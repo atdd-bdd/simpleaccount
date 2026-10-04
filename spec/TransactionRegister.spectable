@@ -1,0 +1,485 @@
+Specification TransactionRegister
+
+Description The transaction register of one account: what each line shows, what
+Description order the lines are in, and what the running balance means.
+Details
+Details A register is always a view of one account. Every line of it is one
+Details posting to that account, with the other side of the transaction
+Details summarised in the Category column. A transaction with four postings
+Details appears once in each of the four registers, showing a different
+Details amount and a different category each time, and it is the same
+Details transaction.
+
+# ---------------------------------------------------------------------------
+# A line of the register
+# ---------------------------------------------------------------------------
+
+Attributes RegisterLine
+Description One line as it appears on screen.
+Details Payment and Deposit are headed differently for different account types;
+Details see the column heading rule below. Balance is the running balance after
+Details this line.
+| Attribute | Type           | Default    |
+| Ref       | TransactionRef |            |
+| Date      | Date           | 2024-01-01 |
+| CheckNo   | CheckNumber    | none       |
+| Payee     | PayeeName      | none       |
+| Category  | Text           | none       |
+| Memo      | Text           | none       |
+| Payment   | Money          | 0.00       |
+| Deposit   | Money          | 0.00       |
+| Cleared   | ClearedStatus  | Uncleared  |
+| Balance   | Money          | 0.00       |
+
+Scenario A register of simple transactions
+Description The Category column holds the other account of the transaction. The
+Description running balance is the balance of this account after each line.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Income:Salary      | Income  | false       |
+| Expenses:Groceries | Expense | false       |
+| Expenses:Auto:Fuel | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee         | Account            | Amount   |
+| T1  | 2024-01-01 | Acme Payroll  | Assets:Checking    | 3000.00  |
+| T1  | 2024-01-01 | Acme Payroll  | Income:Salary      | -3000.00 |
+| T2  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00   |
+| T2  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00    |
+| T3  | 2024-01-20 | Shell         | Assets:Checking    | -52.00   |
+| T3  | 2024-01-20 | Shell         | Expenses:Auto:Fuel | 52.00    |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register lines are : RegisterLine
+| Ref | Date       | Payee         | Category           | Payment | Deposit | Balance |
+| T1  | 2024-01-01 | Acme Payroll  | Income:Salary      | 0.00    | 3000.00 | 3000.00 |
+| T2  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00   | 0.00    | 2955.00 |
+| T3  | 2024-01-20 | Shell         | Expenses:Auto:Fuel | 52.00   | 0.00    | 2903.00 |
+
+Scenario The same transaction seen from the other account
+Description T2 above, in the register of the category rather than the bank. The
+Description amount is on the other side and the category column names the bank.
+Description Nothing was stored twice to make this possible.
+Given the chart of accounts is as previous
+Given postings are as previous
+When register opened on : AccountSelect
+| Path               |
+| Expenses:Groceries |
+Then register lines are : RegisterLine
+| Ref | Date       | Payee         | Category        | Payment | Deposit | Balance |
+| T2  | 2024-01-15 | Harris Teeter | Assets:Checking | 0.00    | 45.00   | 45.00   |
+# In an Expense register the money arriving is what was spent, so it falls in
+# the Deposit column. The column heading rule below gives it a better name.
+
+# ---------------------------------------------------------------------------
+# Column headings
+# ---------------------------------------------------------------------------
+
+BusinessRule What the two amount columns are called
+Description The register is read as a statement of the account it is open on, so
+Description the headings are the words that account uses.
+Examples: ColumnHeadings
+| AccountType | OutColumn | InColumn | Notes                             |
+| Bank        | Payment   | Deposit  |                                   |
+| Cash        | Spend     | Receive  |                                   |
+| CreditCard  | Charge    | Payment  | A payment reduces what is owed    |
+| Liability   | Increase  | Payment  |                                   |
+| Asset       | Decrease  | Increase |                                   |
+| Investment  | Payment   | Deposit  | Of the cash side; see Investments |
+| Expense     | Refund    | Spent    | Money arriving here was spent     |
+| Income      | Earned    | Returned |                                   |
+| Equity      | Decrease  | Increase |                                   |
+
+Attributes ColumnHeadings
+| Attribute   | Type        | Default |
+| AccountType | AccountType | Bank    |
+| OutColumn   | Text        |         |
+| InColumn    | Text        |         |
+| Notes       | String      | none    |
+
+# ---------------------------------------------------------------------------
+# The running balance
+# ---------------------------------------------------------------------------
+
+BusinessRule The running balance uses the display sign of the account
+Description A credit card register shows what is owed, growing as it is charged,
+Description because that is what the statement shows. See the display sign rule
+Description in Accounts.
+Examples: RunningBalanceSign
+| AccountType | PostingAmount | BalanceShown | Notes                      |
+| Bank        | -45.00        | -45.00       | Money left the account     |
+| CreditCard  | -45.00        | 45.00        | A charge; 45.00 is owed    |
+| CreditCard  | 300.00        | -300.00      | A payment, on its own      |
+| Income      | -3000.00      | 3000.00      | Earned                     |
+
+Attributes RunningBalanceSign
+| Attribute     | Type        | Default |
+| AccountType   | AccountType | Bank    |
+| PostingAmount | Money       | 0.00    |
+| BalanceShown  | Money       | 0.00    |
+| Notes         | String      | none    |
+
+Scenario A credit card register shows a growing balance owed
+Given the chart of accounts is : ChartOfAccounts
+| Path              | Type       | Placeholder |
+| Liabilities:Visa  | CreditCard | false       |
+| Assets:Checking   | Bank       | false       |
+| Expenses:Shopping | Expense    | false       |
+| Expenses:Dining   | Expense    | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee     | Account           | Amount  |
+| T1  | 2024-03-02 | Amazon    | Liabilities:Visa  | -89.99  |
+| T1  | 2024-03-02 | Amazon    | Expenses:Shopping | 89.99   |
+| T2  | 2024-03-09 | The Cafe  | Liabilities:Visa  | -18.50  |
+| T2  | 2024-03-09 | The Cafe  | Expenses:Dining   | 18.50   |
+| T3  | 2024-03-25 | Visa      | Liabilities:Visa  | 100.00  |
+| T3  | 2024-03-25 | Visa      | Assets:Checking   | -100.00 |
+When register opened on : AccountSelect
+| Path             |
+| Liabilities:Visa |
+Then register lines are : RegisterLine
+| Ref | Date       | Payee    | Category          | Payment | Deposit | Balance |
+| T1  | 2024-03-02 | Amazon   | Expenses:Shopping | 89.99   | 0.00    | 89.99   |
+| T2  | 2024-03-09 | The Cafe | Expenses:Dining   | 18.50   | 0.00    | 108.49  |
+| T3  | 2024-03-25 | Visa     | Assets:Checking   | 0.00    | 100.00  | 8.49    |
+# Payment here is headed Charge, and Deposit is headed Payment.
+
+BusinessRule What order the register is in
+Description By date, and within a date by the order the transactions were entered.
+Details Entry order is used for the tie rather than amount or payee because it
+Details is stable: reopening the file, or importing more, never reshuffles
+Details lines that are already there, so the running balance against a line
+Details does not change under the user.
+Examples: RegisterOrder
+| Date       | EntrySeq | Position | Notes                              |
+| 2024-01-15 | 2        | 1        | Earliest date first                |
+| 2024-01-20 | 1        | 2        | Entered first, dated later         |
+| 2024-01-20 | 3        | 3        | Same date, entered after           |
+| 2024-01-20 | 4        | 4        |                                    |
+
+Attributes RegisterOrder
+| Attribute | Type    | Default    |
+| Date      | Date    | 2024-01-01 |
+| EntrySeq  | Integer | 0          |
+| Position  | Integer | 0          |
+| Notes     | String  | none       |
+
+Scenario Two transactions on one date keep the order they were entered in
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
+Given postings in entry order are : SequencedPostingRow
+| EntrySeq | Ref | Date       | Payee | Account            | Amount |
+| 1        | T1  | 2024-01-20 | Shop A | Assets:Checking   | -10.00 |
+| 1        | T1  | 2024-01-20 | Shop A | Expenses:Groceries | 10.00 |
+| 2        | T2  | 2024-01-15 | Shop B | Assets:Checking   | -20.00 |
+| 2        | T2  | 2024-01-15 | Shop B | Expenses:Groceries | 20.00 |
+| 3        | T3  | 2024-01-20 | Shop C | Assets:Checking   | -30.00 |
+| 3        | T3  | 2024-01-20 | Shop C | Expenses:Groceries | 30.00 |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register lines are : RegisterLine
+| Ref | Date       | Payee  | Payment | Deposit | Balance |
+| T2  | 2024-01-15 | Shop B | 20.00   | 0.00    | -20.00  |
+| T1  | 2024-01-20 | Shop A | 10.00   | 0.00    | -30.00  |
+| T3  | 2024-01-20 | Shop C | 30.00   | 0.00    | -60.00  |
+
+Attributes SequencedPostingRow
+| Attribute | Type           | Default    |
+| EntrySeq  | Integer        | 0          |
+| Ref       | TransactionRef |            |
+| Date      | Date           | 2024-01-01 |
+| Payee     | PayeeName      | none       |
+| Account   | AccountPath    |            |
+| Amount    | Money          | 0.00       |
+
+Scenario Sorting the register by another column hides the running balance
+Description A running balance down a list that is not in date order is a column
+Description of meaningless numbers. Sorting by payee is useful for finding
+Description something, so it is allowed, and the balance column is emptied
+Description rather than filled with figures that do not add up.
+Given the chart of accounts is as previous
+Given postings in entry order are as previous
+When register sorted by : SortBy
+| Column |
+| Payee  |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Payee  | Balance |
+| T1  | Shop A | 0.00    |
+| T2  | Shop B | 0.00    |
+| T3  | Shop C | 0.00    |
+Then running balance is shown : BalanceColumnState Vertical
+| Shown  | false                                  |
+| Reason | The register is not in date order      |
+
+DataType SortColumn
+Description Which column the register is sorted by.
+Examples: EnumerationValues
+| Value   | Notes                                  |
+| Date    | The default, and the only one that adds up |
+| Payee   |                                        |
+| Category |                                       |
+| Amount  |                                        |
+| CheckNo |                                        |
+| Cleared |                                        |
+
+Attributes BalanceColumnState
+| Attribute | Type    | Default |
+| Shown     | Boolean | true    |
+| Reason    | Text    | none    |
+
+# ---------------------------------------------------------------------------
+# Splits in the register
+# ---------------------------------------------------------------------------
+
+Scenario A split shows as Split in the category column
+Description There is no one category to show, so the column says so, and the
+Description line can be expanded to see the parts.
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type    | Placeholder |
+| Assets:Checking           | Bank    | false       |
+| Expenses:Home:Maintenance | Expense | false       |
+| Expenses:Home:Garden      | Expense | false       |
+| Expenses:Auto:Repairs     | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee      | Account                   | Amount  | Memo         |
+| T1  | 2024-04-02 | Home Depot | Assets:Checking           | -184.50 | none         |
+| T1  | 2024-04-02 | Home Depot | Expenses:Home:Maintenance | 100.00  | Paint        |
+| T1  | 2024-04-02 | Home Depot | Expenses:Home:Garden      | 54.50   | Compost      |
+| T1  | 2024-04-02 | Home Depot | Expenses:Auto:Repairs     | 30.00   | Wiper blades |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register lines are : RegisterLine
+| Ref | Date       | Payee      | Category | Payment | Deposit | Balance |
+| T1  | 2024-04-02 | Home Depot | --Split-- | 184.50 | 0.00    | -184.50 |
+
+Scenario An expanded split shows its lines beneath
+Given the chart of accounts is as previous
+Given postings are as previous
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+When line expanded : TransactionSelect
+| Ref |
+| T1  |
+Then split lines shown are : SplitLineShown
+| Category                  | Amount | Memo         |
+| Expenses:Home:Maintenance | 100.00 | Paint        |
+| Expenses:Home:Garden      | 54.50  | Compost      |
+| Expenses:Auto:Repairs     | 30.00  | Wiper blades |
+
+Attributes SplitLineShown
+| Attribute | Type        | Default |
+| Category  | AccountPath |         |
+| Amount    | Money       | 0.00    |
+| Memo      | Text        | none    |
+
+Scenario A split seen from one of its category registers shows only its own line
+Description The register of Expenses:Home:Garden shows 54.50, not 184.50, and
+Description names the bank account as the category. The other legs of the split
+Description are not its business.
+Given the chart of accounts is as previous
+Given postings are as previous
+When register opened on : AccountSelect
+| Path                 |
+| Expenses:Home:Garden |
+Then register lines are : RegisterLine
+| Ref | Date       | Payee      | Category        | Memo    | Payment | Deposit | Balance |
+| T1  | 2024-04-02 | Home Depot | Assets:Checking | Compost | 0.00    | 54.50   | 54.50   |
+
+# ---------------------------------------------------------------------------
+# Dates in the future, and over many years
+# ---------------------------------------------------------------------------
+
+Scenario A future-dated transaction appears at the end, below a marker
+Description A check written today and dated next month belongs in the register,
+Description and it must not be mistaken for money already gone. The balance as
+Description at today is shown on the marker line.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
+Given today is : Today Vertical
+| Date | 2024-05-15 |
+Given postings are : PostingRow
+| Ref | Date       | Payee  | Account            | Amount  |
+| T1  | 2024-05-01 | Shop A | Assets:Checking    | 1000.00 |
+| T1  | 2024-05-01 | Shop A | Expenses:Groceries | -1000.00 |
+| T2  | 2024-05-10 | Shop B | Assets:Checking    | -40.00  |
+| T2  | 2024-05-10 | Shop B | Expenses:Groceries | 40.00   |
+| T3  | 2024-06-01 | Shop C | Assets:Checking    | -60.00  |
+| T3  | 2024-06-01 | Shop C | Expenses:Groceries | 60.00   |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Balance |
+| T1  | 2024-05-01 | 1000.00 |
+| T2  | 2024-05-10 | 960.00  |
+| T3  | 2024-06-01 | 900.00  |
+Then today marker is : TodayMarker Vertical
+| AfterRef       | T2         |
+| BalanceToday   | 960.00     |
+| FutureCount    | 1          |
+| FutureTotal    | -60.00     |
+
+Attributes Today
+| Attribute | Type | Default    |
+| Date      | Date | 2024-05-15 |
+
+Attributes TodayMarker
+| Attribute     | Type           | Default |
+| AfterRef      | TransactionRef | none    |
+| BalanceToday  | Money          | 0.00    |
+| FutureCount   | Integer        | 0       |
+| FutureTotal   | Money          | 0.00    |
+
+Scenario The register opens on the most recent transactions
+Description Twenty years of history is tens of thousands of lines. Opening at
+Description the top would mean scrolling through 2005 to reach this month.
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type | Placeholder |
+| Assets:Checking | Bank | false       |
+Given the register holds : RegisterExtent Vertical
+| FirstDate | 2005-01-01 |
+| LastDate  | 2026-09-30 |
+| LineCount | 41238      |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register view is : RegisterView Vertical
+| ScrolledTo   | 2026-09-30 |
+| SelectedLine | last       |
+| LinesLoaded  | 41238      |
+
+Attributes RegisterExtent
+| Attribute | Type    | Default    |
+| FirstDate | Date    | 2005-01-01 |
+| LastDate  | Date    | 2026-09-30 |
+| LineCount | Integer | 0          |
+
+Attributes RegisterView
+| Attribute    | Type | Default    |
+| ScrolledTo   | Date | 2026-09-30 |
+| SelectedLine | Text | last       |
+| LinesLoaded  | Integer | 0       |
+
+Scenario A date filter narrows the register without changing the balance
+Description The running balance shown against a line is the balance of the
+Description account, not of the filtered list. A line that reads 2,903.00 in
+Description the unfiltered register reads 2,903.00 when only January is shown,
+Description because that is what the account held on that day.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee  | Account            | Amount  |
+| T1  | 2023-12-20 | Shop A | Assets:Checking    | 1000.00 |
+| T1  | 2023-12-20 | Shop A | Expenses:Groceries | -1000.00 |
+| T2  | 2024-01-15 | Shop B | Assets:Checking    | -45.00  |
+| T2  | 2024-01-15 | Shop B | Expenses:Groceries | 45.00   |
+| T3  | 2024-02-20 | Shop C | Assets:Checking    | -52.00  |
+| T3  | 2024-02-20 | Shop C | Expenses:Groceries | 52.00   |
+When register filtered to dates : DateRange Vertical
+| From | 2024-01-01 |
+| To   | 2024-01-31 |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Balance |
+| T2  | 2024-01-15 | 955.00  |
+Then opening balance line is : OpeningLine Vertical
+| AsAt    | 2023-12-31 |
+| Balance | 1000.00    |
+
+Attributes DateRange
+| Attribute | Type | Default    |
+| From      | Date | 2024-01-01 |
+| To        | Date | 2024-12-31 |
+
+Attributes OpeningLine
+| Attribute | Type  | Default    |
+| AsAt      | Date  | 2024-01-01 |
+| Balance   | Money | 0.00       |
+
+# ---------------------------------------------------------------------------
+# Finding things
+# ---------------------------------------------------------------------------
+
+Scenario Searching the register matches payee, memo, category and amount
+Description One search box, because a user looking for something does not want
+Description to decide first which field it is in.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
+| Expenses:Auto:Fuel | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee         | Account            | Amount | Memo          |
+| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 | weekly shop   |
+| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00  | none          |
+| T2  | 2024-01-20 | Shell         | Assets:Checking    | -52.00 | shop on route |
+| T2  | 2024-01-20 | Shell         | Expenses:Auto:Fuel | 52.00  | none          |
+When register searched for : SearchTerm
+| Term |
+| shop |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Payee         |
+| T1  | Harris Teeter |
+| T2  | Shell         |
+# T1 matches on its memo, T2 on its memo as well. Both are offered; the
+# search does not rank.
+
+DataType SearchText
+Description What was typed into the search box.
+Uses Text
+Examples: ValidValues
+| Value | IsValid | Notes                        |
+| shop  | true    |                              |
+| 45.00 | true    | An amount is searched for too |
+|       | true    | Empty clears the search      |
+
+Scenario Searching for an amount matches either column
+Given the chart of accounts is as previous
+Given postings are as previous
+When register searched for : SearchTerm
+| Term  |
+| 52.00 |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Payee |
+| T2  | Shell |
+
+# ---------------------------------------------------------------------------
+# Entering on the blank line
+# ---------------------------------------------------------------------------
+
+Scenario The blank line at the end takes the next transaction
+Description The register ends in an empty line dated today. Filling it in and
+Description leaving the line commits the transaction, as in Transactions.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
+Given today is : Today Vertical
+| Date | 2024-05-15 |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then blank line is : RegisterLine CompareOnly
+| Date       | Payee | Payment | Deposit |
+| 2024-05-15 | none  | 0.00    | 0.00    |
+
+Scenario Leaving a part-filled blank line with no amount discards it
+Description A payee typed and then thought better of does not become a zero
+Description transaction.
+Given the chart of accounts is as previous
+Given today is as previous
+When blank line filled : RegisterLine Vertical CompareOnly
+| Payee | Harris Teeter |
+When blank line left
+Then register lines are : RegisterLine CompareOnly
+| Ref |
+# No rows: nothing was committed.

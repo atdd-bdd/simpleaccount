@@ -1,0 +1,11 @@
+{
+    "name": "simpleaccount",
+    "projects": [
+        {
+            "name": "simpleaccount",
+            "relativePath": "."
+        }
+    ],
+    "sharingMode": "sharedFiles",
+    "version": 2
+}

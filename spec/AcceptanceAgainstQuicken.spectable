@@ -1,0 +1,1055 @@
+Specification AcceptanceAgainstQuicken
+
+Description Comparing the figures SimpleAccount reports with the figures Quicken
+Description reports for the same data over the same period.
+Details
+Details Quicken is the oracle. For the migration there is no other one: the only
+Details way to know that twenty years came over correctly is that the totals
+Description agree with the program the data came from.
+Details
+Details What is compared is amounts. Font, column widths, page breaks, row order
+Details and the wording of headings are not compared and not expected to match.
+Details A line of a Quicken report and a line of a SimpleAccount report are the
+Details same line when they are about the same category over the same period.
+Details
+Details The expected figures come from PDF reports exported from Quicken. A PDF
+Details is not machine-readable in any way worth relying on, so the figures are
+Details transcribed into the tables below and the tables become the test. That
+Details is the point of writing a specification as tables: the report from
+Details Quicken is already a table of examples.
+Details
+Details This round compares spending reports: what was spent and earned, by
+Details category and by payee, over a period. Net worth, account balances and
+Details anything about investment performance are not compared yet.
+Details
+Details That does not make the investment records ignorable. A dividend posts to
+Details an income category and a brokerage fee to an expense one, so 899
+Details investment records in the business file reach the spending report
+Details through their income and expense sides. What is out of scope is
+Details reporting on the holdings, not importing what they paid.
+
+# ---------------------------------------------------------------------------
+# What is being compared
+# ---------------------------------------------------------------------------
+
+DataType ComparisonRun
+Description The comparisons to be made, in the order they are worth making.
+Details Each later one depends on the one before it passing: there is no point
+Details comparing a single year until the whole period agrees, because a
+Details difference in the whole period tells you less about where it is.
+Details These are the four PDFs in testdata, in the order they are worth
+Details running. The last two are a pair: the same report before and after the
+Details three QFX files are imported, so the difference between them is
+Details exactly what the import did.
+Examples: EnumerationValues
+| Value         | Notes                                                           |
+| WholePeriod   | All Dates, 1/1/2005 to 10/3/2026; catches a systematic error     |
+| FullYear2025  | Last year, 1/1/2025 to 12/31/2025; no partial-period effects     |
+| CurrentYear   | Year to Date, 1/1/2026 to 10/3/2026, before the QFX import       |
+| AfterQfx      | Year to Date again, after importing the three QFX files          |
+| PerYear       | One calendar year; the From and To of the report say which       |
+
+Entity QuickenReport
+Description One PDF report from Quicken, and what it is a report of.
+| Attribute  | Type           | Default      | Notes                           |
+| Run        | ComparisonRun  | WholePeriod  |                                 |
+| Book       | Text           |              | Which QIF file it belongs to    |
+| ReportKind | QuickenReportKind | SpendingByCategory |                           |
+| From       | Date           | 2005-01-01   |                                 |
+| To         | Date           | 2026-10-03   |                                 |
+| Lines      | Integer        | 0            | How many figure lines it has     |
+
+DataType QuickenReportKind
+Description Which Quicken report the PDF is of. It matters: the reports differ
+Description in what they include, not only in how they look.
+Details This round compares spending reports and nothing else. The balance and
+Details net worth reports are listed so that the inclusion rules can say what
+Details they would do, and they are not among the runs below.
+Examples: EnumerationValues
+| Value              | Notes                                                 |
+| SpendingByCategory | In scope; the report this round is about              |
+| SpendingByPayee    | In scope; the same figures grouped the other way      |
+| ItemizedCategories | In scope; every transaction, grouped by category      |
+| CashFlow           | In scope; money in and out by category                |
+| NetWorth           | Not compared this round                               |
+| AccountBalances    | Not compared this round                               |
+
+Attributes ComparisonLine
+Description One line of the comparison: what Quicken said, what SimpleAccount
+Description said, and whether they agree.
+| Attribute      | Type        | Default |
+| QuickenLine    | Text        |         |
+| OurAccount     | AccountPath | none    |
+| QuickenAmount  | Money       | 0.00    |
+| OurAmount      | Money       | 0.00    |
+| Difference     | Money       | 0.00    |
+| Agrees         | Boolean     | false   |
+
+Attributes ComparisonSummary
+| Attribute       | Type    | Default |
+| LinesCompared   | Integer | 0       |
+| LinesAgreeing   | Integer | 0       |
+| LinesDiffering  | Integer | 0       |
+| OnlyInQuicken   | Integer | 0       |
+| OnlyInOurReport | Integer | 0       |
+| TotalDifference | Money   | 0.00    |
+| Passes          | Boolean | false   |
+
+BusinessRule When a comparison passes
+Description Every line agrees to the cent, and neither report has a line the
+Description other does not.
+Details There is no tolerance. A difference of a cent is a rounding rule
+Details somewhere that disagrees, and over twenty years a rounding rule that
+Details disagrees will not stay at a cent. A line present in one report and
+Details not the other is a failure even when the amount is zero, because it
+Details means a category was created or dropped.
+Examples: PassCondition
+| LinesDiffering | OnlyInQuicken | OnlyInOurReport | Passes | Notes                    |
+| 0              | 0             | 0               | true   |                          |
+| 1              | 0             | 0               | false  | One figure disagrees     |
+| 0              | 1             | 0               | false  | A category went missing  |
+| 0              | 0             | 1               | false  | A category was invented  |
+
+Attributes PassCondition
+| Attribute       | Type    | Default |
+| LinesDiffering  | Integer | 0       |
+| OnlyInQuicken   | Integer | 0       |
+| OnlyInOurReport | Integer | 0       |
+| Passes          | Boolean | false   |
+| Notes           | String  | none    |
+
+# ---------------------------------------------------------------------------
+# Lining the two reports up
+# ---------------------------------------------------------------------------
+
+BusinessRule How a Quicken category name becomes an account path
+Description Quicken reports a category by the name the category list gives it,
+Description with no root. SimpleAccount puts Income or Expenses in front. The
+Description comparison adds the root back, using the income or expense flag
+Description from the same category list the migration used.
+Examples: ReportLineMapping
+| QuickenLine      | OurAccount             | Notes                           |
+| Groceries        | Expenses:Groceries     |                                 |
+| Auto:Fuel        | Expenses:Auto:Fuel     | Subcategories keep their depth  |
+| Auto             | Expenses:Auto          | A parent with its own total     |
+| Salary           | Income:Salary          |                                 |
+| TOTAL Auto       | Expenses:Auto          | A subtotal line, same account   |
+| TOTAL INFLOWS    | Income                 | The root subtotal               |
+| TOTAL OUTFLOWS   | Expenses               |                                 |
+| OVERALL TOTAL    | Net                    | Compared with Net, not an account |
+
+Attributes ReportLineMapping
+| Attribute   | Type        | Default |
+| QuickenLine | Text        |         |
+| OurAccount  | AccountPath | none    |
+| Notes       | String      | none    |
+
+BusinessRule How the signs of the two reports are lined up
+Description Quicken writes an Itemized Categories report in natural signs:
+Description income positive, expenses negative, and the overall total their sum.
+Description SimpleAccount reports both as positive and nets them, because that
+Description is easier to read down a column. So expense lines are negated on
+Description one side of the comparison.
+Details Observed in all three populated PDFs. The all-dates report has INCOME
+Details 3,742,439.40, EXPENSES -2,715,446.00, TRANSFERS -63,888.84, and an
+Details OVERALL TOTAL of 963,104.56, which is their sum exactly.
+Details Getting this wrong would flip several hundred lines at once, which is
+Details why it is a rule with examples rather than a remark.
+Examples: SignMapping
+| Section   | QuickenSign | OurSign  | Comparison                        |
+| INCOME    | Positive    | Positive | Compared as they stand            |
+| EXPENSES  | Negative    | Positive | Our figure is negated to compare  |
+| TRANSFERS | Signed      | Signed   | Compared as they stand            |
+| OVERALL   | Sum of the three | Income less expenses | Computed each way and compared |
+
+Attributes SignMapping
+| Attribute   | Type   | Default |
+| Section     | String |         |
+| QuickenSign | String |         |
+| OurSign     | String |         |
+| Comparison  | String |         |
+
+Scenario The section totals of the all-dates report
+Description The three section totals and the overall total, transcribed from
+Description pughkillleen-allyears-category.pdf. This is the single comparison
+Description that says the migration worked, and it is four figures.
+Given the quicken report states : QuickenFigure
+| QuickenLine   | QuickenAmount |
+| INCOME        | 3742439.40    |
+| EXPENSES      | -2715446.00   |
+| TRANSFERS     | -63888.84     |
+| OVERALL TOTAL | 963104.56     |
+When reports compared : QuickenReport Vertical
+| Run        | WholePeriod        |
+| Book       | business           |
+| ReportKind | ItemizedCategories |
+| From       | 2005-01-01         |
+| To         | 2026-10-03         |
+| Lines      | 4                  |
+Then comparison summary is : ComparisonSummary CompareOnly
+| Passes |
+| true   |
+
+Scenario The section totals of the 2025 report
+Description From pughkilleen-2025-transactions.pdf. There is no TRANSFERS
+Description section: every transfer in 2025 has both halves inside the period,
+Description so they cancel and Quicken omits the section entirely. Our report
+Description must omit it too rather than print a zero.
+Given the quicken report states : QuickenFigure
+| QuickenLine   | QuickenAmount |
+| INCOME        | 49374.18      |
+| EXPENSES      | -198939.00    |
+| OVERALL TOTAL | -149564.82    |
+When reports compared : QuickenReport Vertical
+| Run        | FullYear2025       |
+| Book       | business           |
+| ReportKind | ItemizedCategories |
+| From       | 2025-01-01         |
+| To         | 2025-12-31         |
+| Lines      | 3                  |
+Then comparison summary is : ComparisonSummary CompareOnly
+| Passes |
+| true   |
+
+Scenario The section totals of the 2026 report before the import
+Description From pughkilleeen-2026-before update.pdf. Year to Date runs to
+Description 10/3/2026, which is today, so this is also the answer to how a
+Description part-year report is bounded.
+Given the quicken report states : QuickenFigure
+| QuickenLine   | QuickenAmount |
+| INCOME        | 128684.22     |
+| EXPENSES      | -117679.43    |
+| OVERALL TOTAL | 11004.79      |
+When reports compared : QuickenReport Vertical
+| Run        | CurrentYear        |
+| Book       | business           |
+| ReportKind | ItemizedCategories |
+| From       | 2026-01-01         |
+| To         | 2026-10-03         |
+| Lines      | 3                  |
+Then comparison summary is : ComparisonSummary CompareOnly
+| Passes |
+| true   |
+
+BusinessRule The two Uncategorized lines map one to one
+Description Corrected. Quicken does not report one Uncategorized line to be
+Description split: it reports one in each section, and the split is by the sign
+Description of each transaction, not of the category total. So the mapping is
+Description one line to one account after all.
+Details This was measured rather than assumed, and it is the single rule that
+Details decides whether a year reconciles. In 2026 the report shows 104,300.69
+Description of Uncategorized under INCOME and 91,331.00 under EXPENSES, netting
+Details to 12,969.69. Classifying the net by its sign puts all of it in income
+Details and leaves both figures wrong by 91,331.00 with the net still right --
+Details which is exactly the shape of error that looks like success.
+Details The same rule holds for a category the category list does not declare.
+Examples: UncategorizedComparison
+| QuickenLine                | OurAccount             | Holds                      |
+| Uncategorized under INCOME | Income:Uncategorized   | Amounts above zero         |
+| Uncategorized under EXPENSES | Expenses:Uncategorized | Amounts below zero      |
+
+Attributes UncategorizedComparison
+| Attribute   | Type        | Default |
+| QuickenLine | Text        |         |
+| OurAccount  | AccountPath |         |
+| Holds       | String      |         |
+
+BusinessRule How a Quicken report writes a category tree
+Description A parent is a roll-up line and its children sit under it by their
+Description last name only, not their full path. Amounts posted to the parent
+Description itself appear as "Other <Parent>". A comparison that reads the
+Description parent line as a figure of its own double-counts every tree in the
+Description report.
+Details Measured on the 2025 report: reading parents and children together
+Details gives expenses of -297,169.90 against a stated -198,939.00. The lines
+Details below are from that report.
+Examples: ReportTreeShape
+| QuickenLine     | Indent | Means                                  | OurAccount             |
+| Auto            | 4      | The roll-up of everything below it     | Expenses:Auto total    |
+| Ford Escape     | 8      | A child, by its last name              | Expenses:Auto:Ford Escape |
+| Other Auto      | 8      | Posted to Auto itself                  | Expenses:Auto own balance |
+| Household       | 4      | A roll-up                              | Expenses:Household total |
+| swim pool       | 8      | A child                                | Expenses:Household:swim pool |
+| Other Groceries | 8      | Posted to Groceries itself             | Expenses:Groceries own balance |
+
+Attributes ReportTreeShape
+| Attribute   | Type        | Default |
+| QuickenLine | Text        |         |
+| Indent      | Integer     | 0       |
+| Means       | String      |         |
+| OurAccount  | Text        |         |
+
+BusinessRule What each report kind is expected to include
+Description Stated because an apparent difference is usually a difference of
+Description inclusion rather than of arithmetic, and because the equivalent
+Description SimpleAccount report has to be asked for in matching terms.
+Details Corrected from the PDFs. An Itemized Categories report does NOT
+Details exclude transfers: the all-dates report carries a TRANSFERS section of
+Details -63,888.84, and its OVERALL TOTAL is income plus expenses plus that
+Details figure. The 2025 and 2026 reports have no such section, because every
+Details transfer in those periods has both of its halves inside the report.
+Details So a transfer is left out only when it nets to zero within the period,
+Details which is not an exclusion rule at all but arithmetic. Our report needs
+Details the same section for the comparison to line up.
+Examples: InclusionRule
+| ReportKind         | Transfers     | InvestmentIncome | MarketValueChange | OurEquivalent                            |
+| ItemizedCategories | OwnSection    | Included         | Excluded          | Category report plus a transfers section |
+| SpendingByCategory | OwnSection    | Included         | Excluded          | Same                                     |
+| CashFlow           | OwnSection    | Included         | Excluded          | Same                                     |
+| NetWorth           | NotApplicable | NotApplicable    | Included          | Net worth report at a date               |
+| AccountBalances    | NotApplicable | NotApplicable    | Included          | Balances as at a date                    |
+
+Attributes InclusionRule
+| Attribute         | Type   | Default |
+| ReportKind        | QuickenReportKind | SpendingByCategory |
+| Transfers         | String |         |
+| InvestmentIncome  | String |         |
+| MarketValueChange | String |         |
+| OurEquivalent     | String |         |
+
+Scenario Transfers are absent from both reports for the same reason
+Description Quicken excludes transfers from a category report. SimpleAccount has
+Description nothing to exclude: a transfer touches no category, so it cannot
+Description appear. The two agree, and they agree by construction rather than by
+Description a matching exclusion rule, which is worth one test of its own
+Description given there are 8,228 bracketed transfers in the business file.
+Given the chart of accounts is : ChartOfAccounts
+| Path              | Type       | Placeholder |
+| Assets:Checking   | Bank       | false       |
+| Assets:Savings    | Bank       | false       |
+| Liabilities:Visa  | CreditCard | false       |
+| Expenses          | Expense    | true        |
+| Expenses:Shopping | Expense    | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee    | Account           | Amount  |
+| T1  | 2025-03-02 | A Shop   | Liabilities:Visa  | -89.99  |
+| T1  | 2025-03-02 | A Shop   | Expenses:Shopping | 89.99   |
+| T2  | 2025-03-25 | Card     | Liabilities:Visa  | 300.00  |
+| T2  | 2025-03-25 | Card     | Assets:Checking   | -300.00 |
+| T3  | 2025-03-28 | Transfer | Assets:Checking   | -500.00 |
+| T3  | 2025-03-28 | Transfer | Assets:Savings    | 500.00  |
+Given the quicken report states : QuickenFigure
+| QuickenLine    | QuickenAmount |
+| Shopping       | 89.99         |
+| TOTAL OUTFLOWS | 89.99         |
+When reports compared : QuickenReport Vertical
+| Run        | FullYear2025    |
+| Book       | business        |
+| ReportKind | SpendingByCategory |
+| From       | 2025-01-01      |
+| To         | 2025-12-31      |
+| Lines      | 2               |
+Then comparison lines are : ComparisonLine
+| QuickenLine    | OurAccount        | QuickenAmount | OurAmount | Difference | Agrees |
+| Shopping       | Expenses:Shopping | 89.99         | 89.99     | 0.00       | true   |
+| TOTAL OUTFLOWS | Expenses          | 89.99         | 89.99     | 0.00       | true   |
+Then comparison summary is : ComparisonSummary Vertical
+| LinesCompared   | 2    |
+| LinesAgreeing   | 2    |
+| LinesDiffering  | 0    |
+| OnlyInQuicken   | 0    |
+| OnlyInOurReport | 0    |
+| TotalDifference | 0.00 |
+| Passes          | true |
+
+Attributes QuickenFigure
+Description One figure line transcribed from a Quicken PDF.
+| Attribute     | Type  | Default |
+| QuickenLine   | Text  |         |
+| QuickenAmount | Money | 0.00    |
+
+Scenario A market value change stays out of the spending report
+Description Investment reporting is out of scope this round, but keeping it out
+Description of the spending report is not: a revaluation that leaked in would
+Description show as income nobody earned. SimpleAccount posts it to Equity,
+Description which a category report leaves out. Quicken calls the same thing
+Description unrealised gain and also leaves it out. They agree, and because
+Description they get there by different routes it is worth one test.
+Given the chart of accounts is : ChartOfAccounts
+| Path                        | Type       | Placeholder |
+| Assets:Portfolio            | Investment | true        |
+| Assets:Portfolio:Cash       | Investment | false       |
+| Assets:Portfolio:A Fund     | Investment | false       |
+| Income                      | Income     | true        |
+| Income:Dividends            | Income     | false       |
+| Equity:Market Value Changes | Equity     | false       |
+Given postings are : PostingRow
+| Ref | Date       | Account                     | Amount   |
+| T1  | 2025-06-30 | Assets:Portfolio:Cash       | 250.00   |
+| T1  | 2025-06-30 | Income:Dividends            | -250.00  |
+| T2  | 2025-06-28 | Assets:Portfolio:A Fund     | 1000.00  |
+| T2  | 2025-06-28 | Equity:Market Value Changes | -1000.00 |
+Given the quicken report states : QuickenFigure
+| QuickenLine   | QuickenAmount |
+| Dividends     | 250.00        |
+| TOTAL INFLOWS | 250.00        |
+When reports compared : QuickenReport Vertical
+| Run        | FullYear2025    |
+| Book       | business        |
+| ReportKind | SpendingByCategory |
+| From       | 2025-01-01      |
+| To         | 2025-12-31      |
+| Lines      | 2               |
+Then comparison summary is : ComparisonSummary Vertical
+| LinesCompared   | 2    |
+| LinesAgreeing   | 2    |
+| LinesDiffering  | 0    |
+| OnlyInQuicken   | 0    |
+| OnlyInOurReport | 0    |
+| TotalDifference | 0.00 |
+| Passes          | true |
+
+Scenario A difference is reported with the line it is on
+Description A failing comparison has to say where, or it is no use. The line,
+Description both figures and the difference are all shown, and the difference is
+Description what points at the cause.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses           | Expense | true        |
+| Expenses:Groceries | Expense | false       |
+| Expenses:Auto      | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee  | Account            | Amount  |
+| T1  | 2025-01-15 | Shop A | Assets:Checking    | -400.00 |
+| T1  | 2025-01-15 | Shop A | Expenses:Groceries | 400.00  |
+Given the quicken report states : QuickenFigure
+| QuickenLine | QuickenAmount |
+| Groceries   | 450.00        |
+| Auto        | 120.00        |
+When reports compared : QuickenReport Vertical
+| Run        | FullYear2025    |
+| Book        | personal       |
+| ReportKind | SpendingByCategory |
+| From       | 2025-01-01      |
+| To         | 2025-12-31      |
+| Lines      | 2               |
+Then comparison lines are : ComparisonLine
+| QuickenLine | OurAccount         | QuickenAmount | OurAmount | Difference | Agrees |
+| Groceries   | Expenses:Groceries | 450.00        | 400.00    | 50.00      | false  |
+| Auto        | Expenses:Auto      | 120.00        | 0.00      | 120.00     | false  |
+Then comparison summary is : ComparisonSummary Vertical
+| LinesCompared   | 2      |
+| LinesAgreeing   | 0      |
+| LinesDiffering  | 2      |
+| OnlyInQuicken   | 0      |
+| OnlyInOurReport | 0      |
+| TotalDifference | 170.00 |
+| Passes          | false  |
+
+Scenario A category Quicken reports and we do not is a failure, not a gap
+Description An empty line on our side usually means a transaction did not come
+Description over, or came over under another category. Either way the figure to
+Description chase is the one Quicken shows, so the line is reported with its
+Description amount rather than omitted for having nothing on our side.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses           | Expense | true        |
+| Expenses:Groceries | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee  | Account            | Amount  |
+| T1  | 2025-01-15 | Shop A | Assets:Checking    | -400.00 |
+| T1  | 2025-01-15 | Shop A | Expenses:Groceries | 400.00  |
+Given the quicken report states : QuickenFigure
+| QuickenLine | QuickenAmount |
+| Groceries   | 400.00        |
+| Dues        | 75.00         |
+When reports compared : QuickenReport Vertical
+| Run        | FullYear2025    |
+| Book       | personal        |
+| ReportKind | SpendingByCategory |
+| From       | 2025-01-01      |
+| To         | 2025-12-31      |
+| Lines      | 2               |
+Then comparison summary is : ComparisonSummary Vertical
+| LinesCompared   | 2     |
+| LinesAgreeing   | 1     |
+| LinesDiffering  | 0     |
+| OnlyInQuicken   | 1     |
+| OnlyInOurReport | 0     |
+| TotalDifference | 75.00 |
+| Passes          | false |
+Then lines only in the quicken report are : ComparisonLine CompareOnly
+| QuickenLine | QuickenAmount | OurAmount |
+| Dues        | 75.00         | 0.00      |
+
+Scenario A category we report and Quicken does not is also a failure
+Description Usually the sign fallback inventing a category, or --Split-- having
+Description become an account. Both are mistakes this comparison exists to
+Description catch, and both would otherwise look like a tidy report.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses           | Expense | true        |
+| Expenses:Groceries | Expense | false       |
+| Expenses:--Split-- | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee  | Account            | Amount  |
+| T1  | 2025-01-15 | Shop A | Assets:Checking    | -400.00 |
+| T1  | 2025-01-15 | Shop A | Expenses:Groceries | 400.00  |
+| T2  | 2025-01-16 | Shop B | Assets:Checking    | -100.00 |
+| T2  | 2025-01-16 | Shop B | Expenses:--Split-- | 100.00  |
+Given the quicken report states : QuickenFigure
+| QuickenLine | QuickenAmount |
+| Groceries   | 400.00        |
+When reports compared : QuickenReport Vertical
+| Run        | FullYear2025    |
+| Book       | personal        |
+| ReportKind | SpendingByCategory |
+| From       | 2025-01-01      |
+| To         | 2025-12-31      |
+| Lines      | 1               |
+Then comparison summary is : ComparisonSummary Vertical
+| LinesCompared   | 1      |
+| LinesAgreeing   | 1      |
+| LinesDiffering  | 0      |
+| OnlyInQuicken   | 0      |
+| OnlyInOurReport | 1      |
+| TotalDifference | 100.00 |
+| Passes          | false  |
+Then lines only in our report are : ComparisonLine CompareOnly
+| OurAccount         | OurAmount |
+| Expenses:--Split-- | 100.00    |
+
+# ---------------------------------------------------------------------------
+# What the comparison already shows
+# ---------------------------------------------------------------------------
+
+Description The totals below were computed from the QIF export and checked
+Description against the PDFs before any of this was implemented in C++. Two of
+Description the three periods already agree to the cent.
+
+BusinessRule The state of the reconciliation
+Description Measured, not predicted.
+Details The two years that agree do so exactly, which is what gives any
+Details confidence that the date reading, the split signs, the exclusion of
+Details transfers, the handling of --Split-- and the per-transaction treatment
+Details of uncategorised amounts are all right.
+Details The whole period does not agree, and the years it goes wrong in are
+Details not known, because there is no Quicken report for any year between
+Details 2005 and 2024 to compare against.
+Examples: ReconciliationStatus
+| Period    | OurIncome  | TheirIncome | OurExpenses | TheirExpenses | Agrees |
+| 2026 YTD  | 128684.22  | 128684.22   | -117679.43  | -117679.43    | true   |
+| 2025      | 49374.18   | 49374.18    | -198939.00  | -198939.00    | true   |
+| All dates | 3162279.50 | 3742439.40  | -2858141.31 | -2715446.00   | false  |
+
+Attributes ReconciliationStatus
+| Attribute     | Type    | Default |
+| Period        | String  |         |
+| OurIncome     | Money   | 0.00    |
+| TheirIncome   | Money   | 0.00    |
+| OurExpenses   | Money   | 0.00    |
+| TheirExpenses | Money   | 0.00    |
+| Agrees        | Boolean | false   |
+
+BusinessRule Which sections have to be included for a year to reconcile
+Description Each of these was established by leaving it out and watching a year
+Description stop agreeing.
+Examples: SectionNecessity
+| Section               | Effect                                                |
+| Bank, CCard, Cash     | Nothing reconciles at all                             |
+| Invoice and Bill      | 2025 expenses are out by 13,403.46                    |
+| Invst, categorised    | A handful of fees and one income line go missing      |
+| Invst, securities     | Must be left OUT: including them put 2021 income at 1,430,167.25 against a plausible 130,000 to 190,000 |
+
+Attributes SectionNecessity
+| Attribute | Type   | Default |
+| Section   | String |         |
+| Effect    | String |         |
+
+# ---------------------------------------------------------------------------
+# The three periods
+# ---------------------------------------------------------------------------
+
+Scenario The whole period, which is the migration test
+Description Run first. A difference here is systematic, and the single number
+Description that says the migration worked is that this passes.
+Details The figures are transcribed from the PDF for the whole period. The
+Details table below is the shape; the rows arrive with the PDF.
+Given the quicken report states : QuickenFigure
+| QuickenLine | QuickenAmount |
+When reports compared : QuickenReport Vertical
+| Run        | WholePeriod     |
+| Book       | business        |
+| ReportKind | SpendingByCategory |
+| From       | 2005-01-01      |
+| To         | 2026-10-03      |
+| Lines      | 0               |
+Then comparison summary is : ComparisonSummary CompareOnly
+| Passes |
+| true   |
+
+Scenario A full year, which tests how a report is bounded
+Description 2025 is complete, so nothing about today affects it. A difference
+Description here when the whole period agrees means a transaction is in the
+Description wrong year, which is a date-reading fault rather than a missing
+Description transaction.
+Given the quicken report states : QuickenFigure
+| QuickenLine | QuickenAmount |
+When reports compared : QuickenReport Vertical
+| Run        | FullYear2025    |
+| Book        | business       |
+| ReportKind | SpendingByCategory |
+| From       | 2025-01-01      |
+| To         | 2025-12-31      |
+| Lines      | 0               |
+Then comparison summary is : ComparisonSummary CompareOnly
+| Passes |
+| true   |
+
+Scenario The current year, which tests where a report stops
+Description 2026 is incomplete and the business file has transactions dated into
+Description it. Whether the report stops at today or runs to the end of the
+Description year changes the figures, and the two programs have to agree about
+Description which. See the named range rule in Reports.
+Given the quicken report states : QuickenFigure
+| QuickenLine | QuickenAmount |
+When reports compared : QuickenReport Vertical
+| Run        | CurrentYear     |
+| Book        | business        |
+| ReportKind | SpendingByCategory |
+| From       | 2026-01-01      |
+| To         | 2026-10-03      |
+| Lines      | 0               |
+Then comparison summary is : ComparisonSummary CompareOnly
+| Passes |
+| true   |
+
+Scenario A future-dated transaction is counted the same way by both
+Description Settled by the PDFs. All three populated reports carry their range
+Description in the heading, and Year to Date reads "1/1/2026 through 10/3/2026",
+Description which is today. So a part-year report stops at today and a
+Description transaction dated later is excluded, even though it is in the
+Description register. The All Dates report ends at today as well, not at the
+Description last transaction in the file.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses           | Expense | true        |
+| Expenses:Groceries | Expense | false       |
+Given today is : Today Vertical
+| Date | 2026-10-03 |
+Given postings are : PostingRow
+| Ref | Date       | Payee  | Account            | Amount  |
+| T1  | 2026-09-15 | Shop A | Assets:Checking    | -100.00 |
+| T1  | 2026-09-15 | Shop A | Expenses:Groceries | 100.00  |
+| T2  | 2026-11-20 | Shop B | Assets:Checking    | -50.00  |
+| T2  | 2026-11-20 | Shop B | Expenses:Groceries | 50.00   |
+Then current year figures are : PeriodBoundary
+| Bound     | To         | Groceries | Notes                                  |
+| ToToday   | 2026-10-03 | 100.00    | What Quicken does, so what we do       |
+| ToYearEnd | 2026-12-31 | 150.00    | What it would be the other way; unused |
+
+Attributes PeriodBoundary
+| Attribute | Type  | Default    |
+| Bound     | Text  |            |
+| To        | Date  | 2026-12-31 |
+| Groceries | Money | 0.00       |
+| Notes     | String | none      |
+
+# ---------------------------------------------------------------------------
+# Figures computed before the reports arrived
+# ---------------------------------------------------------------------------
+
+Description These are what SimpleAccount makes of the two QIF files, year by
+Description year, written down before any Quicken report for those years had
+Description been seen. When the reports arrive the difference is immediate.
+Details
+Details Writing them first is the point. A figure produced after the answer is
+Details known is not evidence of anything, because there is always a plausible
+Details adjustment that closes a gap; a figure produced before it is either
+Details right or it is a bug with nowhere to hide.
+Details
+Details Two of these are already checked and agree to the cent: 2025 and the
+Details 2026 year to date. The rest are predictions.
+
+Attributes YearFigure
+| Attribute   | Type    | Default |
+| Book        | Text    |         |
+| Year        | Integer | 0       |
+| OurIncome   | Money   | 0.00    |
+| OurExpenses | Money   | 0.00    |
+| OurNet      | Money   | 0.00    |
+| Checked     | Boolean | false   |
+
+BusinessRule What SimpleAccount computes for the business book by year
+Description From pughkilleen.QIF. 2021 is the one to look at first: its income
+Description is well above the years either side of it, and the all-dates total
+Description is short by 580,159.90, so something in these years is wrong.
+Examples: YearFigure
+| Book     | Year | OurIncome | OurExpenses | OurNet     | Checked |
+| business | 2020 | 185517.07 | -169816.46  | 15700.61   | false   |
+| business | 2021 | 343559.17 | -109556.02  | 234003.15  | false   |
+| business | 2022 | 73455.54  | -79151.51   | -5695.97   | false   |
+| business | 2023 | 80918.39  | -82442.47   | -1524.08   | false   |
+| business | 2024 | 132502.14 | -70341.28   | 62160.86   | false   |
+| business | 2025 | 49374.18  | -198939.00  | -149564.82 | true    |
+
+BusinessRule What SimpleAccount computes for the personal book by year
+Description From kenpugh.QIF, which has no Quicken report of any kind yet, so
+Description every line here is unchecked. The file has no credit card section at
+Description all and it does have a bill section, which the business file does
+Description not, so it exercises code the business file never reaches.
+Details 2021 stands out here too, at a net of -105,919.67 against a few
+Details thousand either side.
+Examples: YearFigure
+| Book     | Year | OurIncome | OurExpenses | OurNet     | Checked |
+| personal | 2017 | 89162.20  | -64343.81   | 24818.39   | false   |
+| personal | 2018 | 210554.43 | -188106.09  | 22448.34   | false   |
+| personal | 2019 | 215960.06 | -145815.10  | 70144.96   | false   |
+| personal | 2020 | 271500.00 | -267959.49  | 3540.51    | false   |
+| personal | 2021 | 71066.39  | -176986.06  | -105919.67 | false   |
+| personal | 2022 | 78336.93  | -73781.62   | 4555.31    | false   |
+| personal | 2023 | 60500.00  | -54136.77   | 6363.23    | false   |
+| personal | 2024 | 63890.00  | -56121.63   | 7768.37    | false   |
+| personal | 2025 | 10000.00  | -22095.16   | -12095.16  | false   |
+
+BusinessRule How a report has to be exported to be comparable
+Description Stated because a report run with different settings produces
+Description different figures for the same data, and a difference of settings
+Description looks exactly like a difference of arithmetic.
+Details Every PDF already in testdata was produced this way, which is why they
+Details can be compared with each other at all.
+Examples: ExportSetting
+| Setting     | Value                                               |
+| Report      | Itemized Categories                                 |
+| Basis       | Cash                                                |
+| DateRange   | Custom, 1 January to 31 December of the one year     |
+| Accounts    | All                                                 |
+| Categories  | All                                                 |
+| Subtotal    | None, so the figures are per category               |
+| OnePerFile  | One year per PDF                                    |
+
+Attributes ExportSetting
+| Attribute | Type   | Default |
+| Setting   | String |         |
+| Value     | String |         |
+
+Scenario A per-year comparison names its book and its year
+Description There are two books and several years, so a comparison that did not
+Description say which it was would be unreadable the moment one of them failed.
+Given migrated books are : MigratedBook
+| Name     | SourceFile      | FirstDate  | LastDate   |
+| business | pughkilleen.QIF | 2005-06-17 | 2026-01-31 |
+Given the quicken report states : QuickenFigure
+| QuickenLine | QuickenAmount |
+When reports compared : QuickenReport Vertical
+| Run        | PerYear            |
+| Book       | business           |
+| ReportKind | ItemizedCategories |
+| From       | 2021-01-01         |
+| To         | 2021-12-31         |
+| Lines      | 0                  |
+Then comparison heading is : ComparisonHeading Vertical
+| Book   | business |
+| Period | 2021     |
+
+Attributes ComparisonHeading
+| Attribute | Type | Default |
+| Book      | Text |         |
+| Period    | Text |         |
+
+# ---------------------------------------------------------------------------
+# After importing a QFX into both
+# ---------------------------------------------------------------------------
+
+Scenario The section totals of the 2026 report after the import
+Description From pughkilleen-2026-after-update.pdf, the same Year to Date report
+Description re-run once the three QFX files had been read into Quicken.
+Given the quicken report states : QuickenFigure
+| QuickenLine   | QuickenAmount |
+| INCOME        | 134034.49     |
+| EXPENSES      | -155315.28    |
+| OVERALL TOTAL | -21280.79     |
+When reports compared : QuickenReport Vertical
+| Run        | AfterQfx           |
+| Book       | business           |
+| ReportKind | ItemizedCategories |
+| From       | 2026-01-01         |
+| To         | 2026-10-03         |
+| Lines      | 3                  |
+Then comparison summary is : ComparisonSummary CompareOnly
+| Passes |
+| true   |
+
+Scenario What the import moved is the difference between the two 2026 reports
+Description The strongest test of the importer there is. The same report before
+Description and after, so the difference is exactly what reading three QFX
+Description files did, and it is three figures rather than a thousand rows.
+Details An import that duplicated a transaction, or failed to pair a transfer
+Details and left it as spending, moves these numbers and nothing else has to
+Details be inspected to see it.
+Given the quicken reports state : ImportDelta Vertical
+| IncomeBefore   | 128684.22  |
+| IncomeAfter    | 134034.49  |
+| ExpensesBefore | -117679.43 |
+| ExpensesAfter  | -155315.28 |
+Then import delta is : ImportDelta Vertical
+| IncomeBefore   | 128684.22  |
+| IncomeAfter    | 134034.49  |
+| IncomeMoved    | 5350.27    |
+| ExpensesBefore | -117679.43 |
+| ExpensesAfter  | -155315.28 |
+| ExpensesMoved  | -37635.85  |
+| OverallMoved   | -32285.58  |
+
+Attributes ImportDelta
+| Attribute      | Type  | Default |
+| IncomeBefore   | Money | 0.00    |
+| IncomeAfter    | Money | 0.00    |
+| IncomeMoved    | Money | 0.00    |
+| ExpensesBefore | Money | 0.00    |
+| ExpensesAfter  | Money | 0.00    |
+| ExpensesMoved  | Money | 0.00    |
+| OverallMoved   | Money | 0.00    |
+
+Scenario The transaction report confirms that transfers net to zero in the period
+Description A second report of the same period, and it is not on a cash basis
+Description and does not separate transfers out. Its inflows and outflows are
+Description therefore income and expenses plus every transfer, and the two
+Description transfer figures must be identical because a transfer is money
+Description arriving and leaving inside the same period.
+Details They are, exactly: inflows 263,166.89 less income 134,034.49 is
+Details 129,132.40, and outflows 284,447.68 less expenses 155,315.28 is
+Details 129,132.40. That is why the 2026 Itemized Categories report has no
+Details TRANSFERS section while the all-dates one does.
+Details This is the cross-check worth having, because it tests the transfer
+Details handling from a direction the category report cannot.
+Given the quicken reports cross check : TransferCrossCheck Vertical
+| Inflows  | 263166.89  |
+| Outflows | -284447.68 |
+| Income   | 134034.49  |
+| Expenses | -155315.28 |
+Then transfer cross check is : TransferCrossCheck Vertical
+| Inflows          | 263166.89  |
+| Outflows         | -284447.68 |
+| Income           | 134034.49  |
+| Expenses         | -155315.28 |
+| TransfersIn      | 129132.40  |
+| TransfersOut     | -129132.40 |
+| TransfersNetZero | true       |
+| NetTotal         | -21280.79  |
+
+Attributes TransferCrossCheck
+| Attribute        | Type    | Default |
+| Inflows          | Money   | 0.00    |
+| Outflows         | Money   | 0.00    |
+| Income           | Money   | 0.00    |
+| Expenses         | Money   | 0.00    |
+| TransfersIn      | Money   | 0.00    |
+| TransfersOut     | Money   | 0.00    |
+| TransfersNetZero | Boolean | false   |
+| NetTotal         | Money   | 0.00    |
+
+Scenario The account balance report checks every account this round imports
+Description From pughkilleeen account balances 2025 after update.pdf. The bank,
+Description cash, asset, credit card and liability totals are exactly the
+Description accounts the first round imports, so they are compared. The
+Description investment total is not: the securities side is deliberately not
+Description imported, so that figure cannot be reproduced and is not claimed.
+Details The six totals sum to the overall total, which is how the excluded
+Details line is known to be the only gap: 274,806.23 less 54,340.74 plus
+Details 97,038.21 less 27,427.05 plus nothing plus 1,422,171.38 is
+Details 1,712,248.03.
+Given the quicken report states : QuickenFigure
+| QuickenLine                | QuickenAmount |
+| TOTAL Bank Accounts        | 274806.23     |
+| TOTAL Cash Accounts        | -54340.74     |
+| TOTAL Asset Accounts       | 97038.21      |
+| TOTAL Credit Card Accounts | -27427.05     |
+| TOTAL Liability Accounts   | 0.00          |
+When balance report compared : QuickenReport Vertical
+| Run        | AfterQfx        |
+| Book       | business        |
+| ReportKind | AccountBalances |
+| From       | 2005-01-01      |
+| To         | 2025-12-31      |
+| Lines      | 5               |
+Then comparison summary is : ComparisonSummary CompareOnly
+| Passes |
+| true   |
+Then lines not compared are : LineNotCompared
+| QuickenLine                | QuickenAmount | Reason                                   |
+| TOTAL Investment Accounts  | 1422171.38    | The securities side is not imported this round |
+| OVERALL TOTAL              | 1712248.03    | Includes the investment total            |
+
+Attributes LineNotCompared
+| Attribute     | Type  | Default |
+| QuickenLine   | Text  |         |
+| QuickenAmount | Money | 0.00    |
+| Reason        | Text  |         |
+
+Scenario The same QFX imported into both gives the same report
+Description This is the second half of the acceptance test and it checks the
+Description importer rather than the migration. The QFX goes into a Quicken
+Description file that already holds the history, and into a SimpleAccount book
+Description migrated from the same history, and the two reports are compared
+Description again.
+Details So it is not only a test of reading OFX. It is a test of what the
+Details import does when it meets twenty years of existing transactions: the
+Details FITID test, the match-on-amount-and-date test, and the choice between
+Details creating a transaction and clearing one that is already there. Those
+Details are the rules in ImportOfx that a small file cannot exercise.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses               | Expense | true        |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given imported postings are : ImportedPostingRow
+| Ref | Date       | Payee  | Account            | Amount  | Cleared   | FitId |
+| T1  | 2026-09-15 | Shop A | Assets:Checking    | -100.00 | Uncleared | none  |
+| T1  | 2026-09-15 | Shop A | Expenses:Groceries | 100.00  | Uncleared | none  |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount  | FitId | Name   | Memo | CheckNum |
+| DEBIT   | 2026-09-16 | -100.00 | F1    | SHOP A | none | none     |
+| DEBIT   | 2026-09-20 | -60.00  | F2    | SHOP C | none | none     |
+Then import summary is : ImportSummary Vertical
+| New       | 1 |
+| Duplicate | 0 |
+| Matched   | 1 |
+| Possible  | 0 |
+Given the quicken report states : QuickenFigure
+| QuickenLine   | QuickenAmount |
+| Groceries     | 100.00        |
+| Uncategorized | 60.00         |
+When reports compared : QuickenReport Vertical
+| Run        | AfterQfx        |
+| Book       | business        |
+| ReportKind | SpendingByCategory |
+| From       | 2026-01-01      |
+| To         | 2026-10-03      |
+| Lines      | 2               |
+Then comparison summary is : ComparisonSummary Vertical
+| LinesCompared   | 2    |
+| LinesAgreeing   | 2    |
+| LinesDiffering  | 0    |
+| OnlyInQuicken   | 0    |
+| OnlyInOurReport | 0    |
+| TotalDifference | 0.00 |
+| Passes          | true |
+# The matched transaction did not become a second 100.00, which is what would
+# show here as 200.00 against Quicken's 100.00. That is the failure this run
+# is for.
+
+Scenario Investment income does reach the spending report
+Description The other half of the scope line. A dividend and a brokerage fee
+Description are an income category and an expense category, so they belong in a
+Description spending report even though no report about the holdings is being
+Description compared. Skipping the 899 investment records of the business file
+Description would leave this report short.
+Given the chart of accounts is : ChartOfAccounts
+| Path                     | Type       | Placeholder |
+| Assets:Portfolio:Cash    | Investment | false       |
+| Income                   | Income     | true        |
+| Income:Dividends         | Income     | false       |
+| Expenses                 | Expense    | true        |
+| Expenses:Investment:Fees | Expense    | false       |
+Given postings are : PostingRow
+| Ref | Date       | Account                  | Amount  |
+| T1  | 2025-06-30 | Assets:Portfolio:Cash    | 250.00  |
+| T1  | 2025-06-30 | Income:Dividends         | -250.00 |
+| T2  | 2025-07-01 | Assets:Portfolio:Cash    | -25.00  |
+| T2  | 2025-07-01 | Expenses:Investment:Fees | 25.00   |
+Given the quicken report states : QuickenFigure
+| QuickenLine     | QuickenAmount |
+| Dividends       | 250.00        |
+| Investment:Fees | 25.00         |
+When reports compared : QuickenReport Vertical
+| Run        | FullYear2025       |
+| Book       | business           |
+| ReportKind | SpendingByCategory |
+| From       | 2025-01-01         |
+| To         | 2025-12-31         |
+| Lines      | 2                  |
+Then comparison summary is : ComparisonSummary Vertical
+| LinesCompared   | 2    |
+| LinesAgreeing   | 2    |
+| LinesDiffering  | 0    |
+| OnlyInQuicken   | 0    |
+| OnlyInOurReport | 0    |
+| TotalDifference | 0.00 |
+| Passes          | true |
+
+Scenario Importing the QFX twice changes no figure in the report
+Description The idempotency rule of ImportOfx, checked where it matters: in a
+Description report rather than in a count of rows.
+Given the chart of accounts is as previous
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId | Name   | Memo | CheckNum |
+| DEBIT   | 2026-09-20 | -60.00 | F2    | SHOP C | none | none     |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId | Name   | Memo | CheckNum |
+| DEBIT   | 2026-09-20 | -60.00 | F2    | SHOP C | none | none     |
+Then report rows are : ReportRow
+| Account                | Level | Amount | IsSubtotal |
+| Expenses               | 0     | 60.00  | true       |
+| Expenses:Uncategorized | 1     | 60.00  | false      |
+
+# ---------------------------------------------------------------------------
+# Running the comparison
+# ---------------------------------------------------------------------------
+
+BusinessRule In what order the comparisons are run and what stopping means
+Description Each is only worth running when the one before it has passed.
+Examples: RunOrder
+| Order | Run          | DependsOn    | AFailureHereMeans                                 |
+| 1     | WholePeriod  | The migration | Something did not come over, or came over twice  |
+| 2     | FullYear2025 | WholePeriod   | A transaction is in the wrong year                |
+| 3     | CurrentYear  | FullYear2025  | The two programs bound a part-year differently    |
+| 4     | AfterQfx     | CurrentYear   | The importer duplicated or dropped a transaction  |
+
+Attributes RunOrder
+| Attribute   | Type          | Default     |
+| Order       | Integer       | 0           |
+| Run         | ComparisonRun | WholePeriod |
+| DependsOn   | Text          |             |
+| AFailureHereMeans | Text    |             |
+
+Scenario Each book is compared separately
+Description There are two QIF files and they become two books. Nothing is
+Description compared across them, and no report adds a business figure to a
+Description personal one.
+Given migrated books are : MigratedBook
+| Name     | SourceFile        | FirstDate  | LastDate   |
+| business | pughkilleen.QIF   | 2005-06-17 | 2026-01-31 |
+| personal | kenpugh.QIF       | 2017-01-02 | 2025-12-09 |
+Then comparisons to run are : ComparisonPlan
+| Book     | Run          |
+| business | WholePeriod  |
+| business | FullYear2025 |
+| business | CurrentYear  |
+| business | AfterQfx     |
+| personal | WholePeriod  |
+| personal | FullYear2025 |
+| personal | CurrentYear  |
+| personal | AfterQfx     |
+
+Attributes MigratedBook
+Description A book as the migration created it, with the file it came from.
+| Attribute  | Type | Default    |
+| Name       | Text |            |
+| SourceFile | Text |            |
+| FirstDate  | Date | 2005-01-01 |
+| LastDate   | Date | 2026-12-31 |
+
+Attributes ComparisonPlan
+| Attribute | Type          | Default     |
+| Book      | Text          |             |
+| Run       | ComparisonRun | WholePeriod |
+
+Scenario The personal book covers nine years, not twenty
+Description Worth stating because the whole-period comparison for the personal
+Description book is a report of 2017 onwards and a figure for 2010 in it would
+Description be a fault rather than history.
+Given migrated books are as previous
+Then book extents are : MigratedBook CompareOnly
+| Name     | FirstDate  | LastDate   |
+| business | 2005-06-17 | 2026-01-31 |
+| personal | 2017-01-02 | 2025-12-09 |

@@ -1,0 +1,469 @@
+Specification Accounts
+
+Description The chart of accounts, and what an account balance means.
+Details SimpleAccount keeps one tree of accounts. The types that hold money and
+Details the types Quicken calls categories are both nodes in that tree, which is
+Details what allows every transaction to balance. See Transactions.
+Details
+Details An account has no Name attribute. The name is the last segment of the
+Details path, and is derived by the rule below rather than stored twice.
+
+# ---------------------------------------------------------------------------
+# The account
+# ---------------------------------------------------------------------------
+
+Entity Account
+Uses AccountPath and AccountType from CoreTypes
+| Attribute   | Type        | Default | Notes                               |
+| Path        | AccountPath |         | Unique; identifies the account      |
+| Type        | AccountType | Bank    | Fixed once the account has postings |
+| Placeholder | Boolean     | false   | A grouping node; takes no postings  |
+| Hidden      | Boolean     | false   | Kept out of pickers, history kept   |
+
+Collection ChartOfAccounts
+Description Every account in the book, in one tree.
+| DataType | Minimum | Maximum | Notes          |
+| Account  | 0       | 100000  | Path is unique |
+
+BusinessRule The name of an account is the last segment of its path
+Description A root account has no parent, so its parent is empty.
+Examples: AccountNameDerivation
+| Path                    | Name             | Parent        |
+| Expenses                | Expenses         |               |
+| Expenses:Auto           | Auto             | Expenses      |
+| Expenses:Auto:Fuel      | Fuel             | Expenses:Auto |
+| Equity:Opening Balances | Opening Balances | Equity        |
+
+Attributes AccountNameDerivation
+| Attribute | Type        | Default |
+| Path      | AccountPath |         |
+| Name      | AccountName |         |
+| Parent    | Text        | none    |
+
+Background A small chart of accounts
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type       | Placeholder |
+| Assets                  | Bank       | true        |
+| Assets:Checking         | Bank       | false       |
+| Assets:Savings          | Bank       | false       |
+| Liabilities             | Liability  | true        |
+| Liabilities:Visa        | CreditCard | false       |
+| Income                  | Income     | true        |
+| Income:Salary           | Income     | false       |
+| Expenses                | Expense    | true        |
+| Expenses:Groceries      | Expense    | false       |
+| Expenses:Auto           | Expense    | true        |
+| Expenses:Auto:Fuel      | Expense    | false       |
+| Expenses:Auto:Repairs   | Expense    | false       |
+| Equity:Opening Balances | Equity     | false       |
+
+# ---------------------------------------------------------------------------
+# Creating accounts
+# ---------------------------------------------------------------------------
+
+Scenario Adding an account under a parent
+Given the chart of accounts is as previous
+When account added : Account Vertical
+| Path | Expenses:Auto:Insurance |
+| Type | Expense                 |
+Then account is : Account Vertical
+| Path        | Expenses:Auto:Insurance |
+| Type        | Expense                 |
+| Placeholder | false                   |
+| Hidden      | false                   |
+
+Scenario A missing parent is created as a placeholder
+Description Importing twenty years of data names deep categories that were
+Description never created by hand, so the missing levels are filled in and
+Description marked as placeholders.
+Given the chart of accounts is as previous
+When account added : Account Vertical
+| Path | Expenses:Home:Garden:Seeds |
+| Type | Expense                    |
+Then accounts created are : ChartOfAccounts
+| Path                       | Type    | Placeholder |
+| Expenses:Home              | Expense | true        |
+| Expenses:Home:Garden       | Expense | true        |
+| Expenses:Home:Garden:Seeds | Expense | false       |
+# The first two were filled in; the third is the one that was asked for.
+
+Scenario A filled-in parent takes the type of its child
+Description A placeholder created on the way to an Expense is itself an Expense,
+Description so the roll-up in a report adds up.
+Given the chart of accounts is as previous
+When account added : Account Vertical
+| Path | Income:Interest:Bank Interest |
+| Type | Income                        |
+Then accounts created are : ChartOfAccounts
+| Path                          | Type   | Placeholder |
+| Income:Interest               | Income | true        |
+| Income:Interest:Bank Interest | Income | false       |
+
+Scenario Two accounts may not share a path
+Given the chart of accounts is as previous
+When account added : Account Vertical
+| Path | Assets:Checking |
+| Type | Bank            |
+Then rejected because : Rejection
+| Reason                                  |
+| An account named Assets:Checking exists |
+
+Attributes Rejection
+| Attribute | Type | Default |
+| Reason    | Text |         |
+
+Scenario The same name under two different parents is fine
+Description Expenses:Auto:Insurance and Expenses:Home:Insurance are two
+Description categories, and both are named Insurance.
+Given the chart of accounts is as previous
+When account added : Account Vertical
+| Path | Expenses:Auto:Insurance |
+| Type | Expense                 |
+When account added : Account Vertical
+| Path | Expenses:Home:Insurance |
+| Type | Expense                 |
+Then accounts named Insurance are : ChartOfAccounts CompareOnly
+| Path                    |
+| Expenses:Auto:Insurance |
+| Expenses:Home:Insurance |
+
+# ---------------------------------------------------------------------------
+# Renaming and moving
+# ---------------------------------------------------------------------------
+
+Scenario Renaming an account renames its descendants
+Description The path of a child is built from the path of its parent, so a
+Description rename rewrites every path beneath it. Postings are untouched:
+Description they refer to the account, not to the text of its path.
+Given the chart of accounts is as previous
+When account renamed : AccountRename Vertical
+| Path    | Expenses:Auto |
+| NewName | Vehicle       |
+Then accounts are : ChartOfAccounts CompareOnly
+| Path                     |
+| Expenses:Vehicle         |
+| Expenses:Vehicle:Fuel    |
+| Expenses:Vehicle:Repairs |
+
+Attributes AccountRename
+| Attribute | Type        | Default |
+| Path      | AccountPath |         |
+| NewName   | AccountName |         |
+
+Scenario Moving an account to another parent
+Given the chart of accounts is as previous
+When account moved : AccountMove Vertical
+| Path      | Expenses:Auto:Fuel |
+| NewParent | Expenses           |
+Then accounts are : ChartOfAccounts CompareOnly
+| Path          |
+| Expenses:Fuel |
+
+Attributes AccountMove
+| Attribute | Type        | Default |
+| Path      | AccountPath |         |
+| NewParent | AccountPath |         |
+
+Scenario An account may not be moved beneath itself
+Given the chart of accounts is as previous
+When account moved : AccountMove Vertical
+| Path      | Expenses:Auto      |
+| NewParent | Expenses:Auto:Fuel |
+Then rejected because : Rejection
+| Reason                                   |
+| An account may not be its own descendant |
+
+# ---------------------------------------------------------------------------
+# Deleting and hiding
+# ---------------------------------------------------------------------------
+
+Scenario An account with postings is not deleted
+Description Twenty years of history is the point of the program, so nothing
+Description silently discards a posting. Hide the account instead.
+Given the chart of accounts is as previous
+Given Expenses:Groceries has postings : PostingCount
+| Count |
+| 412   |
+When account deleted : AccountSelect
+| Path               |
+| Expenses:Groceries |
+Then rejected because : Rejection
+| Reason                                               |
+| Expenses:Groceries has 412 postings; hide it instead |
+
+Attributes PostingCount
+| Attribute | Type    | Default |
+| Count     | Integer | 0       |
+
+Scenario An account with no postings is deleted
+Given the chart of accounts is as previous
+Given Expenses:Auto:Repairs has postings : PostingCount
+| Count |
+| 0     |
+When account deleted : AccountSelect
+| Path                  |
+| Expenses:Auto:Repairs |
+Then accounts under Expenses:Auto are : ChartOfAccounts CompareOnly
+| Path               |
+| Expenses:Auto:Fuel |
+
+Scenario Hiding an account keeps its history
+Given the chart of accounts is as previous
+When account hidden : AccountSelect
+| Path               |
+| Expenses:Groceries |
+Then account is : Account Vertical
+| Path        | Expenses:Groceries |
+| Type        | Expense            |
+| Placeholder | false              |
+| Hidden      | true               |
+Then category picker offers : ChartOfAccounts CompareOnly
+| Path                  |
+| Expenses:Auto:Fuel    |
+| Expenses:Auto:Repairs |
+# Expenses:Groceries is absent from the picker, and its 412 postings still
+# report under it.
+
+# ---------------------------------------------------------------------------
+# What a balance is
+# ---------------------------------------------------------------------------
+
+DomainTerm RawBalance : Money
+Description The sum of the amounts of every posting to one account, with the
+Description sign those postings carry. Debits are positive throughout.
+
+DomainTerm DisplayBalance : Money
+Description The raw balance multiplied by the display sign of the account type,
+Description so that each account reads the way its own statement reads.
+
+BusinessRule Display sign follows from account type
+Description Which account types read the other way round from their postings.
+Details A charge to a credit card credits that account, leaving a negative raw
+Details balance, but the cardholder thinks of it as an amount owed. Income is
+Details credited by a paycheque, and a report should show it as earned.
+Examples: DisplaySignOf
+| AccountType | DisplaySign | Notes                                       |
+| Bank        | 1           | Positive raw balance means money held       |
+| Cash        | 1           |                                             |
+| Asset       | 1           |                                             |
+| Investment  | 1           |                                             |
+| Expense     | 1           | Positive raw balance means money spent      |
+| CreditCard  | -1          | Shown as the amount owed                    |
+| Liability   | -1          | Shown as the amount owed                    |
+| Income      | -1          | Shown as the amount earned                  |
+| Equity      | -1          | Shown as the amount contributed to the book |
+
+Attributes DisplaySignOf
+| Attribute   | Type        | Default |
+| AccountType | AccountType | Bank    |
+| DisplaySign | Integer     | 1       |
+| Notes       | String      | none    |
+
+Define SomePostings
+Description The postings the next three scenarios all read, named so that each
+Description can ask for them. A scenario cannot take a table from the scenario
+Description before it: every generated test stands alone.
+| Account            | Amount   |
+| Assets:Checking    | 1000.00  |
+| Assets:Checking    | -45.00   |
+| Liabilities:Visa   | -120.00  |
+| Liabilities:Visa   | 20.00    |
+| Income:Salary      | -1000.00 |
+| Expenses:Groceries | 45.00    |
+| Expenses:Auto:Fuel | 100.00   |
+
+Scenario Balances of an account after some postings
+Given the chart of accounts is as previous
+Given postings are : PostingLine
+=SomePostings
+Then balances are : AccountBalance
+| Account            | RawBalance | DisplayBalance | Notes            |
+| Assets:Checking    | 955.00     | 955.00         | Money held       |
+| Liabilities:Visa   | -100.00    | 100.00         | Owed on the card |
+| Income:Salary      | -1000.00   | 1000.00        | Earned           |
+| Expenses:Groceries | 45.00      | 45.00          | Spent            |
+| Expenses:Auto:Fuel | 100.00     | 100.00         | Spent            |
+
+Attributes PostingLine
+| Attribute | Type        | Default |
+| Account   | AccountPath |         |
+| Amount    | Money       | 0.00    |
+
+Attributes AccountBalance
+| Attribute      | Type        | Default |
+| Account        | AccountPath |         |
+| RawBalance     | Money       | 0.00    |
+| DisplayBalance | Money       | 0.00    |
+| Notes          | String      | none    |
+
+Scenario A placeholder balance is the total of its descendants
+Description A placeholder takes no postings of its own, so its balance is
+Description entirely the roll-up. A node that is both posted to and a parent
+Description reports both numbers, which is why there are two columns.
+Given the chart of accounts is as previous
+Given postings are : PostingLine
+=SomePostings
+Then rolled up balances are : RolledUpBalance
+| Account            | OwnBalance | TotalBalance | Notes                       |
+| Expenses:Auto:Fuel | 100.00     | 100.00       | A leaf                      |
+| Expenses:Auto      | 0.00       | 100.00       | Placeholder: all from below |
+| Expenses:Groceries | 45.00      | 45.00        |                             |
+| Expenses           | 0.00       | 145.00       | Groceries and Auto          |
+| Assets             | 0.00       | 955.00       |                             |
+
+Attributes RolledUpBalance
+| Attribute    | Type        | Default |
+| Account      | AccountPath |         |
+| OwnBalance   | Money       | 0.00    |
+| TotalBalance | Money       | 0.00    |
+| Notes        | String      | none    |
+
+Scenario Net worth is the total of the real accounts
+Description The nominal accounts are left out: including them would always give
+Description zero, because every transaction balances.
+Given the chart of accounts is as previous
+Given postings are : PostingLine
+=SomePostings
+Then net worth is : NetWorth Vertical
+| Assets      | 955.00 |
+| Liabilities | 100.00 |
+| NetWorth    | 855.00 |
+
+Attributes NetWorth
+| Attribute   | Type  | Default |
+| Assets      | Money | 0.00    |
+| Liabilities | Money | 0.00    |
+| NetWorth    | Money | 0.00    |
+
+Scenario A balance as at a date ignores later postings
+Description Every balance in the program is a balance as at a date; the figure
+Description shown without one is the balance as at today. See Reports.
+Given the chart of accounts is as previous
+Given dated postings are : DatedPostingLine
+| Date       | Account         | Amount  |
+| 2024-01-05 | Assets:Checking | 1000.00 |
+| 2024-02-10 | Assets:Checking | -45.00  |
+| 2024-03-20 | Assets:Checking | -55.00  |
+Then balance as at dates are : BalanceAsAt
+| AsAt       | Account         | Balance | Notes                       |
+| 2024-01-04 | Assets:Checking | 0.00    | Before anything was posted  |
+| 2024-01-05 | Assets:Checking | 1000.00 | The date itself is included |
+| 2024-02-28 | Assets:Checking | 955.00  |                             |
+| 2024-12-31 | Assets:Checking | 900.00  | Everything                  |
+
+Attributes DatedPostingLine
+| Attribute | Type        | Default    |
+| Date      | Date        | 2024-01-01 |
+| Account   | AccountPath |            |
+| Amount    | Money       | 0.00       |
+
+Attributes BalanceAsAt
+| Attribute | Type        | Default    |
+| AsAt      | Date        | 2024-01-01 |
+| Account   | AccountPath |            |
+| Balance   | Money       | 0.00       |
+| Notes     | String      | none       |
+
+# ---------------------------------------------------------------------------
+# Opening balances
+# ---------------------------------------------------------------------------
+
+Scenario Opening a real account with a balance
+Description There is no opening balance field on an account. An opening balance
+Description is a transaction against Equity:Opening Balances, so the book
+Description balances from its first day. This is what lets an import of twenty
+Description years of history start from a known position.
+Given the chart of accounts is as previous
+When account added with an opening balance : AccountWithOpeningBalance Vertical
+| Path           | Assets:Brokerage Cash |
+| Type           | Bank                  |
+| OpeningBalance | 2500.00               |
+| OpeningDate    | 2005-01-01            |
+Then postings created are : DatedPostingLine
+| Date       | Account                 | Amount   |
+| 2005-01-01 | Assets:Brokerage Cash   | 2500.00  |
+| 2005-01-01 | Equity:Opening Balances | -2500.00 |
+
+Attributes AccountWithOpeningBalance
+| Attribute      | Type        | Default    |
+| Path           | AccountPath |            |
+| Type           | AccountType | Bank       |
+| OpeningBalance | Money       | 0.00       |
+| OpeningDate    | Date        | 2005-01-01 |
+
+Scenario Opening a credit card with a balance owed
+Description The opening balance is entered the way the statement reads, as an
+Description amount owed, and is stored with the sign the posting needs.
+Given the chart of accounts is as previous
+When account added with an opening balance : AccountWithOpeningBalance Vertical
+| Path           | Liabilities:Amex |
+| Type           | CreditCard       |
+| OpeningBalance | 300.00           |
+| OpeningDate    | 2005-01-01       |
+Then postings created are : DatedPostingLine
+| Date       | Account                 | Amount  |
+| 2005-01-01 | Liabilities:Amex        | -300.00 |
+| 2005-01-01 | Equity:Opening Balances | 300.00  |
+Then balances are : AccountBalance
+| Account          | RawBalance | DisplayBalance | Notes            |
+| Liabilities:Amex | -300.00    | 300.00         | Owed, as entered |
+
+Scenario An account opened with no balance posts nothing
+Given the chart of accounts is as previous
+When account added with an opening balance : AccountWithOpeningBalance Vertical
+| Path           | Assets:Money Market |
+| Type           | Bank                |
+| OpeningBalance | 0.00                |
+| OpeningDate    | 2005-01-01          |
+Then postings created are : DatedPostingLine
+| Date | Account | Amount |
+# No rows: an opening balance of zero is not worth a transaction.
+
+# ---------------------------------------------------------------------------
+# Changing the type of an account
+# ---------------------------------------------------------------------------
+
+Scenario The type of an unused account may be changed
+Given the chart of accounts is as previous
+Given Expenses:Auto:Repairs has postings : PostingCount
+| Count |
+| 0     |
+When account type changed : AccountTypeChange Vertical
+| Path    | Expenses:Auto:Repairs |
+| NewType | Income                |
+Then account is : Account Vertical CompareOnly
+| Path | Expenses:Auto:Repairs |
+| Type | Income                |
+
+Attributes AccountTypeChange
+| Attribute | Type        | Default |
+| Path      | AccountPath |         |
+| NewType   | AccountType | Bank    |
+
+Scenario Changing type across the real and nominal divide is refused
+Description Changing an Expense into a Bank would change the sign that every
+Description existing posting is read with, and so rewrite history in silence.
+Given the chart of accounts is as previous
+Given Expenses:Groceries has postings : PostingCount
+| Count |
+| 412   |
+When account type changed : AccountTypeChange Vertical
+| Path    | Expenses:Groceries |
+| NewType | Bank               |
+Then rejected because : Rejection
+| Reason                                                               |
+| Expenses:Groceries has postings; a category cannot become an account |
+
+Scenario Changing type within the real accounts is allowed
+Description A Bank mistakenly set up as Cash is a common correction, and the
+Description display sign is the same for both, so no posting changes meaning.
+Given the chart of accounts is as previous
+Given Assets:Savings has postings : PostingCount
+| Count |
+| 96    |
+When account type changed : AccountTypeChange Vertical
+| Path    | Assets:Savings |
+| NewType | Cash           |
+Then account is : Account Vertical CompareOnly
+| Path | Assets:Savings |
+| Type | Cash           |

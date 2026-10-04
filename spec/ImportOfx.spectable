@@ -1,0 +1,1012 @@
+Specification ImportOfx
+
+Description Reading a QFX or OFX download, and deciding for each transaction in
+Description it whether it is new, already present, or the arrival of something
+Description entered by hand.
+Details
+Details Importing the same file twice must change nothing. That is the single
+Details requirement everything in this file serves, because over twenty years
+Details of downloads it is certain to happen by accident.
+
+# ---------------------------------------------------------------------------
+# What the file says
+# ---------------------------------------------------------------------------
+
+Entity OfxStatement
+Description The header of one statement in the file, naming the account it is for.
+| Attribute    | Type        | Default    | Notes                             |
+| BankId       | Text        | none       | Routing number; absent on cards   |
+| OfxAccountId | Text        |            | The account number the bank uses  |
+| OfxAcctType  | OfxAcctType | CHECKING   |                                   |
+| Currency     | Text        | USD        |                                   |
+| StartDate    | Date        | 2024-01-01 | Of the period downloaded          |
+| EndDate      | Date        | 2024-01-31 |                                   |
+| LedgerBal    | Money       | 0.00       | What the bank says the balance is |
+| LedgerBalAt  | Date        | 2024-01-31 |                                   |
+
+DataType OfxAcctType
+Description The account type OFX reports, which is not the SimpleAccount type.
+Examples: EnumerationValues
+| Value       | Notes                                   |
+| CHECKING    |                                         |
+| SAVINGS     |                                         |
+| MONEYMRKT   |                                         |
+| CREDITLINE  |                                         |
+| CREDITCARD  | From a CCACCTFROM block rather than BANKACCTFROM |
+| INVESTMENT  | From an INVACCTFROM block               |
+
+Entity OfxTransaction
+Description One STMTTRN block.
+| Attribute  | Type        | Default    | Notes                              |
+| TrnType    | OfxTrnType  | DEBIT      |                                    |
+| DatePosted | Date        | 2024-01-01 | From DTPOSTED                      |
+| Amount     | Money       | 0.00       | From TRNAMT, signed by the bank    |
+| FitId      | FitId       |            | From FITID                         |
+| Name       | Text        | none       | From NAME, the payee as the bank has it |
+| Memo       | Text        | none       | From MEMO                          |
+| CheckNum   | CheckNumber | none       | From CHECKNUM                      |
+
+DataType OfxTrnType
+Description The transaction type OFX reports. It is recorded but not relied on:
+Description the sign of the amount is what decides direction.
+Examples: EnumerationValues
+| Value     | Notes                       |
+| CREDIT    | Money in                    |
+| DEBIT     | Money out                   |
+| INT       | Interest earned or charged  |
+| DIV       | Dividend                    |
+| FEE       | Service charge              |
+| SRVCHG    | Service charge              |
+| DEP       | Deposit                     |
+| ATM       |                             |
+| POS       | Point of sale               |
+| XFER      | Transfer                    |
+| CHECK     | A paper check               |
+| PAYMENT   |                             |
+| CASH      |                             |
+| DIRECTDEP | Direct deposit              |
+| DIRECTDEBIT |                           |
+| REPEATPMT | A standing order            |
+| OTHER     |                             |
+
+Collection OfxTransactions
+| DataType       | Minimum | Maximum | Notes                        |
+| OfxTransaction | 0       | 100000  | FitId is unique per statement |
+
+# ---------------------------------------------------------------------------
+# Parsing the file
+# ---------------------------------------------------------------------------
+
+Scenario Reading an OFX 1 file, which is SGML and not XML
+Description Most bank downloads are OFX 1.0.2 with unclosed tags, and a strict
+Description XML parser rejects them. The reader closes a tag when the next one
+Description opens at the same level, which is what the format intends.
+Given the file contains
+"""
+OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+SECURITY:NONE
+ENCODING:USASCII
+
+<OFX>
+<BANKMSGSRSV1><STMTTRNRS><STMTRS>
+<CURDEF>USD
+<BANKACCTFROM><BANKID>053000196<ACCTID>1234567890<ACCTTYPE>CHECKING</BANKACCTFROM>
+<BANKTRANLIST><DTSTART>20240101<DTEND>20240131
+<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20240115120000[-5:EST]<TRNAMT>-45.00<FITID>20240115001<NAME>HARRIS TEETER #231<MEMO>PURCHASE</STMTTRN>
+<STMTTRN><TRNTYPE>CHECK<DTPOSTED>20240118<TRNAMT>-1250.00<FITID>20240118002<CHECKNUM>2041<NAME>COUNTY TAX OFFICE</STMTTRN>
+<STMTTRN><TRNTYPE>DIRECTDEP<DTPOSTED>20240131<TRNAMT>3000.00<FITID>20240131003<NAME>ACME PAYROLL</STMTTRN>
+</BANKTRANLIST>
+<LEDGERBAL><BALAMT>1705.00<DTASOF>20240131</LEDGERBAL>
+</STMTRS></STMTTRNRS></BANKMSGSRSV1>
+</OFX>
+"""
+Then statement is : OfxStatement Vertical
+| BankId       | 053000196  |
+| OfxAccountId | 1234567890 |
+| OfxAcctType  | CHECKING   |
+| Currency     | USD        |
+| StartDate    | 2024-01-01 |
+| EndDate      | 2024-01-31 |
+| LedgerBal    | 1705.00    |
+| LedgerBalAt  | 2024-01-31 |
+Then transactions read are : OfxTransactions
+| TrnType   | DatePosted | Amount   | FitId       | Name               | Memo     | CheckNum |
+| DEBIT     | 2024-01-15 | -45.00   | 20240115001 | HARRIS TEETER #231 | PURCHASE | none     |
+| CHECK     | 2024-01-18 | -1250.00 | 20240118002 | COUNTY TAX OFFICE  | none     | 2041     |
+| DIRECTDEP | 2024-01-31 | 3000.00  | 20240131003 | ACME PAYROLL       | none     | none     |
+
+Scenario Reading an OFX 2 file, which is XML
+Description Newer downloads are well-formed XML with every tag closed. The same
+Description reader handles both, so nothing downstream knows which it was.
+Given the file contains
+"""
+<?xml version="1.0" encoding="UTF-8"?>
+<?OFX OFXHEADER="200" VERSION="211" SECURITY="NONE"?>
+<OFX>
+  <CREDITCARDMSGSRSV1><CCSTMTTRNRS><CCSTMTRS>
+    <CURDEF>USD</CURDEF>
+    <CCACCTFROM><ACCTID>4111111111111111</ACCTID></CCACCTFROM>
+    <BANKTRANLIST>
+      <DTSTART>20240301</DTSTART><DTEND>20240331</DTEND>
+      <STMTTRN>
+        <TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20240305</DTPOSTED>
+        <TRNAMT>-89.99</TRNAMT><FITID>CC-20240305-1</FITID>
+        <NAME>AMAZON MKTPLACE</NAME>
+      </STMTTRN>
+    </BANKTRANLIST>
+    <LEDGERBAL><BALAMT>-89.99</BALAMT><DTASOF>20240331</DTASOF></LEDGERBAL>
+  </CCSTMTRS></CCSTMTTRNRS></CREDITCARDMSGSRSV1>
+</OFX>
+"""
+Then statement is : OfxStatement Vertical
+| BankId       | none             |
+| OfxAccountId | 4111111111111111 |
+| OfxAcctType  | CREDITCARD       |
+| Currency     | USD              |
+| StartDate    | 2024-03-01       |
+| EndDate      | 2024-03-31       |
+| LedgerBal    | -89.99           |
+| LedgerBalAt  | 2024-03-31       |
+Then transactions read are : OfxTransactions
+| TrnType | DatePosted | Amount | FitId         | Name            | Memo | CheckNum |
+| DEBIT   | 2024-03-05 | -89.99 | CC-20240305-1 | AMAZON MKTPLACE | none | none     |
+
+BusinessRule An OFX date is read to the day
+Description DTPOSTED may carry a time and a timezone. The time is discarded:
+Description a register is kept by date, and keeping the time would make the
+Description same transaction sort differently depending on the reader timezone.
+Examples: OfxDateParse
+| Text                      | Date       | Notes                           |
+| 20240115                  | 2024-01-15 | Date only                       |
+| 20240115120000            | 2024-01-15 | Time discarded                  |
+| 20240115120000.000        | 2024-01-15 | Milliseconds discarded          |
+| 20240115120000[-5:EST]    | 2024-01-15 | Timezone discarded              |
+| 20240115235959[-5:EST]    | 2024-01-15 | Not rolled into the next day    |
+| 20240101000000[+13:NZDT]  | 2024-01-01 | Nor into the previous one       |
+
+Attributes OfxDateParse
+| Attribute | Type   | Default    |
+| Text      | String |            |
+| Date      | Date   | 2024-01-01 |
+| Notes     | String | none       |
+
+BusinessRule The amount in an OFX file is used as the posting amount
+Description TRNAMT is signed from the point of view of the account the statement
+Description is for, which is the same convention the postings use. No account
+Description type needs a sign flip, including a credit card: a charge is
+Description negative in the file and a credit to the card in the book.
+Examples: OfxAmountToPosting
+| OfxAcctType | TrnAmt  | PostingAmount | Notes                        |
+| CHECKING    | -45.00  | -45.00        | Money out of checking        |
+| CHECKING    | 3000.00 | 3000.00       | Pay in                       |
+| CREDITCARD  | -89.99  | -89.99        | A charge; more is now owed   |
+| CREDITCARD  | 300.00  | 300.00        | A payment; less is now owed  |
+| SAVINGS     | 1.23    | 1.23          | Interest                     |
+
+Attributes OfxAmountToPosting
+| Attribute     | Type        | Default  |
+| OfxAcctType   | OfxAcctType | CHECKING |
+| TrnAmt        | Money       | 0.00     |
+| PostingAmount | Money       | 0.00     |
+| Notes         | String      | none     |
+
+Scenario A file that is not OFX at all is reported, not guessed at
+Given the file contains
+"""
+Date,Description,Amount
+2024-01-15,HARRIS TEETER,-45.00
+"""
+Then rejected because : Rejection
+| Reason                                                  |
+| No OFX header found; this looks like a CSV file         |
+
+Scenario A statement for an account that is not yet mapped asks which it is
+Description The first download from an institution names an account number that
+Description means nothing yet. The import stops and asks, rather than inventing
+Description an account.
+Given account mappings are : AccountMapping
+| BankId | OfxAccountId | AccountPath |
+When statement imported : OfxStatement Vertical
+| BankId       | 053000196  |
+| OfxAccountId | 1234567890 |
+| OfxAcctType  | CHECKING   |
+Then asked to choose an account for : UnmappedAccount Vertical
+| BankId       | 053000196  |
+| OfxAccountId | 1234567890 |
+| OfxAcctType  | CHECKING   |
+| Suggestion   | none       |
+
+Attributes UnmappedAccount
+| Attribute    | Type        | Default  |
+| BankId       | Text        | none     |
+| OfxAccountId | Text        |          |
+| OfxAcctType  | OfxAcctType | CHECKING |
+| Suggestion   | AccountPath | none     |
+
+Entity AccountMapping
+Description Which SimpleAccount account a downloaded account number belongs to.
+Details Recorded once, on the first import, and used silently thereafter.
+| Attribute    | Type        | Default | Notes                            |
+| BankId       | Text        | none    | Absent for a credit card         |
+| OfxAccountId | Text        |         | As the file gives it             |
+| AccountPath  | AccountPath |         | Where its transactions are posted |
+
+Scenario A mapped account imports without asking
+Given account mappings are : AccountMapping
+| BankId    | OfxAccountId | AccountPath     |
+| 053000196 | 1234567890   | Assets:Checking |
+When statement imported : OfxStatement Vertical
+| BankId       | 053000196  |
+| OfxAccountId | 1234567890 |
+| OfxAcctType  | CHECKING   |
+Then import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+| Asked       | false           |
+
+Attributes ImportTarget
+| Attribute   | Type        | Default |
+| AccountPath | AccountPath |         |
+| Asked       | Boolean     | false   |
+
+# ---------------------------------------------------------------------------
+# Deciding what to do with each transaction
+# ---------------------------------------------------------------------------
+
+DataType ImportDisposition
+Description What the import decided about one downloaded transaction.
+Examples: EnumerationValues
+| Value     | Notes                                                       |
+| New       | Not seen before; a transaction is created                   |
+| Duplicate | Same FITID already imported into this account; nothing done  |
+| Matched   | Matches one entered by hand; that one is cleared instead    |
+| Possible  | Looks like one already present, but not certainly; asks     |
+
+BusinessRule How a downloaded transaction is identified
+Description In order. The first test that applies decides.
+Details The FITID test is what makes a second import of the same file do
+Details nothing. It is scoped to the account, because two banks may issue the
+Details same identifier.
+Details The match test is what stops a check appearing twice: once when it was
+Details written, and again when it cleared.
+Examples: DispositionRule
+| Test | Condition                                                             | Disposition |
+| 1    | A posting in this account already carries this FITID                  | Duplicate   |
+| 2    | An uncleared posting in this account has the same amount and check number | Matched  |
+| 3    | An uncleared posting in this account has the same amount within five days | Matched  |
+| 4    | A cleared posting in this account has the same amount and date, no FITID | Possible |
+| 5    | Nothing above applies                                                 | New         |
+
+Attributes DispositionRule
+| Attribute   | Type              | Default |
+| Test        | Integer           | 0       |
+| Condition   | String            |         |
+| Disposition | ImportDisposition | New     |
+
+Scenario Importing the same file twice imports nothing the second time
+Description The FITID is stored on the posting in the statement account, which
+Description is what makes this test possible at all.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given account mappings are : AccountMapping
+| BankId    | OfxAccountId | AccountPath     |
+| 053000196 | 1234567890   | Assets:Checking |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name          | Memo | CheckNum |
+| DEBIT   | 2024-01-15 | -45.00 | 20240115001 | HARRIS TEETER | none | none     |
+Then import summary is : ImportSummary Vertical
+| New       | 1 |
+| Duplicate | 0 |
+| Matched   | 0 |
+| Possible  | 0 |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name          | Memo | CheckNum |
+| DEBIT   | 2024-01-15 | -45.00 | 20240115001 | HARRIS TEETER | none | none     |
+Then import summary is : ImportSummary Vertical
+| New       | 0 |
+| Duplicate | 1 |
+| Matched   | 0 |
+| Possible  | 0 |
+Then balances are : AccountBalance
+| Account         | RawBalance | DisplayBalance | Notes                  |
+| Assets:Checking | -45.00     | -45.00         | Imported once, not twice |
+
+Attributes ImportSummary
+| Attribute | Type    | Default |
+| New       | Integer | 0       |
+| Duplicate | Integer | 0       |
+| Matched   | Integer | 0       |
+| Possible  | Integer | 0       |
+
+Scenario The same FITID in a different account is not a duplicate
+Description Two institutions may number their transactions alike. The test is
+Description scoped to the account the statement is for.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Bank       | false       |
+| Liabilities:Visa       | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+Given postings are : ImportedPostingRow
+| Ref | Date       | Account         | Amount | FitId |
+| T1  | 2024-01-15 | Assets:Checking | -45.00 | 00001 |
+Given import target is : ImportTarget Vertical
+| AccountPath | Liabilities:Visa |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId | Name       | Memo | CheckNum |
+| DEBIT   | 2024-01-15 | -45.00 | 00001 | SOME SHOP  | none | none     |
+Then import summary is : ImportSummary Vertical
+| New       | 1 |
+| Duplicate | 0 |
+| Matched   | 0 |
+| Possible  | 0 |
+
+Attributes ImportedPostingRow
+Description A posting row that also carries the identifier it was imported with.
+| Attribute | Type           | Default    |
+| Ref       | TransactionRef |            |
+| Date      | Date           | 2024-01-01 |
+| Payee     | PayeeName      | none       |
+| Account   | AccountPath    |            |
+| Amount    | Money          | 0.00       |
+| Cleared   | ClearedStatus  | Uncleared  |
+| FitId     | FitId          | none       |
+
+Scenario A check entered by hand is matched when it clears
+Description The check was written on the second and cleared on the eighteenth.
+Description The import does not create a second transaction: it marks the one
+Description already there as cleared, and records the FITID on it so that a
+Description later import recognises it immediately.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Home:Rates    | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : ImportedPostingRow
+| Ref | Date       | Payee             | Account             | Amount   | Cleared   | FitId |
+| T1  | 2024-01-02 | County Tax Office | Assets:Checking     | -1250.00 | Uncleared | none  |
+| T1  | 2024-01-02 | County Tax Office | Expenses:Home:Rates | 1250.00  | Uncleared | none  |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount   | FitId       | Name              | Memo | CheckNum |
+| CHECK   | 2024-01-18 | -1250.00 | 20240118002 | COUNTY TAX OFFICE | none | 2041     |
+Then import summary is : ImportSummary Vertical
+| New       | 0 |
+| Duplicate | 0 |
+| Matched   | 1 |
+| Possible  | 0 |
+Then postings are : ImportedPostingRow
+| Ref | Date       | Payee             | Account             | Amount   | Cleared   | FitId       |
+| T1  | 2024-01-02 | County Tax Office | Assets:Checking     | -1250.00 | Cleared   | 20240118002 |
+| T1  | 2024-01-02 | County Tax Office | Expenses:Home:Rates | 1250.00  | Uncleared | none        |
+# The date entered by hand is kept. It is the date the check was written, which
+# is what the register is ordered by; the clearing date belongs to the bank.
+
+Scenario A match within five days on amount alone
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : ImportedPostingRow
+| Ref | Date       | Payee         | Account            | Amount | Cleared   | FitId |
+| T1  | 2024-01-14 | Harris Teeter | Assets:Checking    | -45.00 | Uncleared | none  |
+| T1  | 2024-01-14 | Harris Teeter | Expenses:Groceries | 45.00  | Uncleared | none  |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name               | Memo | CheckNum |
+| DEBIT   | 2024-01-16 | -45.00 | 20240116009 | HARRIS TEETER #231 | none | none     |
+Then import summary is : ImportSummary Vertical
+| New       | 0 |
+| Duplicate | 0 |
+| Matched   | 1 |
+| Possible  | 0 |
+
+Scenario The same amount six days apart is not matched
+Description Five days is the window. Beyond it the two are taken to be two
+Description separate visits to the same shop for the same amount, which is
+Description commoner than a bank taking a week to post.
+Given the chart of accounts is as previous
+Given postings are : ImportedPostingRow
+| Ref | Date       | Payee         | Account            | Amount | Cleared   | FitId |
+| T1  | 2024-01-14 | Harris Teeter | Assets:Checking    | -45.00 | Uncleared | none  |
+| T1  | 2024-01-14 | Harris Teeter | Expenses:Groceries | 45.00  | Uncleared | none  |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name               | Memo | CheckNum |
+| DEBIT   | 2024-01-20 | -45.00 | 20240120009 | HARRIS TEETER #231 | none | none     |
+Then import summary is : ImportSummary Vertical
+| New       | 1 |
+| Duplicate | 0 |
+| Matched   | 0 |
+| Possible  | 0 |
+
+Scenario Two identical downloaded transactions both import
+Description A shop visited twice in one day for the same amount gives two
+Description transactions with two FITIDs. Each is matched on its own identifier,
+Description so neither is mistaken for the other.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name    | Memo | CheckNum |
+| DEBIT   | 2024-01-15 | -4.75  | 20240115010 | STARBUCKS | none | none   |
+| DEBIT   | 2024-01-15 | -4.75  | 20240115011 | STARBUCKS | none | none   |
+Then import summary is : ImportSummary Vertical
+| New       | 2 |
+| Duplicate | 0 |
+| Matched   | 0 |
+| Possible  | 0 |
+
+Scenario A new transaction is created uncategorised and cleared
+Description What the bank sends is known to have happened, so it arrives cleared.
+Description The category is not known, so the other side is Uncategorized until
+Description a payee rule or the user says otherwise. See Payees.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name               | Memo     | CheckNum |
+| DEBIT   | 2024-01-15 | -45.00 | 20240115001 | HARRIS TEETER #231 | PURCHASE | none     |
+Then postings are : ImportedPostingRow
+| Ref | Date       | Payee              | Account                | Amount | Cleared   | FitId       |
+| T1  | 2024-01-15 | HARRIS TEETER #231 | Assets:Checking        | -45.00 | Cleared   | 20240115001 |
+| T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  | Uncleared | none        |
+# The payee is the raw NAME from the file. Tidying it is the business of
+# Payees, so that this file has one job.
+
+# ---------------------------------------------------------------------------
+# Two downloaded transactions that are one transfer
+# ---------------------------------------------------------------------------
+
+Description Importing a file for each account brings in both halves of a
+Description transfer as two separate transactions. Recognising them as one is a
+Description different problem from the matching above, because neither half is
+Description already in the book: both are new in the same import.
+Details
+Details It is never done without asking. Two accounts at one bank moving the
+Details same round number on the same day is exactly what a genuine pair of
+Details separate payments looks like, and merging those would lose one of them.
+Details So a pair is proposed and the user approves it, and an approval can be
+Details remembered so that the next month's import proposes the same thing with
+Details the reasoning already made.
+
+DataType TransferCandidateState
+Description How far a proposed pairing has got.
+Examples: EnumerationValues
+| Value     | Notes                                                       |
+| Proposed  | Found, and waiting to be approved or rejected               |
+| Approved  | Made into one transfer                                      |
+| Rejected  | Left as two transactions, each with an Uncategorized side   |
+| Automatic | Approved without asking, by a remembered rule               |
+
+Attributes TransferCandidate
+Description One proposed pairing, with everything the user needs to judge it.
+| Attribute   | Type                   | Default    |
+| FromAccount | AccountPath            |            |
+| FromDate    | Date                   | 2026-01-01 |
+| FromName    | Text                   | none       |
+| FromFitId   | FitId                  | none       |
+| ToAccount   | AccountPath            |            |
+| ToDate      | Date                   | 2026-01-01 |
+| ToName      | Text                   | none       |
+| ToFitId     | FitId                  | none       |
+| Amount      | Money                  | 0.00       |
+| DaysApart   | Integer                | 0          |
+| State       | TransferCandidateState | Proposed   |
+
+BusinessRule When two new transactions are proposed as one transfer
+Description All of these, and then it is proposed rather than done.
+Details The window is two days, which is narrower than the five used for
+Details matching a download against a transaction already in the book. The two
+Details rules are answering different questions. A cheque written by hand can
+Details take a week to reach the bank, so five days is right there. Two halves
+Details of one electronic transfer are a day or two apart at most, and every
+Details extra day of window is another chance to pair two payments that were
+Details never one transfer.
+Details Borne out by the three files in testdata: of the seven pairs in them,
+Details five are on the same day and the widest is the credit card autopay of
+Details 3 August, which posted to the card on the 1st. Nothing is further
+Details apart than two days.
+Examples: TransferCandidateRule
+| Test | Condition                                                            |
+| 1    | Both are new in this import, neither matched to anything already there |
+| 2    | They are in two different accounts, and both accounts are real        |
+| 3    | The amounts are equal and opposite                                    |
+| 4    | The dates are within two days                                         |
+| 5    | Neither has already been proposed as half of another pair             |
+
+BusinessRule The two date windows, and why they differ
+Description Written down together because having two windows in one importer
+Description invites someone to unify them, and unifying them breaks one case or
+Description the other.
+Examples: DateWindow
+| Rule                                      | Window | Why                                   |
+| A download against a transaction already entered | 5 days | A cheque takes days to clear   |
+| Two new downloads proposed as one transfer | 2 days | Both halves are electronic and near  |
+
+Attributes DateWindow
+| Attribute | Type   | Default |
+| Rule      | String |         |
+| Window    | String |         |
+| Why       | String |         |
+
+Attributes TransferCandidateRule
+| Attribute | Type    | Default |
+| Test      | Integer | 0       |
+| Condition | String  |         |
+
+Scenario A transfer between two checking accounts is proposed and approved
+Description The pair observed in the two checking files in testdata: the same
+Description amount out of one account and into the other on the same day.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking Prime  | Bank    | false       |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Uncategorized | Expense | false       |
+| Income:Uncategorized   | Income  | false       |
+Given account mappings are : AccountMapping
+| BankId    | OfxAccountId  | AccountPath           |
+| 053000219 | 1023711843105 | Assets:Checking Prime |
+| 053000219 | 1023711843112 | Assets:Checking       |
+When statements imported : OfxImportFile
+| OfxAccountId  | TrnType | DatePosted | Amount   | FitId      | Name                      |
+| 1023711843105 | XFER    | 2026-07-31 | 3000.00  | 2026073101 | FROM PUGH K PRIME CHECKING |
+| 1023711843112 | XFER    | 2026-07-31 | -3000.00 | 2026073102 | TO PUGH K CHECKING         |
+Then transfer candidates are : TransferCandidate
+| FromAccount     | FromDate   | ToAccount             | ToDate     | Amount  | DaysApart | State    |
+| Assets:Checking | 2026-07-31 | Assets:Checking Prime | 2026-07-31 | 3000.00 | 0         | Proposed |
+# From is the account the money left, whichever file it was read from.
+When candidate approved : TransferCandidate Vertical CompareOnly
+| FromAccount | Assets:Checking       |
+| ToAccount   | Assets:Checking Prime |
+| Amount      | 3000.00               |
+Then postings are : ImportedPostingRow
+| Ref | Date       | Payee                      | Account               | Amount   | Cleared | FitId      |
+| T1  | 2026-07-31 | FROM PUGH K PRIME CHECKING | Assets:Checking       | -3000.00 | Cleared | 2026073102 |
+| T1  | 2026-07-31 | FROM PUGH K PRIME CHECKING | Assets:Checking Prime | 3000.00  | Cleared | 2026073101 |
+Then import summary is : ImportSummary Vertical
+| New       | 1 |
+| Duplicate | 0 |
+| Matched   | 0 |
+| Possible  | 0 |
+# One transaction, not two, and no Uncategorized posting on either side. Each
+# posting keeps the identifier of the file it came from, so re-importing
+# either file recognises its own half.
+
+Attributes OfxImportFile
+Description Transactions from several files at once, each naming its account.
+| Attribute    | Type        | Default    |
+| OfxAccountId | Text        |            |
+| TrnType      | OfxTrnType  | DEBIT      |
+| DatePosted   | Date        | 2026-01-01 |
+| Amount       | Money       | 0.00       |
+| FitId        | FitId       |            |
+| Name         | Text        | none       |
+| Memo         | Text        | none       |
+| CheckNum     | CheckNumber | none       |
+
+Scenario A credit card autopay is proposed across a two-day gap
+Description The payment left the checking account on 3 August and reached the
+Description card on 1 August. It is the same transfer, and this is the pair
+Description that sets the window: anything narrower than three days would
+Description leave it as two transactions and double the spending.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking Prime  | Bank       | false       |
+| Liabilities:WF Card    | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+| Income:Uncategorized   | Income     | false       |
+Given account mappings are : AccountMapping
+| BankId    | OfxAccountId  | AccountPath           |
+| 053000219 | 1023711843105 | Assets:Checking Prime |
+|           | 4111111111111333 | Liabilities:WF Card |
+When statements imported : OfxImportFile
+| OfxAccountId     | TrnType | DatePosted | Amount   | FitId | Name                     |
+| 1023711843105    | DEBIT   | 2026-08-03 | -3508.09 | C1    | WF Credit Card AUTO PAY  |
+| 4111111111111333 | CREDIT  | 2026-08-01 | 3508.09  | V1    | AUTOMATIC PAYMENT THANK YOU |
+Then transfer candidates are : TransferCandidate
+| FromAccount           | FromDate   | ToAccount           | ToDate     | Amount  | DaysApart | State    |
+| Assets:Checking Prime | 2026-08-03 | Liabilities:WF Card | 2026-08-01 | 3508.09 | 2         | Proposed |
+When candidate approved : TransferCandidate Vertical CompareOnly
+| FromAccount | Assets:Checking Prime |
+| ToAccount   | Liabilities:WF Card   |
+| Amount      | 3508.09               |
+Then postings are : ImportedPostingRow
+| Ref | Date       | Payee                   | Account               | Amount   | Cleared | FitId |
+| T1  | 2026-08-03 | WF Credit Card AUTO PAY | Assets:Checking Prime | -3508.09 | Cleared | C1    |
+| T1  | 2026-08-03 | WF Credit Card AUTO PAY | Liabilities:WF Card   | 3508.09  | Cleared | V1    |
+# The date is the one from the account the money left. The card posted it two
+# days earlier, and a register is kept by one date per transaction.
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-01-01 |
+| To       | 2026-10-03 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account | Level | Amount | IsSubtotal |
+# No rows. Approving the pair is what keeps 3,508.09 out of the spending
+# report twice over: once as an uncategorised payment from the bank and again
+# as an uncategorised credit on the card.
+
+Scenario Three days apart is not proposed
+Description The boundary. Two days is the window, so a third day makes these
+Description two ordinary transactions. The amounts and accounts still look like
+Description a transfer, which is the point: the window is what stops a pair of
+Description unrelated payments being merged on the strength of that alone.
+Given the chart of accounts is as previous
+Given account mappings are as previous
+When statements imported : OfxImportFile
+| OfxAccountId     | TrnType | DatePosted | Amount  | FitId | Name       |
+| 1023711843105    | DEBIT   | 2026-08-04 | -250.00 | D1    | A PAYMENT  |
+| 4111111111111333 | CREDIT  | 2026-08-01 | 250.00  | D2    | A CREDIT   |
+Then transfer candidates are : TransferCandidate
+| FromAccount | FromDate | ToAccount | ToDate | Amount | DaysApart | State |
+# No rows.
+Then import summary is : ImportSummary Vertical
+| New       | 2 |
+| Duplicate | 0 |
+| Matched   | 0 |
+| Possible  | 0 |
+
+Scenario Two days apart is proposed
+Description The other side of the boundary, and the real autopay from the files.
+Given the chart of accounts is as previous
+Given account mappings are as previous
+When statements imported : OfxImportFile
+| OfxAccountId     | TrnType | DatePosted | Amount  | FitId | Name       |
+| 1023711843105    | DEBIT   | 2026-08-03 | -250.00 | D3    | A PAYMENT  |
+| 4111111111111333 | CREDIT  | 2026-08-01 | 250.00  | D4    | A CREDIT   |
+Then transfer candidates are : TransferCandidate
+| FromAccount           | FromDate   | ToAccount           | ToDate     | Amount | DaysApart | State    |
+| Assets:Checking Prime | 2026-08-03 | Liabilities:WF Card | 2026-08-01 | 250.00 | 2         | Proposed |
+
+Scenario Every proposal is confirmed in a dialog before anything is written
+Description Nothing is paired without being shown and agreed to. The dialog
+Description lists each proposal with both halves, the gap in days, and the
+Description accounts, and offers approve, reject, and approve-and-remember.
+Details A remembered rule can approve a later pair without asking again, and
+Details that is the only path that pairs anything silently. It exists because
+Details the user said so once, about those two payees in those two accounts.
+Given the chart of accounts is as previous
+Given account mappings are as previous
+When statements imported : OfxImportFile
+| OfxAccountId     | TrnType | DatePosted | Amount   | FitId | Name                        |
+| 1023711843105    | DEBIT   | 2026-08-03 | -3508.09 | C1    | WF Credit Card AUTO PAY     |
+| 4111111111111333 | CREDIT  | 2026-08-01 | 3508.09  | V1    | AUTOMATIC PAYMENT THANK YOU |
+Then confirmation dialog shows : ConfirmationRow
+| FromAccount           | FromName                | ToAccount           | ToName                      | Amount  | DaysApart | Choices                          |
+| Assets:Checking Prime | WF Credit Card AUTO PAY | Liabilities:WF Card | AUTOMATIC PAYMENT THANK YOU | 3508.09 | 2         | Approve, Reject, ApproveAndRemember |
+Then import preview is : ImportPreview Vertical
+| NewTransactions    | 0     |
+| Duplicates         | 0     |
+| MatchedToExisting  | 0     |
+| TransferCandidates | 1     |
+| Committed          | false |
+# Nothing is written while the dialog is open.
+
+Attributes ConfirmationRow
+| Attribute   | Type        | Default |
+| FromAccount | AccountPath |         |
+| FromName    | Text        | none    |
+| ToAccount   | AccountPath |         |
+| ToName      | Text        | none    |
+| Amount      | Money       | 0.00    |
+| DaysApart   | Integer     | 0       |
+| Choices     | Text        |         |
+
+Scenario Rejecting a candidate leaves two transactions
+Description The user knows these were two separate payments. Nothing is merged,
+Description and each gets the Uncategorized side it would have had anyway.
+Given the chart of accounts is as previous
+Given account mappings are as previous
+When statements imported : OfxImportFile
+| OfxAccountId     | TrnType | DatePosted | Amount   | FitId | Name            |
+| 1023711843105    | DEBIT   | 2026-08-03 | -500.00  | C9    | PAYMENT TO SHOP |
+| 4111111111111333 | CREDIT  | 2026-08-03 | 500.00   | V9    | REFUND          |
+When candidate rejected : TransferCandidate Vertical CompareOnly
+| FromAccount | Assets:Checking Prime |
+| ToAccount   | Liabilities:WF Card   |
+| Amount      | 500.00                |
+Then postings are : ImportedPostingRow
+| Ref | Date       | Payee           | Account                | Amount  | Cleared   | FitId |
+| T1  | 2026-08-03 | PAYMENT TO SHOP | Assets:Checking Prime  | -500.00 | Cleared   | C9    |
+| T1  | 2026-08-03 | PAYMENT TO SHOP | Expenses:Uncategorized | 500.00  | Uncleared | none  |
+| T2  | 2026-08-03 | REFUND          | Liabilities:WF Card    | 500.00  | Cleared   | V9    |
+| T2  | 2026-08-03 | REFUND          | Income:Uncategorized   | -500.00 | Uncleared | none  |
+Then import summary is : ImportSummary Vertical
+| New       | 2 |
+| Duplicate | 0 |
+| Matched   | 0 |
+| Possible  | 0 |
+
+Scenario Four transfers of the same shape are proposed as four pairs
+Description Three of 3,000.00 on three month ends and one of 30,000.00, which
+Description is what the two checking files hold. Each half pairs with exactly
+Description one other half, and a half once proposed is not offered again.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking Prime  | Bank    | false       |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Uncategorized | Expense | false       |
+| Income:Uncategorized   | Income  | false       |
+Given account mappings are : AccountMapping
+| BankId    | OfxAccountId  | AccountPath           |
+| 053000219 | 1023711843105 | Assets:Checking Prime |
+| 053000219 | 1023711843112 | Assets:Checking       |
+When statements imported : OfxImportFile
+| OfxAccountId  | TrnType | DatePosted | Amount    | FitId | Name            |
+| 1023711843105 | XFER    | 2026-07-31 | 3000.00   | A1    | FROM PRIME      |
+| 1023711843105 | XFER    | 2026-08-26 | 30000.00  | A2    | ONLINE TRANSFER |
+| 1023711843105 | XFER    | 2026-08-31 | 3000.00   | A3    | FROM PRIME      |
+| 1023711843105 | XFER    | 2026-09-30 | 3000.00   | A4    | FROM PRIME      |
+| 1023711843112 | XFER    | 2026-07-31 | -3000.00  | B1    | TO CHECKING     |
+| 1023711843112 | XFER    | 2026-08-26 | -30000.00 | B2    | ONLINE TRANSFER |
+| 1023711843112 | XFER    | 2026-08-31 | -3000.00  | B3    | TO CHECKING     |
+| 1023711843112 | XFER    | 2026-09-30 | -3000.00  | B4    | TO CHECKING     |
+Then transfer candidates are : TransferCandidate
+| FromAccount     | FromDate   | ToAccount             | ToDate     | Amount   | DaysApart | State    |
+| Assets:Checking | 2026-07-31 | Assets:Checking Prime | 2026-07-31 | 3000.00  | 0         | Proposed |
+| Assets:Checking | 2026-08-26 | Assets:Checking Prime | 2026-08-26 | 30000.00 | 0         | Proposed |
+| Assets:Checking | 2026-08-31 | Assets:Checking Prime | 2026-08-31 | 3000.00  | 0         | Proposed |
+| Assets:Checking | 2026-09-30 | Assets:Checking Prime | 2026-09-30 | 3000.00  | 0         | Proposed |
+# The three 3,000.00 pairs are not interchangeable even though they look
+# alike: each is paired with the half of its own date, closest date first.
+
+BusinessRule Which half pairs with which when several match
+Description Closest date first, and then the order the files were read. A half
+Description that has been paired is out of the running for the rest.
+Examples: CandidatePriority
+| Test | Condition                                             |
+| 1    | The pair whose dates are closest together is formed first |
+| 2    | A tie goes to the earlier date                        |
+| 3    | A further tie goes to the order the files were read   |
+| 4    | A half already paired is not offered again            |
+
+Attributes CandidatePriority
+| Attribute | Type    | Default |
+| Test      | Integer | 0       |
+| Condition | String  |         |
+
+Scenario A candidate is never proposed within one account
+Description Two transactions in one account with opposite amounts is a payment
+Description and a refund, or a mistake, and either way it is not a transfer.
+Description The rule in Transactions refuses a transaction posting twice to one
+Description account, and this is where that is kept from arising.
+Given the chart of accounts is as previous
+Given account mappings are as previous
+When statements imported : OfxImportFile
+| OfxAccountId  | TrnType | DatePosted | Amount  | FitId | Name     |
+| 1023711843105 | DEBIT   | 2026-08-03 | -120.00 | S1    | A SHOP   |
+| 1023711843105 | CREDIT  | 2026-08-04 | 120.00  | S2    | A REFUND |
+Then transfer candidates are : TransferCandidate
+| FromAccount | FromDate | ToAccount | ToDate | Amount | DaysApart | State |
+# No rows.
+
+Scenario A candidate is not proposed when one half matches a transaction already there
+Description The matching rules of this file run first. A downloaded transaction
+Description that clears something already in the book is accounted for, and is
+Description not then also offered as half of a transfer.
+Given the chart of accounts is as previous
+Given account mappings are as previous
+Given postings are : ImportedPostingRow
+| Ref | Date       | Payee     | Account                | Amount  | Cleared   | FitId |
+| T0  | 2026-08-02 | A Payment | Assets:Checking Prime  | -750.00 | Uncleared | none  |
+| T0  | 2026-08-02 | A Payment | Expenses:Uncategorized | 750.00  | Uncleared | none  |
+When statements imported : OfxImportFile
+| OfxAccountId     | TrnType | DatePosted | Amount  | FitId | Name       |
+| 1023711843105    | DEBIT   | 2026-08-03 | -750.00 | P1    | A PAYMENT  |
+| 4111111111111333 | CREDIT  | 2026-08-03 | 750.00  | P2    | SOME CREDIT |
+Then import summary is : ImportSummary Vertical
+| New       | 1 |
+| Duplicate | 0 |
+| Matched   | 1 |
+| Possible  | 0 |
+Then transfer candidates are : TransferCandidate
+| FromAccount | FromDate | ToAccount | ToDate | Amount | DaysApart | State |
+# No rows: the bank half cleared the transaction that was already entered, so
+# there is nothing left to pair the card half with.
+
+# ---------------------------------------------------------------------------
+# Remembering an approval
+# ---------------------------------------------------------------------------
+
+Entity TransferMatchRule
+Description A remembered approval, so that next month's import does not ask the
+Description same question again.
+Details Learned from an approval, in the same way a payee rule is learned from
+Details categorising. It names the two accounts and the two payee texts, and
+Details it does not name an amount: the autopay is a different figure every
+Details month and that is the whole point of remembering it.
+| Attribute   | Type        | Default | Notes                            |
+| FromAccount | AccountPath |         |                                  |
+| FromPattern | Text        |         | Matched against the name, Contains |
+| ToAccount   | AccountPath |         |                                  |
+| ToPattern   | Text        |         |                                  |
+| Enabled     | Boolean     | true    |                                  |
+
+Collection TransferMatchRules
+| DataType          | Minimum | Maximum | Notes |
+| TransferMatchRule | 0       | 10000   |       |
+
+Scenario Approving a candidate offers to remember it
+Description The offer is made, not taken. Whether a recurring autopay should
+Description always be paired is a judgement about the accounts, and the user is
+Description the one who knows.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking Prime  | Bank       | false       |
+| Liabilities:WF Card    | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+| Income:Uncategorized   | Income     | false       |
+When candidate approved : TransferCandidate Vertical CompareOnly
+| FromAccount | Assets:Checking Prime       |
+| FromName    | WF Credit Card AUTO PAY     |
+| ToAccount   | Liabilities:WF Card         |
+| ToName      | AUTOMATIC PAYMENT THANK YOU |
+| Amount      | 3508.09                     |
+Then rule offered is : TransferMatchRule Vertical
+| FromAccount | Assets:Checking Prime       |
+| FromPattern | WF Credit Card AUTO PAY     |
+| ToAccount   | Liabilities:WF Card         |
+| ToPattern   | AUTOMATIC PAYMENT THANK YOU |
+| Enabled     | true                        |
+
+Scenario A remembered rule pairs the next month without asking
+Description The same two names, a different amount and a different month. The
+Description candidate is approved automatically and still appears in the import
+Description summary, so that it is visible rather than silent.
+Given the chart of accounts is as previous
+Given account mappings are : AccountMapping
+| BankId    | OfxAccountId     | AccountPath           |
+| 053000219 | 1023711843105    | Assets:Checking Prime |
+|           | 4111111111111333 | Liabilities:WF Card   |
+Given transfer match rules are : TransferMatchRules
+| FromAccount           | FromPattern             | ToAccount           | ToPattern         |
+| Assets:Checking Prime | WF Credit Card AUTO PAY | Liabilities:WF Card | AUTOMATIC PAYMENT |
+When statements imported : OfxImportFile
+| OfxAccountId     | TrnType | DatePosted | Amount   | FitId | Name                        |
+| 1023711843105    | DEBIT   | 2026-09-01 | -2026.95 | C2    | WF Credit Card AUTO PAY     |
+| 4111111111111333 | CREDIT  | 2026-09-01 | 2026.95  | V2    | AUTOMATIC PAYMENT THANK YOU |
+Then transfer candidates are : TransferCandidate
+| FromAccount           | FromDate   | ToAccount           | ToDate     | Amount  | DaysApart | State     |
+| Assets:Checking Prime | 2026-09-01 | Liabilities:WF Card | 2026-09-01 | 2026.95 | 0         | Automatic |
+Then postings are : ImportedPostingRow
+| Ref | Date       | Payee                   | Account               | Amount   | Cleared | FitId |
+| T1  | 2026-09-01 | WF Credit Card AUTO PAY | Assets:Checking Prime | -2026.95 | Cleared | C2    |
+| T1  | 2026-09-01 | WF Credit Card AUTO PAY | Liabilities:WF Card   | 2026.95  | Cleared | V2    |
+
+Scenario A remembered rule still requires the amounts to be equal and opposite
+Description The rule says these two payees in these two accounts are worth
+Description pairing. It does not say any two transactions between them are one
+Description transfer, so the arithmetic is still checked.
+Given the chart of accounts is as previous
+Given account mappings are as previous
+Given transfer match rules are as previous
+When statements imported : OfxImportFile
+| OfxAccountId     | TrnType | DatePosted | Amount   | FitId | Name                        |
+| 1023711843105    | DEBIT   | 2026-09-01 | -2026.95 | C2    | WF Credit Card AUTO PAY     |
+| 4111111111111333 | CREDIT  | 2026-09-01 | 1000.00  | V2    | AUTOMATIC PAYMENT THANK YOU |
+Then transfer candidates are : TransferCandidate
+| FromAccount | FromDate | ToAccount | ToDate | Amount | DaysApart | State |
+# No rows, and both arrive as ordinary uncategorised transactions.
+
+Scenario Candidates are shown before anything is written
+Description The import is one decision. The candidates, the duplicates and the
+Description matches are all presented together, and the file is committed once
+Description the user has been through them.
+Given the chart of accounts is as previous
+Given account mappings are as previous
+When statements imported : OfxImportFile
+| OfxAccountId     | TrnType | DatePosted | Amount   | FitId | Name                        |
+| 1023711843105    | DEBIT   | 2026-09-01 | -2026.95 | C2    | WF Credit Card AUTO PAY     |
+| 4111111111111333 | CREDIT  | 2026-09-01 | 2026.95  | V2    | AUTOMATIC PAYMENT THANK YOU |
+| 1023711843105    | DEBIT   | 2026-09-02 | -41.25   | C3    | BLUE CROSS NC MED DRAFT     |
+Then import preview is : ImportPreview Vertical
+| NewTransactions    | 1 |
+| Duplicates         | 0 |
+| MatchedToExisting  | 0 |
+| TransferCandidates | 1 |
+| Committed          | false |
+
+Attributes ImportPreview
+| Attribute          | Type    | Default |
+| NewTransactions    | Integer | 0       |
+| Duplicates         | Integer | 0       |
+| MatchedToExisting  | Integer | 0       |
+| TransferCandidates | Integer | 0       |
+| Committed          | Boolean | false   |
+
+# ---------------------------------------------------------------------------
+# Checking the result against the bank
+# ---------------------------------------------------------------------------
+
+Scenario The imported balance is checked against the one the bank states
+Description LEDGERBAL is the strongest check there is that the import is right.
+Description A disagreement is reported rather than silently accepted.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : ImportedPostingRow
+| Ref | Date       | Account         | Amount  | Cleared | FitId |
+| T0  | 2024-01-01 | Assets:Checking | 1750.00 | Cleared | none  |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name          | Memo | CheckNum |
+| DEBIT   | 2024-01-15 | -45.00 | 20240115001 | HARRIS TEETER | none | none     |
+When ledger balance checked : LedgerBalanceCheck Vertical
+| Account     | Assets:Checking |
+| StatedBal   | 1705.00         |
+| StatedBalAt | 2024-01-31      |
+Then balance check is : LedgerBalanceResult Vertical
+| ClearedBalance | 1705.00 |
+| StatedBal      | 1705.00 |
+| Difference     | 0.00    |
+| Agrees         | true    |
+
+Attributes LedgerBalanceCheck
+| Attribute   | Type        | Default    |
+| Account     | AccountPath |            |
+| StatedBal   | Money       | 0.00       |
+| StatedBalAt | Date        | 2024-01-31 |
+
+Attributes LedgerBalanceResult
+| Attribute      | Type    | Default |
+| ClearedBalance | Money   | 0.00    |
+| StatedBal      | Money   | 0.00    |
+| Difference     | Money   | 0.00    |
+| Agrees         | Boolean | false   |
+
+Scenario A disagreement with the stated balance is reported
+Description The usual cause is a transaction entered by hand that the bank has
+Description not seen, wrongly marked cleared. The number is what makes it
+Description findable, so it is shown rather than hidden.
+Given the chart of accounts is as previous
+Given postings are : ImportedPostingRow
+| Ref | Date       | Account         | Amount  | Cleared | FitId |
+| T0  | 2024-01-01 | Assets:Checking | 1750.00 | Cleared | none  |
+| T9  | 2024-01-20 | Assets:Checking | -100.00 | Cleared | none  |
+When ledger balance checked : LedgerBalanceCheck Vertical
+| Account     | Assets:Checking |
+| StatedBal   | 1750.00         |
+| StatedBalAt | 2024-01-31      |
+Then balance check is : LedgerBalanceResult Vertical
+| ClearedBalance | 1650.00 |
+| StatedBal      | 1750.00 |
+| Difference     | -100.00 |
+| Agrees         | false   |
+
+Scenario Only cleared postings count towards the stated balance
+Description A check written but not yet presented is in the register and not at
+Description the bank. Counting it would make every import look wrong.
+Given the chart of accounts is as previous
+Given postings are : ImportedPostingRow
+| Ref | Date       | Account         | Amount  | Cleared   | FitId |
+| T0  | 2024-01-01 | Assets:Checking | 1750.00 | Cleared   | none  |
+| T9  | 2024-01-29 | Assets:Checking | -250.00 | Uncleared | none  |
+When ledger balance checked : LedgerBalanceCheck Vertical
+| Account     | Assets:Checking |
+| StatedBal   | 1750.00         |
+| StatedBalAt | 2024-01-31      |
+Then balance check is : LedgerBalanceResult Vertical
+| ClearedBalance | 1750.00 |
+| StatedBal      | 1750.00 |
+| Difference     | 0.00    |
+| Agrees         | true    |

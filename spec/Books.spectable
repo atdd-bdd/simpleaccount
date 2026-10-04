@@ -1,0 +1,391 @@
+Specification Books
+
+Description The book: one file, one chart of accounts, one set of transactions.
+Description There are two of them here, a business one and a personal one, and
+Description nothing joins them.
+Details
+Details Every other specification in this folder is written about one book and
+Details says so by saying nothing: "the chart of accounts" means the chart of
+Details accounts of the book being worked in. This file is what makes that
+Details precise, now that there are two.
+Details
+Details Two books rather than one set of accounts with a business branch is the
+Details decision. A sole proprietor files a business return and a personal one,
+Details and the figures on each must come from somewhere that cannot
+Details accidentally include the other. Separate files give that by
+Details construction: there is no query that can reach across them, so no
+Details report can be wrong in that particular way.
+
+Entity Book
+Description One book, which is one file on disk.
+| Attribute        | Type        | Default    | Notes                           |
+| Name             | Text        |            | What the user calls it          |
+| FilePath         | Text        |            | Where it is stored              |
+| FiscalYearStart  | Integer     | 1          | Month; see the rule in Reports  |
+| FirstDate        | Date        | 2005-01-01 | Of the earliest transaction     |
+| LastDate         | Date        | 2026-12-31 | Of the latest                   |
+
+Collection Books
+Description The books the program knows about. Not a container: each is its own
+Description file, and this is the list of them that the user has opened.
+| DataType | Minimum | Maximum | Notes                        |
+| Book     | 0       | 1000    | FilePath is unique            |
+
+Background The two books
+Given books are : Books
+| Name     | FilePath              | FiscalYearStart | FirstDate  | LastDate   |
+| Business | books/business.sadb   | 1               | 2005-06-17 | 2026-01-31 |
+| Personal | books/personal.sadb   | 1               | 2017-01-02 | 2025-12-09 |
+
+# ---------------------------------------------------------------------------
+# What belongs to a book, and what does not
+# ---------------------------------------------------------------------------
+
+BusinessRule What is held in a book and what is held for the program
+Description The rule is whether the thing is a fact about money or a
+Description convenience about working. Facts about money are per book, because
+Description mixing them is the mistake two books exist to prevent. Conveniences
+Description are shared, because setting them up twice is pointless.
+Details The bank profiles are the case worth explaining. The same bank sends
+Details the same CSV layout for a business account and a personal one, and
+Details matching its headings is a fact about the bank rather than about
+Details either book. The mapping from a downloaded account number to an
+Details account is per book, because that is a fact about the money.
+Examples: BookScope
+| Thing                        | Scope   | Why                                        |
+| Accounts                     | PerBook | A fact about money                         |
+| Transactions and postings    | PerBook |                                            |
+| Categories                   | PerBook | The business chart is not the personal one  |
+| Payees                       | PerBook | Derived from the transactions of the book   |
+| Payee rules                  | PerBook | A business payee takes a business category  |
+| Remembered splits            | PerBook |                                            |
+| Account mappings for OFX     | PerBook | Which account a downloaded number is        |
+| Holdings and prices          | PerBook |                                            |
+| Reconciliations              | PerBook |                                            |
+| Fiscal year start            | PerBook | A business year need not be a personal one  |
+| CSV bank profiles            | Shared  | A fact about the bank, not about the money   |
+| CSV header aliases           | Shared  | Likewise                                    |
+| Window size and column order | Shared  | A convenience                                |
+| The list of recent books     | Shared  |                                             |
+
+Attributes BookScope
+| Attribute | Type   | Default |
+| Thing     | String |         |
+| Scope     | String |         |
+| Why       | String | none    |
+
+Scenario A category in one book is not in the other
+Description The business book has categories the personal one has no use for,
+Description and the pickers in each offer only their own.
+Given books are as previous
+Given the chart of accounts of Business is : ChartOfAccounts
+| Path                     | Type    | Placeholder |
+| Expenses                 | Expense | true        |
+| Expenses:Consulting Fees | Expense | false       |
+| Expenses:Groceries       | Expense | false       |
+Given the chart of accounts of Personal is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Expenses           | Expense | true        |
+| Expenses:Groceries | Expense | false       |
+When category picker opened in Personal
+Then category picker offers : ChartOfAccounts CompareOnly
+| Path               |
+| Expenses:Groceries |
+# Expenses:Consulting Fees is absent: it is not in this book at all, which is
+# different from being hidden.
+
+Scenario A payee rule made in one book does not act in the other
+Description The rules are learned from categorising, and a category learned in
+Description the business book names a business category. Applying it in the
+Description personal book would either fail or create that category there.
+Given books are as previous
+Given payee rules of Business are : PayeeRules
+| Pattern | MatchType | Payee  | Category                 |
+| STAPLES | Contains  | Office | Expenses:Consulting Fees |
+Given payee rules of Personal are : PayeeRules
+| Pattern | MatchType | Payee | Category |
+Then payee rules in force in Personal are : PayeeRules
+| Pattern | MatchType | Payee | Category |
+# No rows.
+
+Scenario A bank profile set up for one book serves the other
+Description The headings of a CSV file from a bank are the same whichever
+Description account they describe, so the profile is shared and the second book
+Description needs no setting up. What is not shared is which account the rows
+Description are imported into: that is asked, or taken from the mapping of the
+Description book being imported into.
+Given books are as previous
+Given saved profiles are : SavedProfile
+| Name         | Signature                                      |
+| Example Bank | Posted Date,Description,Amount,Running Balance |
+Given the current book is : CurrentBook Vertical
+| Name | Personal |
+Given the file contains
+"""
+Posted Date,Description,Amount,Running Balance
+01/15/2024,A SHOP,-45.00,1705.00
+"""
+When headers matched
+Then profile recognised is : ProfileRecognition Vertical
+| Name  | Example Bank |
+| Asked | false        |
+
+Attributes CurrentBook
+| Attribute | Type | Default |
+| Name      | Text |         |
+
+Scenario An OFX account mapping is per book
+Description Two accounts at one bank, one business and one personal, have two
+Description different numbers and belong in two different books. A mapping in
+Description the wrong book would post business money to a personal account.
+Given books are as previous
+Given account mappings of Business are : AccountMapping
+| BankId    | OfxAccountId | AccountPath     |
+| 053000196 | 1111111111   | Assets:Checking |
+Given account mappings of Personal are : AccountMapping
+| BankId    | OfxAccountId | AccountPath     |
+| 053000196 | 2222222222   | Assets:Checking |
+Given the current book is : CurrentBook Vertical
+| Name | Personal |
+When statement imported : OfxStatement Vertical
+| BankId       | 053000196  |
+| OfxAccountId | 1111111111 |
+| OfxAcctType  | CHECKING   |
+Then asked to choose an account for : UnmappedAccount Vertical
+| BankId       | 053000196  |
+| OfxAccountId | 1111111111 |
+| OfxAcctType  | CHECKING   |
+| Suggestion   | none       |
+# The number is mapped, but in the other book. In this one it is unknown, and
+# the import asks rather than reaching into the business book to find it.
+
+# ---------------------------------------------------------------------------
+# Each book balances on its own
+# ---------------------------------------------------------------------------
+
+Scenario Every book balances independently
+Description The check from Transactions is per book. A book is never balanced
+Description by something in another one, which is what makes each set of
+Description figures defensible on its own.
+Given books are as previous
+Given postings of Business are : PostingRow
+| Ref | Date       | Account                  | Amount   |
+| B1  | 2025-01-15 | Assets:Checking          | -45.00   |
+| B1  | 2025-01-15 | Expenses:Consulting Fees | 45.00    |
+Given postings of Personal are : PostingRow
+| Ref | Date       | Account            | Amount |
+| P1  | 2025-01-16 | Assets:Checking    | -20.00 |
+| P1  | 2025-01-16 | Expenses:Groceries | 20.00  |
+When each book checked
+Then book checks are : PerBookCheck
+| Book     | TransactionsChecked | OutOfBalance | Balanced |
+| Business | 1                   | 0            | true     |
+| Personal | 1                   | 0            | true     |
+
+Attributes PerBookCheck
+| Attribute           | Type    | Default |
+| Book                | Text    |         |
+| TransactionsChecked | Integer | 0       |
+| OutOfBalance        | Integer | 0       |
+| Balanced            | Boolean | false   |
+
+Scenario A transfer may not name an account in another book
+Description A posting names an account, and the accounts of another book are
+Description not in scope. There is no syntax for it and no account picker that
+Description offers it, so this is what happens if a path is typed in.
+Given books are as previous
+Given the current book is : CurrentBook Vertical
+| Name | Personal |
+When register entry committed : RegisterEntry Vertical
+| Account  | Assets:Checking          |
+| Date     | 2025-03-01               |
+| Category | Expenses:Consulting Fees |
+| Payment  | 500.00                   |
+Then rejected because : Rejection
+| Reason                                                              |
+| Expenses:Consulting Fees is not an account in this book             |
+
+Scenario Money moving between the two books is two transactions
+Description A draw from the business is the case that makes people want one
+Description book. It is recorded as two transactions, one in each book, each
+Description balanced within its own. Equity is where it goes, because from the
+Description point of view of the business it is capital leaving and from the
+Description point of view of the household it is not income earned.
+Details Nothing links the two records. Making the second is the work the two
+Details books cost, and it is a handful of transactions a year against the
+Details certainty that no business report includes household spending.
+Given books are as previous
+Given the chart of accounts of Business is : ChartOfAccounts
+| Path                | Type   | Placeholder |
+| Assets:Checking     | Bank   | false       |
+| Equity:Owner Draw   | Equity | false       |
+Given the chart of accounts of Personal is : ChartOfAccounts
+| Path                   | Type   | Placeholder |
+| Assets:Checking        | Bank   | false       |
+| Equity:Owner Draw      | Equity | false       |
+When draw recorded : OwnerDraw Vertical
+| Date       | 2025-04-01 |
+| Amount     | 4000.00    |
+| FromBook   | Business   |
+| ToBook     | Personal   |
+Then postings of Business are : PostingRow
+| Ref | Date       | Account           | Amount   |
+| B1  | 2025-04-01 | Assets:Checking   | -4000.00 |
+| B1  | 2025-04-01 | Equity:Owner Draw | 4000.00  |
+Then postings of Personal are : PostingRow
+| Ref | Date       | Account           | Amount   |
+| P1  | 2025-04-01 | Assets:Checking   | 4000.00  |
+| P1  | 2025-04-01 | Equity:Owner Draw | -4000.00 |
+Then book checks are : PerBookCheck
+| Book     | TransactionsChecked | OutOfBalance | Balanced |
+| Business | 1                   | 0            | true     |
+| Personal | 1                   | 0            | true     |
+
+Attributes OwnerDraw
+| Attribute | Type  | Default    |
+| Date      | Date  | 2025-01-01 |
+| Amount    | Money | 0.00       |
+| FromBook  | Text  |            |
+| ToBook    | Text  |            |
+
+Scenario A draw is not income in the personal book
+Description It would be counted twice: once as business income when it was
+Description earned and again as household income when it was drawn. Equity is
+Description nominal, so it moves net worth without entering an income report.
+Description This is the same reasoning as market value changes in Investments.
+Given books are as previous
+Given postings of Personal are : PostingRow
+| Ref | Date       | Account           | Amount   |
+| P1  | 2025-04-01 | Assets:Checking   | 4000.00  |
+| P1  | 2025-04-01 | Equity:Owner Draw | -4000.00 |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2025-01-01 |
+| To       | 2025-12-31 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account | Level | Amount | IsSubtotal |
+Then report total is : ReportTotal Vertical
+| TotalIncome   | 0.00 |
+| TotalExpenses | 0.00 |
+| Net           | 0.00 |
+Then net worth is : NetWorth Vertical
+| Assets      | 4000.00 |
+| Liabilities | 0.00    |
+| NetWorth    | 4000.00 |
+
+# ---------------------------------------------------------------------------
+# Opening and working in two books
+# ---------------------------------------------------------------------------
+
+Scenario Two books may be open at once, in two windows
+Description A window is open on one book and every register, report and import
+Description in it belongs to that book. Having both open is useful on the day
+Description a draw is recorded, and there is no window that shows both.
+Given books are as previous
+When book opened : BookOpen Vertical
+| Name | Business |
+When book opened : BookOpen Vertical
+| Name | Personal |
+Then windows are : BookWindow
+| Window | Book     |
+| 1      | Business |
+| 2      | Personal |
+
+Attributes BookOpen
+| Attribute | Type | Default |
+| Name      | Text |         |
+
+Attributes BookWindow
+| Attribute | Type    | Default |
+| Window    | Integer | 0       |
+| Book      | Text    |         |
+
+Scenario Opening the same book twice brings its window forward
+Description Two windows on one book would let the same transaction be edited
+Description in two places, and the second edit would silently win.
+Given books are as previous
+When book opened : BookOpen Vertical
+| Name | Business |
+When book opened : BookOpen Vertical
+| Name | Business |
+Then windows are : BookWindow
+| Window | Book     |
+| 1      | Business |
+
+Scenario A report names the book it is of
+Description Two reports of the same period from two books look alike, and the
+Description figures are not comparable. The name is on the report so that a
+Description printed one can be told from the other.
+Given books are as previous
+Given the current book is : CurrentBook Vertical
+| Name | Business |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2025-01-01 |
+| To       | 2025-12-31 |
+| Interval | Whole      |
+Then report heading is : ReportHeading Vertical
+| Book   | Business              |
+| Period | 1 Jan to 31 Dec 2025  |
+
+Attributes ReportHeading
+| Attribute | Type | Default |
+| Book      | Text |         |
+| Period    | Text |         |
+
+# ---------------------------------------------------------------------------
+# Where the two books come from
+# ---------------------------------------------------------------------------
+
+Scenario Each QIF file migrates into its own book
+Description The two exports in testdata become the two books, and the
+Description migration is run twice. Neither run can see the other, so a
+Description transfer whose other half is in the other file is unpaired rather
+Description than matched across the two. See ImportQif.
+Given no books exist
+When qif file migrated into a new book : QifMigration
+| SourceFile      | BookName |
+| pughkilleen.QIF | Business |
+| kenpugh.QIF     | Personal |
+Then books are : Books CompareOnly
+| Name     | FirstDate  | LastDate   |
+| Business | 2005-06-17 | 2026-01-31 |
+| Personal | 2017-01-02 | 2025-12-09 |
+
+Attributes QifMigration
+| Attribute  | Type | Default |
+| SourceFile | Text |         |
+| BookName   | Text |         |
+
+Scenario A bracketed account naming the other file is created in this book
+Description The business export may name an account that lives in the personal
+Description one. The migration cannot reach across, so it creates the account
+Description in the book it is building and reports it, as it does for any
+Description bracketed name it has not seen. Whether the two should be joined
+Description afterwards is a judgement, and it is left to the user.
+Given no books exist
+Given the current book is : CurrentBook Vertical
+| Name | Business |
+Given the file contains
+"""
+!Type:Bank
+D4/ 1'25
+T-4000.00
+POwner draw
+L[Personal Checking]
+^
+"""
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When qif file imported
+Then accounts created are : ChartOfAccounts CompareOnly
+| Path                     |
+| Assets:Checking          |
+| Assets:Personal Checking |
+Then migration notes are : MigrationNote
+| Kind           | Detail                                                        |
+| AccountGuessed | "[Personal Checking]" was not in the account list; made Assets:Personal Checking of type Bank |
+# In the business book this is an asset: money the business has placed outside
+# itself. Recategorising it as Equity:Owner Draw is the user's call, and the
+# note is what prompts it.

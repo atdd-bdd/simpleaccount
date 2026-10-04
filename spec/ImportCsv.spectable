@@ -1,0 +1,1077 @@
+Specification ImportCsv
+
+Description Reading a CSV file into an account, and the saved mapping that says
+Description what its columns mean.
+Details
+Details A CSV file has no standard. Every bank picks its own column headings,
+Details its own date order and its own way of signing an amount. The headings
+Details are therefore matched to one fixed set of fields, and the result is a
+Details named profile: set up once per bank, recognised by its headings
+Details thereafter.
+Details
+Details A CSV file also has no identifier per transaction, so the duplicate test
+Details of ImportOfx cannot be used. What is here instead is a content
+Details fingerprint, which is weaker, and that difference is stated rather than
+Details hidden.
+
+# ---------------------------------------------------------------------------
+# The mapping
+# ---------------------------------------------------------------------------
+
+Entity CsvProfile
+Description What the columns of one institution CSV file mean.
+Details A column is named by its heading when the file has a header row, and by
+Details its position, counting from one, when it does not.
+| Attribute     | Type          | Default  | Notes                             |
+| Name          | Text          |          | Shown in the import dialog        |
+| HasHeader     | Boolean       | true     |                                   |
+| Delimiter     | CsvDelimiter  | Comma    |                                   |
+| DateColumn    | Text          |          |                                   |
+| DateOrder     | DateOrder     | MDY      | Not guessed; stated               |
+| PayeeColumn   | Text          | none     |                                   |
+| MemoColumn    | Text          | none     |                                   |
+| CheckColumn   | Text          | none     |                                   |
+| CategoryColumn | Text         | none     | For a file that carries categories |
+| AmountStyle   | AmountStyle   | Signed   |                                   |
+| AmountColumn  | Text          | none     | For the Signed style              |
+| DebitColumn   | Text          | none     | For the two-column styles         |
+| CreditColumn  | Text          | none     | For the two-column styles         |
+| OutwardSign   | OutwardSign   | Negative | What money leaving looks like     |
+| SkipRows      | Integer       | 0        | Preamble lines before the header  |
+
+DataType CsvDelimiter
+Description The character between the fields of a row.
+Examples: EnumerationValues
+| Value     | Notes                        |
+| Comma     |                              |
+| Semicolon | Common where the comma is a decimal separator |
+| Tab       |                              |
+| Pipe      |                              |
+
+DataType DateOrder
+Description Which of the first two numbers in a date is the month.
+Details Stated in the profile rather than detected. A file whose dates are all
+Details before the thirteenth of the month is genuinely ambiguous, and guessing
+Details wrong silently moves twenty years of history by up to eleven months.
+Examples: EnumerationValues
+| Value | Notes                      |
+| MDY   | 03/04/2024 is 4 March      |
+| DMY   | 03/04/2024 is 3 April      |
+| YMD   | 2024-03-04 is 4 March      |
+
+DataType AmountStyle
+Description How the file expresses the amount.
+Examples: EnumerationValues
+| Value        | Notes                                                    |
+| Signed       | One column, with a sign                                  |
+| DebitCredit  | Two columns, at most one of them filled on any row       |
+| SignedPaired | Two columns, both already signed; they are added         |
+
+DataType OutwardSign
+Description What money leaving the account looks like in the file.
+Details A statement written from the point of view of the bank has the signs the
+Details other way round from one written for the customer, and both exist.
+Examples: EnumerationValues
+| Value    | Notes                                              |
+| Negative | A payment is -45.00; the usual case                |
+| Positive | A payment is 45.00 and a deposit is -45.00         |
+
+# ---------------------------------------------------------------------------
+# Matching the headers of the file to the fields the program needs
+# ---------------------------------------------------------------------------
+
+Description Every bank names its columns differently, so the headers of the file
+Description are matched to one fixed set of fields. That set is below, and it is
+Description the only vocabulary the rest of the import speaks.
+
+DataType CanonicalField
+Description The fields an imported row can supply. Nothing outside this set is
+Description read, and a header matched to none of them is carried no further.
+Examples: EnumerationValues
+| Value   | Notes                                                           |
+| Date    | Required                                                        |
+| Payee   | Required; the description the bank gives                        |
+| Amount  | One signed column; required unless Debit and Credit are present |
+| Debit   | Money out; required with Credit unless Amount is present        |
+| Credit  | Money in                                                        |
+| Memo    | Optional                                                        |
+| CheckNo | Optional                                                        |
+| Category | Optional; present on an export from accounting software        |
+| Balance | Optional; used to check the import, never stored                |
+| Ignore  | Matched deliberately to nothing                                 |
+
+BusinessRule Which fields a file must supply
+Description A file missing a required field cannot be imported, because nothing
+Description downstream can invent a date or an amount.
+Examples: FieldRequirement
+| Field    | Requirement                              |
+| Date     | Always                                   |
+| Payee    | Always                                   |
+| Amount   | Unless both Debit and Credit are matched |
+| Debit    | Unless Amount is matched                 |
+| Credit   | Unless Amount is matched                 |
+| Memo     | Never                                    |
+| CheckNo  | Never                                    |
+| Category | Never                                    |
+| Balance  | Never                                    |
+
+Attributes FieldRequirement
+| Attribute   | Type           | Default |
+| Field       | CanonicalField | Date    |
+| Requirement | String         |         |
+
+Entity HeaderMatch
+Description One column of the file, and the field it was matched to.
+| Attribute    | Type           | Default | Notes                            |
+| Position     | Integer        | 0       | Counting from one                |
+| SourceHeader | Text           | none    | As written in the file           |
+| Field        | CanonicalField | Ignore  |                                  |
+| MatchedBy    | MatchedBy      | Alias   | How the match was arrived at     |
+
+Collection HeaderMatches
+| DataType    | Minimum | Maximum | Notes                        |
+| HeaderMatch | 0       | 200     | One per column of the file   |
+
+DataType MatchedBy
+Description How a column came to be matched to its field.
+Details The difference matters to the user: a match from a saved profile has
+Details been confirmed before, and one from the alias table has not.
+Examples: EnumerationValues
+| Value   | Notes                                                    |
+| Profile | A saved profile for this bank said so                    |
+| Alias   | The header is a known spelling of that field             |
+| User    | Chosen in the import dialog                              |
+| None    | Nothing matched it; it is ignored                        |
+
+BusinessRule How a header is normalised before it is matched
+Description Case, spaces and punctuation differ between exports of the same
+Description bank, so they are removed before comparing. What is left is
+Description letters and digits.
+Examples: HeaderNormalisation
+| SourceHeader         | Normalised        | Notes                     |
+| Date                 | date              |                           |
+| DATE                 | date              | Case removed              |
+| Posted Date          | posteddate        | Space removed             |
+| Post Date            | postdate          | A different header        |
+| Check #              | check             | Punctuation removed       |
+| Check Number         | checknumber       | Still a different header  |
+| Transaction Amount   | transactionamount |                           |
+| "Amount"             | amount            | Quotes are not part of it |
+| Amount (USD)         | amountusd         |                           |
+|                      |                   | An unnamed column         |
+
+Attributes HeaderNormalisation
+| Attribute    | Type   | Default |
+| SourceHeader | Text   | none    |
+| Normalised   | Text   | none    |
+| Notes        | String | none    |
+
+BusinessRule Known spellings of each field
+Description The alias table. It is what lets a file from a bank not seen before
+Description import with nothing to set up, and it is the starting point the
+Description import dialog offers when something is unmatched.
+Details Headers are listed in their normalised form. The table is data, not
+Details code: a spelling added here is the whole of adding support for
+Details another bank that happens to use it.
+Examples: HeaderAlias
+| Normalised           | Field    |
+| date                 | Date     |
+| transactiondate      | Date     |
+| posteddate           | Date     |
+| postdate             | Date     |
+| postingdate          | Date     |
+| transdate            | Date     |
+| effectivedate        | Date     |
+| payee                | Payee    |
+| description          | Payee    |
+| name                 | Payee    |
+| merchant             | Payee    |
+| merchantname         | Payee    |
+| transactiondescription | Payee  |
+| originaldescription  | Payee    |
+| amount               | Amount   |
+| transactionamount    | Amount   |
+| amountusd            | Amount   |
+| netamount            | Amount   |
+| debit                | Debit    |
+| debitamount          | Debit    |
+| withdrawal           | Debit    |
+| withdrawals          | Debit    |
+| withdrawalamount     | Debit    |
+| amountdebit          | Debit    |
+| paidout              | Debit    |
+| credit               | Credit   |
+| creditamount         | Credit   |
+| deposit              | Credit   |
+| deposits             | Credit   |
+| depositamount        | Credit   |
+| amountcredit         | Credit   |
+| paidin               | Credit   |
+| memo                 | Memo     |
+| notes                | Memo     |
+| note                 | Memo     |
+| extendeddescription  | Memo     |
+| additionalinfo       | Memo     |
+| check                | CheckNo  |
+| checknumber          | CheckNo  |
+| checkno              | CheckNo  |
+| serialnumber         | CheckNo  |
+| referencenumber      | CheckNo  |
+| category             | Category |
+| balance              | Balance  |
+| runningbalance       | Balance  |
+| ledgerbalance        | Balance  |
+| runningbal           | Balance  |
+| type                 | Ignore   |
+| transactiontype      | Ignore   |
+| status               | Ignore   |
+| currency             | Ignore   |
+| accountnumber        | Ignore   |
+| accountname          | Ignore   |
+
+Attributes HeaderAlias
+| Attribute  | Type           | Default |
+| Normalised | Text           |         |
+| Field      | CanonicalField | Ignore  |
+
+Scenario A file whose headers are all known imports with nothing to set up
+Description This is the common case and it should cost the user nothing.
+Given the file contains
+"""
+Posted Date,Description,Amount,Running Balance
+01/15/2024,HARRIS TEETER #231,-45.00,1705.00
+"""
+When headers matched
+Then header matches are : HeaderMatches
+| Position | SourceHeader    | Field   | MatchedBy |
+| 1        | Posted Date     | Date    | Alias     |
+| 2        | Description     | Payee   | Alias     |
+| 3        | Amount          | Amount  | Alias     |
+| 4        | Running Balance | Balance | Alias     |
+Then header matching is complete : HeaderMatchResult Vertical
+| Complete       | true |
+| MissingFields  | 0    |
+| UnmatchedCount | 0    |
+| AmbiguousCount | 0    |
+
+Attributes HeaderMatchResult
+| Attribute      | Type    | Default |
+| Complete       | Boolean | false   |
+| MissingFields  | Integer | 0       |
+| UnmatchedCount | Integer | 0       |
+| AmbiguousCount | Integer | 0       |
+
+Scenario A file with separate debit and credit headers is matched the same way
+Given the file contains
+"""
+Trans Date,Payee,Withdrawals,Deposits
+01/15/2024,HARRIS TEETER,45.00,
+"""
+When headers matched
+Then header matches are : HeaderMatches
+| Position | SourceHeader | Field  | MatchedBy |
+| 1        | Trans Date   | Date   | Alias     |
+| 2        | Payee        | Payee  | Alias     |
+| 3        | Withdrawals  | Debit  | Alias     |
+| 4        | Deposits     | Credit | Alias     |
+Then amount style follows from the matches : AmountStyleChoice Vertical
+| AmountStyle | DebitCredit |
+
+Attributes AmountStyleChoice
+| Attribute   | Type        | Default |
+| AmountStyle | AmountStyle | Signed  |
+
+BusinessRule The amount style follows from which amount fields matched
+Description The user does not choose it; the headers already said.
+Examples: AmountStyleFromFields
+| AmountMatched | DebitMatched | CreditMatched | AmountStyle | Valid | Notes                        |
+| true          | false        | false         | Signed      | true  | One signed column            |
+| false         | true         | true          | DebitCredit | true  | Two columns                  |
+| true          | true         | true          | DebitCredit | true  | Two columns win over one     |
+| false         | true         | false         | Signed      | false | Credit is missing            |
+| false         | false        | true          | Signed      | false | Debit is missing             |
+| false         | false        | false         | Signed      | false | No amount at all             |
+
+Attributes AmountStyleFromFields
+| Attribute     | Type        | Default |
+| AmountMatched | Boolean     | false   |
+| DebitMatched  | Boolean     | false   |
+| CreditMatched | Boolean     | false   |
+| AmountStyle   | AmountStyle | Signed  |
+| Valid         | Boolean     | true    |
+| Notes         | String      | none    |
+
+Scenario An unknown header is left unmatched and asked about
+Description The file still imports: the unmatched column is simply not read.
+Description The user is told which column was not understood, and may map it
+Description or leave it, and the choice is saved with the profile.
+Given the file contains
+"""
+Date,Narrative,Amount,Reference
+01/15/2024,HARRIS TEETER,-45.00,ABC123
+"""
+When headers matched
+Then header matches are : HeaderMatches
+| Position | SourceHeader | Field  | MatchedBy |
+| 1        | Date         | Date   | Alias     |
+| 2        | Narrative    | Ignore | None      |
+| 3        | Amount       | Amount | Alias     |
+| 4        | Reference    | Ignore | None      |
+Then header matching is complete : HeaderMatchResult Vertical
+| Complete       | false |
+| MissingFields  | 1     |
+| UnmatchedCount | 2     |
+| AmbiguousCount | 0     |
+Then user asked about headers are : UnmatchedHeader
+| Position | SourceHeader | Suggestion |
+| 2        | Narrative    | Payee      |
+| 4        | Reference    | CheckNo    |
+# Payee is required and nothing matched it, so the import cannot proceed until
+# column 2 is answered. Column 4 may be left as Ignore.
+
+Attributes UnmatchedHeader
+| Attribute    | Type           | Default |
+| Position     | Integer        | 0       |
+| SourceHeader | Text           | none    |
+| Suggestion   | CanonicalField | Ignore  |
+
+Scenario A required field that nothing matches stops the import
+Description Refusing is the only option: a row with no date cannot be placed in
+Description a register.
+Given the file contains
+"""
+Description,Amount
+HARRIS TEETER,-45.00
+"""
+When headers matched
+Then rejected because : Rejection
+| Reason                                                      |
+| No column matched Date, which is required                   |
+
+Scenario Two headers matching one field is reported rather than resolved
+Description Taking the first would be a guess, and a file with both Amount and
+Description Transaction Amount is a file worth looking at before importing.
+Given the file contains
+"""
+Date,Description,Amount,Transaction Amount
+01/15/2024,HARRIS TEETER,-45.00,-45.00
+"""
+When headers matched
+Then header matching is complete : HeaderMatchResult Vertical
+| Complete       | false |
+| MissingFields  | 0     |
+| UnmatchedCount | 0     |
+| AmbiguousCount | 1     |
+Then ambiguous fields are : AmbiguousField
+| Field  | Positions | Headers                   |
+| Amount | 3 and 4   | Amount, Transaction Amount |
+
+Attributes AmbiguousField
+| Attribute | Type           | Default |
+| Field     | CanonicalField | Date    |
+| Positions | Text           |         |
+| Headers   | Text           |         |
+
+Scenario Two columns with the same header are both reported
+Description It happens in exports that concatenate two statements. Neither is
+Description chosen.
+Given the file contains
+"""
+Date,Description,Amount,Amount
+01/15/2024,HARRIS TEETER,-45.00,-45.00
+"""
+When headers matched
+Then ambiguous fields are : AmbiguousField
+| Field  | Positions | Headers        |
+| Amount | 3 and 4   | Amount, Amount |
+
+Scenario A saved profile is recognised by the headers of the file
+Description Once a bank has been set up, its files are recognised by the set of
+Description headers they carry, so the right profile is chosen without the user
+Description naming it. The signature is the matched headers in file order.
+Given saved profiles are : SavedProfile
+| Name            | Signature                                 |
+| Example Bank    | Posted Date,Description,Amount,Running Balance |
+| Two Column Bank | Trans Date,Payee,Withdrawals,Deposits     |
+Given the file contains
+"""
+Trans Date,Payee,Withdrawals,Deposits
+01/15/2024,HARRIS TEETER,45.00,
+"""
+When headers matched
+Then profile recognised is : ProfileRecognition Vertical
+| Name      | Two Column Bank |
+| Asked     | false           |
+| MatchedBy | Profile         |
+
+Attributes SavedProfile
+| Attribute | Type | Default |
+| Name      | Text |         |
+| Signature | Text |         |
+
+Attributes ProfileRecognition
+| Attribute | Type      | Default |
+| Name      | Text      | none    |
+| Asked     | Boolean   | true    |
+| MatchedBy | MatchedBy | Alias   |
+
+Scenario A profile takes precedence over the alias table
+Description The user corrected a mapping once; that correction is not quietly
+Description undone by an alias that happens to match. Here Description was
+Description mapped to Memo rather than Payee, and it stays mapped to Memo.
+Given saved profiles are : SavedProfile
+| Name         | Signature                      |
+| Odd Bank     | Date,Description,Narrative,Amount |
+Given saved header matches are : HeaderMatches
+| Position | SourceHeader | Field  | MatchedBy |
+| 1        | Date         | Date   | User      |
+| 2        | Description  | Memo   | User      |
+| 3        | Narrative    | Payee  | User      |
+| 4        | Amount       | Amount | User      |
+Given the file contains
+"""
+Date,Description,Narrative,Amount
+01/15/2024,CARD PURCHASE,HARRIS TEETER,-45.00
+"""
+When headers matched
+Then header matches are : HeaderMatches
+| Position | SourceHeader | Field  | MatchedBy |
+| 1        | Date         | Date   | Profile   |
+| 2        | Description  | Memo   | Profile   |
+| 3        | Narrative    | Payee  | Profile   |
+| 4        | Amount       | Amount | Profile   |
+Then rows read are : CsvRowRead
+| Date       | Payee         | Memo          | Amount |
+| 2024-01-15 | HARRIS TEETER | CARD PURCHASE | -45.00 |
+
+Scenario A file whose headers are in a different order is still recognised
+Description The signature is compared as a set, so a bank that reorders its
+Description columns between exports does not need setting up again. The
+Description positions are taken from this file, not from the saved ones.
+Given saved profiles are : SavedProfile
+| Name         | Signature                                      |
+| Example Bank | Posted Date,Description,Amount,Running Balance |
+Given the file contains
+"""
+Description,Posted Date,Running Balance,Amount
+HARRIS TEETER,01/15/2024,1705.00,-45.00
+"""
+When headers matched
+Then profile recognised is : ProfileRecognition Vertical
+| Name  | Example Bank |
+| Asked | false        |
+Then header matches are : HeaderMatches
+| Position | SourceHeader    | Field   | MatchedBy |
+| 1        | Description     | Payee   | Profile   |
+| 2        | Posted Date     | Date    | Profile   |
+| 3        | Running Balance | Balance | Profile   |
+| 4        | Amount          | Amount  | Profile   |
+
+Scenario A confirmed mapping is saved against the name the user gives the bank
+Description The mapping is set up once. What is saved is the signature, the
+Description matches, and the file-level settings of the profile.
+Given the file contains
+"""
+Date,Narrative,Amount
+01/15/2024,HARRIS TEETER,-45.00
+"""
+When headers matched
+When header mapped by user : HeaderMatch Vertical
+| Position     | 2         |
+| SourceHeader | Narrative |
+| Field        | Payee     |
+| MatchedBy    | User      |
+When profile saved as : ProfileLabel
+| Name           |
+| Narrative Bank |
+Then saved profiles are : SavedProfile
+| Name           | Signature             |
+| Narrative Bank | Date,Narrative,Amount |
+Then header matching is complete : HeaderMatchResult Vertical
+| Complete       | true |
+| MissingFields  | 0    |
+| UnmatchedCount | 0    |
+| AmbiguousCount | 0    |
+
+DataType ProfileName
+Description What the user calls a saved mapping.
+Uses Text
+Examples: ValidValues
+| Value          | IsValid | Notes                    |
+| Narrative Bank | true    |                          |
+|                | false   | A saved profile is named |
+
+Scenario Columns the file has that the program does not need are ignored quietly
+Description A bank that exports a currency column and a transaction type column
+Description is not asking a question. These are matched to Ignore by the alias
+Description table, so the user is not asked about them.
+Given the file contains
+"""
+Date,Description,Amount,Currency,Transaction Type,Status
+01/15/2024,HARRIS TEETER,-45.00,USD,DEBIT,POSTED
+"""
+When headers matched
+Then header matches are : HeaderMatches
+| Position | SourceHeader     | Field  | MatchedBy |
+| 1        | Date             | Date   | Alias     |
+| 2        | Description      | Payee  | Alias     |
+| 3        | Amount           | Amount | Alias     |
+| 4        | Currency         | Ignore | Alias     |
+| 5        | Transaction Type | Ignore | Alias     |
+| 6        | Status           | Ignore | Alias     |
+Then header matching is complete : HeaderMatchResult Vertical
+| Complete       | true |
+| MissingFields  | 0    |
+| UnmatchedCount | 0    |
+| AmbiguousCount | 0    |
+
+Scenario A matched balance column is used to check the import, not stored
+Description The balance after each row is the strongest check a CSV file offers,
+Description and it is the nearest thing in CSV to the ledger balance of an OFX
+Description file. A disagreement is reported with the row that broke it.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Account         | Amount  |
+| T0  | 2024-01-01 | Assets:Checking | 1750.00 |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Given the file contains
+"""
+Date,Description,Amount,Balance
+01/15/2024,HARRIS TEETER,-45.00,1705.00
+01/16/2024,SHELL,-52.00,1660.00
+"""
+When rows imported
+Then balance column check is : BalanceColumnCheck
+| Line | RowBalance | ComputedBalance | Agrees |
+| 2    | 1705.00    | 1705.00         | true   |
+| 3    | 1660.00    | 1653.00         | false  |
+# The second row disagrees by seven dollars, which says a transaction is
+# missing from the file between the two rows, or the opening position is wrong.
+
+Attributes BalanceColumnCheck
+| Attribute       | Type    | Default |
+| Line            | Integer | 0       |
+| RowBalance      | Money   | 0.00    |
+| ComputedBalance | Money   | 0.00    |
+| Agrees          | Boolean | false   |
+
+# ---------------------------------------------------------------------------
+# Reading the rows
+# ---------------------------------------------------------------------------
+
+Attributes CsvRowRead
+Description One row of the file, after the mapping has been applied to it.
+| Attribute | Type        | Default    |
+| Date      | Date        | 2024-01-01 |
+| Payee     | PayeeName   | none       |
+| Memo      | Text        | none       |
+| CheckNo   | CheckNumber | none       |
+| Category  | AccountPath | none       |
+| Amount    | Money       | 0.00       |
+
+Scenario A file with a signed amount column
+Given the csv profile is : CsvProfile Vertical
+| Name         | Example Bank    |
+| HasHeader    | true            |
+| Delimiter    | Comma           |
+| DateColumn   | Date            |
+| DateOrder    | MDY             |
+| PayeeColumn  | Description     |
+| AmountStyle  | Signed          |
+| AmountColumn | Amount          |
+| OutwardSign  | Negative        |
+Given the file contains
+"""
+Date,Description,Amount
+01/15/2024,HARRIS TEETER #231,-45.00
+01/18/2024,COUNTY TAX OFFICE,-1250.00
+01/31/2024,ACME PAYROLL,3000.00
+"""
+Then rows read are : CsvRowRead
+| Date       | Payee              | Amount   |
+| 2024-01-15 | HARRIS TEETER #231 | -45.00   |
+| 2024-01-18 | COUNTY TAX OFFICE  | -1250.00 |
+| 2024-01-31 | ACME PAYROLL       | 3000.00  |
+
+Scenario A file with separate debit and credit columns
+Description Each row fills in one column or the other. A debit is money out,
+Description whatever sign the file writes it with, so the sign is taken from the
+Description column rather than from the number.
+Given the csv profile is : CsvProfile Vertical
+| Name         | Two Column Bank |
+| HasHeader    | true            |
+| Delimiter    | Comma           |
+| DateColumn   | Posted          |
+| DateOrder    | MDY             |
+| PayeeColumn  | Payee           |
+| AmountStyle  | DebitCredit     |
+| DebitColumn  | Withdrawal      |
+| CreditColumn | Deposit         |
+Given the file contains
+"""
+Posted,Payee,Withdrawal,Deposit
+01/15/2024,HARRIS TEETER,45.00,
+01/31/2024,ACME PAYROLL,,3000.00
+02/01/2024,BANK FEE,12.00,
+"""
+Then rows read are : CsvRowRead
+| Date       | Payee         | Amount   |
+| 2024-01-15 | HARRIS TEETER | -45.00   |
+| 2024-01-31 | ACME PAYROLL  | 3000.00  |
+| 2024-02-01 | BANK FEE      | -12.00   |
+
+Scenario A file whose signs are written from the point of view of the bank
+Description Some exports show a customer payment as a positive number, because
+Description to the bank it is a credit. The profile says so and the signs are
+Description turned round on the way in.
+Given the csv profile is : CsvProfile Vertical
+| Name         | Inverted Bank |
+| HasHeader    | true          |
+| Delimiter    | Comma         |
+| DateColumn   | Date          |
+| DateOrder    | MDY           |
+| PayeeColumn  | Description   |
+| AmountStyle  | Signed        |
+| AmountColumn | Amount        |
+| OutwardSign  | Positive      |
+Given the file contains
+"""
+Date,Description,Amount
+01/15/2024,HARRIS TEETER,45.00
+01/31/2024,ACME PAYROLL,-3000.00
+"""
+Then rows read are : CsvRowRead
+| Date       | Payee         | Amount   |
+| 2024-01-15 | HARRIS TEETER | -45.00   |
+| 2024-01-31 | ACME PAYROLL  | 3000.00  |
+
+BusinessRule How a row becomes an amount
+Description The three styles, and what each does with the numbers it finds.
+Examples: CsvAmount
+| AmountStyle  | OutwardSign | AmountCell | DebitCell | CreditCell | Amount   | Notes                      |
+| Signed       | Negative    | -45.00     |           |            | -45.00   | Taken as written           |
+| Signed       | Negative    | 3000.00    |           |            | 3000.00  |                            |
+| Signed       | Positive    | 45.00      |           |            | -45.00   | Turned round               |
+| Signed       | Positive    | -3000.00   |           |            | 3000.00  |                            |
+| DebitCredit  | Negative    |            | 45.00     |            | -45.00   | Debit is always money out  |
+| DebitCredit  | Negative    |            |           | 3000.00    | 3000.00  | Credit is always money in  |
+| DebitCredit  | Negative    |            | -45.00    |            | -45.00   | A signed debit is still out |
+| SignedPaired | Negative    |            | -45.00    | 0.00       | -45.00   | The two are added          |
+| SignedPaired | Negative    |            | 0.00      | 3000.00    | 3000.00  |                            |
+
+Attributes CsvAmount
+| Attribute   | Type        | Default  |
+| AmountStyle | AmountStyle | Signed   |
+| OutwardSign | OutwardSign | Negative |
+| AmountCell  | String      | none     |
+| DebitCell   | String      | none     |
+| CreditCell  | String      | none     |
+| Amount      | Money       | 0.00     |
+| Notes       | String      | none     |
+
+Scenario A row with both debit and credit filled in is refused
+Description In the DebitCredit style this cannot be meant, and adding them would
+Description invent a figure. The row is reported with its line number.
+Given the csv profile is : CsvProfile Vertical
+| Name         | Two Column Bank |
+| DateColumn   | Posted          |
+| PayeeColumn  | Payee           |
+| AmountStyle  | DebitCredit     |
+| DebitColumn  | Withdrawal      |
+| CreditColumn | Deposit         |
+Given the file contains
+"""
+Posted,Payee,Withdrawal,Deposit
+01/15/2024,ODD ROW,45.00,20.00
+"""
+Then rows rejected are : CsvRowError
+| Line | Reason                                                      |
+| 2    | Both Withdrawal and Deposit are filled in                   |
+
+Attributes CsvRowError
+| Attribute | Type    | Default |
+| Line      | Integer | 0       |
+| Reason    | Text    |         |
+
+# ---------------------------------------------------------------------------
+# Dates
+# ---------------------------------------------------------------------------
+
+BusinessRule How a date cell is read
+Description The profile says which order the parts are in; the separator and the
+Description width of the year are taken as they come.
+Examples: CsvDateParse
+| DateOrder | Text       | Date       | Valid | Notes                        |
+| MDY       | 01/15/2024 | 2024-01-15 | true  |                              |
+| MDY       | 1/5/2024   | 2024-01-05 | true  | Single digits                |
+| MDY       | 01-15-2024 | 2024-01-15 | true  | Dashes                       |
+| MDY       | 01/15/24   | 2024-01-15 | true  | Two-digit year               |
+| DMY       | 15/01/2024 | 2024-01-15 | true  |                              |
+| DMY       | 03/04/2024 | 2024-04-03 | true  | The same text, read the other way |
+| MDY       | 03/04/2024 | 2024-03-04 | true  |                              |
+| YMD       | 2024-01-15 | 2024-01-15 | true  |                              |
+| YMD       | 2024/01/15 | 2024-01-15 | true  |                              |
+| MDY       | 15/01/2024 | 2024-01-01 | false | No fifteenth month           |
+| MDY       | 02/30/2024 | 2024-01-01 | false | February has no thirtieth    |
+| MDY       | 02/29/2024 | 2024-02-29 | true  | 2024 is a leap year          |
+| MDY       | 02/29/2023 | 2024-01-01 | false | 2023 is not                  |
+| MDY       |            | 2024-01-01 | false | A date is required           |
+
+Attributes CsvDateParse
+| Attribute | Type      | Default    |
+| DateOrder | DateOrder | MDY        |
+| Text      | String    | none       |
+| Date      | Date      | 2024-01-01 |
+| Valid     | Boolean   | true       |
+| Notes     | String    | none       |
+
+BusinessRule How a two-digit year is read
+Description A window is needed, and twenty years of history sets where it goes.
+Details Years 70 to 99 are nineteen hundreds; 00 to 69 are two thousands. A
+Details file old enough to write dates this way will not contain 2070.
+Examples: TwoDigitYear
+| Text | Year | Notes                    |
+| 24   | 2024 |                          |
+| 05   | 2005 | The start of the history |
+| 69   | 2069 | The top of the window    |
+| 70   | 1970 | The bottom               |
+| 99   | 1999 |                          |
+
+Attributes TwoDigitYear
+| Attribute | Type    | Default |
+| Text      | String  |         |
+| Year      | Integer | 2000    |
+| Notes     | String  | none    |
+
+Scenario A file whose dates could be read either way is reported before import
+Description Every date in this file has a first part of twelve or less, so both
+Description readings work and they disagree. The import says which it will use
+Description and what the file would look like the other way, and waits.
+Given the csv profile is : CsvProfile Vertical
+| Name         | Ambiguous Bank |
+| DateColumn   | Date           |
+| DateOrder    | MDY            |
+| PayeeColumn  | Description    |
+| AmountStyle  | Signed         |
+| AmountColumn | Amount         |
+Given the file contains
+"""
+Date,Description,Amount
+03/04/2024,SHOP A,-10.00
+05/06/2024,SHOP B,-20.00
+"""
+Then date order is ambiguous : DateOrderWarning Vertical
+| Ambiguous      | true       |
+| UsingOrder     | MDY        |
+| FirstDateAsMDY | 2024-03-04 |
+| FirstDateAsDMY | 2024-04-03 |
+
+Attributes DateOrderWarning
+| Attribute      | Type      | Default    |
+| Ambiguous      | Boolean   | false      |
+| UsingOrder     | DateOrder | MDY        |
+| FirstDateAsMDY | Date      | 2024-01-01 |
+| FirstDateAsDMY | Date      | 2024-01-01 |
+
+Scenario A file with an unambiguous date is not queried
+Description One date with a first part above twelve settles the order for the
+Description whole file, and it agrees with the profile, so nothing is asked.
+Given the csv profile is as previous
+Given the file contains
+"""
+Date,Description,Amount
+03/04/2024,SHOP A,-10.00
+12/25/2024,SHOP B,-20.00
+"""
+Then date order is ambiguous : DateOrderWarning Vertical
+| Ambiguous | false |
+
+Scenario A file whose dates contradict the profile is refused
+Description The profile says month first, and the file has a thirteenth month.
+Description Reading it the other way would work, but quietly disagreeing with
+Description the profile is how a migration goes wrong without anyone noticing.
+Given the csv profile is as previous
+Given the file contains
+"""
+Date,Description,Amount
+15/01/2024,SHOP A,-10.00
+"""
+Then rows rejected are : CsvRowError
+| Line | Reason                                                         |
+| 2    | 15/01/2024 is not a date in MDY order; the profile may be wrong |
+
+# ---------------------------------------------------------------------------
+# The shape of the file
+# ---------------------------------------------------------------------------
+
+Scenario A quoted field may contain the delimiter
+Given the csv profile is : CsvProfile Vertical
+| Name         | Example Bank |
+| DateColumn   | Date         |
+| PayeeColumn  | Description  |
+| MemoColumn   | Memo         |
+| AmountStyle  | Signed       |
+| AmountColumn | Amount       |
+Given the file contains
+"""
+Date,Description,Memo,Amount
+01/15/2024,"SMITH, JONES & CO","Invoice 4, paid in full",-250.00
+01/16/2024,"THE ""BLUE"" CAFE",,-18.50
+"""
+Then rows read are : CsvRowRead
+| Date       | Payee              | Memo                    | Amount  |
+| 2024-01-15 | SMITH, JONES & CO  | Invoice 4, paid in full | -250.00 |
+| 2024-01-16 | THE "BLUE" CAFE    | none                    | -18.50  |
+
+Scenario A quoted field may contain a line break
+Description A memo typed with a newline in it arrives as one field spanning two
+Description lines of the file. Counting lines by newline would split the row.
+Given the csv profile is as previous
+Given the file contains
+"""
+Date,Description,Memo,Amount
+01/15/2024,HARDWARE STORE,"Paint
+and brushes",-45.00
+"""
+Then rows read are : CsvRowRead
+| Date       | Payee          | Memo             | Amount |
+| 2024-01-15 | HARDWARE STORE | Paint and brushes | -45.00 |
+# The break becomes a space: a memo is one line in the register.
+
+Scenario A preamble before the header row is skipped
+Description Several banks put the account number and the period above the
+Description header. SkipRows says how many lines to pass over.
+Given the csv profile is : CsvProfile Vertical
+| Name         | Preamble Bank |
+| HasHeader    | true          |
+| SkipRows     | 3             |
+| DateColumn   | Date          |
+| PayeeColumn  | Description   |
+| AmountStyle  | Signed        |
+| AmountColumn | Amount        |
+Given the file contains
+"""
+Account Statement
+Account Number: ****7890
+Period: 01/01/2024 to 01/31/2024
+Date,Description,Amount
+01/15/2024,HARRIS TEETER,-45.00
+"""
+Then rows read are : CsvRowRead
+| Date       | Payee         | Amount |
+| 2024-01-15 | HARRIS TEETER | -45.00 |
+
+Scenario A file with no header row names its columns by position
+Given the csv profile is : CsvProfile Vertical
+| Name         | Positional Bank |
+| HasHeader    | false           |
+| DateColumn   | 1               |
+| PayeeColumn  | 2               |
+| AmountStyle  | Signed          |
+| AmountColumn | 3               |
+Given the file contains
+"""
+01/15/2024,HARRIS TEETER,-45.00
+01/31/2024,ACME PAYROLL,3000.00
+"""
+Then rows read are : CsvRowRead
+| Date       | Payee         | Amount  |
+| 2024-01-15 | HARRIS TEETER | -45.00  |
+| 2024-01-31 | ACME PAYROLL  | 3000.00 |
+
+Scenario Blank rows and a trailing total row are skipped
+Description A blank line is passed over without comment. A row whose date cell
+Description will not parse is reported, because it might have been a real
+Description transaction rather than a footer.
+Given the csv profile is : CsvProfile Vertical
+| Name         | Example Bank |
+| DateColumn   | Date         |
+| PayeeColumn  | Description  |
+| AmountStyle  | Signed       |
+| AmountColumn | Amount       |
+Given the file contains
+"""
+Date,Description,Amount
+01/15/2024,HARRIS TEETER,-45.00
+
+,Total,-45.00
+"""
+Then rows read are : CsvRowRead
+| Date       | Payee         | Amount |
+| 2024-01-15 | HARRIS TEETER | -45.00 |
+Then rows rejected are : CsvRowError
+| Line | Reason                        |
+| 4    | No date in the Date column    |
+
+Scenario A byte order mark does not become part of the first heading
+Description A file saved from a spreadsheet on Windows begins with a BOM. Left
+Description in place it makes the first column heading unmatchable, and the
+Description error that follows says the Date column is missing, which sends the
+Description reader looking in the wrong place.
+Given the file begins with a byte order mark and contains
+"""
+Date,Description,Amount
+01/15/2024,HARRIS TEETER,-45.00
+"""
+Then headings read are : HeadingRead
+| Heading     |
+| Date        |
+| Description |
+| Amount      |
+
+DataType Heading
+Description One column heading from the header row.
+Uses Text
+Examples: ValidValues
+| Value       | IsValid | Notes                    |
+| Date        | true    |                          |
+| Description | true    |                          |
+|             | false   | An unnamed column        |
+
+# ---------------------------------------------------------------------------
+# Categories in the file
+# ---------------------------------------------------------------------------
+
+Scenario A file that carries categories imports them
+Description This is the migration path. An export of twenty years of history
+Description names the category of each transaction, and taking it saves
+Description recategorising everything by hand. A category named in the file but
+Description not in the book is created, as in Accounts.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given the csv profile is : CsvProfile Vertical
+| Name           | Quicken Export |
+| DateColumn     | Date           |
+| PayeeColumn    | Payee          |
+| CategoryColumn | Category       |
+| AmountStyle    | Signed         |
+| AmountColumn   | Amount         |
+Given the file contains
+"""
+Date,Payee,Category,Amount
+01/15/2024,Harris Teeter,Expenses:Groceries,-45.00
+01/16/2024,Shell,Expenses:Auto:Fuel,-52.00
+01/17/2024,Unknown,,-10.00
+"""
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When rows imported
+Then postings are : PostingRow
+| Ref | Date       | Payee         | Account                | Amount |
+| T1  | 2024-01-15 | Harris Teeter | Assets:Checking        | -45.00 |
+| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries     | 45.00  |
+| T2  | 2024-01-16 | Shell         | Assets:Checking        | -52.00 |
+| T2  | 2024-01-16 | Shell         | Expenses:Auto:Fuel     | 52.00  |
+| T3  | 2024-01-17 | Unknown       | Assets:Checking        | -10.00 |
+| T3  | 2024-01-17 | Unknown       | Expenses:Uncategorized | 10.00  |
+Then accounts created are : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Expenses:Auto      | Expense | true        |
+| Expenses:Auto:Fuel | Expense | false       |
+
+Scenario A category column naming a real account makes a transfer
+Description A Quicken export writes a transfer with the other account in square
+Description brackets. Stripping them gives the account path, and the result is
+Description an ordinary two-posting transfer.
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type | Placeholder |
+| Assets:Checking | Bank | false       |
+| Assets:Savings  | Bank | false       |
+Given the csv profile is as previous
+Given the file contains
+"""
+Date,Payee,Category,Amount
+03/01/2024,Transfer,[Assets:Savings],-500.00
+"""
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When rows imported
+Then postings are : PostingRow
+| Ref | Date       | Payee    | Account         | Amount  |
+| T1  | 2024-03-01 | Transfer | Assets:Checking | -500.00 |
+| T1  | 2024-03-01 | Transfer | Assets:Savings  | 500.00  |
+
+# ---------------------------------------------------------------------------
+# Duplicates, without an identifier to go on
+# ---------------------------------------------------------------------------
+
+DomainTerm Fingerprint : Text
+Description The date, amount, and payee of a row taken together, folded to upper
+Description case with runs of blanks collapsed. It stands in for the FITID that a
+Description CSV file does not have.
+
+BusinessRule How a CSV row is tested against what is already there
+Description Weaker than the FITID test of ImportOfx, and it says so: a row that
+Description matches is offered rather than skipped, because two genuine visits to
+Description one shop on one day for one amount are not rare.
+Examples: CsvDispositionRule
+| Test | Condition                                                         | Disposition |
+| 1    | A posting in this account has the same fingerprint                | Possible    |
+| 2    | An uncleared posting in this account has the same amount and check number | Matched |
+| 3    | An uncleared posting in this account has the same amount within five days | Matched |
+| 4    | Nothing above applies                                             | New         |
+
+Attributes CsvDispositionRule
+| Attribute   | Type              | Default |
+| Test        | Integer           | 0       |
+| Condition   | String            |         |
+| Disposition | ImportDisposition | New     |
+
+Scenario Re-importing the same CSV file offers every row rather than skipping it
+Description Nothing is created without being asked, and nothing is discarded
+Description without being asked. Over twenty years both mistakes are expensive,
+Description and the second is worse.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given the csv profile is as previous
+Given the file contains
+"""
+Date,Payee,Amount
+01/15/2024,Harris Teeter,-45.00
+"""
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When rows imported
+Then import summary is : ImportSummary Vertical
+| New       | 1 |
+| Duplicate | 0 |
+| Matched   | 0 |
+| Possible  | 0 |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When rows imported
+Then import summary is : ImportSummary Vertical
+| New       | 0 |
+| Duplicate | 0 |
+| Matched   | 0 |
+| Possible  | 1 |
+
+BusinessRule What a fingerprint ignores
+Description Two rows that differ only in how the payee is spaced or cased are
+Description the same row. Two that differ in amount or date are not.
+Examples: FingerprintMatch
+| DateA      | PayeeA          | AmountA | DateB      | PayeeB          | AmountB | Same  |
+| 2024-01-15 | Harris Teeter   | -45.00  | 2024-01-15 | HARRIS TEETER   | -45.00  | true  |
+| 2024-01-15 | Harris  Teeter  | -45.00  | 2024-01-15 | Harris Teeter   | -45.00  | true  |
+| 2024-01-15 | Harris Teeter   | -45.00  | 2024-01-15 | Harris Teeter   | -45.01  | false |
+| 2024-01-15 | Harris Teeter   | -45.00  | 2024-01-16 | Harris Teeter   | -45.00  | false |
+| 2024-01-15 | Harris Teeter   | -45.00  | 2024-01-15 | Harris Teeter 2 | -45.00  | false |
+
+Attributes FingerprintMatch
+| Attribute | Type      | Default    |
+| DateA     | Date      | 2024-01-01 |
+| PayeeA    | PayeeName | none       |
+| AmountA   | Money     | 0.00       |
+| DateB     | Date      | 2024-01-01 |
+| PayeeB    | PayeeName | none       |
+| AmountB   | Money     | 0.00       |
+| Same      | Boolean   | false      |

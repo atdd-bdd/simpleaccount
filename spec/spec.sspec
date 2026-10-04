@@ -1,0 +1,11 @@
+{
+    "name": "spec",
+    "projects": [
+        {
+            "name": "spec",
+            "relativePath": "."
+        }
+    ],
+    "sharingMode": "sharedFiles",
+    "version": 2
+}

@@ -1,0 +1,2759 @@
+Specification ImportQif
+
+Description Reading a QIF export of twenty years of Quicken history: its
+Description sections, its account and category lists, its transactions, its
+Description splits, its transfers and its investment actions.
+Details
+Details This is the migration. It runs once, against a file nobody will produce
+Details again, and whatever it gets wrong is wrong for twenty years. So it
+Details reports everything it did, it refuses rather than guesses wherever a
+Details guess would be unverifiable, and it can be run twice without doubling
+Details the book.
+Details
+Details QIF carries both halves of every transfer. That is the single largest
+Details hazard here, and the rule that collapses them is the heart of this file.
+
+# ---------------------------------------------------------------------------
+# The shape of the file
+# ---------------------------------------------------------------------------
+
+DataType QifSection
+Description What an exclamation-mark header introduces.
+Details Everything after a header belongs to that section until the next one.
+Details The sections marked "observed" are the ones the two files in testdata
+Details actually contain. ClassList and PriceList are not among them: Quicken
+Details replaced classes with tags, and neither file carries a price list.
+Examples: EnumerationValues
+| Value           | Notes                                              |
+| AccountList     | !Account -- observed                               |
+| CategoryList    | !Type:Cat -- observed                              |
+| TagList         | !Type:Tag -- observed; replaced ClassList          |
+| ClassList       | !Type:Class -- not in either file                  |
+| SecurityList    | !Type:Security -- not in either file               |
+| PriceList       | !Type:Prices -- not in either file                 |
+| MemorizedList   | !Type:Memorized -- observed                        |
+| InvoiceItemList | !Type:InvItem -- observed; invoice line items      |
+| TemplateList    | !Type:Template -- observed; a report definition    |
+| BankTxns        | !Type:Bank -- observed                             |
+| CashTxns        | !Type:Cash -- observed                             |
+| CreditCardTxns  | !Type:CCard -- observed                            |
+| AssetTxns       | !Type:Oth A -- observed                            |
+| LiabilityTxns   | !Type:Oth L -- observed                            |
+| InvestmentTxns  | !Type:Invst -- observed                            |
+| InvoiceTxns     | !Type:Invoice -- observed; receivables             |
+| BillTxns        | !Type:Bill -- observed; payables                   |
+| TaxTxns         | !Type:Tax -- observed; one record in each file     |
+| AutoSwitchOn    | !Option:AutoSwitch -- observed                     |
+| AutoSwitchOff   | !Clear:AutoSwitch -- observed                      |
+| Unknown         | Anything else; reported and skipped                |
+
+BusinessRule How a header line is read
+Description Case and trailing blanks are ignored, because exports differ in both.
+Details Both files in testdata write "!Type:Bank " and "!Type:Cash " with a
+Details trailing space and the others without, so trimming is not optional.
+Examples: SectionHeader
+| Line                | Section         | Notes                            |
+| !Type:Bank          | BankTxns        |                                  |
+| !Type:Bank~         | BankTxns        | Trailing space, as in both files |
+| !Type:Cash~         | CashTxns        | Likewise                         |
+| !type:bank          | BankTxns        | Case ignored                     |
+| !Account            | AccountList     |                                  |
+| !Type:Cat           | CategoryList    |                                  |
+| !Type:Tag           | TagList         |                                  |
+| !Type:CCard         | CreditCardTxns  |                                  |
+| !Type:Oth A         | AssetTxns       | The space is part of the name    |
+| !Type:Oth L         | LiabilityTxns   |                                  |
+| !Type:Invst         | InvestmentTxns  |                                  |
+| !Type:Invoice       | InvoiceTxns     |                                  |
+| !Type:Bill          | BillTxns        |                                  |
+| !Type:Tax           | TaxTxns         |                                  |
+| !Type:InvItem       | InvoiceItemList |                                  |
+| !Type:Template      | TemplateList    |                                  |
+| !Option:AutoSwitch  | AutoSwitchOn    |                                  |
+| !Clear:AutoSwitch   | AutoSwitchOff   |                                  |
+| !Type:Budget        | Unknown         | Not imported; reported           |
+
+Attributes SectionHeader
+| Attribute | Type       | Default |
+| Line      | String     |         |
+| Section   | QifSection | Unknown |
+| Notes     | String     | none    |
+
+BusinessRule What an account block means depends on AutoSwitch
+Description An !Account block is a definition while AutoSwitch is on, and a
+Description change of the current account while it is off.
+Details A Quicken export of a whole file turns AutoSwitch on, lists every
+Details account, turns it off, and then alternates !Account with a transaction
+Details section once per account. Reading an !Account block as a definition in
+Description the second half would lose the account context and put every
+Details transaction in the first account.
+Examples: AccountBlockMeaning
+| AutoSwitch | Meaning           | Notes                                    |
+| on         | Definition        | One of the accounts of the file          |
+| off        | SwitchTo          | The transactions that follow are its own |
+
+Attributes AccountBlockMeaning
+| Attribute  | Type   | Default |
+| AutoSwitch | String |         |
+| Meaning    | String |         |
+| Notes      | String | none    |
+
+Scenario A single-account file with no account block at all
+Description The simplest export, and the one a bank or an old Quicken produces.
+Description There is no account name anywhere in it, so the user names the
+Description account to import into, as for a CSV file.
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given the file contains
+"""
+!Type:Bank
+D01/15/2024
+T-45.00
+PHarris Teeter
+LGroceries
+^
+D01/31/2024
+T3000.00
+PAcme Payroll
+LSalary
+^
+"""
+When qif file imported
+Then qif records read are : QifRecord
+| Account         | Date       | Amount   | Payee         | CategoryText |
+| Assets:Checking | 2024-01-15 | -45.00   | Harris Teeter | Groceries    |
+| Assets:Checking | 2024-01-31 | 3000.00  | Acme Payroll  | Salary       |
+
+Attributes QifRecord
+Description One record of a transaction section, before it becomes postings.
+| Attribute    | Type        | Default    |
+| Account      | AccountPath |            |
+| Date         | Date        | 2024-01-01 |
+| Amount       | Money       | 0.00       |
+| Payee        | PayeeName   | none       |
+| CategoryText | Text        | none       |
+| Memo         | Text        | none       |
+| CheckNo      | CheckNumber | none       |
+| ClearedText  | Text        | none       |
+
+Scenario A whole-file export switches account as it goes
+Description The account list defines three accounts; the sections that follow
+Description each name the account their transactions belong to. The second
+Description !Account block is a switch, not a redefinition.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Expenses:Uncategorized | Expense | false       |
+Given the file contains
+"""
+!Option:AutoSwitch
+!Account
+NChecking
+TBank
+DFirst National checking
+^
+NVisa
+TCCard
+^
+!Clear:AutoSwitch
+!Account
+NChecking
+TBank
+^
+!Type:Bank
+D01/15/2024
+T-45.00
+PHarris Teeter
+LGroceries
+^
+!Account
+NVisa
+TCCard
+^
+!Type:CCard
+D01/20/2024
+T-89.99
+PAmazon
+LShopping
+^
+"""
+When qif file imported
+Then accounts created are : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Bank       | false       |
+| Liabilities:Visa       | CreditCard | false       |
+Then qif records read are : QifRecord
+| Account          | Date       | Amount | Payee         | CategoryText |
+| Assets:Checking  | 2024-01-15 | -45.00 | Harris Teeter | Groceries    |
+| Liabilities:Visa | 2024-01-20 | -89.99 | Amazon        | Shopping     |
+
+# ---------------------------------------------------------------------------
+# Account types and where accounts land in the tree
+# ---------------------------------------------------------------------------
+
+BusinessRule How a QIF account type becomes an account type and a path
+Description QIF names a type and a bare name. The tree needs a root, and which
+Description root follows from the type.
+Details The roots are fixed: Assets, Liabilities, Income, Expenses, Equity. A
+Details user who wants other names renames them afterwards, which renames the
+Details descendants too.
+Details Every type below occurs in the two files in testdata. Invoice, Bill and
+Details Tax are Quicken Home and Business accounts: receivables, payables, and a
+Details tax holding account. They are ordinary accounts here, because a
+Details receivable is an asset and a payable is a liability, and nothing else
+Details about them needs modelling for the balances to come out right.
+Examples: QifAccountMapping
+| QifType | AccountType | Root        | ExampleName | ExamplePath            |
+| Bank    | Bank        | Assets      | Checking    | Assets:Checking        |
+| Cash    | Cash        | Assets      | Wallet      | Assets:Wallet          |
+| CCard   | CreditCard  | Liabilities | Visa        | Liabilities:Visa       |
+| Oth A   | Asset       | Assets      | House       | Assets:House           |
+| Oth L   | Liability   | Liabilities | Mortgage    | Liabilities:Mortgage   |
+| Invst   | Investment  | Assets      | Brokerage   | Assets:Brokerage       |
+| Port    | Investment  | Assets      | Portfolio   | Assets:Portfolio       |
+| Invoice | Asset       | Assets      | Receivables | Assets:Receivables     |
+| Bill    | Liability   | Liabilities | Payables    | Liabilities:Payables   |
+| Tax     | Asset       | Assets      | Tax         | Assets:Tax             |
+
+Scenario A credit limit on a card account is kept
+Description Forty-three of the card accounts in the business file carry one. It
+Description is not a balance and posts nothing; it is kept so that a register
+Description can show how much of the card is used.
+Given the file contains
+"""
+!Option:AutoSwitch
+!Account
+NVisa
+TCCard
+L5000.00
+^
+"""
+When qif file imported
+Then account limits are : AccountLimit
+| Account          | CreditLimit |
+| Liabilities:Visa | 5000.00     |
+
+Attributes AccountLimit
+| Attribute   | Type        | Default |
+| Account     | AccountPath |         |
+| CreditLimit | Money       | 0.00    |
+
+Attributes QifAccountMapping
+| Attribute   | Type        | Default |
+| QifType     | String      |         |
+| AccountType | AccountType | Bank    |
+| Root        | AccountName |         |
+| ExampleName | AccountName |         |
+| ExamplePath | AccountPath |         |
+
+Scenario An account name containing a colon is kept whole
+Description QIF account names are free text and a colon in one would otherwise
+Description split it into two levels of the tree. The colon is replaced on the
+Description way in, and the change is reported.
+Given the file contains
+"""
+!Option:AutoSwitch
+!Account
+NSavings: Rainy Day
+TBank
+^
+"""
+When qif file imported
+Then accounts created are : ChartOfAccounts CompareOnly
+| Path                        |
+| Assets:Savings - Rainy Day  |
+Then migration notes are : MigrationNote
+| Kind         | Detail                                                      |
+| NameChanged  | Account "Savings: Rainy Day" became "Savings - Rainy Day"   |
+
+Attributes MigrationNote
+| Attribute | Type | Default |
+| Kind      | Text |         |
+| Detail    | Text |         |
+
+Scenario An account with a statement balance records an opening balance
+Description The QIF account block may carry the balance and the date it was
+Description taken. It is not an opening balance and is not used as one: it is
+Description kept as the figure to check the import against, as a downloaded
+Description ledger balance is in ImportOfx.
+Given the file contains
+"""
+!Option:AutoSwitch
+!Account
+NChecking
+TBank
+/12/31/2024
+$1705.00
+^
+"""
+When qif file imported
+Then statement balance to check is : QifStatementBalance
+| Account         | StatedBal | StatedBalAt |
+| Assets:Checking | 1705.00   | 2024-12-31  |
+
+Attributes QifStatementBalance
+| Attribute   | Type        | Default    |
+| Account     | AccountPath |            |
+| StatedBal   | Money       | 0.00       |
+| StatedBalAt | Date        | 2024-12-31 |
+
+# ---------------------------------------------------------------------------
+# The category list
+# ---------------------------------------------------------------------------
+
+Scenario The category list says which categories are income and which expense
+Description This list is read before any transaction, because it is the only
+Description thing in the file that says whether Bonus is income or an expense.
+Description Without it the sign of the first transaction has to decide, which
+Description is a guess that will be wrong somewhere in twenty years.
+Given the file contains
+"""
+!Type:Cat
+NSalary
+DGross pay
+I
+T
+^
+NAuto
+DVehicle
+E
+^
+NAuto:Fuel
+E
+^
+NBonus
+I
+T
+^
+"""
+When qif file imported
+Then accounts created are : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Income:Bonus       | Income  | false       |
+| Income:Salary      | Income  | false       |
+| Expenses:Auto      | Expense | false       |
+| Expenses:Auto:Fuel | Expense | false       |
+# Expenses:Auto is not a placeholder: the file declares it as a category in
+# its own right, and transactions may be posted to it. A category that only
+# appears as a parent is made a placeholder, as in Accounts.
+
+BusinessRule How a category name becomes an account path
+Description Using the income or expense flag from the category list. A name not
+Description in the list falls back to the sign of the amount, and that fallback
+Description is reported every time it is used.
+Examples: CategoryMapping
+| CategoryText | InList  | Amount  | AccountPath          | Fallback | Notes                     |
+| Groceries    | Expense | -45.00  | Expenses:Groceries   | false    |                           |
+| Salary       | Income  | 3000.00 | Income:Salary        | false    |                           |
+| Auto:Fuel    | Expense | -52.00  | Expenses:Auto:Fuel   | false    | Subcategory keeps its depth |
+| Bonus        | Income  | -100.00 | Income:Bonus         | false    | The list wins over the sign |
+| Mystery      | Absent  | -45.00  | Expenses:Mystery     | true     | Money out, so an expense  |
+| Mystery      | Absent  | 45.00   | Income:Mystery       | true     | Money in, so income       |
+|              | Absent  | -45.00  | Expenses:Uncategorized | false  | No category at all        |
+|              | Absent  | 45.00   | Income:Uncategorized   | false  |                           |
+
+Attributes CategoryMapping
+| Attribute    | Type        | Default |
+| CategoryText | Text        | none    |
+| InList       | String      |         |
+| Amount       | Money       | 0.00    |
+| AccountPath  | AccountPath |         |
+| Fallback     | Boolean     | false   |
+| Notes        | String      | none    |
+
+Scenario Every use of the sign fallback is reported
+Description A category that was not declared is the sort of thing worth looking
+Description at once, so each distinct name is listed with a count rather than
+Description one line per transaction.
+Given the file contains
+"""
+!Type:Cat
+NGroceries
+E
+^
+!Type:Bank
+D01/15/2024
+T-45.00
+LGroceries
+^
+D01/16/2024
+T-12.00
+LMystery
+^
+D01/17/2024
+T-13.00
+LMystery
+^
+"""
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When qif file imported
+Then migration notes are : MigrationNote
+| Kind              | Detail                                                       |
+| CategoryGuessed   | "Mystery" was not in the category list; made Expenses:Mystery from the sign, 2 transactions |
+
+# ---------------------------------------------------------------------------
+# Dates
+# ---------------------------------------------------------------------------
+
+BusinessRule How a QIF date is read
+Description QIF dates are the worst part of the format. The order of the day and
+Description the month is stated in a profile, as for a CSV file, and never
+Description guessed. The apostrophe is Quicken's own century marker.
+Details Every date in both files in testdata uses the apostrophe form, and
+Details every part of it may be blank-padded rather than zero-padded -- the
+Details year included, which is the form that is easiest to get wrong. The
+Details year tokens observed run from " 5" to "26" without a gap, so an
+Details apostrophe year is two thousand plus the number, for one digit and for
+Details two alike.
+Details The slash form with a two-digit year does not occur in either file. It
+Details is kept, reading by the window rule of ImportCsv, because an older
+Details export would use it.
+Examples: QifDateParse
+| DateOrder | Text        | Date       | Valid | Notes                            |
+| MDY       | 3/12'17     | 2017-03-12 | true  | The commonest shape              |
+| MDY       | 1/ 2'18     | 2018-01-02 | true  | Blank-padded day                 |
+| MDY       | 12/ 9'25    | 2025-12-09 | true  | Two-digit month, padded day      |
+| MDY       | 6/17' 5     | 2005-06-17 | true  | Blank-padded year: 2005          |
+| MDY       | 1/ 2' 9     | 2009-01-02 | true  | Both padded                      |
+| MDY       | 1/31'26     | 2026-01-31 | true  | The latest in the business file  |
+| MDY       | 3/ 7'24     | 2024-03-07 | true  | The date of the one stock split  |
+| MDY       | 1/15'05     | 2005-01-15 | true  | Zero-padded year, same reading   |
+| MDY       | 01/15/2024   | 2024-01-15 | true | Four-digit year, slash form      |
+| MDY       | 1/15/24     | 2024-01-15 | true  | Slash form, window rule          |
+| MDY       | 12/31/99    | 1999-12-31 | true  | Window rule: 99 is 1999          |
+| DMY       | 15/01/2024   | 2024-01-15 | true | The other order                  |
+| DMY       | 01/15/2024   | 2024-01-01 | false | No fifteenth month              |
+| MDY       | 02/29/2024   | 2024-02-29 | true | A leap year                      |
+| MDY       | 02/29/2023   | 2024-01-01 | false | Not a leap year                 |
+| MDY       |             | 2024-01-01 | false | A record needs a date            |
+
+Scenario A file that proves its own date order is not queried
+Description The business file has 24,324 dates whose second part is above
+Description twelve and none whose first part is, so it can only be month first.
+Description Where the file settles the question the profile is not consulted and
+Description the user is not asked.
+Given the qif profile is : QifProfile Vertical
+| DateOrder | MDY |
+Given the file contains
+"""
+!Type:Bank
+D3/12'17
+T-45.00
+PShop A
+^
+D1/31'26
+T-20.00
+PShop B
+^
+"""
+Then date order is ambiguous : DateOrderWarning Vertical
+| Ambiguous | false |
+Then date order evidence is : DateOrderEvidence Vertical
+| FirstPartOver12  | 0   |
+| SecondPartOver12 | 1   |
+| Proven           | MDY |
+
+Attributes DateOrderEvidence
+| Attribute        | Type      | Default |
+| FirstPartOver12  | Integer   | 0       |
+| SecondPartOver12 | Integer   | 0       |
+| Proven           | DateOrder | MDY     |
+
+Scenario A file that contradicts the profile it was given is refused
+Description If the file proves DMY and the profile says MDY, one of them is
+Description wrong and importing either way would be a guess.
+Given the qif profile is : QifProfile Vertical
+| DateOrder | MDY |
+Given the file contains
+"""
+!Type:Bank
+D25/12'17
+T-45.00
+PShop A
+^
+"""
+Then rejected because : Rejection
+| Reason                                                             |
+| The file proves DMY order and the profile says MDY; nothing imported |
+
+Attributes QifDateParse
+| Attribute | Type      | Default    |
+| DateOrder | DateOrder | MDY        |
+| Text      | String    | none       |
+| Date      | Date      | 2024-01-01 |
+| Valid     | Boolean   | true       |
+| Notes     | String    | none       |
+
+Scenario A file whose dates could be read either way stops before importing
+Description The same rule as for a CSV file, and it matters more here: a whole
+Description history read in the wrong order is not something that gets noticed
+Description by looking at one register.
+Given the qif profile is : QifProfile Vertical
+| DateOrder | MDY |
+Given the file contains
+"""
+!Type:Bank
+D03/04/2024
+T-10.00
+^
+D05/06/2024
+T-20.00
+^
+"""
+Then date order is ambiguous : DateOrderWarning Vertical
+| Ambiguous      | true       |
+| UsingOrder     | MDY        |
+| FirstDateAsMDY | 2024-03-04 |
+| FirstDateAsDMY | 2024-04-03 |
+
+Entity QifProfile
+Description The few things about a QIF file that cannot be read from it.
+| Attribute      | Type      | Default  | Notes                              |
+| DateOrder      | DateOrder | MDY      | Never guessed                      |
+| DecimalComma   | Boolean   | false    | For a European export              |
+| InvestmentMode | InvestmentMode | CashOnly | What to do with trade history |
+
+# ---------------------------------------------------------------------------
+# Amounts
+# ---------------------------------------------------------------------------
+
+BusinessRule How a QIF amount is read
+Description Newer exports write the amount twice, as U and as T. T is used, and
+Description a disagreement between the two is reported rather than resolved.
+Examples: QifAmountParse
+| Text        | DecimalComma | Amount  | Valid | Notes                        |
+| -45.00      | false        | -45.00  | true  |                              |
+| 3000.00     | false        | 3000.00 | true  |                              |
+| 1,234.56    | false        | 1234.56 | true  | Thousands separator          |
+| -1,234.56   | false        | -1234.56 | true |                              |
+| 45          | false        | 45.00   | true  | No decimal point             |
+| -45,00      | true         | -45.00  | true  | A European export            |
+| 1.234,56    | true         | 1234.56 | true  | Separators the other way     |
+|             | false        | 0.00    | true  | An empty amount is zero      |
+| abc         | false        | 0.00    | false | Not a number                 |
+
+Attributes QifAmountParse
+| Attribute    | Type    | Default |
+| Text         | String  | none    |
+| DecimalComma | Boolean | false   |
+| Amount       | Money   | 0.00    |
+| Valid        | Boolean | true    |
+| Notes        | String  | none    |
+
+Scenario A record whose U and T amounts disagree is reported
+Description They are the same field written twice and they should never differ.
+Description When they do, something has rewritten the file, and that is worth
+Description knowing before twenty years of it is trusted.
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Given the file contains
+"""
+!Type:Bank
+D01/15/2024
+U-45.00
+T-45.50
+PHarris Teeter
+^
+"""
+When qif file imported
+Then migration notes are : MigrationNote
+| Kind           | Detail                                                  |
+| AmountMismatch | 2024-01-15 Harris Teeter: U is -45.00 and T is -45.50; used -45.50 |
+
+# ---------------------------------------------------------------------------
+# Cleared status
+# ---------------------------------------------------------------------------
+
+BusinessRule How the C field becomes a cleared status
+Description Quicken has written four different markers over the years and they
+Description mean two things between them.
+Examples: ClearedMapping
+| Text | Cleared    | Notes                       |
+|      | Uncleared  | Absent or empty             |
+| *    | Cleared    |                             |
+| c    | Cleared    | Lower case, newer files     |
+| X    | Reconciled |                             |
+| R    | Reconciled | Lower case R also seen      |
+
+Attributes ClearedMapping
+| Attribute | Type          | Default   |
+| Text      | String        | none      |
+| Cleared   | ClearedStatus | Uncleared |
+| Notes     | String        | none      |
+
+Scenario A cleared marker is applied to the posting in its own account only
+Description The marker belongs to the account whose section the record is in,
+Description which is exactly the posting-level status of Transactions. The
+Description other side of the transaction is left uncleared.
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
+Given the file contains
+"""
+!Type:Bank
+D01/15/2024
+T-45.00
+PHarris Teeter
+LGroceries
+CX
+^
+"""
+When qif file imported
+Then postings are : PostingRow
+| Ref | Date       | Payee         | Account            | Amount | Cleared    |
+| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 | Reconciled |
+| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00  | Uncleared  |
+
+# ---------------------------------------------------------------------------
+# Splits
+# ---------------------------------------------------------------------------
+
+BusinessRule The split lines decide the categories, not the L field
+Description A split record carries S, E and dollar lines for its real categories,
+Description and its L field holds the literal text "--Split--". Taken as a
+Description category name that text would create an account called --Split--
+Description with a thousand transactions in it.
+Details All 1,026 records in the business file whose L is "--Split--" have
+Details dollar lines, and 19 records have dollar lines while L holds a real
+Details category. So the rule is not "ignore L when it says --Split--" but
+Details "ignore L whenever there are split lines", which covers both.
+Examples: SplitCategorySource
+| LField             | HasSplitLines | CategoriesFrom | Notes                        |
+| --Split--          | true          | SplitLines     | 1,026 records in the business file |
+| Groceries          | true          | SplitLines     | 19 such records; L is ignored |
+| Groceries          | false         | LField         | An ordinary transaction      |
+| --Split--          | false         | None           | Never seen; reported if met  |
+|                    | true          | SplitLines     |                              |
+
+Attributes SplitCategorySource
+| Attribute      | Type    | Default |
+| LField         | Text    | none    |
+| HasSplitLines  | Boolean | false   |
+| CategoriesFrom | String  |         |
+| Notes          | String  | none    |
+
+Scenario A split record keeps --Split-- out of the chart of accounts
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type    | Placeholder |
+| Assets:Checking           | Bank    | false       |
+| Expenses:Home:Maintenance | Expense | false       |
+| Expenses:Home:Garden      | Expense | false       |
+Given the file contains
+"""
+!Type:Bank
+D4/ 2'24
+T-154.50
+PHome Depot
+L--Split--
+SHome:Maintenance
+$-100.00
+SHome:Garden
+$-54.50
+^
+"""
+When qif file imported
+Then accounts created are : ChartOfAccounts
+| Path | Type | Placeholder |
+# No rows: every account named was already there, and --Split-- is not a name.
+Then postings are : PostingRow
+| Ref | Date       | Payee      | Account                   | Amount  |
+| T1  | 2024-04-02 | Home Depot | Assets:Checking           | -154.50 |
+| T1  | 2024-04-02 | Home Depot | Expenses:Home:Maintenance | 100.00  |
+| T1  | 2024-04-02 | Home Depot | Expenses:Home:Garden      | 54.50   |
+
+BusinessRule How a split line amount becomes a posting amount
+Description The dollar lines are signed from the point of view of the account the
+Description record is in, and they sum to the T amount. A posting to the category
+Description is therefore the dollar value with its sign turned round, and the
+Description posting to the account itself is T.
+Details This is confirmed rather than assumed: in all 1,045 records with dollar
+Details lines across both files, the lines sum exactly to T. In 268 of them the
+Details lines do not all share one sign -- a paycheque has gross pay one way
+Details and deductions the other -- so the rule is per line, not per record.
+Examples: SplitLineSign
+| T        | Dollar1  | Dollar2  | Dollar3 | AccountPosting | Posting1 | Posting2 | Posting3 | Notes          |
+| -154.50  | -100.00  | -54.50   |         | -154.50        | 100.00   | 54.50    |          | A payment      |
+| 3550.00  | 5000.00  | -1200.00 | -250.00 | 3550.00        | -5000.00 | 1200.00  | 250.00   | A paycheque    |
+| -45.00   | -45.00   |          |         | -45.00         | 45.00    |          |          | One line       |
+
+Attributes SplitLineSign
+| Attribute      | Type  | Default |
+| T              | Money | 0.00    |
+| Dollar1        | Money | 0.00    |
+| Dollar2        | Money | 0.00    |
+| Dollar3        | Money | 0.00    |
+| AccountPosting | Money | 0.00    |
+| Posting1       | Money | 0.00    |
+| Posting2       | Money | 0.00    |
+| Posting3       | Money | 0.00    |
+| Notes          | String | none   |
+
+Scenario A split record becomes one transaction with a posting per line
+Description The S, E and dollar fields repeat, one group per split line, and
+Description they come after the fields of the transaction itself.
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type    | Placeholder |
+| Assets:Checking           | Bank    | false       |
+| Expenses:Home:Maintenance | Expense | false       |
+| Expenses:Home:Garden      | Expense | false       |
+| Expenses:Auto:Repairs     | Expense | false       |
+Given the file contains
+"""
+!Type:Bank
+D04/02/2024
+T-184.50
+PHome Depot
+SHome:Maintenance
+EPaint
+$-100.00
+SHome:Garden
+ECompost
+$-54.50
+SAuto:Repairs
+EWiper blades
+$-30.00
+^
+"""
+When qif file imported
+Then postings are : PostingRow
+| Ref | Date       | Payee      | Account                   | Amount  | Memo         |
+| T1  | 2024-04-02 | Home Depot | Assets:Checking           | -184.50 | none         |
+| T1  | 2024-04-02 | Home Depot | Expenses:Home:Maintenance | 100.00  | Paint        |
+| T1  | 2024-04-02 | Home Depot | Expenses:Home:Garden      | 54.50   | Compost      |
+| T1  | 2024-04-02 | Home Depot | Expenses:Auto:Repairs     | 30.00   | Wiper blades |
+# The split amounts carry the sign of the account side in QIF, and are turned
+# round to become category postings, as a register entry is in Transactions.
+
+Scenario A split whose lines do not add up to the total is reported and balanced
+Description Refusing the record would lose it. The difference goes to
+Description Uncategorized, where it is visible and can be put right, and the
+Description record is listed in the migration report.
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type    | Placeholder |
+| Assets:Checking           | Bank    | false       |
+| Expenses:Home:Maintenance | Expense | false       |
+| Expenses:Uncategorized    | Expense | false       |
+Given the file contains
+"""
+!Type:Bank
+D04/02/2024
+T-184.50
+PHome Depot
+SHome:Maintenance
+$-154.50
+^
+"""
+When qif file imported
+Then postings are : PostingRow
+| Ref | Date       | Payee      | Account                   | Amount  |
+| T1  | 2024-04-02 | Home Depot | Assets:Checking           | -184.50 |
+| T1  | 2024-04-02 | Home Depot | Expenses:Home:Maintenance | 154.50  |
+| T1  | 2024-04-02 | Home Depot | Expenses:Uncategorized    | 30.00   |
+Then migration notes are : MigrationNote
+| Kind         | Detail                                                        |
+| SplitShort   | 2024-04-02 Home Depot: split lines are 30.00 short of 184.50; put to Uncategorized |
+
+# ---------------------------------------------------------------------------
+# Transfers, and the duplicate halves
+# ---------------------------------------------------------------------------
+
+DomainTerm TransferHalf : QifRecord
+Description A record whose category field is an account name in square
+Description brackets. Quicken writes one in each of the two accounts, so a
+Description transfer appears in the file twice.
+
+BusinessRule When two transfer halves are the same transfer
+Description All four must hold. Nothing weaker is safe: two 500.00 movements
+Description between the same pair of accounts on the same day are a real thing
+Description that happens, and collapsing them would lose money.
+Details When more than two halves match each other, they are paired off in the
+Details order they appear in the file, and the pairing is reported.
+Examples: TransferPairing
+| Test | Condition                                                          |
+| 1    | One names the account of the other in brackets, and the other names the first |
+| 2    | The amounts are equal and opposite                                 |
+| 3    | The dates are the same                                             |
+| 4    | Neither has already been paired with something else                |
+
+Attributes TransferPairing
+| Attribute | Type    | Default |
+| Test      | Integer | 0       |
+| Condition | String  |         |
+
+Scenario Both halves of a transfer become one transaction
+Description This is the rule that stops the migration doubling every transfer
+Description in twenty years of history.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Expenses:Uncategorized | Expense | false       |
+Given the file contains
+"""
+!Option:AutoSwitch
+!Account
+NChecking
+TBank
+^
+NSavings
+TBank
+^
+!Clear:AutoSwitch
+!Account
+NChecking
+TBank
+^
+!Type:Bank
+D03/01/2024
+T-500.00
+PTransfer to savings
+L[Savings]
+^
+!Account
+NSavings
+TBank
+^
+!Type:Bank
+D03/01/2024
+T500.00
+PTransfer from checking
+L[Checking]
+^
+"""
+When qif file imported
+Then postings are : PostingRow
+| Ref | Date       | Payee               | Account         | Amount  |
+| T1  | 2024-03-01 | Transfer to savings | Assets:Checking | -500.00 |
+| T1  | 2024-03-01 | Transfer to savings | Assets:Savings  | 500.00  |
+Then import summary is : ImportSummary Vertical
+| New       | 1 |
+| Duplicate | 1 |
+| Matched   | 0 |
+| Possible  | 0 |
+# One transaction created, one half recognised as its other side. The payee of
+# the half that was kept is the one from the account the money left.
+
+Scenario Two transfers of the same amount on the same day stay two transfers
+Description Both are real. Each half pairs with exactly one other half, and
+Description once a half is paired it is not available to pair again.
+Given the chart of accounts is as previous
+Given the file contains
+"""
+!Option:AutoSwitch
+!Account
+NChecking
+TBank
+^
+NSavings
+TBank
+^
+!Clear:AutoSwitch
+!Account
+NChecking
+TBank
+^
+!Type:Bank
+D03/01/2024
+T-500.00
+PTransfer one
+L[Savings]
+^
+D03/01/2024
+T-500.00
+PTransfer two
+L[Savings]
+^
+!Account
+NSavings
+TBank
+^
+!Type:Bank
+D03/01/2024
+T500.00
+PIn one
+L[Checking]
+^
+D03/01/2024
+T500.00
+PIn two
+L[Checking]
+^
+"""
+When qif file imported
+Then postings are : PostingRow
+| Ref | Date       | Payee        | Account         | Amount  |
+| T1  | 2024-03-01 | Transfer one | Assets:Checking | -500.00 |
+| T1  | 2024-03-01 | Transfer one | Assets:Savings  | 500.00  |
+| T2  | 2024-03-01 | Transfer two | Assets:Checking | -500.00 |
+| T2  | 2024-03-01 | Transfer two | Assets:Savings  | 500.00  |
+Then import summary is : ImportSummary Vertical
+| New       | 2 |
+| Duplicate | 2 |
+| Matched   | 0 |
+| Possible  | 0 |
+
+Scenario A transfer half with no partner still becomes a whole transfer
+Description The bracketed account names both sides, so the transaction can be
+Description made from one half alone. It happens when only some accounts were
+Description exported, and it is reported because the other account may be
+Description about to be imported from a second file.
+Given the chart of accounts is as previous
+Given the file contains
+"""
+!Option:AutoSwitch
+!Account
+NChecking
+TBank
+^
+!Clear:AutoSwitch
+!Account
+NChecking
+TBank
+^
+!Type:Bank
+D03/01/2024
+T-500.00
+PTransfer to savings
+L[Savings]
+^
+"""
+When qif file imported
+Then accounts created are : ChartOfAccounts CompareOnly
+| Path            |
+| Assets:Checking |
+| Assets:Savings  |
+Then postings are : PostingRow
+| Ref | Date       | Payee               | Account         | Amount  |
+| T1  | 2024-03-01 | Transfer to savings | Assets:Checking | -500.00 |
+| T1  | 2024-03-01 | Transfer to savings | Assets:Savings  | 500.00  |
+Then migration notes are : MigrationNote
+| Kind            | Detail                                                      |
+| UnpairedTransfer | 2024-03-01 Assets:Checking to Assets:Savings 500.00: only one half was in the file |
+
+Scenario Dates a day apart do not pair, and are reported as a likely pair
+Description Quicken writes both halves with the same date, so a day between
+Description them means something was edited. They are left as two transfers
+Description rather than collapsed, and listed so they can be looked at.
+Given the chart of accounts is as previous
+Given the file contains
+"""
+!Option:AutoSwitch
+!Account
+NChecking
+TBank
+^
+NSavings
+TBank
+^
+!Clear:AutoSwitch
+!Account
+NChecking
+TBank
+^
+!Type:Bank
+D03/01/2024
+T-500.00
+PTransfer out
+L[Savings]
+^
+!Account
+NSavings
+TBank
+^
+!Type:Bank
+D03/02/2024
+T500.00
+PTransfer in
+L[Checking]
+^
+"""
+When qif file imported
+Then import summary is : ImportSummary Vertical
+| New       | 2 |
+| Duplicate | 0 |
+| Matched   | 0 |
+| Possible  | 2 |
+Then migration notes are : MigrationNote
+| Kind          | Detail                                                        |
+| NearTransfer  | 2024-03-01 and 2024-03-02 between Assets:Checking and Assets:Savings for 500.00 may be one transfer |
+
+Scenario A transfer to the account itself is an opening balance
+Description Quicken writes the opening balance of an account as a transfer from
+Description the account to itself. Left alone it would be refused by the rule
+Description in Transactions against posting to one account twice, so it is
+Description recognised and posted against Equity.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type   | Placeholder |
+| Equity:Opening Balances | Equity | false       |
+Given the file contains
+"""
+!Option:AutoSwitch
+!Account
+NChecking
+TBank
+^
+!Clear:AutoSwitch
+!Account
+NChecking
+TBank
+^
+!Type:Bank
+D01/01/2005
+T2500.00
+POpening Balance
+L[Checking]
+^
+"""
+When qif file imported
+Then postings are : PostingRow
+| Ref | Date       | Payee           | Account                 | Amount   |
+| T1  | 2005-01-01 | Opening Balance | Assets:Checking         | 2500.00  |
+| T1  | 2005-01-01 | Opening Balance | Equity:Opening Balances | -2500.00 |
+
+Scenario A category name in brackets that is not an account creates the account
+Description Brackets mean an account, so a bracketed name that is not in the
+Description account list is an account that was not exported rather than a
+Description category that happens to have brackets in its name.
+Given the chart of accounts is as previous
+Given the file contains
+"""
+!Type:Bank
+D03/01/2024
+T-500.00
+PTransfer
+L[Old Brokerage]
+^
+"""
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When qif file imported
+Then accounts created are : ChartOfAccounts CompareOnly
+| Path                 |
+| Assets:Old Brokerage |
+Then migration notes are : MigrationNote
+| Kind           | Detail                                                        |
+| AccountGuessed | "[Old Brokerage]" was not in the account list; made Assets:Old Brokerage of type Bank |
+
+# ---------------------------------------------------------------------------
+# Classes
+# ---------------------------------------------------------------------------
+
+Scenario A class on a category is kept as a tag
+Description Reporting by class is not in this release. Discarding the class
+Description during a migration that runs once would lose it for good, so it is
+Description stored on the transaction and reported as not yet shown anywhere.
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Given the chart of accounts is : ChartOfAccounts
+| Path                | Type    | Placeholder |
+| Assets:Checking     | Bank    | false       |
+| Expenses:Home:Rates | Expense | false       |
+Given the file contains
+"""
+!Type:Class
+NRental
+DRental property
+^
+!Type:Bank
+D02/01/2024
+T-1250.00
+PCounty Tax Office
+LHome:Rates/Rental
+^
+"""
+When qif file imported
+Then transaction is : Transaction Vertical CompareOnly
+| Date  | 2024-02-01        |
+| Payee | County Tax Office |
+| Tag   | Rental            |
+Then postings are : PostingRow
+| Ref | Date       | Payee             | Account             | Amount   |
+| T1  | 2024-02-01 | County Tax Office | Assets:Checking     | -1250.00 |
+| T1  | 2024-02-01 | County Tax Office | Expenses:Home:Rates | 1250.00  |
+Then migration notes are : MigrationNote
+| Kind      | Detail                                                       |
+| TagsKept  | 1 class kept as a tag; no report groups by tag in this release |
+
+# ---------------------------------------------------------------------------
+# Investments
+# ---------------------------------------------------------------------------
+
+DataType InvestmentMode
+Description What to do with twenty years of trades in an investment account.
+Details Replay is the default because the income it posts belongs in a report
+Details of income. PositionsOnly exists because an account whose history is
+Details not wanted is common, and because the balance is what matters here.
+Examples: EnumerationValues
+| Value         | Notes                                                        |
+| CashOnly      | This round: only records that move cash out of the account   |
+| Replay        | Every action is imported, in order                           |
+| PositionsOnly | Only the resulting holdings, established at the last price   |
+
+DataType QifAction
+Description The N field of an investment record.
+Examples: EnumerationValues
+| Value     | Notes                                         |
+| Buy       | Cash to shares                                |
+| BuyX      | Same, with the cash from another account      |
+| Sell      | Shares to cash                                |
+| SellX     | Same, with the cash to another account        |
+| Div       | A cash dividend                               |
+| DivX      | Same, paid into another account               |
+| IntInc    | Interest                                      |
+| CGLong    | A long-term capital gain distribution         |
+| CGShort   | A short-term capital gain distribution        |
+| ReinvDiv  | A dividend reinvested                         |
+| ReinvInt  | Interest reinvested                           |
+| ReinvLg   | A long gain distribution reinvested           |
+| ReinvSh   | A short gain distribution reinvested          |
+| ShrsIn    | Shares added with no cash                     |
+| ShrsOut   | Shares removed with no cash                   |
+| StkSplit  | A share count change at no value              |
+| MargInt   | Margin interest paid                          |
+| MiscExp   | A miscellaneous expense                       |
+| MiscInc   | Miscellaneous income                          |
+| XIn       | Cash in from another account                  |
+| XOut      | Cash out to another account                   |
+| Unsupported | Anything else; reported, not imported       |
+
+BusinessRule What each investment action posts
+Description In the terms of Investments: a holding is an account carrying a money
+Description balance, income goes to an Income category, and anything that is only
+Description a change in market value goes to Equity:Market Value Changes.
+Examples: ActionPosting
+| Action   | Debited                  | Credited                    | Notes                             |
+| Buy      | The holding account      | The cash account            | Commission to Expenses:Investment:Fees |
+| BuyX     | The holding account      | The transfer account        |                                   |
+| Sell     | The cash account         | The holding account         | Any excess to Equity:Market Value Changes |
+| SellX    | The transfer account     | The holding account         |                                   |
+| Div      | The cash account         | Income:Dividends            |                                   |
+| DivX     | The transfer account     | Income:Dividends            |                                   |
+| IntInc   | The cash account         | Income:Interest             |                                   |
+| CGLong   | The cash account         | Income:Capital Gains:Long   |                                   |
+| CGShort  | The cash account         | Income:Capital Gains:Short  |                                   |
+| ReinvDiv | The holding account      | Income:Dividends            | No cash moves                     |
+| ReinvInt | The holding account      | Income:Interest             |                                   |
+| ReinvLg  | The holding account      | Income:Capital Gains:Long   |                                   |
+| ReinvSh  | The holding account      | Income:Capital Gains:Short  |                                   |
+| ShrsIn   | The holding account      | Equity:Opening Balances     | Shares from before the file       |
+| ShrsOut  | Equity:Opening Balances  | The holding account         |                                   |
+| StkSplit | Nothing                  | Nothing                     | Shares and price change, value does not |
+| MargInt  | Expenses:Investment:Interest | The cash account        |                                   |
+| MiscExp  | The category named       | The cash account            |                                   |
+| MiscInc  | The cash account         | The category named          |                                   |
+| XIn      | The cash account         | The transfer account        |                                   |
+| XOut     | The transfer account     | The cash account            |                                   |
+
+Attributes ActionPosting
+| Attribute | Type   | Default |
+| Action    | String |         |
+| Debited   | String |         |
+| Credited  | String |         |
+| Notes     | String | none    |
+
+Scenario A buy and a reinvested dividend in an investment account
+Description The security name from the Y field becomes an account under the
+Description investment account, named by its symbol when the security list
+Description gives one and by its name when it does not.
+Given the chart of accounts is : ChartOfAccounts
+| Path                        | Type   | Placeholder |
+| Income:Dividends            | Income | false       |
+| Equity:Market Value Changes | Equity | false       |
+| Equity:Opening Balances     | Equity | false       |
+Given the file contains
+"""
+!Type:Security
+NVanguard Total Stock Mkt Idx
+SVTSAX
+TMutual Fund
+^
+!Option:AutoSwitch
+!Account
+NBrokerage
+TInvst
+^
+!Clear:AutoSwitch
+!Account
+NBrokerage
+TInvst
+^
+!Type:Invst
+D01/02/2024
+NXIn
+T20000.00
+PTransfer from checking
+L[Checking]
+^
+D02/01/2024
+NBuy
+YVanguard Total Stock Mkt Idx
+I100.00
+Q100
+T10000.00
+^
+D06/30/2024
+NReinvDiv
+YVanguard Total Stock Mkt Idx
+I100.00
+Q2.5
+T250.00
+^
+"""
+When qif file imported
+Then accounts created are : ChartOfAccounts CompareOnly
+| Path                   |
+| Assets:Brokerage       |
+| Assets:Brokerage:Cash  |
+| Assets:Brokerage:VTSAX |
+| Assets:Checking        |
+Then postings are : PostingRow
+| Ref | Date       | Account                | Amount    |
+| T1  | 2024-01-02 | Assets:Brokerage:Cash  | 20000.00  |
+| T1  | 2024-01-02 | Assets:Checking        | -20000.00 |
+| T2  | 2024-02-01 | Assets:Brokerage:VTSAX | 10000.00  |
+| T2  | 2024-02-01 | Assets:Brokerage:Cash  | -10000.00 |
+| T3  | 2024-06-30 | Assets:Brokerage:VTSAX | 250.00    |
+| T3  | 2024-06-30 | Income:Dividends       | -250.00   |
+Then holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 102.5  | 100.0000 | 2024-06-30 |
+
+Scenario A security with no symbol is named by its security name
+Given the chart of accounts is as previous
+Given the file contains
+"""
+!Type:Security
+NOld Employer Stock Plan
+TStock
+^
+!Option:AutoSwitch
+!Account
+NBrokerage
+TInvst
+^
+!Clear:AutoSwitch
+!Account
+NBrokerage
+TInvst
+^
+!Type:Invst
+D01/02/2005
+NShrsIn
+YOld Employer Stock Plan
+I10.00
+Q100
+T1000.00
+^
+"""
+When qif file imported
+Then accounts created are : ChartOfAccounts CompareOnly
+| Path                                      |
+| Assets:Brokerage                          |
+| Assets:Brokerage:Old Employer Stock Plan  |
+Then postings are : PostingRow
+| Ref | Date       | Account                                  | Amount   |
+| T1  | 2005-01-02 | Assets:Brokerage:Old Employer Stock Plan | 1000.00  |
+| T1  | 2005-01-02 | Equity:Opening Balances                  | -1000.00 |
+
+Scenario A stock split changes the shares and the price but posts nothing
+Description The value of the holding is the same before and after, so there is
+Description nothing to post, and posting a revaluation of zero would clutter
+Description the register. The Q field holds the number of new shares for each
+Description old one, multiplied by ten, which is Quicken's own convention.
+Given the chart of accounts is as previous
+Given holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-02-01 |
+Given the file contains
+"""
+!Type:Invst
+D03/01/2024
+NStkSplit
+YVTSAX
+Q20
+^
+"""
+When qif file imported
+Then postings created are : PostingRow
+| Ref | Date | Account | Amount |
+Then holdings are : Holdings
+| Account                | Symbol | Shares | Price   | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 200    | 50.0000 | 2024-03-01 |
+
+BusinessRule How a stock split ratio is read
+Description The Q field is the new shares per old share, times ten.
+Details This is the convention Quicken writes and it is worth confirming
+Details against the file being migrated, because a wrong reading here changes
+Details a share count by a factor of ten.
+Examples: SplitRatio
+| QField | Ratio | HeldBefore | HeldAfter | PriceBefore | PriceAfter | Notes       |
+| 20     | 2     | 100        | 200       | 100.0000    | 50.0000    | Two for one |
+| 30     | 3     | 100        | 300       | 120.0000    | 40.0000    | Three for one |
+| 15     | 1.5   | 100        | 150       | 90.0000     | 60.0000    | Three for two |
+| 5      | 0.5   | 100        | 50        | 50.0000     | 100.0000   | A reverse split |
+
+Attributes SplitRatio
+| Attribute   | Type    | Default |
+| QField      | Decimal | 0       |
+| Ratio       | Decimal | 0       |
+| HeldBefore  | Shares  | 0       |
+| HeldAfter   | Shares  | 0       |
+| PriceBefore | Price   | 0       |
+| PriceAfter  | Price   | 0       |
+| Notes       | String  | none    |
+
+Scenario An unsupported action is reported and not imported
+Description Employee stock plan actions carry tax meaning this program does not
+Description model. Importing them as something else would be worse than
+Description leaving them out and saying so.
+Given the chart of accounts is as previous
+Given the file contains
+"""
+!Type:Invst
+D03/01/2024
+NVest
+YOld Employer Stock Plan
+Q50
+^
+"""
+When qif file imported
+Then postings created are : PostingRow
+| Ref | Date | Account | Amount |
+Then migration notes are : MigrationNote
+| Kind        | Detail                                            |
+| Unsupported | 2024-03-01 action "Vest" is not imported; 1 record |
+
+Scenario PositionsOnly skips the trades and establishes the holdings
+Description For an account whose twenty years of trades are not wanted. The
+Description holdings that result are posted once, at the last price in the
+Description file, against Equity:Opening Balances.
+Given the chart of accounts is as previous
+Given the qif profile is : QifProfile Vertical
+| DateOrder      | MDY           |
+| InvestmentMode | PositionsOnly |
+Given the file contains
+"""
+!Type:Prices
+"VTSAX",110.00,"6/28'24"
+^
+!Option:AutoSwitch
+!Account
+NBrokerage
+TInvst
+^
+!Clear:AutoSwitch
+!Account
+NBrokerage
+TInvst
+^
+!Type:Invst
+D02/01/2024
+NBuy
+YVTSAX
+I100.00
+Q100
+T10000.00
+^
+D03/01/2024
+NBuy
+YVTSAX
+I120.00
+Q50
+T6000.00
+^
+"""
+When qif file imported
+Then postings are : PostingRow
+| Ref | Date       | Account                | Amount    |
+| T1  | 2024-06-28 | Assets:Brokerage:VTSAX | 16500.00  |
+| T1  | 2024-06-28 | Equity:Opening Balances | -16500.00 |
+Then holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 150    | 110.0000 | 2024-06-28 |
+
+# ---------------------------------------------------------------------------
+# Prices
+# ---------------------------------------------------------------------------
+
+Scenario The price list sets the last price of each security
+Description The price list is a comma-separated oddity in the middle of a
+Description field-per-line format. Only the latest price per security is used:
+Description the earlier ones would each post a revaluation, and twenty years of
+Description daily prices would bury the register.
+Given the chart of accounts is as previous
+Given holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-02-01 |
+Given the file contains
+"""
+!Type:Prices
+"VTSAX",105.00,"3/29'24"
+^
+"VTSAX",110.00,"6/28'24"
+^
+"""
+When qif file imported
+Then postings are : PostingRow
+| Ref | Date       | Account                     | Amount   |
+| T1  | 2024-06-28 | Assets:Brokerage:VTSAX      | 1000.00  |
+| T1  | 2024-06-28 | Equity:Market Value Changes | -1000.00 |
+Then holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 100    | 110.0000 | 2024-06-28 |
+Then migration notes are : MigrationNote
+| Kind          | Detail                                            |
+| PricesSkipped | 1 earlier price for VTSAX was not used            |
+
+BusinessRule How a price list line is read
+Description Quoted symbol, bare price, quoted date, and the date uses the same
+Description apostrophe century marker as everywhere else.
+Examples: PriceLine
+| Line                        | Symbol | Price    | AsOf       | Valid |
+| "VTSAX",110.00,"6/28'24"    | VTSAX  | 110.0000 | 2024-06-28 | true  |
+| "BRK.B",405.1234,"1/14'22"  | BRK.B  | 405.1234 | 2022-01-14 | true  |
+| "VTSAX",110,"6/28'24"       | VTSAX  | 110.0000 | 2024-06-28 | true  |
+| "VTSAX",,"6/28'24"          | VTSAX  | 0        | 2024-06-28 | false |
+| "VTSAX",110.00              | VTSAX  | 110.0000 | 2024-01-01 | false |
+
+Attributes PriceLine
+| Attribute | Type   | Default    |
+| Line      | String |            |
+| Symbol    | Symbol |            |
+| Price     | Price  | 0          |
+| AsOf      | Date   | 2024-01-01 |
+| Valid     | Boolean | true      |
+
+# ---------------------------------------------------------------------------
+# Memorized transactions
+# ---------------------------------------------------------------------------
+
+Scenario Memorized transactions become payee rules
+Description Quicken remembers a payee and the category it takes, which is what
+Description a payee rule is. Bringing them over means the categorising that was
+Description done over twenty years is not done again. See Payees.
+Given the file contains
+"""
+!Type:Memorized
+KC
+PHarris Teeter
+LGroceries
+T-45.00
+^
+KC
+PShell
+LAuto:Fuel
+T-52.00
+^
+"""
+When qif file imported
+Then payee rules created are : PayeeRules
+| Pattern       | MatchType | Payee         | Category           | Enabled |
+| Harris Teeter | Contains  | Harris Teeter | Expenses:Groceries | true    |
+| Shell         | Contains  | Shell         | Expenses:Auto:Fuel | true    |
+# The remembered amount is not brought over. A rule that filled in an amount
+# from 2009 would do more harm than good.
+
+Scenario A memorized split becomes a remembered split rule
+Description The mortgage split that Payees exists to handle, arriving ready
+Description made.
+Given the file contains
+"""
+!Type:Memorized
+KC
+PFirst National
+SHome:Interest
+$-820.00
+SMortgage
+$-430.00
+SHome:Escrow
+$-250.00
+^
+"""
+When qif file imported
+Then payee split rules created are : PayeeSplitRule Vertical
+| Pattern   | First National |
+| MatchType | Contains       |
+| Payee     | First National |
+| Shape     | Amounts        |
+Then remembered split lines created are : RememberedSplitLine
+| Category               | Amount | Memo |
+| Expenses:Home:Interest | 820.00 | none |
+| Expenses:Mortgage      | 430.00 | none |
+| Expenses:Home:Escrow   | 250.00 | none |
+# Mortgage was not in the category list and the sign made it an expense. It is
+# a liability account in the book being built, so this is one of the lines the
+# migration report is for.
+
+# ---------------------------------------------------------------------------
+# The run as a whole
+# ---------------------------------------------------------------------------
+
+BusinessRule In what order a QIF file is read
+Description Four passes, because a transaction cannot be placed until the
+Description accounts and categories it names are known.
+Examples: MigrationPass
+| Pass | Reads                                     | Why                                      |
+| 1    | Account, category, class and security lists | A transaction names these               |
+| 2    | Every transaction record, with its account | Nothing is created yet; halves are paired |
+| 3    | Transactions, splits and transfers          | In date order, so the register reads right |
+| 4    | Price list, then statement balance checks   | Revaluation is last, on final holdings  |
+
+Attributes MigrationPass
+| Attribute | Type    | Default |
+| Pass      | Integer | 0       |
+| Reads     | String  |         |
+| Why       | String  |         |
+
+Scenario Nothing is written until the whole file has been read without error
+Description A migration that half succeeded would leave a book that is neither
+Description the old data nor the new, and no way to tell which transactions had
+Description arrived. It is all or nothing.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Expenses:Uncategorized | Expense | false       |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Given the file contains
+"""
+!Type:Bank
+D01/15/2024
+T-45.00
+PHarris Teeter
+^
+D99/99/9999
+T-12.00
+PBad Record
+^
+"""
+When qif file imported
+Then rejected because : Rejection
+| Reason                                                        |
+| Line 7: 99/99/9999 is not a date; nothing was imported        |
+Then postings are : PostingRow
+| Ref | Date | Account | Amount |
+# No rows: the good record was not written either.
+
+Scenario A migration report is produced whether or not anything was odd
+Description The report is the deliverable of a migration, not a by-product. It
+Description is what makes it possible to say the twenty years came over, and
+Description to find the handful of things that did not.
+Given the chart of accounts is as previous
+Given the file contains
+"""
+!Option:AutoSwitch
+!Account
+NChecking
+TBank
+/12/31/2024
+$955.00
+^
+NSavings
+TBank
+^
+!Clear:AutoSwitch
+!Account
+NChecking
+TBank
+^
+!Type:Bank
+D01/01/2005
+T2500.00
+POpening Balance
+L[Checking]
+^
+D01/15/2024
+T-45.00
+PHarris Teeter
+LGroceries
+^
+D03/01/2024
+T-1500.00
+PTransfer to savings
+L[Savings]
+^
+!Account
+NSavings
+TBank
+^
+!Type:Bank
+D03/01/2024
+T1500.00
+PTransfer from checking
+L[Checking]
+^
+"""
+When qif file imported
+Then migration report is : MigrationReport Vertical
+| AccountsCreated   | 3       |
+| CategoriesCreated | 2       |
+| Transactions      | 3       |
+| Postings          | 6       |
+| TransfersPaired   | 1       |
+| Unsupported       | 0       |
+| Notes             | 0       |
+| Balanced          | true    |
+Then balance checks are : LedgerBalanceResult Vertical
+| ClearedBalance | 955.00 |
+| StatedBal      | 955.00 |
+| Difference     | 0.00   |
+| Agrees         | true   |
+# Three accounts: Assets:Checking, Assets:Savings and Equity:Opening Balances.
+# Two categories: Expenses:Groceries and the Expenses placeholder above it.
+
+Attributes MigrationReport
+| Attribute         | Type    | Default |
+| AccountsCreated   | Integer | 0       |
+| CategoriesCreated | Integer | 0       |
+| Transactions      | Integer | 0       |
+| Postings          | Integer | 0       |
+| TransfersPaired   | Integer | 0       |
+| Unsupported       | Integer | 0       |
+| Notes             | Integer | 0       |
+| Balanced          | Boolean | false   |
+
+Scenario Every transaction in the book balances after the migration
+Description The check from Transactions, run over the whole book at the end of
+Description the migration. It is the one assertion that catches a mistake in any
+Description of the rules above.
+Given the chart of accounts is as previous
+Given the file contains
+"""
+!Type:Bank
+D01/15/2024
+T-45.00
+PHarris Teeter
+LGroceries
+^
+"""
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When qif file imported
+When book checked
+Then book check is : BookCheck Vertical
+| TransactionsChecked | 1    |
+| OutOfBalance        | 0    |
+| Balanced            | true |
+
+Attributes BookCheck
+| Attribute           | Type    | Default |
+| TransactionsChecked | Integer | 0       |
+| OutOfBalance        | Integer | 0       |
+| Balanced            | Boolean | false   |
+
+Scenario Importing the same QIF file twice does not double the book
+Description A migration gets run again: because the first attempt was abandoned,
+Description or because a second export was taken. Every record carries a
+Description fingerprint of its account, date, amount, payee and category, and
+Description a record whose fingerprint is already present is offered rather
+Description than created, as a CSV row is in ImportCsv.
+Given the chart of accounts is as previous
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Given the file contains
+"""
+!Type:Bank
+D01/15/2024
+T-45.00
+PHarris Teeter
+LGroceries
+^
+"""
+When qif file imported
+Then import summary is : ImportSummary Vertical
+| New       | 1 |
+| Duplicate | 0 |
+| Matched   | 0 |
+| Possible  | 0 |
+When qif file imported
+Then import summary is : ImportSummary Vertical
+| New       | 0 |
+| Duplicate | 0 |
+| Matched   | 0 |
+| Possible  | 1 |
+
+# ---------------------------------------------------------------------------
+# What the first round imports, and what it leaves
+# ---------------------------------------------------------------------------
+
+Description The first round is about spending reports from banking and card
+Description accounts. This section says exactly which records that includes,
+Description because the answer is not quite "the bank and card sections".
+
+BusinessRule Which sections the first round imports
+Description Every section that carries dated, categorised transactions, which is
+Description more than the bank and card ones.
+Details The invoice and bill sections are not investment data and not an aside:
+Details across the two files they carry 334 income references and 660 expense
+Details references. They are consulting revenue and business costs, and a
+Details spending report without them is short by that much. They have the same
+Details shape as a bank record -- a date, an amount, a payee, a category,
+Details sometimes splits -- so they are imported the same way, and only their
+Details X and A extension fields are dropped.
+Details The securities side of the investment sections is the one thing left
+Details out. See the rule after this one.
+Examples: RoundOneSection
+| Section        | Records | InRound1 | Why                                      |
+| !Type:Bank     | 11,587  | true     | The main case                            |
+| !Type:CCard    | 28,970  | true     | The main case                            |
+| !Type:Cash     | 695     | true     | Same shape                               |
+| !Type:Oth A    | 80      | true     | Same shape                               |
+| !Type:Oth L    | 8       | true     | Same shape                               |
+| !Type:Invoice  | 588     | true     | Carries income and expense categories    |
+| !Type:Bill     | 68      | true     | Carries expense categories               |
+| !Type:Tax      | 2       | true     | One record each; a transfer              |
+| !Type:Cat      | 588     | true     | Needed to know income from expense       |
+| !Type:Tag      | 2       | true     | Read; tags are kept but not reported on  |
+| !Type:Memorized | 50     | true     | Becomes payee rules                      |
+| !Type:Invst    | 899     | true     | Only the 51 with a category or transfer; see the next rule |
+| !Type:InvItem  | 10      | false    | Invoice line items; nothing to post      |
+| !Type:Template | 5       | false    | A report definition, not data            |
+
+Attributes RoundOneSection
+| Attribute | Type    | Default |
+| Section   | String  |         |
+| Records   | String  |         |
+| InRound1  | Boolean | true    |
+| Why       | String  | none    |
+
+BusinessRule Which investment records the first round imports
+Description Those that move cash to somewhere outside the account, and no
+Description others. The securities side is left for a later round.
+Details The reason this is not simply "skip the investment sections" is that
+Details 21 of those records name a category that a spending report shows:
+Details twenty use Investment transfer, which the category list declares as
+Details income, and one uses Misc Expense. Dropping them would leave two
+Details lines short against Quicken.
+Details The other 848 records are dividends reinvested, buys, sells, shares in
+Details and out, and the one stock split. None of them carries a category --
+Details the holdings are in retirement accounts, so nothing they earn is
+Details reportable spending or income -- and all of them are internal to the
+Details account. Leaving them out changes no figure in a spending report.
+Examples: RoundOneInvestmentAction
+| Action   | Records | InRound1 | Becomes                                   |
+| XIn      | 11      | true     | Cash in, from the account or category in L |
+| XOut     | 8       | true     | Cash out, to the account or category in L  |
+| Cash     | 41      | true     | A cash movement against the category in L  |
+| Buy      | 74      | false    | Internal to the account; no category        |
+| Sell     | 33      | false    | Internal; any gain is not reported          |
+| ReinvDiv | 665     | false    | Retirement account; not reportable income   |
+| Div      | 15      | false    | Likewise; carries no category               |
+| ShrsIn   | 40      | false    | Shares from before the file                 |
+| ShrsOut  | 11      | false    | Internal                                    |
+| StkSplit | 1       | false    | No value changes                            |
+
+Attributes RoundOneInvestmentAction
+| Attribute | Type    | Default |
+| Action    | String  |         |
+| Records   | String  |         |
+| InRound1  | Boolean | true    |
+| Becomes   | String  |         |
+
+Scenario An investment account exists so that a transfer into it stays a transfer
+Description Nineteen banking and card records transfer to an investment account.
+Description If the account did not exist those nineteen would fall to
+Description Uncategorized, and money moved to a retirement account would read as
+Description spending. So the accounts are created even though their contents are
+Description not imported.
+Given the qif profile is : QifProfile Vertical
+| DateOrder      | MDY      |
+| InvestmentMode | CashOnly |
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Expenses:Uncategorized | Expense | false       |
+Given the file contains
+"""
+!Option:AutoSwitch
+!Account
+NChecking
+TBank
+^
+NKen Roth IRA
+TInvst
+^
+!Clear:AutoSwitch
+!Account
+NChecking
+TBank
+^
+!Type:Bank
+D4/15'24
+T-6000.00
+PVanguard
+L[Ken Roth IRA]
+^
+"""
+When qif file imported
+Then accounts created are : ChartOfAccounts CompareOnly
+| Path                  |
+| Assets:Checking       |
+| Assets:Ken Roth IRA   |
+Then postings are : PostingRow
+| Ref | Date       | Payee    | Account             | Amount   |
+| T1  | 2024-04-15 | Vanguard | Assets:Checking     | -6000.00 |
+| T1  | 2024-04-15 | Vanguard | Assets:Ken Roth IRA | 6000.00  |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2024-01-01 |
+| To       | 2024-12-31 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account | Level | Amount | IsSubtotal |
+# No rows. Both accounts are real, so the transfer touches no category and the
+# six thousand is not spending. This is the figure the nineteen records would
+# otherwise have added to Uncategorized.
+
+Scenario A categorised investment cash movement does reach the spending report
+Description The twenty-one records that keep the investment sections in scope at
+Description all. A fee charged inside the account is an expense wherever it was
+Description charged.
+Given the qif profile is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                  | Type       | Placeholder |
+| Assets:Vanguard       | Investment | false       |
+| Expenses              | Expense    | true        |
+| Expenses:Misc Expense | Expense    | false       |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Vanguard |
+Given the file contains
+"""
+!Type:Invst
+D3/ 1'24
+NCash
+T-25.00
+LMisc Expense
+MAccount fee
+^
+"""
+When qif file imported
+Then postings are : PostingRow
+| Ref | Date       | Account               | Amount | Memo        |
+| T1  | 2024-03-01 | Assets:Vanguard       | -25.00 | Account fee |
+| T1  | 2024-03-01 | Expenses:Misc Expense | 25.00  | Account fee |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2024-01-01 |
+| To       | 2024-12-31 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account               | Level | Amount | IsSubtotal |
+| Expenses              | 0     | 25.00  | true       |
+| Expenses:Misc Expense | 1     | 25.00  | false      |
+
+Scenario The securities side is skipped, counted, and the balance is flagged
+Description A reinvested dividend in a retirement account changes what the
+Description account is worth and changes no spending figure. It is not
+Description imported this round, and the account is marked as holding an
+Description incomplete balance so that nobody reads the number as a valuation.
+Given the qif profile is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type       | Placeholder |
+| Assets:Vanguard | Investment | false       |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Vanguard |
+Given the file contains
+"""
+!Type:Invst
+D6/30'24
+NReinvDiv
+YSOME RETIREMENT FUND
+I100.00
+Q2.5
+T250.00
+^
+D2/ 1'24
+NBuy
+YSOME RETIREMENT FUND
+I100.00
+Q100
+T10000.00
+^
+"""
+When qif file imported
+Then postings created are : PostingRow
+| Ref | Date | Account | Amount |
+# No rows.
+Then migration notes are : MigrationNote
+| Kind              | Detail                                                       |
+| SecuritiesSkipped | 2 investment records not imported this round; Assets:Vanguard holds an incomplete balance |
+Then accounts with incomplete balances are : IncompleteBalance
+| Account         | Reason                                        | SkippedRecords |
+| Assets:Vanguard | The securities side is not imported this round | 2             |
+
+Attributes IncompleteBalance
+| Attribute      | Type        | Default |
+| Account        | AccountPath |         |
+| Reason         | Text        |         |
+| SkippedRecords | Integer     | 0       |
+
+Scenario An incomplete balance is not offered as a figure to rely on
+Description The account appears in the chart, its transfers are right, and its
+Description balance is marked rather than shown as though it were a valuation.
+Description A net worth report is not in this round, and this is why.
+Given the qif profile is as previous
+Given accounts with incomplete balances are : IncompleteBalance
+| Account         | Reason                                        | SkippedRecords |
+| Assets:Vanguard | The securities side is not imported this round | 848            |
+Then balance display is : BalanceDisplay Vertical
+| Account    | Assets:Vanguard                                  |
+| Complete   | false                                            |
+| ShownAs    | Transfers only                                   |
+| Caution    | Securities not imported; not a market value      |
+
+Attributes BalanceDisplay
+| Attribute | Type        | Default |
+| Account   | AccountPath |         |
+| Complete  | Boolean     | true    |
+| ShownAs   | Text        | none    |
+| Caution   | Text        | none    |
+
+# ---------------------------------------------------------------------------
+# Invoices, and when their income is recognised
+# ---------------------------------------------------------------------------
+
+Description Income from an invoice is recognised when the invoice is paid, not
+Description when it is issued. The reports being compared against are on a cash
+Description basis, and that is what cash basis means.
+Details
+Details This section says what the QIF export makes possible, which is less than
+Details the rule asks for, and it says so rather than approximating quietly.
+
+BusinessRule How the invoice section is shaped
+Description Two kinds of record share the section, told apart by the L field.
+Details Observed in the business file: 425 records, 212 invoices and 213
+Details payments. The counts are almost equal because almost every invoice was
+Details paid.
+Examples: InvoiceRecordKind
+| Kind    | LField           | HasSplitLines | CarriesCategories | Count |
+| Invoice | --Split--        | true          | true              | 207   |
+| Invoice | An income category | false       | true              | 5     |
+| Payment | A bracketed account | false      | false             | 213   |
+
+Attributes InvoiceRecordKind
+| Attribute         | Type    | Default |
+| Kind              | String  |         |
+| LField            | String  |         |
+| HasSplitLines     | Boolean | false   |
+| CarriesCategories | Boolean | false   |
+| Count             | String  |         |
+
+BusinessRule The export does not say which payment paid which invoice
+Description So a payment cannot be given the categories of its invoice with
+Description certainty, and that is the obstacle to posting income at the payment
+Description date.
+Details The evidence, all from the business file:
+Details Not one of the 213 payment records carries a split line, so no payment
+Details names a category of its own.
+Details The only field that looked like a reference, XI, has two distinct values
+Details across all 425 records -- 1 and 3 -- so it is a record-type flag and
+Details not an identifier. XE is a due date and X# is a quantity.
+Details Matching on payee and amount, oldest invoice first, resolves 184 of the
+Details 213 payments exactly. A payee-only fallback reaches about 204. The
+Details remainder are partial payments, combined payments, or payments whose
+Details payee was edited.
+Details That residual is not good enough to post income from, because a
+Details comparison that has to agree to the cent cannot rest on a match that
+Details is right most of the time.
+Examples: InvoiceLinkEvidence
+| Question                                | Answer                                  |
+| Do payments carry categories            | No; 0 of 213 have split lines           |
+| Is there a reference field              | No; XI has 2 distinct values over 425 records |
+| Does payee and amount recover the link  | Partly; 184 of 213 exactly              |
+| Is that enough to post income from      | No                                      |
+
+Attributes InvoiceLinkEvidence
+| Attribute | Type   | Default |
+| Question  | String |         |
+| Answer    | String |         |
+
+BusinessRule How a payment is matched to the invoice it paid
+Description In three passes, and whatever is left over is reported rather than
+Description attached to something by guesswork.
+Details The link is not in the export, so it is reconstructed. Pass one is
+Details exact and settles most of it; pass two accepts a different amount from
+Details the same payee, which is a partial or combined payment; pass three
+Details gives up and says so.
+Details On the business file: 184 of 213 payments match exactly, 20 more match a
+Details payee with some invoice still open, and 9 match nothing at all.
+Examples: PaymentMatchPass
+| Pass | Rule                                                        | Matched |
+| 1    | Same payee and the same amount, oldest invoice first        | 184     |
+| 2    | Same payee, any open invoice, oldest first                  | 20      |
+| 3    | Nothing; the payment is reported and posted uncategorised    | 9       |
+
+Attributes PaymentMatchPass
+| Attribute | Type    | Default |
+| Pass      | Integer | 0       |
+| Rule      | String  |         |
+| Matched   | String  |         |
+
+Scenario Income posts at the payment date, not the invoice date
+Description The invoice is dated November 2025 and was paid in January 2026. On
+Description a cash basis the income is 2026 income, so the categories of the
+Description invoice are posted on the day the money arrived.
+Details The invoice itself posts nothing. It is the record of what the income
+Details is for, and it is held until a payment claims it.
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Customer Invoices |
+Given the chart of accounts is : ChartOfAccounts
+| Path                     | Type   | Placeholder |
+| Assets:Customer Invoices | Asset  | false       |
+| Assets:Checking          | Bank   | false       |
+| Income:Consulting        | Income | false       |
+Given the file contains
+"""
+!Type:Invoice
+D11/15'25
+T2500.00
+U2500.00
+PA Client
+L--Split--
+SConsulting
+$-2500.00
+XI1
+^
+D1/20'26
+T-2500.00
+U-2500.00
+PA Client
+L[Checking]
+XI3
+^
+"""
+When qif file imported
+Then postings are : PostingRow
+| Ref | Date       | Payee    | Account           | Amount   |
+| T1  | 2026-01-20 | A Client | Assets:Checking   | 2500.00  |
+| T1  | 2026-01-20 | A Client | Income:Consulting | -2500.00 |
+# One transaction, dated when the money arrived. Assets:Customer Invoices is
+# never posted to: on a cash basis there is no receivable to carry.
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2025-01-01 |
+| To       | 2025-12-31 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account | Level | Amount | IsSubtotal |
+# No rows in 2025: the income is in 2026.
+
+Scenario A split invoice posts every one of its categories at the payment date
+Given import target is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                     | Type   | Placeholder |
+| Assets:Customer Invoices | Asset  | false       |
+| Assets:Checking          | Bank   | false       |
+| Income:Consulting        | Income | false       |
+| Income:Royalty           | Income | false       |
+Given the file contains
+"""
+!Type:Invoice
+D3/15'25
+T1500.00
+U1500.00
+PA Client
+L--Split--
+SConsulting
+$-1000.00
+SRoyalty
+$-500.00
+XI1
+^
+D4/20'25
+T-1500.00
+U-1500.00
+PA Client
+L[Checking]
+XI3
+^
+"""
+When qif file imported
+Then postings are : PostingRow
+| Ref | Date       | Payee    | Account           | Amount   |
+| T1  | 2025-04-20 | A Client | Assets:Checking   | 1500.00  |
+| T1  | 2025-04-20 | A Client | Income:Consulting | -1000.00 |
+| T1  | 2025-04-20 | A Client | Income:Royalty    | -500.00  |
+
+Scenario Royalty received both ways reaches the same category
+Description Some royalties were invoiced and paid off, others were banked
+Description straight to the category. Both paths exist in the file and both have
+Description to arrive in the same place, which is why the figure reconciles as
+Description banking plus invoices.
+Details Observed: Royalty is 20,977.40 in the report, 2,576.02 from banking
+Details records and 18,401.38 from invoices.
+Given import target is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                     | Type   | Placeholder |
+| Assets:Customer Invoices | Asset  | false       |
+| Assets:Checking          | Bank   | false       |
+| Income:Royalty           | Income | false       |
+Given the file contains
+"""
+!Type:Invoice
+D3/15'25
+T400.00
+U400.00
+PA Publisher
+L--Split--
+SRoyalty
+$-400.00
+XI1
+^
+D4/20'25
+T-400.00
+U-400.00
+PA Publisher
+L[Checking]
+XI3
+^
+"""
+Given the second file contains
+"""
+!Type:Bank
+D5/10'25
+T600.00
+U600.00
+PA Publisher
+LRoyalty
+^
+"""
+When qif file imported
+Then report rows are : ReportRow
+| Account        | Level | Amount  | IsSubtotal |
+| Income:Royalty | 0     | 1000.00 | false      |
+# Four hundred through an invoice and six hundred banked directly.
+
+Scenario A payment matched only by payee is posted and reported
+Description A different amount from the same customer is a partial payment or
+Description one cheque covering several invoices. The categories of the oldest
+Description open invoice are used, in the proportions that invoice gives, and
+Description the pairing is listed so it can be checked.
+Given import target is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                     | Type   | Placeholder |
+| Assets:Customer Invoices | Asset  | false       |
+| Assets:Checking          | Bank   | false       |
+| Income:Consulting        | Income | false       |
+Given the file contains
+"""
+!Type:Invoice
+D3/15'25
+T1000.00
+U1000.00
+PA Client
+L--Split--
+SConsulting
+$-1000.00
+XI1
+^
+D4/20'25
+T-600.00
+U-600.00
+PA Client
+L[Checking]
+XI3
+^
+"""
+When qif file imported
+Then postings are : PostingRow
+| Ref | Date       | Payee    | Account           | Amount  |
+| T1  | 2025-04-20 | A Client | Assets:Checking   | 600.00  |
+| T1  | 2025-04-20 | A Client | Income:Consulting | -600.00 |
+Then migration notes are : MigrationNote
+| Kind            | Detail                                                        |
+| PaymentPartial  | 2025-04-20 A Client 600.00 matched the 2025-03-15 invoice for 1,000.00 by payee only; 400.00 of that invoice is still open |
+
+Scenario A payment matching no invoice is posted uncategorised and reported
+Description Nine of these in the business file, the largest 13,243.67. They are
+Description posted so that the bank balance is right, and listed so that the
+Description income can be categorised by hand.
+Given import target is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                     | Type    | Placeholder |
+| Assets:Customer Invoices | Asset   | false       |
+| Assets:Checking          | Bank    | false       |
+| Income:Uncategorized     | Income  | false       |
+Given the file contains
+"""
+!Type:Invoice
+D6/15'24
+T-4000.00
+U-4000.00
+PAnother Client
+L[Checking]
+XI3
+^
+"""
+When qif file imported
+Then postings are : PostingRow
+| Ref | Date       | Payee          | Account              | Amount   |
+| T1  | 2024-06-15 | Another Client | Assets:Checking      | 4000.00  |
+| T1  | 2024-06-15 | Another Client | Income:Uncategorized | -4000.00 |
+Then migration notes are : MigrationNote
+| Kind              | Detail                                                      |
+| PaymentUnmatched  | 2024-06-15 Another Client 4,000.00 matched no invoice; posted to Income:Uncategorized |
+
+# ---------------------------------------------------------------------------
+# The unpaid invoices, in the migration report
+# ---------------------------------------------------------------------------
+
+Scenario An unpaid invoice posts nothing and is listed in full
+Description On a cash basis an invoice never paid is never income, so it posts
+Description nothing at all. It is listed with its date, payee, amount and
+Description categories, because it is the difference between what was invoiced
+Description and what was earned, and it is the only place that difference is
+Description visible.
+Details There are eight of these in the business file and every one of them is
+Details dated before 2020: one in 2006, five in 2007, one in 2009 and one in
+Details 2010. Three carry negative amounts, which are credit notes, and one is
+Details for zero.
+Given import target is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                     | Type   | Placeholder |
+| Assets:Customer Invoices | Asset  | false       |
+| Income:Consulting        | Income | false       |
+Given the file contains
+"""
+!Type:Invoice
+D6/01'07
+T975.00
+U975.00
+PA Client
+L--Split--
+SConsulting
+$-975.00
+XI1
+X#1.0
+^
+"""
+When qif file imported
+Then postings created are : PostingRow
+| Ref | Date | Account | Amount |
+# No rows.
+Then unpaid invoices are : UnpaidInvoice
+| Date       | Payee    | Amount | Category          | Note                    |
+| 2007-06-01 | A Client | 975.00 | Income:Consulting | No payment in the file  |
+
+Attributes UnpaidInvoice
+| Attribute | Type        | Default    |
+| Date      | Date        | 2026-01-01 |
+| Payee     | PayeeName   | none       |
+| Amount    | Money       | 0.00       |
+| Category  | AccountPath | none       |
+| Note      | Text        | none       |
+
+Scenario An invoice for a negative amount is a credit note and is listed as one
+Description Three of the eight carry negative amounts. Calling them unpaid
+Description invoices in the report would be misleading, so they are named for
+Description what they are.
+Given import target is as previous
+Given the chart of accounts is as previous
+Given the file contains
+"""
+!Type:Invoice
+D7/01'07
+T-445.95
+U-445.95
+PA Client
+L--Split--
+SConsulting
+$445.95
+XI1
+^
+"""
+When qif file imported
+Then unpaid invoices are : UnpaidInvoice
+| Date       | Payee    | Amount  | Category          | Note                   |
+| 2007-07-01 | A Client | -445.95 | Income:Consulting | A credit note, unapplied |
+
+Scenario An invoice for zero is listed and posts nothing
+Given import target is as previous
+Given the chart of accounts is as previous
+Given the file contains
+"""
+!Type:Invoice
+D8/01'07
+T0.00
+U0.00
+PA Client
+L--Split--
+SConsulting
+$0.00
+XI1
+^
+"""
+When qif file imported
+Then unpaid invoices are : UnpaidInvoice
+| Date       | Payee    | Amount | Category          | Note                  |
+| 2007-08-01 | A Client | 0.00   | Income:Consulting | A zero invoice        |
+
+Scenario The migration report totals what invoicing left unresolved
+Description Four numbers that say how much of the invoice history did not
+Description resolve, so that the size of it is known before the figures are
+Description trusted.
+Given import target is as previous
+Given the chart of accounts is as previous
+When invoice reconciliation summarised
+Then invoice reconciliation is : InvoiceReconciliation Vertical
+| Invoices           | 212 |
+| Payments           | 213 |
+| MatchedExactly     | 184 |
+| MatchedByPayee     | 20  |
+| PaymentsUnmatched  | 9   |
+| InvoicesUnpaid     | 8   |
+| EarliestUnpaid     | 2006-01-01 |
+| LatestUnpaid       | 2010-12-31 |
+
+Attributes InvoiceReconciliation
+| Attribute         | Type    | Default    |
+| Invoices          | Integer | 0          |
+| Payments          | Integer | 0          |
+| MatchedExactly    | Integer | 0          |
+| MatchedByPayee    | Integer | 0          |
+| PaymentsUnmatched | Integer | 0          |
+| InvoicesUnpaid    | Integer | 0          |
+| EarliestUnpaid    | Date    | 2006-01-01 |
+| LatestUnpaid      | Date    | 2010-12-31 |
+
+Scenario Invoicing was used in two spells, and the report says so
+Description 180 of the 212 invoices fall between 2006 and 2011, none at all
+Description between 2012 and 2016, and 32 from 2017 onwards. The gap is not a
+Description fault: the practice changed to banking the money against its
+Description category directly. Saying so in the report stops the gap being
+Description read as missing data.
+When invoice years summarised
+Then invoice years are : InvoiceYearSpan
+| Span      | FromYear | ToYear | Invoices | Note                              |
+| First     | 2006     | 2011   | 180      | Invoices written and paid off     |
+| Gap       | 2012     | 2016   | 0        | Money banked straight to category |
+| Second    | 2017     | 2025   | 32       | Invoicing used again, lightly     |
+
+Attributes InvoiceYearSpan
+| Attribute | Type    | Default |
+| Span      | Text    |         |
+| FromYear  | Integer | 2006    |
+| ToYear    | Integer | 2026    |
+| Invoices  | Integer | 0       |
+| Note      | Text    | none    |
+
+Scenario A bill is the same shape, owed the other way
+Description The bill section of the personal file has 68 records carrying 165
+Description expense references. A bill is a payable, and on a cash basis its
+Description expense is recognised when it is paid, by the same three passes.
+Given the chart of accounts is : ChartOfAccounts
+| Path                       | Type      | Placeholder |
+| Liabilities:Business Bills | Liability | false       |
+| Assets:Checking            | Bank      | false       |
+| Expenses:Office            | Expense   | false       |
+Given import target is : ImportTarget Vertical
+| AccountPath | Liabilities:Business Bills |
+Given the file contains
+"""
+!Type:Bill
+D3/15'25
+T-400.00
+U-400.00
+PA Vendor
+L--Split--
+SOffice
+$400.00
+^
+D4/10'25
+T400.00
+U400.00
+PA Vendor
+L[Checking]
+^
+"""
+When qif file imported
+Then postings are : PostingRow
+| Ref | Date       | Payee    | Account         | Amount  |
+| T1  | 2025-04-10 | A Vendor | Assets:Checking | -400.00 |
+| T1  | 2025-04-10 | A Vendor | Expenses:Office | 400.00  |
+# Dated when it was paid, not when the bill arrived.
+
+
+# ---------------------------------------------------------------------------
+# Things the two files in testdata settled
+# ---------------------------------------------------------------------------
+
+Description The rules in this section were written from the files rather than
+Description from the format, and each says what was observed.
+
+BusinessRule What encoding a QIF file is read as
+Description Tried as UTF-8 first; read as Windows-1252 if that fails.
+Details The two files differ. pughkilleen.QIF is valid UTF-8, with the
+Details registered-trade-mark sign written as two bytes. kenpugh.QIF is not
+Details valid UTF-8: it contains a lone byte 0x96, which is an en dash in
+Details Windows-1252 and an illegal lead byte in UTF-8. Reading either as the
+Details wrong one of the two either fails or produces mojibake, so the choice
+Details is made by trying, not by asking.
+Examples: EncodingChoice
+| Observed                       | ReadAs       | Notes                        |
+| Decodes as UTF-8               | UTF8         | pughkilleen.QIF              |
+| Fails to decode as UTF-8       | Windows1252  | kenpugh.QIF, byte 0x96       |
+| Begins with a UTF-8 byte order mark | UTF8    | Mark removed; neither file has one |
+
+Attributes EncodingChoice
+| Attribute | Type   | Default |
+| Observed  | String |         |
+| ReadAs    | String |         |
+| Notes     | String | none    |
+
+BusinessRule A field whose value will not parse is a continuation of the one before
+Description QIF has no way to quote a value, so a value containing a newline
+Description becomes a line that begins with whatever character follows it. A
+Description line beginning with D whose value is not a date is not a date.
+Details This happens only in the invoice sections of these files: thirteen such
+Details lines in kenpugh.QIF, inside !Type:Invoice. Elsewhere every D parses.
+Details The D fields that look wrong in !Type:Cat and !Account are not
+Details continuations at all: D means Description in those sections, which is
+Details the other reason a field code cannot be read without knowing the
+Details section it is in.
+Examples: ContinuationLine
+| Section       | Line                     | Reading                        |
+| !Type:Invoice | D4/ 2'24                 | The date of the record         |
+| !Type:Invoice | Development work, phase 2 | Appended to the field before it |
+| !Type:Invoice | Dec 14-16, 2024          | Appended; not a date           |
+| !Type:Cat     | DVehicle expenses        | The description of a category  |
+| !Account      | DFirst National checking | The description of an account  |
+
+Attributes ContinuationLine
+| Attribute | Type   | Default |
+| Section   | String |         |
+| Line      | String |         |
+| Reading   | String |         |
+
+BusinessRule What a field code means depends on its section
+Description The same letter is a different field in a different section, which is
+Description why the reader tracks the section and never reads a record alone.
+Examples: FieldCodeBySection
+| Code | InTransaction | InCategoryList | InAccountList   |
+| D    | Date          | Description    | Description     |
+| T    | Amount        | TaxRelated     | AccountType     |
+| N    | CheckNumber   | Name           | Name            |
+| L    | Category      | Unused         | CreditLimit     |
+| E    | SplitMemo     | IsExpense      | Unused          |
+| I    | Price         | IsIncome       | Unused          |
+| R    | Unused        | TaxSchedule    | TaxDeferred     |
+
+Attributes FieldCodeBySection
+| Attribute      | Type   | Default |
+| Code           | String |         |
+| InTransaction  | String |         |
+| InCategoryList | String |         |
+| InAccountList  | String |         |
+
+Scenario Invoice extension and address fields are dropped, and counted
+Description The X fields carry the line items, terms and numbering of a Quicken
+Description Home and Business invoice, and the A fields carry a posting address.
+Description Neither has anywhere to go in a register. The transaction part of
+Description the record is imported and the rest is reported as dropped, so that
+Description nothing is lost quietly.
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Receivables |
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Receivables     | Asset   | false       |
+| Income:Consulting      | Income  | false       |
+Given the file contains
+"""
+!Type:Invoice
+D4/ 2'24
+T2500.00
+U2500.00
+PA Client
+LConsulting
+CX
+N1041
+XN1041
+X#1041
+X$2500.00
+AA Client
+A1 Some Street
+^
+"""
+When qif file imported
+Then postings are : PostingRow
+| Ref | Date       | Payee    | Account            | Amount   | Cleared    |
+| T1  | 2024-04-02 | A Client | Assets:Receivables | 2500.00  | Reconciled |
+| T1  | 2024-04-02 | A Client | Income:Consulting  | -2500.00 | Uncleared  |
+Then migration notes are : MigrationNote
+| Kind           | Detail                                                      |
+| InvoiceDetail  | 1 invoice record: 3 X fields and 2 address lines not imported |
+
+Scenario An invoice section posts to the receivables account
+Description An invoice is money owed to the business, which is an asset, and a
+Description bill is money owed by it. Neither needs anything beyond the two
+Description postings every other transaction has. When the income is recognised
+Description is a separate question; see the invoice section further down.
+Given the file contains
+"""
+!Option:AutoSwitch
+!Account
+NInvoices
+TInvoice
+^
+NBills
+TBill
+^
+"""
+When qif file imported
+Then accounts created are : ChartOfAccounts
+| Path                | Type      | Placeholder |
+| Assets:Invoices     | Asset     | false       |
+| Liabilities:Bills   | Liability | false       |
+
+Scenario No price list means the last price comes from the last transaction
+Description Neither file has a !Type:Prices section, so there is no price to
+Description revalue a holding to. The price carried is the one from the most
+Description recent transaction that stated a price, and the holdings report
+Description shows how old it is.
+Given the chart of accounts is : ChartOfAccounts
+| Path                        | Type       | Placeholder |
+| Assets:Portfolio            | Investment | true        |
+| Assets:Portfolio:Cash       | Investment | false       |
+| Equity:Market Value Changes | Equity     | false       |
+| Equity:Opening Balances     | Equity     | false       |
+| Income:Dividends            | Income     | false       |
+Given today is : Today Vertical
+| Date | 2026-10-03 |
+Given the file contains
+"""
+!Option:AutoSwitch
+!Account
+NPortfolio
+TPort
+^
+!Clear:AutoSwitch
+!Account
+NPortfolio
+TPort
+^
+!Type:Invst
+D2/ 1'24
+NShrsIn
+YISHARES U S TRANSPORTATION ETF
+I60.00
+Q100
+T6000.00
+^
+D6/30'24
+NReinvDiv
+YISHARES U S TRANSPORTATION ETF
+I62.50
+Q1.6
+T100.00
+^
+"""
+When qif file imported
+Then holdings are : Holdings
+| Account                                   | SecurityName                   | Shares | Price   | PriceAsOf  |
+| Assets:Portfolio:ISHARES U S TRANSPORTATION ETF | ISHARES U S TRANSPORTATION ETF | 101.6 | 62.5000 | 2024-06-30 |
+Then migration notes are : MigrationNote
+| Kind         | Detail                                                        |
+| NoPriceList  | No !Type:Prices section; 1 holding carries a price from its last transaction |
+Then holdings report rows are : HoldingsReportRow CompareOnly
+| SecurityName                   | Stale |
+| ISHARES U S TRANSPORTATION ETF | true  |
+# Priced in June 2024 and read in October 2026, so it is stale by any measure.
+# A migration of an old file leaves every holding stale, which is correct and
+# is the signal to go and enter current prices.
+
+Scenario No statement balance means the import cannot check itself
+Description The account blocks in these files carry a name, a type and
+Description sometimes a credit limit, and never a statement balance. So the
+Description check that ImportOfx makes against a downloaded ledger balance has
+Description nothing to compare with, and the migration says so rather than
+Description reporting that everything agreed.
+Given the file contains
+"""
+!Option:AutoSwitch
+!Account
+NChecking
+TBank
+^
+"""
+When qif file imported
+Then balance check is : LedgerBalanceResult Vertical
+| ClearedBalance | 0.00  |
+| StatedBal      | 0.00  |
+| Difference     | 0.00  |
+| Agrees         | false |
+Then migration notes are : MigrationNote
+| Kind            | Detail                                                      |
+| NoStatedBalance | No account block carries a statement balance; the import was not checked against one |
+
+Scenario The Cash action moves cash in an investment account
+Description Forty-one records in the business file use it. It is a cash movement
+Description with a category, and nothing to do with securities.
+Given the chart of accounts is : ChartOfAccounts
+| Path                     | Type       | Placeholder |
+| Assets:Portfolio         | Investment | true        |
+| Assets:Portfolio:Cash    | Investment | false       |
+| Expenses:Investment:Fees | Expense    | false       |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Portfolio |
+Given the file contains
+"""
+!Type:Invst
+D3/ 1'24
+NCash
+T-25.00
+LInvestment:Fees
+MAccount fee
+^
+"""
+When qif file imported
+Then postings are : PostingRow
+| Ref | Date       | Account                  | Amount | Memo        |
+| T1  | 2024-03-01 | Assets:Portfolio:Cash    | -25.00 | Account fee |
+| T1  | 2024-03-01 | Expenses:Investment:Fees | 25.00  | Account fee |
+
+Scenario The one stock split in the business file
+Description Read with the ratio rule confirmed below. The holding is iShares US
+Description Transportation on 7 March 2024, which was a four-for-one split, and
+Description the Q field holds 40. That is what settles the factor of ten.
+Given the chart of accounts is as previous
+Given holdings are : Holdings
+| Account                                         | SecurityName                   | Shares | Price    | PriceAsOf  |
+| Assets:Portfolio:ISHARES U S TRANSPORTATION ETF | ISHARES U S TRANSPORTATION ETF | 100    | 240.0000 | 2024-03-06 |
+Given the file contains
+"""
+!Type:Invst
+D3/ 7'24
+NStkSplit
+YISHARES U S TRANSPORTATION ETF
+Q40
+Mfrom data feed
+^
+"""
+When qif file imported
+Then postings created are : PostingRow
+| Ref | Date | Account | Amount |
+Then holdings are : Holdings
+| Account                                         | SecurityName                   | Shares | Price   | PriceAsOf  |
+| Assets:Portfolio:ISHARES U S TRANSPORTATION ETF | ISHARES U S TRANSPORTATION ETF | 400    | 60.0000 | 2024-03-07 |
+# No postings: four hundred shares at sixty is the same twenty-four thousand
+# as one hundred at two hundred and forty.
+
+Scenario The amount is written twice and the two always agree
+Description Every one of the 42,322 transaction records across both files that
+Description carries both U and T has them equal. The check is kept because a
+Description disagreement would matter, and it is expected never to fire.
+Details The only records where the two differ are in !Type:Template, which is
+Details a report definition rather than a transaction and is not imported.
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Given the file contains
+"""
+!Type:Bank
+D1/15'24
+U-45.00
+T-45.00
+PA Shop
+^
+"""
+When qif file imported
+Then migration notes are : MigrationNote
+| Kind | Detail |
+# No rows: nothing to report.
+# ---------------------------------------------------------------------------
+# What needs checking against the file being migrated
+# ---------------------------------------------------------------------------
+
+BusinessRule What the two files settled, and what is still assumed
+Description Each point was a place where being wrong would be expensive and
+Description quiet. Most are now settled by reading the files in testdata. The
+Description ones still marked Assumed have no evidence either way in those
+Description files, and would only matter to a different export.
+Examples: DialectRisk
+| Point                  | Status  | Evidence                                                                 |
+| Date order             | Settled | 24,324 dates have a second part above 12 and none a first part above 12  |
+| Century marker         | Settled | Apostrophe year tokens run " 5" to "26" with no gap: two thousands       |
+| Blank-padded year      | Settled | "6/17' 5" is June 2005; the year is padded as well as the day            |
+| Stock split ratio      | Settled | The one split was a four-for-one and Q is 40, so Q is the ratio times ten |
+| Split line signs       | Settled | All 1,045 split records sum exactly to T; 268 have lines of both signs   |
+| Split category source  | Settled | 1,026 records carry the literal --Split-- in L; the split lines hold the categories |
+| Category list presence | Settled | Present in both; every declared category carries E or I, none neither    |
+| Undeclared categories  | Settled | One name in the personal file and five in the business one; the sign decides |
+| Amount fields          | Settled | U equals T in all 42,322 transaction records; they differ only in a template |
+| Cleared markers        | Settled | All four occur: X, star, c, and R once                                   |
+| File encoding          | Settled | One file is UTF-8 and the other Windows-1252; decided by trying          |
+| Statement balance      | Settled | No account block carries one, so the import cannot check itself          |
+| Price list             | Settled | Absent from both, so a holding is priced from its last transaction       |
+| Security symbols       | Settled | None of the 44 securities has one; the name is the identifier            |
+| Transfer halves        | Assumed | Both written with the same date and opposite signs; 8,228 to pair        |
+| Multi-line values      | Assumed | A field that will not parse continues the one before                     |
+| Decimal comma          | Assumed | Not present in either file; kept for a European export                   |
+
+Attributes DialectRisk
+| Attribute | Type   | Default |
+| Point     | String |         |
+| Status    | String |         |
+| Evidence  | String |         |
+
+Scenario Transfer pairing is the one unsettled rule that matters at scale
+Description There are 8,228 bracketed category fields in the business file, so
+Description a wrong pairing rule is wrong thousands of times. The counts are
+Description therefore in the migration report, where they can be checked
+Description against what Quicken says the balances are. See
+Description AcceptanceAgainstQuicken.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Expenses:Uncategorized | Expense | false       |
+Given the file contains
+"""
+!Option:AutoSwitch
+!Account
+NChecking
+TBank
+^
+NSavings
+TBank
+^
+!Clear:AutoSwitch
+!Account
+NChecking
+TBank
+^
+!Type:Bank
+D3/ 1'24
+T-500.00
+PTransfer
+L[Savings]
+^
+!Account
+NSavings
+TBank
+^
+!Type:Bank
+D3/ 1'24
+T500.00
+PTransfer
+L[Checking]
+^
+"""
+When qif file imported
+Then transfer pairing report is : TransferPairingReport Vertical
+| BracketedFields | 2 |
+| PairsFormed     | 1 |
+| Unpaired        | 0 |
+| NearMisses      | 0 |
+
+Attributes TransferPairingReport
+| Attribute       | Type    | Default |
+| BracketedFields | Integer | 0       |
+| PairsFormed     | Integer | 0       |
+| Unpaired        | Integer | 0       |
+| NearMisses      | Integer | 0       |

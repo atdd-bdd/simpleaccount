@@ -1,0 +1,648 @@
+Specification Investments
+
+Description Tracking what an investment account is currently worth, without
+Description tracking lots, holding periods or realised gains.
+Details
+Details SCOPE. The first round is about spending reports. No report in this file
+Details is compared against Quicken in that round, and the holdings report at
+Details the end of it is the last thing to build, not the first.
+Details
+Details What is in scope is everything in here that a spending report depends
+Details on, and that is more than it looks. The 899 investment records in the
+Details business file include dividends, which post to an income category, and
+Details fees, which post to an expense one. Those reach the spending report and
+Details must be right. So must the rule that sends a revaluation to
+Details Equity:Market Value Changes, because its whole purpose is to keep market
+Details movement out of that report.
+Details
+Details What can wait is the holdings report, the staleness marking, and
+Details recording prices at all. A migrated book has no price list to work from
+Details anyway, so every holding starts stale and the balances are as good as
+Details the last transaction makes them. See ImportQif and
+Details AcceptanceAgainstQuicken.
+Details
+Details What is wanted here is the current balance. Cost basis, holding periods
+Details and realised gain or loss are reported on the 1099, and keeping a second
+Details set of those figures here would mean maintaining something that has to
+Details agree with a document nobody controls. So they are not kept.
+Details
+Details What is kept must still balance, because the book is double entry
+Details throughout and net worth is read off the real accounts. A security is
+Details therefore an account of type Investment beneath the brokerage account,
+Details carrying a money balance like any other, and a share count beside it.
+Details When a price changes, the difference is posted against
+Details Equity:Market Value Changes. Equity is nominal, so a revaluation moves
+Details net worth without ever appearing in a report of income and expenses.
+Details That is the whole of the design, and it is what the simplification buys.
+
+# ---------------------------------------------------------------------------
+# The shape of a brokerage account
+# ---------------------------------------------------------------------------
+
+Background A brokerage account with two holdings
+Given the chart of accounts is : ChartOfAccounts
+| Path                           | Type       | Placeholder |
+| Assets:Brokerage               | Investment | true        |
+| Assets:Brokerage:Cash          | Investment | false       |
+| Assets:Brokerage:VTSAX         | Investment | false       |
+| Assets:Brokerage:BRK.B         | Investment | false       |
+| Assets:Checking                | Bank       | false       |
+| Income:Dividends               | Income     | false       |
+| Income:Interest                | Income     | false       |
+| Expenses:Investment:Fees       | Expense    | false       |
+| Equity:Market Value Changes    | Equity     | false       |
+| Equity:Opening Balances        | Equity     | false       |
+
+Entity Holding
+Description The share count and price of one security, beside the account that
+Description carries its value.
+Details Value is not stored. It is the money balance of the account, and the
+Details invariant below is what keeps the two in step.
+Details A security is identified by its name. The symbol is optional, because a
+Details QIF export generally has none: see the naming rule below.
+| Attribute    | Type         | Default    | Notes                         |
+| Account      | AccountPath  |            | The Investment account for it |
+| SecurityName | SecurityName |            | The identifier                |
+| Symbol       | Symbol       | none       | Optional shorthand            |
+| Shares       | Shares       | 0          |                               |
+| Price        | Price        | 0          | The last price recorded       |
+| PriceAsOf    | Date         | 2024-01-01 | When that price was recorded  |
+
+BusinessRule What the account of a holding is called
+Description The symbol where there is one, because it is shorter and is what a
+Description holdings report is read by. The name otherwise.
+Details Colons are replaced, as for any account name. A name of 76 characters
+Details makes a long path, and that is preferred to inventing a symbol that
+Description would then disagree with every statement.
+Examples: HoldingAccountName
+| SecurityName                   | Symbol | AccountName                    |
+| Vanguard Total Stock Mkt Idx   | VTSAX  | VTSAX                          |
+| ISHARES U S TRANSPORTATION ETF |        | ISHARES U S TRANSPORTATION ETF |
+| Berkshire Hathaway B           | BRK.B  | BRK.B                          |
+
+Attributes HoldingAccountName
+| Attribute    | Type         | Default |
+| SecurityName | SecurityName |         |
+| Symbol       | Symbol       | none    |
+| AccountName  | AccountName  |         |
+
+Collection Holdings
+| DataType | Minimum | Maximum | Notes                        |
+| Holding  | 0       | 10000   | One per Investment account   |
+
+BusinessRule The value of a holding is its shares times its price
+Description And that value is the money balance of its account. Every operation
+Description below leaves this true; it is checked whenever the file is opened.
+Details Rounding is to the cent, half away from zero.
+Examples: HoldingValue
+| Shares     | Price    | Value    | Notes                          |
+| 100        | 123.4500 | 12345.00 |                                |
+| 0          | 123.4500 | 0.00     | A closed position              |
+| 100        | 0        | 0.00     | Unpriced                       |
+| 12.345678  | 100.0000 | 1234.57  | Rounded up to the cent         |
+| 12.344444  | 100.0000 | 1234.44  | Rounded down                   |
+| 3          | 0.3333   | 1.00     | 0.9999 rounds to one           |
+
+Attributes HoldingValue
+| Attribute | Type   | Default |
+| Shares    | Shares | 0       |
+| Price     | Price  | 0       |
+| Value     | Money  | 0.00    |
+| Notes     | String | none    |
+
+Scenario The balance of a brokerage account is its cash and its holdings
+Description The brokerage account itself is a placeholder, so its balance is the
+Description roll-up of the cash account and the holdings beneath it, which is
+Description the ordinary rule from Accounts and needs nothing special here.
+Given the chart of accounts is as previous
+Given holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 100    | 110.0000 | 2024-06-28 |
+| Assets:Brokerage:BRK.B | BRK.B  | 10     | 405.0000 | 2024-06-28 |
+Given postings are : PostingRow
+| Ref | Date       | Account                | Amount   |
+| T1  | 2024-01-02 | Assets:Brokerage:Cash  | 2500.00  |
+| T1  | 2024-01-02 | Equity:Opening Balances | -2500.00 |
+| T2  | 2024-01-03 | Assets:Brokerage:VTSAX | 11000.00 |
+| T2  | 2024-01-03 | Equity:Opening Balances | -11000.00 |
+| T3  | 2024-01-03 | Assets:Brokerage:BRK.B | 4050.00  |
+| T3  | 2024-01-03 | Equity:Opening Balances | -4050.00 |
+Then rolled up balances are : RolledUpBalance
+| Account                | OwnBalance | TotalBalance | Notes            |
+| Assets:Brokerage:Cash  | 2500.00    | 2500.00      | Uninvested cash  |
+| Assets:Brokerage:VTSAX | 11000.00   | 11000.00     | 100 at 110.00    |
+| Assets:Brokerage:BRK.B | 4050.00    | 4050.00      | 10 at 405.00     |
+| Assets:Brokerage       | 0.00       | 17550.00     | Cash and holdings |
+
+# ---------------------------------------------------------------------------
+# Buying and selling
+# ---------------------------------------------------------------------------
+
+Attributes TradeEntry
+Description What is typed to record a trade.
+| Attribute | Type        | Default    |
+| Account   | AccountPath |            |
+| Date      | Date        | 2024-01-01 |
+| Symbol    | Symbol      |            |
+| Shares    | Shares      | 0          |
+| Price     | Price       | 0          |
+| Fee       | Money       | 0.00       |
+| Proceeds  | Money       | 0.00       |
+
+Scenario Buying shares moves cash into the holding
+Description Two postings, and no gain to compute. The holding is carried at
+Description what was paid for it until a price is recorded.
+Given the chart of accounts is as previous
+Given holdings are : Holdings
+| Account                | Symbol | Shares | Price | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 0      | 0     | 2024-01-01 |
+Given postings are : PostingRow
+| Ref | Date       | Account                 | Amount    |
+| T1  | 2024-01-02 | Assets:Brokerage:Cash   | 20000.00  |
+| T1  | 2024-01-02 | Equity:Opening Balances | -20000.00 |
+When shares bought : TradeEntry Vertical
+| Account | Assets:Brokerage:VTSAX |
+| Date    | 2024-02-01             |
+| Symbol  | VTSAX                  |
+| Shares  | 100                    |
+| Price   | 100.0000               |
+Then postings are : PostingRow
+| Ref | Date       | Account                | Amount    |
+| T2  | 2024-02-01 | Assets:Brokerage:VTSAX | 10000.00  |
+| T2  | 2024-02-01 | Assets:Brokerage:Cash  | -10000.00 |
+Then holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-02-01 |
+
+Scenario A commission is an expense, not part of the holding
+Description Folding the fee into the value of the holding would make the
+Description invariant false, because the shares did not cost more than their
+Description price. It is a three-posting transaction.
+Given the chart of accounts is as previous
+Given holdings are : Holdings
+| Account                | Symbol | Shares | Price | PriceAsOf  |
+| Assets:Brokerage:BRK.B | BRK.B  | 0      | 0     | 2024-01-01 |
+Given postings are as previous
+When shares bought : TradeEntry Vertical
+| Account | Assets:Brokerage:BRK.B |
+| Date    | 2024-02-01             |
+| Symbol  | BRK.B                  |
+| Shares  | 10                     |
+| Price   | 400.0000               |
+| Fee     | 6.95                   |
+Then postings are : PostingRow
+| Ref | Date       | Account                  | Amount   |
+| T2  | 2024-02-01 | Assets:Brokerage:BRK.B   | 4000.00  |
+| T2  | 2024-02-01 | Expenses:Investment:Fees | 6.95     |
+| T2  | 2024-02-01 | Assets:Brokerage:Cash    | -4006.95 |
+
+Scenario Buying more shares averages the price, because no lots are kept
+Description This is the simplification. Two purchases at different prices leave
+Description one holding at one price, and that price is the carrying value
+Description divided by the shares. It is not a cost basis and is not used as
+Description one: the 1099 has the basis.
+Given the chart of accounts is as previous
+Given holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-02-01 |
+Given postings are : PostingRow
+| Ref | Date       | Account                 | Amount    |
+| T1  | 2024-01-02 | Assets:Brokerage:Cash   | 20000.00  |
+| T1  | 2024-01-02 | Equity:Opening Balances | -20000.00 |
+| T2  | 2024-02-01 | Assets:Brokerage:VTSAX  | 10000.00  |
+| T2  | 2024-02-01 | Assets:Brokerage:Cash   | -10000.00 |
+When shares bought : TradeEntry Vertical
+| Account | Assets:Brokerage:VTSAX |
+| Date    | 2024-03-01             |
+| Symbol  | VTSAX                  |
+| Shares  | 50                     |
+| Price   | 120.0000               |
+Then holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 150    | 106.6667 | 2024-03-01 |
+Then balances are : AccountBalance
+| Account                | RawBalance | DisplayBalance | Notes                   |
+| Assets:Brokerage:VTSAX | 16000.00   | 16000.00       | 10000.00 plus 6000.00   |
+
+BusinessRule How the carried price changes when more shares are bought
+Description The new price is the total carried value divided by the total shares,
+Description rounded to four places. The value is the sum of what was paid; the
+Description price is derived from it, so the invariant holds.
+Examples: AveragePrice
+| HeldShares | HeldValue | BoughtShares | BoughtPrice | NewShares | NewValue | NewPrice | Notes               |
+| 100        | 10000.00  | 50           | 120.0000    | 150       | 16000.00 | 106.6667 |                     |
+| 0          | 0.00      | 100          | 100.0000    | 100       | 10000.00 | 100.0000 | A first purchase    |
+| 100        | 10000.00  | 100          | 100.0000    | 200       | 20000.00 | 100.0000 | Same price          |
+| 3          | 100.00    | 1            | 1.0000      | 4         | 101.00   | 25.2500  | Rounds to four places |
+
+Attributes AveragePrice
+| Attribute    | Type   | Default |
+| HeldShares   | Shares | 0       |
+| HeldValue    | Money  | 0.00    |
+| BoughtShares | Shares | 0       |
+| BoughtPrice  | Price  | 0       |
+| NewShares    | Shares | 0       |
+| NewValue     | Money  | 0.00    |
+| NewPrice     | Price  | 0       |
+| Notes        | String | none    |
+
+Scenario Selling shares at the carried price needs no gain
+Description The holding is carried at 106.6667 and sold at that price, so the
+Description cash in equals the value out and there is nothing left over.
+Given the chart of accounts is as previous
+Given holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 150    | 106.6667 | 2024-03-01 |
+Given postings are : PostingRow
+| Ref | Date       | Account                 | Amount    |
+| T1  | 2024-03-01 | Assets:Brokerage:VTSAX  | 16000.00  |
+| T1  | 2024-03-01 | Equity:Opening Balances | -16000.00 |
+When shares sold : TradeEntry Vertical
+| Account | Assets:Brokerage:VTSAX |
+| Date    | 2024-04-01             |
+| Symbol  | VTSAX                  |
+| Shares  | 50                     |
+| Price   | 106.6667               |
+Then postings are : PostingRow
+| Ref | Date       | Account                | Amount    |
+| T2  | 2024-04-01 | Assets:Brokerage:Cash  | 5333.34   |
+| T2  | 2024-04-01 | Assets:Brokerage:VTSAX | -5333.34  |
+Then holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 100    | 106.6666 | 2024-04-01 |
+# The price is re-derived from the value that is left, 10666.66 over 100
+# shares, rather than carried forward, so the invariant stays exact.
+
+Scenario Selling above the carried price puts the difference to Equity
+Description The difference is a market value change, not income, so it does not
+Description appear in a report of income and expenses. It is also not a realised
+Description gain for tax: that figure comes on the 1099.
+Given the chart of accounts is as previous
+Given holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-03-01 |
+Given postings are : PostingRow
+| Ref | Date       | Account                 | Amount    |
+| T1  | 2024-03-01 | Assets:Brokerage:VTSAX  | 10000.00  |
+| T1  | 2024-03-01 | Equity:Opening Balances | -10000.00 |
+When shares sold : TradeEntry Vertical
+| Account | Assets:Brokerage:VTSAX |
+| Date    | 2024-04-01             |
+| Symbol  | VTSAX                  |
+| Shares  | 100                    |
+| Price   | 130.0000               |
+Then postings are : PostingRow
+| Ref | Date       | Account                     | Amount    |
+| T2  | 2024-04-01 | Assets:Brokerage:Cash       | 13000.00  |
+| T2  | 2024-04-01 | Assets:Brokerage:VTSAX      | -10000.00 |
+| T2  | 2024-04-01 | Equity:Market Value Changes | -3000.00  |
+Then holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 0      | 130.0000 | 2024-04-01 |
+
+Scenario Selling more shares than are held is refused
+Description Short positions are not modelled, so this is always either a missing
+Description purchase or a typing mistake, and both are worth stopping for.
+Given the chart of accounts is as previous
+Given holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-03-01 |
+When shares sold : TradeEntry Vertical
+| Account | Assets:Brokerage:VTSAX |
+| Date    | 2024-04-01             |
+| Symbol  | VTSAX                  |
+| Shares  | 150                    |
+| Price   | 130.0000               |
+Then rejected because : Rejection
+| Reason                                        |
+| Only 100 shares of VTSAX are held             |
+
+# ---------------------------------------------------------------------------
+# Recording a price
+# ---------------------------------------------------------------------------
+
+Scenario Recording a new price revalues the holding
+Description This is how the balance is kept current, and it is the only thing
+Description that has to be done regularly for the figures to mean anything.
+Given the chart of accounts is as previous
+Given holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-03-01 |
+Given postings are : PostingRow
+| Ref | Date       | Account                 | Amount    |
+| T1  | 2024-03-01 | Assets:Brokerage:VTSAX  | 10000.00  |
+| T1  | 2024-03-01 | Equity:Opening Balances | -10000.00 |
+When price recorded : PriceEntry Vertical
+| Symbol | VTSAX      |
+| Price  | 110.0000   |
+| AsOf   | 2024-06-28 |
+Then postings are : PostingRow
+| Ref | Date       | Account                     | Amount   |
+| T2  | 2024-06-28 | Assets:Brokerage:VTSAX      | 1000.00  |
+| T2  | 2024-06-28 | Equity:Market Value Changes | -1000.00 |
+Then holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 100    | 110.0000 | 2024-06-28 |
+Then balances are : AccountBalance
+| Account                | RawBalance | DisplayBalance | Notes            |
+| Assets:Brokerage:VTSAX | 11000.00   | 11000.00       | 100 at 110.00    |
+
+Attributes PriceEntry
+| Attribute | Type   | Default    |
+| Symbol    | Symbol |            |
+| Price     | Price  | 0          |
+| AsOf      | Date   | 2024-01-01 |
+
+Scenario A price that falls revalues downwards
+Given the chart of accounts is as previous
+Given holdings are as previous
+Given postings are as previous
+When price recorded : PriceEntry Vertical
+| Symbol | VTSAX      |
+| Price  | 90.0000    |
+| AsOf   | 2024-06-28 |
+Then postings are : PostingRow
+| Ref | Date       | Account                     | Amount   |
+| T2  | 2024-06-28 | Assets:Brokerage:VTSAX      | -1000.00 |
+| T2  | 2024-06-28 | Equity:Market Value Changes | 1000.00  |
+
+Scenario Recording the price already held posts nothing
+Description A revaluation of zero is not worth a transaction, and a register
+Description full of them would hide the ones that matter.
+Given the chart of accounts is as previous
+Given holdings are as previous
+Given postings are as previous
+When price recorded : PriceEntry Vertical
+| Symbol | VTSAX      |
+| Price  | 100.0000   |
+| AsOf   | 2024-06-28 |
+Then postings created are : PostingRow
+| Ref | Date | Account | Amount |
+Then holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-06-28 |
+# The date is still brought forward: the price was confirmed on the 28th.
+
+Scenario A price applies to every account holding that symbol
+Description The same fund held in two accounts is priced once. The revaluation
+Description is one transaction per holding, because each holding is its own
+Description account and a posting belongs to one.
+Given the chart of accounts is : ChartOfAccounts
+| Path                        | Type       | Placeholder |
+| Assets:Brokerage            | Investment | true        |
+| Assets:Brokerage:VTSAX      | Investment | false       |
+| Assets:IRA                  | Investment | true        |
+| Assets:IRA:VTSAX            | Investment | false       |
+| Equity:Market Value Changes | Equity     | false       |
+| Equity:Opening Balances     | Equity     | false       |
+Given holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-03-01 |
+| Assets:IRA:VTSAX       | VTSAX  | 50     | 100.0000 | 2024-03-01 |
+Given postings are : PostingRow
+| Ref | Date       | Account                 | Amount    |
+| T1  | 2024-03-01 | Assets:Brokerage:VTSAX  | 10000.00  |
+| T1  | 2024-03-01 | Equity:Opening Balances | -10000.00 |
+| T2  | 2024-03-01 | Assets:IRA:VTSAX        | 5000.00   |
+| T2  | 2024-03-01 | Equity:Opening Balances | -5000.00  |
+When price recorded : PriceEntry Vertical
+| Symbol | VTSAX      |
+| Price  | 110.0000   |
+| AsOf   | 2024-06-28 |
+Then postings created are : PostingRow
+| Ref | Date       | Account                     | Amount   |
+| T3  | 2024-06-28 | Assets:Brokerage:VTSAX      | 1000.00  |
+| T3  | 2024-06-28 | Equity:Market Value Changes | -1000.00 |
+| T4  | 2024-06-28 | Assets:IRA:VTSAX            | 500.00   |
+| T4  | 2024-06-28 | Equity:Market Value Changes | -500.00  |
+
+# ---------------------------------------------------------------------------
+# Income from investments
+# ---------------------------------------------------------------------------
+
+Scenario A dividend paid in cash is income
+Description Dividends and interest are income and belong in an income report,
+Description because they are taxable and because the question of how much the
+Description investments paid is worth answering. Only the market movement is
+Description kept out of that report.
+Given the chart of accounts is as previous
+Given holdings are as previous
+When dividend recorded : IncomeEntry Vertical
+| Account  | Assets:Brokerage:VTSAX |
+| Date     | 2024-06-30             |
+| Symbol   | VTSAX                  |
+| Amount   | 250.00                 |
+| Category | Income:Dividends       |
+| Reinvest | false                  |
+Then postings are : PostingRow
+| Ref | Date       | Account               | Amount  |
+| T5  | 2024-06-30 | Assets:Brokerage:Cash | 250.00  |
+| T5  | 2024-06-30 | Income:Dividends      | -250.00 |
+
+Attributes IncomeEntry
+| Attribute | Type        | Default    |
+| Account   | AccountPath |            |
+| Date      | Date        | 2024-01-01 |
+| Symbol    | Symbol      |            |
+| Amount    | Money       | 0.00       |
+| Category  | AccountPath |            |
+| Reinvest  | Boolean     | false      |
+| Shares    | Shares      | 0          |
+| Price     | Price       | 0          |
+
+Scenario A reinvested dividend is income and a purchase at once
+Description Still income, so it still appears in an income report, and the cash
+Description never rests in the cash account. The shares go up and the carried
+Description price is re-derived.
+Given the chart of accounts is as previous
+Given holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-03-01 |
+Given postings are : PostingRow
+| Ref | Date       | Account                 | Amount    |
+| T1  | 2024-03-01 | Assets:Brokerage:VTSAX  | 10000.00  |
+| T1  | 2024-03-01 | Equity:Opening Balances | -10000.00 |
+When dividend recorded : IncomeEntry Vertical
+| Account  | Assets:Brokerage:VTSAX |
+| Date     | 2024-06-30             |
+| Symbol   | VTSAX                  |
+| Amount   | 250.00                 |
+| Category | Income:Dividends       |
+| Reinvest | true                   |
+| Shares   | 2.5                    |
+| Price    | 100.0000               |
+Then postings are : PostingRow
+| Ref | Date       | Account                | Amount  |
+| T2  | 2024-06-30 | Assets:Brokerage:VTSAX | 250.00  |
+| T2  | 2024-06-30 | Income:Dividends       | -250.00 |
+Then holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 102.5  | 100.0000 | 2024-06-30 |
+
+Scenario Investment income shows in an income report and market movement does not
+Description The two scenarios above and a revaluation, reported together. This
+Description is what the choice of Equity for revaluation buys, and it is the
+Description reason the choice was made.
+Given the chart of accounts is as previous
+Given postings are : PostingRow
+| Ref | Date       | Account                     | Amount   |
+| T1  | 2024-06-30 | Assets:Brokerage:Cash       | 250.00   |
+| T1  | 2024-06-30 | Income:Dividends            | -250.00  |
+| T2  | 2024-06-30 | Assets:Brokerage:Cash       | 12.00    |
+| T2  | 2024-06-30 | Income:Interest             | -12.00   |
+| T3  | 2024-06-28 | Assets:Brokerage:VTSAX      | 1000.00  |
+| T3  | 2024-06-28 | Equity:Market Value Changes | -1000.00 |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2024-01-01 |
+| To       | 2024-12-31 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account          | Level | Amount | IsSubtotal |
+| Income           | 0     | 262.00 | true       |
+| Income:Dividends | 1     | 250.00 | false      |
+| Income:Interest  | 1     | 12.00  | false      |
+Then report total is : ReportTotal Vertical
+| TotalIncome   | 262.00 |
+| TotalExpenses | 0.00   |
+| Net           | 262.00 |
+# The 1000.00 revaluation is absent, and net worth is 1000.00 higher for it.
+
+# ---------------------------------------------------------------------------
+# An account tracked by value alone
+# ---------------------------------------------------------------------------
+
+Scenario An account may carry a stated value with no holdings at all
+Description A pension or an employer plan reports one figure on one statement
+Description and the positions behind it are not worth entering. The account
+Description holds no holdings; its value is set directly, against the same
+Description equity account a revaluation uses.
+Given the chart of accounts is : ChartOfAccounts
+| Path                        | Type       | Placeholder |
+| Assets:Pension              | Investment | false       |
+| Equity:Market Value Changes | Equity     | false       |
+| Equity:Opening Balances     | Equity     | false       |
+Given postings are : PostingRow
+| Ref | Date       | Account                 | Amount    |
+| T1  | 2024-01-01 | Assets:Pension          | 85000.00  |
+| T1  | 2024-01-01 | Equity:Opening Balances | -85000.00 |
+When value stated : ValueEntry Vertical
+| Account | Assets:Pension |
+| Value   | 91200.00       |
+| AsOf    | 2024-06-30     |
+Then postings are : PostingRow
+| Ref | Date       | Account                     | Amount   |
+| T2  | 2024-06-30 | Assets:Pension              | 6200.00  |
+| T2  | 2024-06-30 | Equity:Market Value Changes | -6200.00 |
+Then balances are : AccountBalance
+| Account        | RawBalance | DisplayBalance | Notes             |
+| Assets:Pension | 91200.00   | 91200.00       | As last stated    |
+
+Attributes ValueEntry
+| Attribute | Type        | Default    |
+| Account   | AccountPath |            |
+| Value     | Money       | 0.00       |
+| AsOf      | Date        | 2024-01-01 |
+
+Scenario A stated value on an account that has holdings is refused
+Description The value of such an account is the total of its holdings. Setting
+Description it directly would make the invariant false and there would be no way
+Description to tell which figure was wrong.
+Given the chart of accounts is : ChartOfAccounts
+| Path                        | Type       | Placeholder |
+| Assets:Brokerage:VTSAX      | Investment | false       |
+| Equity:Market Value Changes | Equity     | false       |
+Given holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-03-01 |
+When value stated : ValueEntry Vertical
+| Account | Assets:Brokerage:VTSAX |
+| Value   | 11000.00               |
+| AsOf    | 2024-06-30             |
+Then rejected because : Rejection
+| Reason                                                               |
+| Assets:Brokerage:VTSAX holds VTSAX; record a price instead of a value |
+
+# ---------------------------------------------------------------------------
+# What is deliberately absent
+# ---------------------------------------------------------------------------
+
+Scenario No realised gain is reported, by design
+Description Asking for a gain report says what the program does instead, rather
+Description than offering a figure that would not agree with the 1099 and would
+Description be believed anyway.
+Given the chart of accounts is as previous
+When gain report requested
+Then told that : Notice
+| Message                                                                        |
+| Realised gains are not tracked; the carried price is an average, not a basis   |
+
+Attributes Notice
+| Attribute | Type | Default |
+| Message   | Text |         |
+
+Scenario A holdings report shows what is held now, and when it was priced
+Description The age of a price is shown beside it, because a balance resting on
+Description a price from two years ago is worth distrusting and there is no way
+Description to tell from the figure alone.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Brokerage       | Investment | true        |
+| Assets:Brokerage:Cash  | Investment | false       |
+| Assets:Brokerage:VTSAX | Investment | false       |
+| Assets:Brokerage:BRK.B | Investment | false       |
+Given today is : Today Vertical
+| Date | 2024-07-01 |
+Given holdings are : Holdings
+| Account                | Symbol | Shares | Price    | PriceAsOf  |
+| Assets:Brokerage:VTSAX | VTSAX  | 100    | 110.0000 | 2024-06-28 |
+| Assets:Brokerage:BRK.B | BRK.B  | 10     | 405.0000 | 2022-01-14 |
+Given postings are : PostingRow
+| Ref | Date       | Account                | Amount   |
+| T1  | 2024-01-02 | Assets:Brokerage:Cash  | 2500.00  |
+| T2  | 2024-01-03 | Assets:Brokerage:VTSAX | 11000.00 |
+| T3  | 2024-01-03 | Assets:Brokerage:BRK.B | 4050.00  |
+When holdings report run
+Then holdings report rows are : HoldingsReportRow
+| Symbol | Shares | Price    | Value    | PriceAsOf  | DaysOld | Stale |
+| BRK.B  | 10     | 405.0000 | 4050.00  | 2022-01-14 | 899     | true  |
+| VTSAX  | 100    | 110.0000 | 11000.00 | 2024-06-28 | 3       | false |
+Then holdings report total is : HoldingsTotal Vertical
+| Cash       | 2500.00  |
+| Securities | 15050.00 |
+| Total      | 17550.00 |
+
+Attributes HoldingsReportRow
+Description A holding is listed by its symbol where it has one and by its name
+Description otherwise, so both columns are here and one of them may be empty.
+| Attribute    | Type         | Default    |
+| SecurityName | SecurityName | none       |
+| Symbol       | Symbol       | none       |
+| Shares       | Shares       | 0          |
+| Price        | Price        | 0          |
+| Value        | Money        | 0.00       |
+| PriceAsOf    | Date         | 2024-01-01 |
+| DaysOld      | Integer      | 0          |
+| Stale        | Boolean      | false      |
+
+Attributes HoldingsTotal
+| Attribute  | Type  | Default |
+| Cash       | Money | 0.00    |
+| Securities | Money | 0.00    |
+| Total      | Money | 0.00    |
+
+BusinessRule When a price is called stale
+Description Thirty days, which is long enough that a monthly statement keeps a
+Description holding fresh and short enough that a forgotten one is noticed.
+Examples: Staleness
+| DaysOld | Stale | Notes                        |
+| 0       | false | Priced today                 |
+| 30      | false | The last day it is fresh     |
+| 31      | true  |                              |
+| 899     | true  |                              |
+
+Attributes Staleness
+| Attribute | Type    | Default |
+| DaysOld   | Integer | 0       |
+| Stale     | Boolean | false   |
+| Notes     | String  | none    |

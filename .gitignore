@@ -1,0 +1,18 @@
+build/
+out/
+.vs/
+spec/generated/
+spec/build.log
+
+# Generated test scaffolding is rebuilt from spec/ and not tracked -- except the
+# glue, which the converter writes once as stubs and is then written by hand. It
+# is production code and must be kept.
+generated/*
+!generated/*_glue.h
+
+# Real financial records. Kept out of version control so that twenty years of
+# transactions cannot reach a remote by accident. Remove these lines if you want
+# them tracked.
+testdata/
+*.QIF
+*.pdf

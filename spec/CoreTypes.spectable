@@ -1,0 +1,280 @@
+Specification CoreTypes
+
+Description The types every other specification in SimpleAccount is written in.
+Details Declared once here because the analyzer treats a spec folder as one
+Details namespace; the other files refer to these names without redeclaring them.
+
+# ---------------------------------------------------------------------------
+# Money
+# ---------------------------------------------------------------------------
+
+DataType Money
+Description A signed amount in the currency of the book.
+Details Two decimal places, held as whole cents so that sums are exact.
+Details A leading dollar sign and thousands separators may be written and are
+Details accepted on input; the stored value is the number.
+Uses Decimal
+Examples: ValidValues
+| Value     | IsValid | Notes                              |
+| 0.00      | true    | A zero amount is legal             |
+| 12.34     | true    |                                    |
+| -12.34    | true    | Negative is legal: a credit        |
+| $1,234.56 | true    | Currency and separators accepted   |
+| ($45.00)  | true    | Accounting parentheses mean -45.00 |
+| 1.005     | false   | More than two decimal places       |
+| 12.3.4    | false   | Not a number                       |
+|           | false   | Empty is not zero                  |
+| USD 12.34 | false   | No currency codes in this release  |
+
+BusinessRule Money is held as whole cents
+Description Parsing text into a stored integer number of cents.
+Details Rounding is not applied: a third decimal place is rejected rather than
+Details rounded, so that no cent is ever invented by an import.
+Examples: MoneyParse
+| Text      | Cents  | Notes                              |
+| 0.00      | 0      |                                    |
+| 12.34     | 1234   |                                    |
+| -12.34    | -1234  |                                    |
+| $1,234.56 | 123456 |                                    |
+| ($45.00)  | -4500  | Parentheses are the negative sign  |
+| .50       | 50     | Leading zero may be omitted        |
+| 12        | 1200   | No decimal point means whole units |
+| 12.3      | 1230   | One decimal place is tenths        |
+
+Attributes MoneyParse
+| Attribute | Type    | Default |
+| Text      | String  |         |
+| Cents     | Integer | 0       |
+| Notes     | String  |         |
+
+BusinessRule Money formats for display
+Description How a stored amount is written back out.
+Details Negative amounts show a leading minus in the register and parentheses
+Details in reports, which is the convention each place is read in.
+Examples: MoneyFormat
+| Cents  | InRegister | InReport | Notes                    |
+| 0      | 0.00     | 0.00     |                            |
+| 1234   | 12.34    | 12.34    |                            |
+| -1234  | -12.34   | (12.34)  | Two conventions, one value |
+| 123456 | 1,234.56 | 1,234.56 | Grouped above a thousand   |
+
+Attributes MoneyFormat
+| Attribute | Type    | Default |
+| Cents     | Integer | 0       |
+| InRegister | String  |         |
+| InReport   | String  |         |
+| Notes     | String  |         |
+
+# ---------------------------------------------------------------------------
+# Names and identifiers
+# ---------------------------------------------------------------------------
+
+DataType AccountName
+Description The name of one account, being one segment of its path.
+Details A colon separates the segments of a path, so a name may not contain one.
+Details Blanks around a name are trimmed before it is checked, so they can never
+Details make a name invalid; " Checking" and "Checking" are the same name.
+Uses Text
+Examples: ValidValues
+| Value         | IsValid | Notes                          |
+| Checking      | true    |                                |
+| Wells Fargo   | true    | Spaces inside a name are fine  |
+| Auto & Travel | true    |                                |
+| ~Checking     | true    | Trimmed to Checking            |
+|               | false   | A name is required             |
+| ~~~           | false   | Blanks alone are no name       |
+| Expense:Fuel  | false   | A colon separates segments     |
+
+DataType AccountPath
+Description The full colon-separated path of an account, root segment first.
+Details This is how every other specification refers to an account.
+Uses Text
+Examples: ValidValues
+| Value              | IsValid | Notes                          |
+| Assets:Checking    | true    |                                |
+| Expenses:Auto:Fuel | true    | Any depth is allowed           |
+| Expenses           | true    | A root account is a valid path |
+|                    | false   | A path is required             |
+| Expenses:          | false   | Empty trailing segment         |
+| :Expenses          | false   | Empty leading segment          |
+| Expenses::Fuel     | false   | Empty middle segment           |
+
+DataType PayeeName
+Description Who the money went to, or came from.
+Details May be empty: a bank fee or an opening balance has no payee.
+Uses Text
+Examples: ValidValues
+| Value         | IsValid | Notes               |
+| Harris Teeter | true    |                     |
+|               | true    | A payee is optional |
+| AT&T          | true    |                     |
+
+DataType Symbol
+Description The ticker symbol of a security, where one is known.
+Details May be empty. A QIF export carries a security name and often no symbol
+Details at all: of the 44 securities in the business file in testdata, not one
+Details has a symbol. A holding is identified by its SecurityName, and the
+Details symbol is an optional shorthand. See Investments.
+Uses Text
+Examples: ValidValues
+| Value  | IsValid | Notes                               |
+| VTSAX  | true    |                                     |
+| BRK.B  | true    | A dot is part of some symbols       |
+| vtsax  | true    | Folded to upper case on input       |
+|        | true    | Unknown; the security has a name    |
+| VT SAX | false   | No spaces in a symbol               |
+
+DataType SecurityName
+Description The name of a security, which is what a QIF export always gives.
+Details Up to 76 characters in the business file in testdata, and all but one
+Details of the 44 names contain spaces.
+Uses Text
+Examples: ValidValues
+| Value                          | IsValid | Notes                          |
+| ISHARES U S TRANSPORTATION ETF | true    | Spaces are ordinary here       |
+| Vanguard Total Stock Mkt Idx   | true    |                                |
+| VTSAX                          | true    | A name may look like a symbol  |
+|                                | false   | A holding must name a security |
+
+DataType Shares
+Description A number of shares or units held.
+Details Six decimal places, which is what fund statements report.
+Details Never negative: this release does not model short positions.
+Uses Decimal
+Examples: ValidValues
+| Value      | IsValid | Notes                         |
+| 0          | true    | A closed position             |
+| 100        | true    |                               |
+| 12.345678  | true    | Six decimal places            |
+| 12.3456789 | false   | Seven is more than is tracked |
+| -5         | false   | No short positions            |
+
+DataType Price
+Description The price of one share.
+Details Four decimal places, never negative.
+Uses Decimal
+Examples: ValidValues
+| Value     | IsValid | Notes                   |
+| 0         | true    | Unpriced                |
+| 123.4567  | true    | Four decimal places     |
+| 123.45678 | false   | Five is too many        |
+| -1        | false   | A price is not negative |
+
+DataType CheckNumber
+Description The number written on a paper check.
+Uses Text
+Examples: ValidValues
+| Value | IsValid | Notes                       |
+| 1234  | true    |                             |
+|       | true    | Most transactions have none |
+| 1234A | true    | Some banks suffix a letter  |
+
+DataType FitId
+Description The identifier a bank assigns a transaction in an OFX file.
+Details This is what lets a second import recognise what it has already seen.
+Uses Text
+Examples: ValidValues
+| Value                | IsValid | Notes                        |
+| 20240115001          | true    |                              |
+| 2024-01-15-AMZN-4499 | true    | Banks choose their own shape |
+|                      | false   | Required when OFX supplies it |
+
+# ---------------------------------------------------------------------------
+# Enumerations
+# ---------------------------------------------------------------------------
+
+DataType AccountType
+Description What kind of account a node in the tree is.
+Details The first six hold money and are reconciled against a statement.
+Details Income and Expense are what Quicken calls categories; modelling them as
+Details accounts is what makes every transaction balance.
+Details Equity holds the opening balances that start the book.
+Examples: EnumerationValues
+| Value      | Notes                                             |
+| Bank       | Checking and savings                              |
+| Cash       | A wallet, or petty cash                           |
+| CreditCard | A balance owed, which rises as it is spent        |
+| Asset      | A house or a car                                  |
+| Liability  | A mortgage or a loan                              |
+| Investment | Holds securities as well as cash                  |
+| Income     | A category money arrives from                     |
+| Expense    | A category money goes to                          |
+| Equity     | Opening balances, so a new book starts in balance |
+
+DataType AccountClass
+Description The two groups the account types fall into.
+Details Reports and the balance sheet ask this rather than listing the types.
+Examples: EnumerationValues
+| Value   | Notes                                                |
+| Real    | Bank, Cash, CreditCard, Asset, Liability, Investment |
+| Nominal | Income, Expense and Equity: the categories           |
+
+BusinessRule Account class follows from account type
+Description Which types are real and which are nominal.
+Examples: AccountClassOf
+| AccountType | AccountClass | Notes                             |
+| Bank        | Real         |                                   |
+| Cash        | Real         |                                   |
+| CreditCard  | Real         |                                   |
+| Asset       | Real         |                                   |
+| Liability   | Real         |                                   |
+| Investment  | Real         |                                   |
+| Income      | Nominal      |                                   |
+| Expense     | Nominal      |                                   |
+| Equity      | Nominal      | Reconciling it would mean nothing |
+
+Attributes AccountClassOf
+| Attribute    | Type         | Default |
+| AccountType  | AccountType  | Bank    |
+| AccountClass | AccountClass | Real    |
+| Notes        | String       |         |
+
+DataType ClearedStatus
+Description How far a posting has got through the records of the bank.
+Details Held on the posting rather than the transaction, because a transfer
+Details between two accounts clears on each statement separately.
+Examples: EnumerationValues
+| Value      | Notes                                           |
+| Uncleared  | Entered here, not yet seen at the bank          |
+| Cleared    | Appeared on a downloaded statement              |
+| Reconciled | Locked by a finished reconciliation; edits warn |
+
+# ---------------------------------------------------------------------------
+# One-attribute selectors
+# ---------------------------------------------------------------------------
+
+Description A step that names a single value still needs an attribute set, so
+Description that the generated code has a struct to carry it. These are those
+Description sets: one attribute each, named for what the step selects.
+Details The C++ generator emits a typed and a string struct for an Attributes
+Details or an Entity block and not for a bare DataType, so a step written as
+Details ": AccountPath EveryCell" analyses cleanly and then generates glue that
+Details will not compile. These wrappers are the fix.
+
+Attributes AccountSelect
+| Attribute | Type        | Default |
+| Path      | AccountPath |         |
+
+Attributes HeadingRead
+| Attribute | Type    | Default |
+| Heading   | Heading |         |
+
+Attributes PayeeSelect
+| Attribute | Type      | Default |
+| Payee     | PayeeName |         |
+
+Attributes ProfileLabel
+| Attribute | Type        | Default |
+| Name      | ProfileName |         |
+
+Attributes SearchTerm
+| Attribute | Type       | Default |
+| Term      | SearchText |         |
+
+Attributes SortBy
+| Attribute | Type       | Default |
+| Column    | SortColumn |         |
+
+Attributes TransactionSelect
+| Attribute | Type           | Default |
+| Ref       | TransactionRef |         |

@@ -1,0 +1,602 @@
+Specification Reports
+
+Description Reporting by category and by payee, over a date range or over many
+Description years side by side.
+Details
+Details Every figure in a report is a total of postings. A report never reads a
+Details stored total, so it cannot disagree with the register, and a correction
+Details made in 2007 shows in a report run today without anything being
+Details rebuilt.
+Details
+Details Amounts are shown with the display sign of the account, so income and
+Details expenses are both positive and a reader does not have to hold the sign
+Details convention in their head. See the display sign rule in Accounts.
+
+# ---------------------------------------------------------------------------
+# Asking for a report
+# ---------------------------------------------------------------------------
+
+Attributes ReportSpec
+Description What was asked for.
+| Attribute   | Type           | Default    |
+| GroupBy     | ReportGrouping | Category   |
+| From        | Date           | 2024-01-01 |
+| To          | Date           | 2024-12-31 |
+| Interval    | ReportInterval | Whole      |
+| Depth       | Integer        | 0          |
+| Subtotals   | Boolean        | true       |
+| ZeroRows    | Boolean        | false      |
+
+DataType ReportGrouping
+Description What the rows of the report are.
+Examples: EnumerationValues
+| Value    | Notes                                        |
+| Category | One row per income or expense account        |
+| Payee    | One row per payee                            |
+| Account  | One row per real account, for a balance sheet |
+
+DataType ReportInterval
+Description What the columns of the report are.
+Examples: EnumerationValues
+| Value   | Notes                                       |
+| Whole   | One column for the whole range              |
+| Month   | One column per calendar month               |
+| Quarter | One column per calendar quarter             |
+| Year    | One column per year                         |
+| FiscalYear | One column per fiscal year               |
+
+Attributes ReportRow
+Description One row of a single-column report.
+| Attribute | Type        | Default |
+| Account   | AccountPath |         |
+| Level     | Integer     | 0       |
+| Amount    | Money       | 0.00    |
+| IsSubtotal | Boolean    | false   |
+
+Background Two years of transactions
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Income                 | Income  | true        |
+| Income:Salary          | Income  | false       |
+| Income:Interest        | Income  | false       |
+| Expenses               | Expense | true        |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Auto          | Expense | true        |
+| Expenses:Auto:Fuel     | Expense | false       |
+| Expenses:Auto:Repairs  | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee         | Account                | Amount    |
+| T1  | 2023-06-30 | Acme Payroll  | Assets:Checking        | 40000.00  |
+| T1  | 2023-06-30 | Acme Payroll  | Income:Salary          | -40000.00 |
+| T2  | 2023-07-15 | Harris Teeter | Assets:Checking        | -400.00   |
+| T2  | 2023-07-15 | Harris Teeter | Expenses:Groceries     | 400.00    |
+| T3  | 2023-08-10 | Shell         | Assets:Checking        | -120.00   |
+| T3  | 2023-08-10 | Shell         | Expenses:Auto:Fuel     | 120.00    |
+| T4  | 2024-02-28 | Acme Payroll  | Assets:Checking        | 42000.00  |
+| T4  | 2024-02-28 | Acme Payroll  | Income:Salary          | -42000.00 |
+| T5  | 2024-03-15 | Harris Teeter | Assets:Checking        | -500.00   |
+| T5  | 2024-03-15 | Harris Teeter | Expenses:Groceries     | 500.00    |
+| T6  | 2024-04-10 | Shell         | Assets:Checking        | -150.00   |
+| T6  | 2024-04-10 | Shell         | Expenses:Auto:Fuel     | 150.00    |
+| T7  | 2024-05-05 | Quick Fit     | Assets:Checking        | -300.00   |
+| T7  | 2024-05-05 | Quick Fit     | Expenses:Auto:Repairs  | 300.00    |
+| T8  | 2024-06-30 | First Bank    | Assets:Checking        | 25.00     |
+| T8  | 2024-06-30 | First Bank    | Income:Interest        | -25.00    |
+| T9  | 2024-07-01 | Unknown       | Assets:Checking        | -10.00    |
+| T9  | 2024-07-01 | Unknown       | Expenses:Uncategorized | 10.00     |
+
+# ---------------------------------------------------------------------------
+# By category
+# ---------------------------------------------------------------------------
+
+Scenario A category report for one year
+Description The tree is kept, with a subtotal on every placeholder, and income
+Description and expenses both read as positive figures.
+Given the chart of accounts is as previous
+Given postings are as previous
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2024-01-01 |
+| To       | 2024-12-31 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account                | Level | Amount   | IsSubtotal |
+| Income                 | 0     | 42025.00 | true       |
+| Income:Interest        | 1     | 25.00    | false      |
+| Income:Salary          | 1     | 42000.00 | false      |
+| Expenses               | 0     | 960.00   | true       |
+| Expenses:Auto          | 1     | 450.00   | true       |
+| Expenses:Auto:Fuel     | 2     | 150.00   | false      |
+| Expenses:Auto:Repairs  | 2     | 300.00   | false      |
+| Expenses:Groceries     | 1     | 500.00   | false      |
+| Expenses:Uncategorized | 1     | 10.00    | false      |
+Then report total is : ReportTotal Vertical
+| TotalIncome   | 42025.00 |
+| TotalExpenses | 960.00   |
+| Net           | 41065.00 |
+
+Attributes ReportTotal
+| Attribute     | Type  | Default |
+| TotalIncome   | Money | 0.00    |
+| TotalExpenses | Money | 0.00    |
+| Net           | Money | 0.00    |
+
+Scenario Rows are in alphabetical order within each parent
+Description Not by amount. A report compared with the same report from last
+Description month should have its rows in the same places, so that the eye can
+Description find a line without reading every one of them.
+Given the chart of accounts is : ChartOfAccounts
+| Path           | Type    | Placeholder |
+| Assets:Checking | Bank   | false       |
+| Expenses       | Expense | true        |
+| Expenses:Zoo   | Expense | false       |
+| Expenses:Apples | Expense | false      |
+| Expenses:Milk  | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee  | Account         | Amount  |
+| T1  | 2024-01-10 | Shop A | Assets:Checking | -300.00 |
+| T1  | 2024-01-10 | Shop A | Expenses:Zoo    | 300.00  |
+| T2  | 2024-01-11 | Shop B | Assets:Checking | -10.00  |
+| T2  | 2024-01-11 | Shop B | Expenses:Apples | 10.00   |
+| T3  | 2024-01-12 | Shop C | Assets:Checking | -200.00 |
+| T3  | 2024-01-12 | Shop C | Expenses:Milk   | 200.00  |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2024-01-01 |
+| To       | 2024-12-31 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account         | Level | Amount | IsSubtotal |
+| Expenses        | 0     | 510.00 | true       |
+| Expenses:Apples | 1     | 10.00  | false      |
+| Expenses:Milk   | 1     | 200.00 | false      |
+| Expenses:Zoo    | 1     | 300.00 | false      |
+# Entered largest first, reported alphabetically.
+
+Scenario A date range takes only the postings inside it
+Given the chart of accounts is as previous
+Given postings are as previous
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2024-03-01 |
+| To       | 2024-05-31 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account               | Level | Amount | IsSubtotal |
+| Expenses              | 0     | 950.00 | true       |
+| Expenses:Auto         | 1     | 450.00 | true       |
+| Expenses:Auto:Fuel    | 2     | 150.00 | false      |
+| Expenses:Auto:Repairs | 2     | 300.00 | false      |
+| Expenses:Groceries    | 1     | 500.00 | false      |
+# No income rows: nothing was earned between March and May, and empty rows
+# are left out unless ZeroRows is asked for.
+
+Scenario Asking for zero rows keeps every category in the report
+Description Useful when the report is a form to be filled in, or compared with
+Description the same report from another year.
+Given the chart of accounts is as previous
+Given postings are as previous
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2024-03-01 |
+| To       | 2024-05-31 |
+| Interval | Whole      |
+| ZeroRows | true       |
+Then report rows are : ReportRow
+| Account                | Level | Amount | IsSubtotal |
+| Income                 | 0     | 0.00   | true       |
+| Income:Interest        | 1     | 0.00   | false      |
+| Income:Salary          | 1     | 0.00   | false      |
+| Expenses               | 0     | 950.00 | true       |
+| Expenses:Auto          | 1     | 450.00 | true       |
+| Expenses:Auto:Fuel     | 2     | 150.00 | false      |
+| Expenses:Auto:Repairs  | 2     | 300.00 | false      |
+| Expenses:Groceries     | 1     | 500.00 | false      |
+| Expenses:Uncategorized | 1     | 0.00   | false      |
+
+Scenario A depth limit rolls the detail up into its parent
+Description Twenty years of history grows a deep tree. A report to depth one is
+Description the summary; the figures still add to the same total.
+Given the chart of accounts is as previous
+Given postings are as previous
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2024-01-01 |
+| To       | 2024-12-31 |
+| Interval | Whole      |
+| Depth    | 1          |
+Then report rows are : ReportRow
+| Account                | Level | Amount   | IsSubtotal |
+| Income                 | 0     | 42025.00 | true       |
+| Income:Interest        | 1     | 25.00    | false      |
+| Income:Salary          | 1     | 42000.00 | false      |
+| Expenses               | 0     | 960.00   | true       |
+| Expenses:Auto          | 1     | 450.00   | false      |
+| Expenses:Groceries     | 1     | 500.00   | false      |
+| Expenses:Uncategorized | 1     | 10.00    | false      |
+# Expenses:Auto is a leaf at this depth, so it is not marked a subtotal even
+# though the 450.00 came from below it.
+
+Scenario Transfers do not appear in a category report
+Description A transfer between two real accounts touches no category, so it is
+Description absent without having to be excluded. This is the reason the credit
+Description card payment in Transactions is modelled as a transfer: were it an
+Description expense, this report would count the same spending twice.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type       | Placeholder |
+| Assets:Checking    | Bank       | false       |
+| Assets:Savings     | Bank       | false       |
+| Liabilities:Visa   | CreditCard | false       |
+| Expenses           | Expense    | true        |
+| Expenses:Shopping  | Expense    | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee    | Account           | Amount  |
+| T1  | 2024-03-02 | Amazon   | Liabilities:Visa  | -89.99  |
+| T1  | 2024-03-02 | Amazon   | Expenses:Shopping | 89.99   |
+| T2  | 2024-03-25 | Visa     | Liabilities:Visa  | 300.00  |
+| T2  | 2024-03-25 | Visa     | Assets:Checking   | -300.00 |
+| T3  | 2024-03-28 | Transfer | Assets:Checking   | -500.00 |
+| T3  | 2024-03-28 | Transfer | Assets:Savings    | 500.00  |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2024-01-01 |
+| To       | 2024-12-31 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account           | Level | Amount | IsSubtotal |
+| Expenses          | 0     | 89.99  | true       |
+| Expenses:Shopping | 1     | 89.99  | false      |
+Then report total is : ReportTotal Vertical
+| TotalIncome   | 0.00  |
+| TotalExpenses | 89.99 |
+| Net           | -89.99 |
+
+Scenario A hidden category with activity in the range still reports
+Description Hiding a category keeps it out of the picker for new transactions.
+Description Leaving it out of a report would make the total wrong.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder | Hidden |
+| Assets:Checking    | Bank    | false       | false  |
+| Expenses           | Expense | true        | false  |
+| Expenses:Groceries | Expense | false       | true   |
+Given postings are : PostingRow
+| Ref | Date       | Payee         | Account            | Amount |
+| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 |
+| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00  |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2024-01-01 |
+| To       | 2024-12-31 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account            | Level | Amount | IsSubtotal |
+| Expenses           | 0     | 45.00  | true       |
+| Expenses:Groceries | 1     | 45.00  | false      |
+
+# ---------------------------------------------------------------------------
+# By payee
+# ---------------------------------------------------------------------------
+
+Scenario A payee report over one year
+Description Flat, because payees have no tree, and ordered by amount because
+Description the question being asked is usually which is the largest.
+Given the chart of accounts is as previous
+Given postings are as previous
+When report run : ReportSpec Vertical
+| GroupBy  | Payee      |
+| From     | 2024-01-01 |
+| To       | 2024-12-31 |
+| Interval | Whole      |
+Then payee report rows are : PayeeReportRow
+| Payee         | Amount   | Count |
+| Acme Payroll  | 42000.00 | 1     |
+| Harris Teeter | 500.00   | 1     |
+| Quick Fit     | 300.00   | 1     |
+| Shell         | 150.00   | 1     |
+| First Bank    | 25.00    | 1     |
+| Unknown       | 10.00    | 1     |
+
+Attributes PayeeReportRow
+| Attribute | Type      | Default |
+| Payee     | PayeeName | none    |
+| Amount    | Money     | 0.00    |
+| Count     | Integer   | 0       |
+
+Scenario A payee report counts the transactions, not the postings
+Description A split with four postings is one visit to the hardware store. The
+Description amount is the total of its category postings, which is the total of
+Description the transaction and not twice it.
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type    | Placeholder |
+| Assets:Checking           | Bank    | false       |
+| Expenses:Home:Maintenance | Expense | false       |
+| Expenses:Home:Garden      | Expense | false       |
+| Expenses:Auto:Repairs     | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee      | Account                   | Amount  |
+| T1  | 2024-04-02 | Home Depot | Assets:Checking           | -184.50 |
+| T1  | 2024-04-02 | Home Depot | Expenses:Home:Maintenance | 100.00  |
+| T1  | 2024-04-02 | Home Depot | Expenses:Home:Garden      | 54.50   |
+| T1  | 2024-04-02 | Home Depot | Expenses:Auto:Repairs     | 30.00   |
+When report run : ReportSpec Vertical
+| GroupBy  | Payee      |
+| From     | 2024-01-01 |
+| To       | 2024-12-31 |
+| Interval | Whole      |
+Then payee report rows are : PayeeReportRow
+| Payee      | Amount | Count |
+| Home Depot | 184.50 | 1     |
+
+Scenario A payee report for one category only
+Description What was spent at the hardware store on the garden, rather than
+Description what was spent there altogether.
+Given the chart of accounts is as previous
+Given postings are as previous
+When report run for category : CategoryFilter Vertical
+| Category | Expenses:Home:Garden |
+| From     | 2024-01-01           |
+| To       | 2024-12-31           |
+Then payee report rows are : PayeeReportRow
+| Payee      | Amount | Count |
+| Home Depot | 54.50  | 1     |
+
+Attributes CategoryFilter
+| Attribute | Type        | Default    |
+| Category  | AccountPath |            |
+| From      | Date        | 2024-01-01 |
+| To        | Date        | 2024-12-31 |
+
+# ---------------------------------------------------------------------------
+# Many years side by side
+# ---------------------------------------------------------------------------
+
+Attributes YearColumnRow
+Description A report row with one column per year. Three years are shown here;
+Description the real report has as many columns as the range covers.
+| Attribute | Type        | Default |
+| Account   | AccountPath |         |
+| Level     | Integer     | 0       |
+| Y2023     | Money       | 0.00    |
+| Y2024     | Money       | 0.00    |
+| Y2025     | Money       | 0.00    |
+| Total     | Money       | 0.00    |
+
+Scenario A category report by year
+Description This is the multi-year history, and it is the reason the postings
+Description are never summarised into a stored total: a column for 2007 is the
+Description same calculation as a column for this year.
+Given the chart of accounts is as previous
+Given postings are as previous
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2023-01-01 |
+| To       | 2025-12-31 |
+| Interval | Year       |
+Then year column rows are : YearColumnRow
+| Account                | Level | Y2023    | Y2024    | Y2025 | Total    |
+| Income                 | 0     | 40000.00 | 42025.00 | 0.00  | 82025.00 |
+| Income:Interest        | 1     | 0.00     | 25.00    | 0.00  | 25.00    |
+| Income:Salary          | 1     | 40000.00 | 42000.00 | 0.00  | 82000.00 |
+| Expenses               | 0     | 520.00   | 960.00   | 0.00  | 1480.00  |
+| Expenses:Auto          | 1     | 120.00   | 450.00   | 0.00  | 570.00   |
+| Expenses:Auto:Fuel     | 2     | 120.00   | 150.00   | 0.00  | 270.00   |
+| Expenses:Auto:Repairs  | 2     | 0.00     | 300.00   | 0.00  | 300.00   |
+| Expenses:Groceries     | 1     | 400.00   | 500.00   | 0.00  | 900.00   |
+| Expenses:Uncategorized | 1     | 0.00     | 10.00    | 0.00  | 10.00    |
+
+Scenario A year with no postings still has a column
+Description An empty column is information: it says nothing happened that year,
+Description which is a different statement from the year being absent from the
+Description report altogether. Nothing was posted in 2025, and 2025 is a column.
+Given the chart of accounts is as previous
+Given postings are as previous
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2023-01-01 |
+| To       | 2025-12-31 |
+| Interval | Year       |
+Then report columns are : ReportColumn
+| Heading | From       | To         | HasPostings |
+| 2023    | 2023-01-01 | 2023-12-31 | true        |
+| 2024    | 2024-01-01 | 2024-12-31 | true        |
+| 2025    | 2025-01-01 | 2025-12-31 | false       |
+
+Attributes ReportColumn
+| Attribute   | Type    | Default    |
+| Heading     | String  |            |
+| From        | Date    | 2024-01-01 |
+| To          | Date    | 2024-12-31 |
+| HasPostings | Boolean | false      |
+
+Scenario A range that stops inside a year gives a short last column
+Description The column is labelled with the part of the year it covers, so that
+Description a figure covering five months is not read as a whole year.
+Given the chart of accounts is as previous
+Given postings are as previous
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2023-01-01 |
+| To       | 2024-05-31 |
+| Interval | Year       |
+Then report columns are : ReportColumn
+| Heading        | From       | To         | HasPostings |
+| 2023           | 2023-01-01 | 2023-12-31 | true        |
+| 2024 to 31 May | 2024-01-01 | 2024-05-31 | true        |
+
+Scenario An average column over the years asked for
+Description The average is over the columns in the report, not over the years in
+Description which something happened, so a category used twice in three years
+Description averages over three.
+Given the chart of accounts is as previous
+Given postings are as previous
+When report run with average : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2023-01-01 |
+| To       | 2025-12-31 |
+| Interval | Year       |
+Then average column is : AverageRow
+| Account            | Total   | Columns | Average |
+| Expenses:Groceries | 900.00  | 3       | 300.00  |
+| Expenses:Auto:Fuel | 270.00  | 3       | 90.00   |
+
+Attributes AverageRow
+| Attribute | Type        | Default |
+| Account   | AccountPath |         |
+| Total     | Money       | 0.00    |
+| Columns   | Integer     | 0       |
+| Average   | Money       | 0.00    |
+
+# ---------------------------------------------------------------------------
+# Date ranges
+# ---------------------------------------------------------------------------
+
+BusinessRule What the named date ranges mean
+Description Taken relative to today, which is 2024-05-15 in these examples.
+Details The ranges that end today end today rather than at the end of the
+Details period, because a month-to-date total compared with a whole previous
+Details month is a comparison nobody wants by accident.
+Examples: NamedRange
+| Name            | From       | To         | Notes                        |
+| ThisMonth       | 2024-05-01 | 2024-05-31 | The whole month              |
+| MonthToDate     | 2024-05-01 | 2024-05-15 |                              |
+| LastMonth       | 2024-04-01 | 2024-04-30 |                              |
+| ThisQuarter     | 2024-04-01 | 2024-06-30 |                              |
+| ThisYear        | 2024-01-01 | 2024-12-31 |                              |
+| YearToDate      | 2024-01-01 | 2024-05-15 |                              |
+| LastYear        | 2023-01-01 | 2023-12-31 |                              |
+| Last12Months    | 2023-05-16 | 2024-05-15 | Twelve months back from today |
+| All             | 2005-01-01 | 2024-05-15 | The whole book               |
+
+Attributes NamedRange
+| Attribute | Type   | Default    |
+| Name      | String |            |
+| From      | Date   | 2024-01-01 |
+| To        | Date   | 2024-12-31 |
+| Notes     | String | none       |
+
+BusinessRule How a fiscal year is named and bounded
+Description The fiscal year is named for the calendar year it ends in. With a
+Description start month of July, the year running July 2023 to June 2024 is
+Description FY2024.
+Details A start month of January makes the fiscal year the calendar year, which
+Details is the default and what most users want.
+Examples: FiscalYear
+| StartMonth | FiscalYear | From       | To         | Notes               |
+| 1          | FY2024     | 2024-01-01 | 2024-12-31 | The calendar year   |
+| 7          | FY2024     | 2023-07-01 | 2024-06-30 |                     |
+| 7          | FY2025     | 2024-07-01 | 2025-06-30 |                     |
+| 10         | FY2024     | 2023-10-01 | 2024-09-30 |                     |
+| 4          | FY2024     | 2023-04-01 | 2024-03-31 |                     |
+
+Attributes FiscalYear
+| Attribute  | Type    | Default    |
+| StartMonth | Integer | 1          |
+| FiscalYear | String  |            |
+| From       | Date    | 2024-01-01 |
+| To         | Date    | 2024-12-31 |
+| Notes      | String  | none       |
+
+# ---------------------------------------------------------------------------
+# Getting from a figure to the transactions behind it
+# ---------------------------------------------------------------------------
+
+Scenario A figure in a report opens the transactions it is made of
+Description Any figure, including a subtotal. A report that cannot be taken
+Description apart is a report that cannot be checked, and over twenty years
+Description every odd-looking number is worth checking.
+Given the chart of accounts is as previous
+Given postings are as previous
+When report figure opened : ReportCell Vertical
+| Account | Expenses:Auto |
+| From    | 2024-01-01    |
+| To      | 2024-12-31    |
+Then transactions behind it are : DrillDownRow
+| Ref | Date       | Payee     | Account               | Amount |
+| T6  | 2024-04-10 | Shell     | Expenses:Auto:Fuel    | 150.00 |
+| T7  | 2024-05-05 | Quick Fit | Expenses:Auto:Repairs | 300.00 |
+# The subtotal was 450.00 and these two postings are what made it. Opening a
+# subtotal reaches through the placeholder to the leaves beneath it.
+
+Attributes ReportCell
+| Attribute | Type        | Default    |
+| Account   | AccountPath |            |
+| From      | Date        | 2024-01-01 |
+| To        | Date        | 2024-12-31 |
+
+Attributes DrillDownRow
+| Attribute | Type           | Default    |
+| Ref       | TransactionRef |            |
+| Date      | Date           | 2024-01-01 |
+| Payee     | PayeeName      | none       |
+| Account   | AccountPath    |            |
+| Amount    | Money          | 0.00       |
+
+# ---------------------------------------------------------------------------
+# Net worth over time
+# ---------------------------------------------------------------------------
+
+Scenario Net worth at the end of each year
+Description The real accounts only, as in Accounts. Each column is a balance as
+Description at a date rather than a total of a period, which is why this report
+Description is a different shape from the category one.
+Given the chart of accounts is : ChartOfAccounts
+| Path             | Type       | Placeholder |
+| Assets:Checking  | Bank       | false       |
+| Liabilities:Visa | CreditCard | false       |
+| Income:Salary    | Income     | false       |
+| Expenses:Shopping | Expense   | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee        | Account           | Amount    |
+| T1  | 2023-06-30 | Acme Payroll | Assets:Checking   | 40000.00  |
+| T1  | 2023-06-30 | Acme Payroll | Income:Salary     | -40000.00 |
+| T2  | 2023-12-01 | Amazon       | Liabilities:Visa  | -500.00   |
+| T2  | 2023-12-01 | Amazon       | Expenses:Shopping | 500.00    |
+| T3  | 2024-06-30 | Acme Payroll | Assets:Checking   | 42000.00  |
+| T3  | 2024-06-30 | Acme Payroll | Income:Salary     | -42000.00 |
+When net worth report run : ReportSpec Vertical
+| GroupBy  | Account    |
+| From     | 2023-01-01 |
+| To       | 2024-12-31 |
+| Interval | Year       |
+Then net worth columns are : NetWorthColumn
+| AsAt       | Assets   | Liabilities | NetWorth |
+| 2023-12-31 | 40000.00 | 500.00      | 39500.00 |
+| 2024-12-31 | 82000.00 | 500.00      | 81500.00 |
+
+Attributes NetWorthColumn
+| Attribute   | Type  | Default    |
+| AsAt        | Date  | 2024-12-31 |
+| Assets      | Money | 0.00       |
+| Liabilities | Money | 0.00       |
+| NetWorth    | Money | 0.00       |
+
+# ---------------------------------------------------------------------------
+# Taking a report away
+# ---------------------------------------------------------------------------
+
+Scenario A report is written out as CSV with its figures unrounded
+Description The file is for a spreadsheet, so the grouping separators and the
+Description parentheses of the displayed report are left out and the sign is
+Description written as a minus.
+Given the chart of accounts is as previous
+Given postings are as previous
+When report exported as csv : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2024-01-01 |
+| To       | 2024-12-31 |
+| Interval | Whole      |
+Then csv written is
+"""
+Account,Level,Amount
+Income,0,42025.00
+Income:Interest,1,25.00
+Income:Salary,1,42000.00
+Expenses,0,960.00
+Expenses:Auto,1,450.00
+Expenses:Auto:Fuel,2,150.00
+Expenses:Auto:Repairs,2,300.00
+Expenses:Groceries,1,500.00
+Expenses:Uncategorized,1,10.00
+"""

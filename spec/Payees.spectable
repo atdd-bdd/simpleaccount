@@ -1,0 +1,549 @@
+Specification Payees
+
+Description Turning what the bank calls a payee into what the user calls it, and
+Description remembering which category that payee usually takes.
+Details
+Details A bank writes a payee as a terminal record: HARRIS TEETER #231 DURHAM NC
+Details 01/15. A report grouped by that is useless, because every shop appears
+Details once per branch and once per visit. The rules here collapse that back to
+Details one name, and carry the category that was chosen last time.
+Details
+Details Nothing here guesses. A rule exists because the user made it, or because
+Details the user categorised a transaction and agreed to remember it.
+
+# ---------------------------------------------------------------------------
+# The rule
+# ---------------------------------------------------------------------------
+
+Entity PayeeRule
+Description One rule: what to look for, and what to do when it is found.
+| Attribute  | Type        | Default | Notes                                 |
+| Pattern    | Text        |         | What is looked for in the raw name    |
+| MatchType  | MatchType   | Contains |                                      |
+| Payee      | PayeeName   |         | The name to record instead            |
+| Category   | AccountPath | none    | Empty leaves the category alone       |
+| Enabled    | Boolean     | true    |                                       |
+
+DataType MatchType
+Description How a pattern is compared with the raw name from the bank.
+Details The comparison ignores case in every form. Contains is the default
+Details because it is what a user means by typing part of a name.
+Examples: EnumerationValues
+| Value      | Notes                                                |
+| Contains   | The pattern appears somewhere in the raw name        |
+| StartsWith | The raw name begins with the pattern                 |
+| Exact      | The whole raw name equals the pattern                |
+| Regex      | A regular expression, for the one case in a hundred  |
+
+Collection PayeeRules
+| DataType  | Minimum | Maximum | Notes                     |
+| PayeeRule | 0       | 10000   | Pattern need not be unique |
+
+BusinessRule How a pattern is matched
+Description Each match type against the same raw name, so the difference is
+Description visible in one place.
+Examples: MatchCase
+| MatchType  | Pattern          | RawName                       | Matches |
+| Contains   | HARRIS TEETER    | HARRIS TEETER #231 DURHAM NC  | true    |
+| Contains   | harris teeter    | HARRIS TEETER #231 DURHAM NC  | true    |
+| Contains   | TEETER           | HARRIS TEETER #231 DURHAM NC  | true    |
+| Contains   | WHOLE FOODS      | HARRIS TEETER #231 DURHAM NC  | false   |
+| StartsWith | HARRIS           | HARRIS TEETER #231 DURHAM NC  | true    |
+| StartsWith | TEETER           | HARRIS TEETER #231 DURHAM NC  | false   |
+| Exact      | HARRIS TEETER    | HARRIS TEETER #231 DURHAM NC  | false   |
+| Exact      | HARRIS TEETER    | HARRIS TEETER                 | true    |
+| Regex      | ^SHELL ?OIL      | SHELLOIL 4471                 | true    |
+| Regex      | ^SHELL ?OIL      | ROYAL SHELL OIL               | false   |
+
+Attributes MatchCase
+| Attribute | Type      | Default  |
+| MatchType | MatchType | Contains |
+| Pattern   | String    |          |
+| RawName   | String    |          |
+| Matches   | Boolean   | false    |
+
+BusinessRule Which rule wins when several match
+Description The most specific rule, which is taken to be the one with the longest
+Description pattern. Length is a crude measure, and it is used because it needs no
+Description explaining: a user who adds a longer pattern expects it to win.
+Details Ties are broken by match type, in the order Exact, StartsWith, Regex,
+Details Contains, and then by the order the rules were added.
+Examples: RulePrecedence
+| PatternA      | TypeA    | PatternB         | TypeB    | Winner           | Notes                       |
+| AMAZON        | Contains | AMAZON MKTPLACE  | Contains | AMAZON MKTPLACE  | Longer pattern              |
+| SHELL         | Contains | SHELL            | Exact    | SHELL            | Same length; Exact wins     |
+| HARRIS TEETER | Contains | TEETER           | Contains | HARRIS TEETER    | Longer pattern              |
+
+Attributes RulePrecedence
+| Attribute | Type      | Default  |
+| PatternA  | String    |          |
+| TypeA     | MatchType | Contains |
+| PatternB  | String    |          |
+| TypeB     | MatchType | Contains |
+| Winner    | String    |          |
+| Notes     | String    | none     |
+
+Scenario A rule tidies the payee and sets the category
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given payee rules are : PayeeRules
+| Pattern       | MatchType | Payee         | Category           |
+| HARRIS TEETER | Contains  | Harris Teeter | Expenses:Groceries |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name                         | Memo | CheckNum |
+| DEBIT   | 2024-01-15 | -45.00 | 20240115001 | HARRIS TEETER #231 DURHAM NC | none | none     |
+Then postings are : PostingRow
+| Ref | Date       | Payee         | Account            | Amount | Cleared   |
+| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 | Cleared   |
+| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00  | Uncleared |
+
+Scenario A rule with no category tidies the name only
+Description Some payees take a different category each time. The rule is still
+Description worth having, because it is what makes the report readable.
+Given the chart of accounts is as previous
+Given payee rules are : PayeeRules
+| Pattern | MatchType | Payee  | Category |
+| AMAZON  | Contains  | Amazon | none     |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId | Name                    | Memo | CheckNum |
+| DEBIT   | 2024-02-01 | -89.99 | A1    | AMAZON MKTPLACE PMTS WA | none | none     |
+Then postings are : PostingRow
+| Ref | Date       | Payee  | Account                | Amount |
+| T1  | 2024-02-01 | Amazon | Assets:Checking        | -89.99 |
+| T1  | 2024-02-01 | Amazon | Expenses:Uncategorized | 89.99  |
+
+Scenario With no rule the raw name is kept
+Description Nothing is invented. The raw name is what the bank said, and it is
+Description kept so that a rule written later can still match it.
+Given the chart of accounts is as previous
+Given payee rules are : PayeeRules
+| Pattern | MatchType | Payee | Category |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId | Name              | Memo | CheckNum |
+| DEBIT   | 2024-02-02 | -12.00 | A2    | SOME SHOP 4471 NC | none | none     |
+Then postings are : PostingRow
+| Ref | Date       | Payee             | Account                | Amount |
+| T1  | 2024-02-02 | SOME SHOP 4471 NC | Assets:Checking        | -12.00 |
+| T1  | 2024-02-02 | SOME SHOP 4471 NC | Expenses:Uncategorized | 12.00  |
+
+Scenario The raw name is kept even after a rule has renamed the payee
+Description A rule written next year must be able to match what the bank sent
+Description this year, so the original text is stored alongside the tidied name
+Description rather than replaced by it.
+Given the chart of accounts is as previous
+Given payee rules are : PayeeRules
+| Pattern       | MatchType | Payee         | Category           |
+| HARRIS TEETER | Contains  | Harris Teeter | Expenses:Groceries |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name                         | Memo | CheckNum |
+| DEBIT   | 2024-01-15 | -45.00 | 20240115001 | HARRIS TEETER #231 DURHAM NC | none | none     |
+Then transaction names are : PayeeNames Vertical
+| Payee   | Harris Teeter                |
+| RawName | HARRIS TEETER #231 DURHAM NC |
+
+Attributes PayeeNames
+| Attribute | Type      | Default |
+| Payee     | PayeeName | none    |
+| RawName   | Text      | none    |
+
+Scenario The most specific of two matching rules is applied
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Shopping      | Expense | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given payee rules are : PayeeRules
+| Pattern         | MatchType | Payee           | Category           |
+| AMAZON          | Contains  | Amazon          | Expenses:Shopping  |
+| AMAZON GROCERY  | Contains  | Amazon Grocery  | Expenses:Groceries |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId | Name                    | Memo | CheckNum |
+| DEBIT   | 2024-02-03 | -31.00 | A3    | AMAZON GROCERY SUBS WA  | none | none     |
+| DEBIT   | 2024-02-04 | -89.99 | A4    | AMAZON MKTPLACE PMTS WA | none | none     |
+Then postings are : PostingRow
+| Ref | Date       | Payee          | Account            | Amount |
+| T1  | 2024-02-03 | Amazon Grocery | Assets:Checking    | -31.00 |
+| T1  | 2024-02-03 | Amazon Grocery | Expenses:Groceries | 31.00  |
+| T2  | 2024-02-04 | Amazon         | Assets:Checking    | -89.99 |
+| T2  | 2024-02-04 | Amazon         | Expenses:Shopping  | 89.99  |
+
+Scenario A disabled rule is passed over
+Description Rules are kept rather than deleted, because a rule that was wrong
+Description once is usually wanted again in a changed form.
+Given the chart of accounts is as previous
+Given payee rules are : PayeeRules
+| Pattern | MatchType | Payee  | Category          | Enabled |
+| AMAZON  | Contains  | Amazon | Expenses:Shopping | false   |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId | Name                    | Memo | CheckNum |
+| DEBIT   | 2024-02-04 | -89.99 | A4    | AMAZON MKTPLACE PMTS WA | none | none     |
+Then postings are : PostingRow
+| Ref | Date       | Payee                   | Account                | Amount |
+| T1  | 2024-02-04 | AMAZON MKTPLACE PMTS WA | Assets:Checking        | -89.99 |
+| T1  | 2024-02-04 | AMAZON MKTPLACE PMTS WA | Expenses:Uncategorized | 89.99  |
+
+# ---------------------------------------------------------------------------
+# A rule that carries a split
+# ---------------------------------------------------------------------------
+
+Entity PayeeSplitRule
+Description A rule whose category side is several categories in fixed proportion.
+Details A mortgage payment is the case this exists for: the same division of
+Details interest, principal and escrow every month, with the amounts changing.
+| Attribute | Type        | Default | Notes                              |
+| Pattern   | Text        |         |                                    |
+| MatchType | MatchType   | Contains |                                   |
+| Payee     | PayeeName   |         |                                    |
+| Shape     | SplitShape  | Amounts | How the lines divide the total     |
+
+DataType SplitShape
+Description Whether the remembered split lines are amounts or proportions.
+Examples: EnumerationValues
+| Value       | Notes                                                       |
+| Amounts     | The amounts are reused as they are; any shortfall is queried |
+| Percentages | The total is divided in the remembered proportions          |
+
+Attributes RememberedSplitLine
+| Attribute | Type        | Default |
+| Category  | AccountPath |         |
+| Amount    | Money       | 0.00    |
+| Percent   | Decimal     | 0       |
+| Memo      | Text        | none    |
+
+Scenario A remembered split in fixed amounts is offered
+Description The escrow and principal are the amounts last used. The total of the
+Description downloaded transaction differs, so the shortfall is reported rather
+Description than silently absorbed into one line.
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type    | Placeholder |
+| Assets:Checking           | Bank    | false       |
+| Expenses:Home:Interest    | Expense | false       |
+| Expenses:Home:Escrow      | Expense | false       |
+| Liabilities:Mortgage      | Liability | false     |
+| Expenses:Uncategorized    | Expense | false       |
+Given payee split rules are : PayeeSplitRule Vertical
+| Pattern   | FIRST NATIONAL MTG |
+| MatchType | Contains           |
+| Payee     | First National     |
+| Shape     | Amounts            |
+Given remembered split lines are : RememberedSplitLine
+| Category               | Amount  | Memo      |
+| Expenses:Home:Interest | 820.00  | Interest  |
+| Liabilities:Mortgage   | 430.00  | Principal |
+| Expenses:Home:Escrow   | 250.00  | Escrow    |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount   | FitId | Name                   | Memo | CheckNum |
+| DEBIT   | 2024-03-01 | -1500.00 | M1    | FIRST NATIONAL MTG ACH | none | none     |
+Then split offered is : OfferedSplit
+| Category               | Amount  | Memo      |
+| Expenses:Home:Interest | 820.00  | Interest  |
+| Liabilities:Mortgage   | 430.00  | Principal |
+| Expenses:Home:Escrow   | 250.00  | Escrow    |
+Then split shortfall is : SplitShortfall Vertical
+| Total     | 1500.00 |
+| Allocated | 1500.00 |
+| Shortfall | 0.00    |
+| Balanced  | true    |
+
+Attributes OfferedSplit
+| Attribute | Type        | Default |
+| Category  | AccountPath |         |
+| Amount    | Money       | 0.00    |
+| Memo      | Text        | none    |
+
+Attributes SplitShortfall
+| Attribute | Type    | Default |
+| Total     | Money   | 0.00    |
+| Allocated | Money   | 0.00    |
+| Shortfall | Money   | 0.00    |
+| Balanced  | Boolean | false   |
+
+Scenario A remembered split whose amounts no longer add up reports the shortfall
+Description The payment went up by twenty dollars in January, as it does. The
+Description remembered amounts are offered unchanged and the difference is
+Description shown, for the user to put where it belongs.
+Given the chart of accounts is as previous
+Given payee split rules are as previous
+Given remembered split lines are as previous
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount   | FitId | Name                   | Memo | CheckNum |
+| DEBIT   | 2025-01-01 | -1520.00 | M2    | FIRST NATIONAL MTG ACH | none | none     |
+Then split shortfall is : SplitShortfall Vertical
+| Total     | 1520.00 |
+| Allocated | 1500.00 |
+| Shortfall | 20.00   |
+| Balanced  | false   |
+
+Scenario A remembered split in percentages divides the total
+Description Percentages are applied to the downloaded total, so the lines always
+Description add up. The rounding goes to the largest line, so that the sum is
+Description exact and the adjustment lands where it is least visible.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type    | Placeholder |
+| Assets:Checking         | Bank    | false       |
+| Expenses:Office:Rent    | Expense | false       |
+| Expenses:Office:Utility | Expense | false       |
+| Expenses:Uncategorized  | Expense | false       |
+Given payee split rules are : PayeeSplitRule Vertical
+| Pattern   | OFFICE PARK LLC |
+| MatchType | Contains        |
+| Payee     | Office Park     |
+| Shape     | Percentages     |
+Given remembered split lines are : RememberedSplitLine
+| Category                | Percent | Memo    |
+| Expenses:Office:Rent    | 70      | Rent    |
+| Expenses:Office:Utility | 30      | Utility |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount   | FitId | Name            | Memo | CheckNum |
+| DEBIT   | 2024-03-01 | -1000.01 | O1    | OFFICE PARK LLC | none | none     |
+Then split offered is : OfferedSplit
+| Category                | Amount | Memo    |
+| Expenses:Office:Rent    | 700.01 | Rent    |
+| Expenses:Office:Utility | 300.00 | Utility |
+Then split shortfall is : SplitShortfall Vertical
+| Total     | 1000.01 |
+| Allocated | 1000.01 |
+| Shortfall | 0.00    |
+| Balanced  | true    |
+
+BusinessRule How a percentage split rounds
+Description Each line is rounded to the cent, and whatever is left over after
+Description that is added to the largest line.
+Examples: PercentageSplit
+| Total   | PercentA | PercentB | AmountA | AmountB | Notes                       |
+| 1000.00 | 70       | 30       | 700.00  | 300.00  | Exact                       |
+| 1000.01 | 70       | 30       | 700.01  | 300.00  | The odd cent to the larger  |
+| 100.00  | 33       | 67       | 33.00   | 67.00   | Exact                       |
+| 10.00   | 33       | 33       | 3.34    | 3.30    | Percentages need not total 100 |
+
+Attributes PercentageSplit
+| Attribute | Type    | Default |
+| Total     | Money   | 0.00    |
+| PercentA  | Decimal | 0       |
+| PercentB  | Decimal | 0       |
+| AmountA   | Money   | 0.00    |
+| AmountB   | Money   | 0.00    |
+| Notes     | String  | none    |
+
+# ---------------------------------------------------------------------------
+# Learning a rule
+# ---------------------------------------------------------------------------
+
+Scenario Categorising an uncategorised transaction offers to remember it
+Description This is how the rules get written: by doing the work once. The offer
+Description is made, not taken, because the user is the only one who knows
+Description whether this payee always takes this category.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee              | Account                | Amount |
+| T1  | 2024-01-15 | HARRIS TEETER #231 | Assets:Checking        | -45.00 |
+| T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  |
+When category changed : CategoryChange Vertical
+| Ref         | T1                     |
+| FromAccount | Expenses:Uncategorized |
+| ToAccount   | Expenses:Groceries     |
+Then rule offered is : PayeeRule Vertical
+| Pattern   | HARRIS TEETER #231 |
+| MatchType | Contains           |
+| Payee     | HARRIS TEETER #231 |
+| Category  | Expenses:Groceries |
+| Enabled   | true               |
+# The pattern offered is the whole raw name, which is safe but narrow. The
+# user shortens it to HARRIS TEETER, which is the point of offering it in an
+# editable form rather than just writing it.
+
+Scenario Accepting a learned rule categorises the transactions already there
+Description Twenty years of imported history is mostly uncategorised. A rule is
+Description only useful if it can be applied backwards, so accepting one offers
+Description to do exactly that, and says how many it would change.
+Given the chart of accounts is as previous
+Given postings are : PostingRow
+| Ref | Date       | Payee                    | Account                | Amount |
+| T1  | 2024-01-15 | HARRIS TEETER #231       | Assets:Checking        | -45.00 |
+| T1  | 2024-01-15 | HARRIS TEETER #231       | Expenses:Uncategorized | 45.00  |
+| T2  | 2024-02-20 | HARRIS TEETER #418 CARY  | Assets:Checking        | -62.10 |
+| T2  | 2024-02-20 | HARRIS TEETER #418 CARY  | Expenses:Uncategorized | 62.10  |
+| T3  | 2024-03-02 | SHELL OIL 4471           | Assets:Checking        | -52.00 |
+| T3  | 2024-03-02 | SHELL OIL 4471           | Expenses:Uncategorized | 52.00  |
+When rule applied to existing : PayeeRule Vertical
+| Pattern   | HARRIS TEETER      |
+| MatchType | Contains           |
+| Payee     | Harris Teeter      |
+| Category  | Expenses:Groceries |
+Then would change : RuleApplication Vertical
+| Matched        | 2 |
+| AlreadyCorrect | 0 |
+| Skipped        | 1 |
+Then postings are : PostingRow
+| Ref | Date       | Payee          | Account                | Amount |
+| T1  | 2024-01-15 | Harris Teeter  | Assets:Checking        | -45.00 |
+| T1  | 2024-01-15 | Harris Teeter  | Expenses:Groceries     | 45.00  |
+| T2  | 2024-02-20 | Harris Teeter  | Assets:Checking        | -62.10 |
+| T2  | 2024-02-20 | Harris Teeter  | Expenses:Groceries     | 62.10  |
+| T3  | 2024-03-02 | SHELL OIL 4471 | Assets:Checking        | -52.00 |
+| T3  | 2024-03-02 | SHELL OIL 4471 | Expenses:Uncategorized | 52.00  |
+
+Attributes RuleApplication
+| Attribute      | Type    | Default |
+| Matched        | Integer | 0       |
+| AlreadyCorrect | Integer | 0       |
+| Skipped        | Integer | 0       |
+
+Scenario Applying a rule backwards does not touch a transaction already categorised
+Description A category chosen by hand is a decision, and a rule applied in bulk
+Description does not overrule it. Only Uncategorized postings are changed.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Dining        | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee              | Account                | Amount |
+| T1  | 2024-01-15 | HARRIS TEETER #231 | Assets:Checking        | -45.00 |
+| T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  |
+| T2  | 2024-02-20 | HARRIS TEETER #418 | Assets:Checking        | -8.50  |
+| T2  | 2024-02-20 | HARRIS TEETER #418 | Expenses:Dining        | 8.50   |
+When rule applied to existing : PayeeRule Vertical
+| Pattern   | HARRIS TEETER      |
+| MatchType | Contains           |
+| Payee     | Harris Teeter      |
+| Category  | Expenses:Groceries |
+Then would change : RuleApplication Vertical
+| Matched        | 1 |
+| AlreadyCorrect | 0 |
+| Skipped        | 1 |
+Then postings are : PostingRow
+| Ref | Date       | Payee         | Account            | Amount |
+| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 |
+| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00  |
+| T2  | 2024-02-20 | Harris Teeter | Assets:Checking    | -8.50  |
+| T2  | 2024-02-20 | Harris Teeter | Expenses:Dining    | 8.50   |
+# The payee of T2 is tidied, because that is not a judgement. Its category is
+# left, because it is.
+
+Scenario A rule does not change a reconciled posting
+Description A bulk change that altered a reconciled balance would undo a
+Description reconciliation nobody asked it to touch.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee              | Account                | Amount | Cleared    |
+| T1  | 2024-01-15 | HARRIS TEETER #231 | Assets:Checking        | -45.00 | Reconciled |
+| T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  | Reconciled |
+When rule applied to existing : PayeeRule Vertical
+| Pattern   | HARRIS TEETER      |
+| MatchType | Contains           |
+| Payee     | Harris Teeter      |
+| Category  | Expenses:Groceries |
+Then would change : RuleApplication Vertical
+| Matched        | 0 |
+| AlreadyCorrect | 0 |
+| Skipped        | 1 |
+
+# ---------------------------------------------------------------------------
+# The payee list
+# ---------------------------------------------------------------------------
+
+Scenario The payee list is what the transactions use, not a separate table
+Description There is no list of payees to maintain. The list offered for
+Description autocompletion is the distinct payees of the transactions, most
+Description recently used first, which means it needs no upkeep and can never
+Description disagree with the register.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee         | Account         | Amount |
+| T1  | 2024-01-15 | Harris Teeter | Assets:Checking | -45.00 |
+| T2  | 2024-02-20 | Shell         | Assets:Checking | -52.00 |
+| T3  | 2024-03-02 | Harris Teeter | Assets:Checking | -31.00 |
+Then payee list is : PayeeListEntry
+| Payee         | LastUsed   | Count |
+| Harris Teeter | 2024-03-02 | 2     |
+| Shell         | 2024-02-20 | 1     |
+
+Attributes PayeeListEntry
+| Attribute | Type      | Default    |
+| Payee     | PayeeName | none       |
+| LastUsed  | Date      | 2024-01-01 |
+| Count     | Integer   | 0          |
+
+Scenario Choosing a payee offers the category it took last time
+Description The last category used for a payee is the best guess there is, and
+Description it costs nothing to offer because the register already knows it.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
+| Expenses:Dining    | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee         | Account            | Amount |
+| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 |
+| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00  |
+| T2  | 2024-02-20 | Harris Teeter | Assets:Checking    | -8.50  |
+| T2  | 2024-02-20 | Harris Teeter | Expenses:Dining    | 8.50   |
+When payee typed : PayeeSelect
+| Payee         |
+| Harris Teeter |
+Then category suggested is : CategorySuggestion Vertical
+| Category | Expenses:Dining |
+| BasedOn  | 2024-02-20      |
+
+Attributes CategorySuggestion
+| Attribute | Type        | Default    |
+| Category  | AccountPath | none       |
+| BasedOn   | Date        | 2024-01-01 |
+
+Scenario A payee renamed everywhere keeps its history together
+Description Twenty years of imports leave the same shop under several spellings.
+Description Merging them is a rename applied to every transaction, and it is
+Description what makes a report by payee worth reading.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee              | Account         | Amount |
+| T1  | 2024-01-15 | HARRIS TEETER #231 | Assets:Checking | -45.00 |
+| T2  | 2024-02-20 | Harris Teeter      | Assets:Checking | -62.10 |
+| T3  | 2024-03-02 | harris teeter 418  | Assets:Checking | -31.00 |
+When payees merged : PayeeMerge Vertical
+| NewName | Harris Teeter |
+Then payee list is : PayeeListEntry
+| Payee         | LastUsed   | Count |
+| Harris Teeter | 2024-03-02 | 3     |
+
+Attributes PayeeMerge
+| Attribute | Type      | Default |
+| NewName   | PayeeName |         |
