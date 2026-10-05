@@ -144,4 +144,11 @@ public:
         }
     }
 
+public:
+
+    void examples_datatype_importsource(const std::vector<EnumerationValuesString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_datatype_importsource";
+    }
+
 };

@@ -16,3 +16,6 @@ generated/*
 testdata/
 *.QIF
 *.pdf
+
+# Python bytecode from the comparison tools in tools/.
+__pycache__/

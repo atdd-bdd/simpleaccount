@@ -37,6 +37,32 @@ Description The sides of one transaction.
 | DataType | Minimum | Maximum | Notes                       |
 | Posting  | 2       | 200     | The amounts must sum to zero |
 
+DataType ImportSource
+Description Where an identifier came from. Two files describing one transaction
+Description do not agree on what to call it, so the name of the source travels
+Description with the name of the transaction.
+Examples: EnumerationValues
+| Value | Notes                                      |
+| Ofx   | A FITID, from an OFX or QFX download        |
+| Csv   | Whatever the bank's CSV calls a reference   |
+| Qif   | From a QIF migration, where one is present |
+
+Entity ImportId
+Description An identifier a file gave to one posting, and which file gave it.
+Details Per posting rather than per transaction, because a download describes
+Details one side of it: the bank knows what left the chequing account and has
+Details never heard of the category it was spent on.
+| Attribute | Type         | Default | Notes                                |
+| Source    | ImportSource | Ofx     | Which kind of file said so           |
+| Id        | Text         |         | As that file gave it, unchanged      |
+
+Collection ImportIds
+Description The identifiers one posting has collected. More than one, because a
+Description posting imported from a CSV and later recognised in a QFX has a name
+Description in each, and losing either would make that file import twice.
+| DataType | Minimum | Maximum | Notes                        |
+| ImportId | 0       | 8       | One per source at most       |
+
 Entity Transaction
 Description What the two or more postings share.
 | Attribute | Type           | Default    | Notes                        |
@@ -101,7 +127,10 @@ Then rejected because : Rejection
 | A transaction needs at least two postings     |
 
 Scenario An unbalanced transaction is refused
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
 When postings committed : PostingRow
 | Ref | Date       | Account            | Amount |
 | T1  | 2024-01-15 | Assets:Checking    | -45.00 |
@@ -149,7 +178,10 @@ Attributes RegisterEntryToPostings
 | Notes          | String | none    |
 
 Scenario A payment entered in a register
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
 When register entry committed : RegisterEntry Vertical
 | Account  | Assets:Checking    |
 | Date     | 2024-01-15         |
@@ -342,7 +374,12 @@ Then postings are : PostingRow
 Scenario Split lines that do not add up to the total are refused
 Description The split window shows the shortfall as it is typed; this is what
 Description happens if the entry is committed anyway.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                       | Type    | Placeholder |
+| Assets:Checking            | Bank    | false       |
+| Expenses:Home:Maintenance  | Expense | false       |
+| Expenses:Home:Garden       | Expense | false       |
+| Expenses:Auto:Repairs      | Expense | false       |
 When split entry committed : RegisterEntry Vertical
 | Account | Assets:Checking |
 | Date    | 2024-04-02      |
@@ -436,7 +473,9 @@ Then postings are : PostingRow
 | T1  | 2024-05-01 | Unknown Shop | Expenses:Uncategorized   | 23.75  |
 
 Scenario An uncategorised deposit posts to income
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type | Placeholder |
+| Assets:Checking | Bank | false       |
 When register entry committed : RegisterEntry Vertical
 | Account | Assets:Checking |
 | Date    | 2024-05-02      |

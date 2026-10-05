@@ -276,4 +276,11 @@ public:
         ADD_FAILURE() << "Not implemented: examples_businessrule_what_a_fingerprint_ignores";
     }
 
+public:
+
+    void examples_businessrule_a_row_claims_at_most_one_transaction_already_there(const std::vector<ClaimPairingString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_a_row_claims_at_most_one_transaction_already_there";
+    }
+
 };

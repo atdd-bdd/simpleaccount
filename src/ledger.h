@@ -22,6 +22,11 @@ struct DatedPosting {
     types::Date date;
     types::AccountPath account;
     Money amount;
+    // Which transaction it came from. A balance does not need it, but a report
+    // that asks where the money was does: see the investment-activity rule in
+    // Reports.spectable. Empty where nothing claims a transaction, as for an
+    // opening balance.
+    std::string ref;
 };
 
 class Ledger {

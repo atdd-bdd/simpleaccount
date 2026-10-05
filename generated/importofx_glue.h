@@ -206,4 +206,21 @@ public:
         ADD_FAILURE() << "Not implemented: examples_businessrule_which_half_pairs_with_which_when_several_match";
     }
 
+public:
+
+    void when_the_possible_duplicate_is_answered(const std::vector<PossibleResolutionString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_the_possible_duplicate_is_answered";
+    }
+
+    void examples_businessrule_an_identifier_is_only_an_identifier_to_the_file_that_gave_it(const std::vector<IdentifierScopeString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_an_identifier_is_only_an_identifier_to_the_file_that_gave_it";
+    }
+
+    void examples_businessrule_a_possible_duplicate_is_the_only_disposition_that_waits(const std::vector<PossibleAnswerString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_a_possible_duplicate_is_the_only_disposition_that_waits";
+    }
+
 };

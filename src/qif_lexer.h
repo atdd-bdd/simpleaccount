@@ -205,4 +205,20 @@ inline std::string transfer_account_of(const std::string& l_field) {
     return is_transfer_category(s) ? s.substr(1, s.size() - 2) : std::string();
 }
 
+// A field that will not parse as a date is a continuation of the field before
+// it: QIF has no way to quote a value, so a value containing a newline becomes a
+// line beginning with whatever follows it. Used only to tell the two apart.
+inline bool looks_like_a_date(const std::string& value) {
+    const std::string s = detail::trim(value);
+    if (s.size() < 3) return false;
+    std::size_t digits = 0;
+    bool separator = false;
+    for (char c : s) {
+        if (c >= '0' && c <= '9') { ++digits; continue; }
+        if (c == '/' || c == '\'' || c == '-' || c == ' ') { separator = true; continue; }
+        return false;   // a letter means prose
+    }
+    return separator && digits >= 3;
+}
+
 }  // namespace qif

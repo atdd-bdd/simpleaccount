@@ -26,6 +26,8 @@ Description What was asked for.
 | Depth       | Integer        | 0          |
 | Subtotals   | Boolean        | true       |
 | ZeroRows    | Boolean        | false      |
+| IncludeInvestmentActivity | Boolean | false  |
+| QuickenSigns | Boolean     | false      |
 
 DataType ReportGrouping
 Description What the rows of the report are.
@@ -122,6 +124,52 @@ Attributes ReportTotal
 | TotalIncome   | Money | 0.00    |
 | TotalExpenses | Money | 0.00    |
 | Net           | Money | 0.00    |
+
+Scenario Quicken signs show expenses negative
+Description The same report as above with QuickenSigns asked for, which is how
+Description Quicken writes it: income positive, expenses negative. For reading
+Description a figure against a Quicken report side by side, where having to
+Description negate one column in your head is where mistakes come from.
+Details The rule is uniform and has no special cases: a Quicken expense figure
+Details is the negation of ours, every row, and that holds for a category whose
+Details figure is a credit as well. Measured on the 2021 business report, where
+Details Clear Out Balances reads 127.56 in Quicken and -127.56 here, and
+Details Groceries reads -12,129.60 there and 12,129.60 here.
+Details
+Details The net does not move. Only the sign of the expenses figure does, so
+Details the net is income plus expenses in this mode and income minus expenses
+Details in the other, and both come to the same number.
+Details
+Details Income is untouched because the two conventions already agree on it.
+Details Payee reports keep the other convention whatever this is set to: a
+Details payee report sums a payee's income and expense postings into one
+Details figure, so a payee with both has no sensible sign here, and flipping it
+Details would make the number meaningless rather than differently signed.
+Given the chart of accounts is as previous
+Given postings are as previous
+When report run : ReportSpec Vertical
+| GroupBy      | Category   |
+| From         | 2024-01-01 |
+| To           | 2024-12-31 |
+| Interval     | Whole      |
+| QuickenSigns | true       |
+Then report rows are : ReportRow
+| Account                | Level | Amount   | IsSubtotal |
+| Income                 | 0     | 42025.00 | true       |
+| Income:Interest        | 1     | 25.00    | false      |
+| Income:Salary          | 1     | 42000.00 | false      |
+| Expenses               | 0     | -960.00  | true       |
+| Expenses:Auto          | 1     | -450.00  | true       |
+| Expenses:Auto:Fuel     | 2     | -150.00  | false      |
+| Expenses:Auto:Repairs  | 2     | -300.00  | false      |
+| Expenses:Groceries     | 1     | -500.00  | false      |
+| Expenses:Uncategorized | 1     | -10.00   | false      |
+Then report total is : ReportTotal Vertical
+| TotalIncome   | 42025.00 |
+| TotalExpenses | -960.00  |
+| Net           | 41065.00 |
+# Every figure is the one in the scenario above with the expense rows negated,
+# and the net is unchanged at 41065.00.
 
 Scenario Rows are in alphabetical order within each parent
 Description Not by amount. A report compared with the same report from last
@@ -274,6 +322,234 @@ Then report rows are : ReportRow
 | Account            | Level | Amount | IsSubtotal |
 | Expenses           | 0     | 45.00  | true       |
 | Expenses:Groceries | 1     | 45.00  | false      |
+
+# ---------------------------------------------------------------------------
+# Investment activity
+# ---------------------------------------------------------------------------
+
+BusinessRule Income and expense arising inside an investment account is left out
+Description A spending report answers what was earned and spent. A dividend
+Description reinvested inside a retirement account was neither: no money
+Description reached the household, and the figure is reported on a 1099
+Description rather than budgeted against.
+Details
+Details So the test is not which category was used but where the money was.
+Details A category posting counts when the transaction it belongs to touches
+Details no investment account, and is left out when it touches one. The same
+Details category can do both -- Invest Inc is real income when the dividend
+Details lands in a bank account and is not when it stays in the brokerage --
+Details which is why the category alone cannot decide it.
+Details
+Details Money actually moved out of an investment account into a bank account
+Details is a transfer between two real accounts, so it never reached this
+Details report in the first place; see the transfer scenario above.
+Details
+Details IncludeInvestmentActivity puts it all back, for the reader who wants
+Details the whole picture rather than the household one.
+Examples: InvestmentActivityCase
+| TransactionTouches                     | Category          | Counts | Notes                               |
+| A brokerage account only               | Income:Invest Inc | false  | A dividend reinvested; on the 1099  |
+| A retirement account only              | Income:Invest Inc | false  | Same, and not yet taxable           |
+| A brokerage account and a bank account | Income:Invest Inc | false  | The brokerage side taints it        |
+| A bank account only                    | Income:Invest Inc | true   | A dividend paid out and spendable   |
+| A brokerage account only               | Expenses:Fees     | false  | An advisory fee taken from the fund |
+| A bank account only                    | Expenses:Fees     | true   | A fee paid by cheque                |
+
+Attributes InvestmentActivityCase
+| Attribute          | Type        | Default |
+| TransactionTouches | String      |         |
+| Category           | AccountPath |         |
+| Counts             | Boolean     | false   |
+| Notes              | String      | none    |
+
+Scenario A dividend reinvested inside a retirement account is not income
+Description T2 credits Income:Invest Inc for 1200.00 and the money stayed in
+Description the IRA, so the report shows only the 40.00 that reached the bank.
+Given the chart of accounts is : ChartOfAccounts
+| Path              | Type       | Placeholder |
+| Assets:Checking   | Bank       | false       |
+| Assets:Ken IRA    | Investment | false       |
+| Income            | Income     | true        |
+| Income:Invest Inc | Income     | false       |
+| Income:Salary     | Income     | false       |
+| Expenses          | Expense    | true        |
+| Expenses:Fees     | Expense    | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee        | Account           | Amount   |
+| T1  | 2024-03-01 | Acme Payroll | Assets:Checking   | 5000.00  |
+| T1  | 2024-03-01 | Acme Payroll | Income:Salary     | -5000.00 |
+| T2  | 2024-03-02 | Vanguard     | Assets:Ken IRA    | 1200.00  |
+| T2  | 2024-03-02 | Vanguard     | Income:Invest Inc | -1200.00 |
+| T3  | 2024-03-03 | First Bank   | Assets:Checking   | 40.00    |
+| T3  | 2024-03-03 | First Bank   | Income:Invest Inc | -40.00   |
+| T4  | 2024-03-04 | Vanguard     | Assets:Ken IRA    | -25.00   |
+| T4  | 2024-03-04 | Vanguard     | Expenses:Fees     | 25.00    |
+| T5  | 2024-03-05 | Vanguard     | Assets:Ken IRA    | -3000.00 |
+| T5  | 2024-03-05 | Vanguard     | Assets:Checking   | 3000.00  |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2024-01-01 |
+| To       | 2024-12-31 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account           | Level | Amount  | IsSubtotal |
+| Income            | 0     | 5040.00 | true       |
+| Income:Invest Inc | 1     | 40.00   | false      |
+| Income:Salary     | 1     | 5000.00 | false      |
+Then report total is : ReportTotal Vertical
+| TotalIncome   | 5040.00 |
+| TotalExpenses | 0.00    |
+| Net           | 5040.00 |
+# The 25.00 advisory fee came out of the IRA too, so there are no expense rows
+# at all. T5 is a transfer between two real accounts and was never a candidate.
+
+Scenario Asking for investment activity puts it back
+Description The same range with the whole picture rather than the household
+Description one. Every figure above grows by what was left out.
+Given the chart of accounts is : ChartOfAccounts
+| Path              | Type       | Placeholder |
+| Assets:Checking   | Bank       | false       |
+| Assets:Ken IRA    | Investment | false       |
+| Income            | Income     | true        |
+| Income:Invest Inc | Income     | false       |
+| Income:Salary     | Income     | false       |
+| Expenses          | Expense    | true        |
+| Expenses:Fees     | Expense    | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee        | Account           | Amount   |
+| T1  | 2024-03-01 | Acme Payroll | Assets:Checking   | 5000.00  |
+| T1  | 2024-03-01 | Acme Payroll | Income:Salary     | -5000.00 |
+| T2  | 2024-03-02 | Vanguard     | Assets:Ken IRA    | 1200.00  |
+| T2  | 2024-03-02 | Vanguard     | Income:Invest Inc | -1200.00 |
+| T3  | 2024-03-03 | First Bank   | Assets:Checking   | 40.00    |
+| T3  | 2024-03-03 | First Bank   | Income:Invest Inc | -40.00   |
+| T4  | 2024-03-04 | Vanguard     | Assets:Ken IRA    | -25.00   |
+| T4  | 2024-03-04 | Vanguard     | Expenses:Fees     | 25.00    |
+| T5  | 2024-03-05 | Vanguard     | Assets:Ken IRA    | -3000.00 |
+| T5  | 2024-03-05 | Vanguard     | Assets:Checking   | 3000.00  |
+When report run : ReportSpec Vertical
+| GroupBy                   | Category   |
+| From                      | 2024-01-01 |
+| To                        | 2024-12-31 |
+| Interval                  | Whole      |
+| IncludeInvestmentActivity | true       |
+Then report rows are : ReportRow
+| Account           | Level | Amount  | IsSubtotal |
+| Income            | 0     | 6240.00 | true       |
+| Income:Invest Inc | 1     | 1240.00 | false      |
+| Income:Salary     | 1     | 5000.00 | false      |
+| Expenses          | 0     | 25.00   | true       |
+| Expenses:Fees     | 1     | 25.00   | false      |
+Then report total is : ReportTotal Vertical
+| TotalIncome   | 6240.00 |
+| TotalExpenses | 25.00   |
+| Net           | 6215.00 |
+
+Scenario A transaction touching both a brokerage and a bank is left out
+Description A sale inside the brokerage that sweeps the proceeds to checking
+Description and books a gain in one transaction. The gain belongs to the
+Description brokerage, so the whole of it is left out rather than apportioned:
+Description guessing which posting the investment account is responsible for
+Description would be a worse answer than the one on the 1099.
+Given the chart of accounts is : ChartOfAccounts
+| Path              | Type       | Placeholder |
+| Assets:Checking   | Bank       | false       |
+| Assets:Ken IRA    | Investment | false       |
+| Income            | Income     | true        |
+| Income:Invest Inc | Income     | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee    | Account           | Amount   |
+| T1  | 2024-06-01 | Vanguard | Assets:Ken IRA    | -9000.00 |
+| T1  | 2024-06-01 | Vanguard | Assets:Checking   | 10000.00 |
+| T1  | 2024-06-01 | Vanguard | Income:Invest Inc | -1000.00 |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2024-01-01 |
+| To       | 2024-12-31 |
+| Interval | Whole      |
+Then report total is : ReportTotal Vertical
+| TotalIncome   | 0.00 |
+| TotalExpenses | 0.00 |
+| Net           | 0.00 |
+# No rows at all. The 10000.00 that arrived in checking is a transfer and the
+# 1000.00 gain is the brokerage's, reported on its own statement.
+
+Scenario A payee report leaves out investment activity too
+Description Otherwise the largest payee in the book would be the brokerage,
+Description for money that was never spent anywhere.
+Given the chart of accounts is : ChartOfAccounts
+| Path              | Type       | Placeholder |
+| Assets:Checking   | Bank       | false       |
+| Assets:Ken IRA    | Investment | false       |
+| Income:Invest Inc | Income     | false       |
+| Income:Salary     | Income     | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee        | Account           | Amount   |
+| T1  | 2024-03-01 | Acme Payroll | Assets:Checking   | 5000.00  |
+| T1  | 2024-03-01 | Acme Payroll | Income:Salary     | -5000.00 |
+| T2  | 2024-03-02 | Vanguard     | Assets:Ken IRA    | 1200.00  |
+| T2  | 2024-03-02 | Vanguard     | Income:Invest Inc | -1200.00 |
+When report run : ReportSpec Vertical
+| GroupBy  | Payee      |
+| From     | 2024-01-01 |
+| To       | 2024-12-31 |
+| Interval | Whole      |
+Then payee report rows are : PayeeReportRow
+| Payee        | Amount  | Count |
+| Acme Payroll | 5000.00 | 1     |
+# Vanguard is absent: it had no posting that counts, so it is not a row with
+# zero against it.
+
+Scenario A draw from another book does not reach the spending report
+Description Money drawn from Ken Pugh, Inc. or WarpandByteDesigns is not income
+Description here. That income was earned and already reported in the other
+Description book, and counting it again would state the same earnings twice.
+Description Entered as a transfer to an account for what that entity has paid
+Description across, both sides are real, so nothing has to exclude it: only the
+Description salary was earned in this book.
+Details
+Details The convention, rather than a mechanism. A draw is entered as this
+Details transfer when it happens; nothing rewrites a category on import, and
+Details the import stays a faithful mirror of its source. Twenty years of
+Details history hold two such postings -- 27,500.00 drawn in December 2021
+Details and 10,815.00 returned in August 2022 -- so a mapping in the importer
+Details would be machinery for two lines, and a rule that applied only after
+Details some cutover date would put a step in the middle of the multi-year
+Details report that is the point of keeping the history at all.
+Details
+Details The reimbursement trees that carry the same two names are a different
+Details thing and need nothing: a business expense paid personally debits a
+Details subcategory and the reimbursement credits the parent, so the subtree
+Details cancels itself. Over 2010 to 2026 the Warp And Byte tree nets 230.94
+Details across 3,540 postings. What is left in such a net is a real personal
+Details expense that was never reimbursed, so excluding it would be wrong.
+Given the chart of accounts is : ChartOfAccounts
+| Path                         | Type   | Placeholder |
+| Assets:Ken~Checking          | Bank   | false       |
+| Assets:Due~from~Ken~Pugh~Inc | Asset  | false       |
+| Income                       | Income | true        |
+| Income:Salary~Ken            | Income | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee                      | Account                      | Amount    |
+| T1  | 2021-03-15 | Transfer from Ken Pugh Inc | Assets:Ken~Checking          | 27500.00  |
+| T1  | 2021-03-15 | Transfer from Ken Pugh Inc | Assets:Due~from~Ken~Pugh~Inc | -27500.00 |
+| T2  | 2021-03-31 | Acme Payroll               | Assets:Ken~Checking          | 1800.00   |
+| T2  | 2021-03-31 | Acme Payroll               | Income:Salary~Ken            | -1800.00  |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2021-01-01 |
+| To       | 2021-12-31 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account           | Level | Amount  | IsSubtotal |
+| Income            | 0     | 1800.00 | true       |
+| Income:Salary~Ken | 1     | 1800.00 | false      |
+Then report total is : ReportTotal Vertical
+| TotalIncome   | 1800.00 |
+| TotalExpenses | 0.00    |
+| Net           | 1800.00 |
+# The 27,500.00 is absent, and the balance of Assets:Due from Ken Pugh Inc is
+# where it can be read instead.
 
 # ---------------------------------------------------------------------------
 # By payee

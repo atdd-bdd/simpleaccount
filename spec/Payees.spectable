@@ -105,7 +105,11 @@ Then postings are : PostingRow
 Scenario A rule with no category tidies the name only
 Description Some payees take a different category each time. The rule is still
 Description worth having, because it is what makes the report readable.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
 Given payee rules are : PayeeRules
 | Pattern | MatchType | Payee  | Category |
 | AMAZON  | Contains  | Amazon | none     |
@@ -122,7 +126,11 @@ Then postings are : PostingRow
 Scenario With no rule the raw name is kept
 Description Nothing is invented. The raw name is what the bank said, and it is
 Description kept so that a rule written later can still match it.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
 Given payee rules are : PayeeRules
 | Pattern | MatchType | Payee | Category |
 Given import target is : ImportTarget Vertical
@@ -139,7 +147,11 @@ Scenario The raw name is kept even after a rule has renamed the payee
 Description A rule written next year must be able to match what the bank sent
 Description this year, so the original text is stored alongside the tidied name
 Description rather than replaced by it.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
 Given payee rules are : PayeeRules
 | Pattern       | MatchType | Payee         | Category           |
 | HARRIS TEETER | Contains  | Harris Teeter | Expenses:Groceries |
@@ -184,7 +196,12 @@ Then postings are : PostingRow
 Scenario A disabled rule is passed over
 Description Rules are kept rather than deleted, because a rule that was wrong
 Description once is usually wanted again in a changed form.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Shopping      | Expense | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
 Given payee rules are : PayeeRules
 | Pattern | MatchType | Payee  | Category          | Enabled |
 | AMAZON  | Contains  | Amazon | Expenses:Shopping | false   |
@@ -280,9 +297,23 @@ Scenario A remembered split whose amounts no longer add up reports the shortfall
 Description The payment went up by twenty dollars in January, as it does. The
 Description remembered amounts are offered unchanged and the difference is
 Description shown, for the user to put where it belongs.
-Given the chart of accounts is as previous
-Given payee split rules are as previous
-Given remembered split lines are as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type    | Placeholder |
+| Assets:Checking           | Bank    | false       |
+| Expenses:Home:Interest    | Expense | false       |
+| Expenses:Home:Escrow      | Expense | false       |
+| Liabilities:Mortgage      | Liability | false     |
+| Expenses:Uncategorized    | Expense | false       |
+Given payee split rules are : PayeeSplitRule Vertical
+| Pattern   | FIRST NATIONAL MTG |
+| MatchType | Contains           |
+| Payee     | First National     |
+| Shape     | Amounts            |
+Given remembered split lines are : RememberedSplitLine
+| Category               | Amount  | Memo      |
+| Expenses:Home:Interest | 820.00  | Interest  |
+| Liabilities:Mortgage   | 430.00  | Principal |
+| Expenses:Home:Escrow   | 250.00  | Escrow    |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -382,7 +413,11 @@ Scenario Accepting a learned rule categorises the transactions already there
 Description Twenty years of imported history is mostly uncategorised. A rule is
 Description only useful if it can be applied backwards, so accepting one offers
 Description to do exactly that, and says how many it would change.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee                    | Account                | Amount |
 | T1  | 2024-01-15 | HARRIS TEETER #231       | Assets:Checking        | -45.00 |

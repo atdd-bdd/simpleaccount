@@ -41,32 +41,46 @@ Given books are : Books
 # What belongs to a book, and what does not
 # ---------------------------------------------------------------------------
 
-BusinessRule What is held in a book and what is held for the program
-Description The rule is whether the thing is a fact about money or a
-Description convenience about working. Facts about money are per book, because
-Description mixing them is the mistake two books exist to prevent. Conveniences
-Description are shared, because setting them up twice is pointless.
-Details The bank profiles are the case worth explaining. The same bank sends
-Details the same CSV layout for a business account and a personal one, and
-Details matching its headings is a fact about the bank rather than about
-Details either book. The mapping from a downloaded account number to an
-Details account is per book, because that is a fact about the money.
+BusinessRule Everything a book needs is in the book
+Description A book is self-contained. Anything the program needs in order to
+Description work on a book is stored in that book's own file, even where two
+Description books would hold the same thing.
+Details An earlier reading of this had the bank profiles shared, on the
+Details grounds that the same bank sends the same CSV layout to a business
+Details account and a personal one, so matching its headings is a fact about
+Details the bank rather than about either book. That is true and it is not the
+Details point. Setting a profile up twice is a minute's work; a book that
+Details cannot be opened, copied or carried to another machine on its own is
+Details a permanent cost. Separation is worth more than the minute.
+Details
+Details So almost nothing is stored outside a book. The window's own state --
+Details its size, which columns are where -- is the program's settings rather
+Details than anybody's data, and one thing more is kept beside the books.
+Details
+Details That one thing is the QIF profile, and it is worth saying why it is not
+Details per book when the CSV profile is. A CSV profile describes a bank, and
+Details the same bank writes the same layout to a business account and a
+Details personal one, so duplicating it costs a minute and keeps the books
+Details apart. A QIF profile describes how Quicken itself writes a file -- the
+Details date order, whether the decimal mark is a comma, what to do with trade
+Details history -- and that is one answer for the machine, not one per book.
+Details Importing the same export a second time should not ask again, and
+Details importing from a second Quicken book should not ask at all.
 Examples: BookScope
-| Thing                        | Scope   | Why                                        |
-| Accounts                     | PerBook | A fact about money                         |
-| Transactions and postings    | PerBook |                                            |
-| Categories                   | PerBook | The business chart is not the personal one  |
-| Payees                       | PerBook | Derived from the transactions of the book   |
-| Payee rules                  | PerBook | A business payee takes a business category  |
-| Remembered splits            | PerBook |                                            |
-| Account mappings for OFX     | PerBook | Which account a downloaded number is        |
-| Holdings and prices          | PerBook |                                            |
-| Reconciliations              | PerBook |                                            |
-| Fiscal year start            | PerBook | A business year need not be a personal one  |
-| CSV bank profiles            | Shared  | A fact about the bank, not about the money   |
-| CSV header aliases           | Shared  | Likewise                                    |
-| Window size and column order | Shared  | A convenience                                |
-| The list of recent books     | Shared  |                                             |
+| Thing                        | Scope    | Why                                       |
+| Accounts                     | PerBook  | A fact about money                        |
+| Transactions and postings    | PerBook  |                                           |
+| Categories                   | PerBook  | The business chart is not the personal one |
+| Payees                       | PerBook  | Derived from the transactions of the book  |
+| Payee rules                  | PerBook  | A business payee takes a business category |
+| Remembered splits            | PerBook  |                                           |
+| Account mappings for OFX     | PerBook  | Which account a downloaded number is      |
+| Reconciliations              | PerBook  |                                           |
+| Fiscal year start            | PerBook  | A business year need not be a personal one |
+| CSV bank profiles            | PerBook  | Duplicated rather than shared; see above  |
+| CSV header aliases           | PerBook  | Likewise                                  |
+| The QIF profile              | Machine  | How Quicken writes, not what a book holds |
+| Window size and column order | Settings | The program's, not a book's               |
 
 Attributes BookScope
 | Attribute | Type   | Default |
@@ -273,6 +287,304 @@ Then net worth is : NetWorth Vertical
 | Assets      | 4000.00 |
 | Liabilities | 0.00    |
 | NetWorth    | 4000.00 |
+
+# ---------------------------------------------------------------------------
+# Where a book is kept
+# ---------------------------------------------------------------------------
+
+BusinessRule A book is one SQLite database in one known folder
+Description Every book is a single file with a .sadb name, and they all live in
+Description one folder that the program knows without being told. There is no
+Description "where would you like to save this": a book is named, and the name
+Description decides the file.
+Details The folder is ProgramData\SimpleAccount. It is machine-wide rather than
+Details per-user, so the books on a machine are the books, whoever is signed
+Details in. As many of them as the user makes can live there side by side.
+Details
+Details The program makes the folder itself, the first time a book is created.
+Details That needs no installer and no elevation: a process running as an
+Details ordinary user may create a subfolder of ProgramData and owns what it
+Details puts there.
+Details
+Details Nothing is ever created implicitly. A database is initialised when the
+Details user asks for a new book and at no other time, so opening a book that
+Details is not there is refused rather than quietly made -- a mistyped name
+Details must not look like a book that lost all its transactions.
+Examples: BookFile
+| Action                        | Name     | Effect                                |
+| New book                      | Business | Created, initialised, and opened      |
+| New book, the second time     | Business | Refused; that book already exists     |
+| Open book                     | Business | Opened                                |
+| Open book                     | Typo     | Refused; there is no book of that name |
+| List books                    |          | Every .sadb file in the folder        |
+
+Attributes BookFile
+| Attribute | Type   | Default |
+| Action    | String |         |
+| Name      | Text   | none    |
+| Effect    | String |         |
+
+BusinessRule One table per collection, one row per entity
+Description The schema is not designed separately from this specification: it is
+Description read off it. Every Entity declared anywhere in these files becomes a
+Description row, and the Collection it belongs to becomes the table. Its
+Description attributes become the columns, with the same names and the same
+Description defaults.
+Details So there is nothing to keep in step by hand. Adding an attribute to an
+Details Entity adds a column; declaring a new Entity that belongs in a book
+Details adds a table. The check that the two have not drifted is mechanical:
+Details every Entity in these files appears below, in one of the three
+Details groups, and a reviewer can see at a glance that none was forgotten.
+Details
+Details Which group an Entity is in follows from the rule above. Nearly
+Details everything is in the book's own file. One thing sits beside the books,
+Details because it describes Quicken rather than any book of ours. And what is
+Details only ever being looked at is stored nowhere: a statement being
+Details imported, a Quicken report being compared against. Those belong to the
+Details act of importing rather than to a book.
+Details
+Details Holdings are the exception and are marked "not yet" rather than left
+Details out: investments are carried as balances only in this round, so there
+Details is nothing to store per security. The row stays in the table above so
+Details that the count of entities still matches and nobody has to wonder
+Details whether it was forgotten.
+Examples: EntityStorage
+| Entity            | Collection          | Table                 | Where       |
+| Account           | ChartOfAccounts     | accounts              | The book    |
+| Transaction       |                     | transactions          | The book    |
+| Posting           | Postings            | postings              | The book    |
+| ImportId          | ImportIds           | posting_import_ids    | The book    |
+| Holding           | Holdings            |                       | Not yet     |
+| PayeeRule         | PayeeRules          | payee_rules           | The book    |
+| PayeeSplitRule    |                     | payee_split_rules     | The book    |
+| AccountMapping    |                     | ofx_account_mappings  | The book    |
+| TransferMatchRule | TransferMatchRules  | transfer_match_rules  | The book    |
+| Book              | Books               |                       | The folder  |
+| CsvProfile        |                     | csv_profiles          | The book    |
+| HeaderMatch       | HeaderMatches       | csv_header_matches    | The book    |
+| QifProfile        |                     | qif_profiles          | Beside      |
+| OfxStatement      |                     |                       | Nowhere     |
+| OfxTransaction    | OfxTransactions     |                       | Nowhere     |
+| QuickenReport     |                     |                       | Nowhere     |
+
+Attributes EntityStorage
+| Attribute  | Type   | Default |
+| Entity     | String |         |
+| Collection | String | none    |
+| Table      | String | none    |
+| Where      | String |         |
+
+BusinessRule What a book's file holds besides its entities
+Description Two things that are not entities and are needed anyway: which
+Description version the schema is, and the book's own name and fiscal year.
+Details The version is read before anything else. A file written by a later
+Details version of the program is refused and left untouched, because the
+Details alternative is a program guessing at columns it does not know and
+Details writing the book back in a shape that loses them. Being told to
+Details upgrade is a better morning than finding a silently emptied register.
+Details
+Details The Book entity is the odd one out: there is no table of books inside a
+Details book, and no table of books anywhere. The folder is the collection --
+Details one file per book -- and a book is chosen from the file names in it
+Details with the extension taken off, so the list is made by looking rather
+Details than maintained.
+Details
+Details What a book stores about itself is a single row in a table of its own.
+Details A text file of the same name beside the database would do as well, and
+Details the reason to prefer the row is that there is then one file per book:
+Details copying it, backing it up or moving it to another machine cannot take
+Details half of a book, and there is no second file to fall out of step.
+Details
+Details Amounts are stored as whole cents in an integer column. A binary
+Details floating-point column cannot hold 0.10, and a book that cannot add up
+Details is the one thing this program may not be.
+Examples: BookInfrastructure
+| Table  | Columns                        | Notes                              |
+| schema | version                        | One row; read before anything else |
+| book   | name, fiscal_year_start        | One row; the Book entity's own data |
+
+Attributes BookInfrastructure
+| Attribute | Type   | Default |
+| Table     | String |         |
+| Columns   | String |         |
+| Notes     | String | none    |
+
+BusinessRule How an attribute becomes a column
+Description Mechanically, by its type, so that no column is a judgement call.
+Examples: ColumnType
+| AttributeType  | Column  | Notes                                        |
+| Money          | INTEGER | Whole cents; never a floating-point column   |
+| Date           | TEXT    | ISO, so it sorts and compares as text        |
+| Integer        | INTEGER |                                              |
+| Boolean        | INTEGER | 0 or 1                                       |
+| Text           | TEXT    |                                              |
+| AccountPath    | TEXT    | The path, which is the account's identity    |
+| TransactionRef | TEXT    |                                              |
+| An enumeration | TEXT    | The value's own name, as this file writes it |
+
+Attributes ColumnType
+| Attribute     | Type   | Default |
+| AttributeType | String |         |
+| Column        | String |         |
+| Notes         | String | none    |
+
+BusinessRule The QIF profiles live in one file beside the books, under a name
+Description Named, so there can be more than one: an export made years ago may
+Description have a different date order from one made today, and being able to
+Description keep both beats answering the question again from memory.
+Details The file is settings.sadata in the same folder, and the extension is
+Details what keeps it out of the way: a book is a .sadb file, so the list of
+Details books does not offer this one and a stray file is never mistaken for a
+Details book. It carries its own schema version, read first, for the same
+Details reason a book does.
+Details
+Details It is made on demand, like the folder. A machine that has never
+Details imported a QIF file has no such file and needs none.
+Examples: BesideTheBooks
+| File            | Holds                     | InBookList |
+| Business.sadb   | A book                    | Yes        |
+| Personal.sadb   | A book                    | Yes        |
+| settings.sadata | The QIF profiles, by name | No         |
+| notes.txt       | Nothing of ours           | No         |
+
+Attributes BesideTheBooks
+| Attribute  | Type   | Default |
+| File       | Text   |         |
+| Holds      | String |         |
+| InBookList | String |         |
+
+Scenario A QIF profile is remembered under a name and found again
+Description So that importing the same export twice does not ask twice, and
+Description importing from another Quicken book does not ask at all.
+Given no settings file exists
+When a qif profile is saved named : QifProfileSaved Vertical
+| Name           | Quicken 2026 |
+| DateOrder      | MDY          |
+| DecimalComma   | false        |
+| InvestmentMode | CashOnly     |
+Then the qif profiles are : QifProfileRow
+| Name         | DateOrder | DecimalComma | InvestmentMode |
+| Quicken 2026 | MDY       | false        | CashOnly       |
+Then the book names are : BookNameRow
+| Name |
+# The settings file is not a book, so it is not offered as one.
+
+Attributes QifProfileSaved
+| Attribute      | Type           | Default  |
+| Name           | Text           |          |
+| DateOrder      | DateOrder      | MDY      |
+| DecimalComma   | Boolean        | false    |
+| InvestmentMode | InvestmentMode | CashOnly |
+
+Attributes QifProfileRow
+| Attribute      | Type           | Default  |
+| Name           | Text           |          |
+| DateOrder      | DateOrder      | MDY      |
+| DecimalComma   | Boolean        | false    |
+| InvestmentMode | InvestmentMode | CashOnly |
+
+Scenario A new book is initialised empty
+Description No accounts, no transactions, and a schema version. An empty book is
+Description a working book: it opens, it reports nothing, and it balances.
+When a new book is made named : BookName Vertical
+| Name | Business |
+Then the book opened is : OpenedBook Vertical
+| Name         | Business |
+| Accounts     | 0        |
+| Transactions | 0        |
+| Balances     | true     |
+
+Attributes BookName
+| Attribute | Type | Default |
+| Name      | Text |         |
+
+Attributes OpenedBook
+| Attribute    | Type    | Default |
+| Name         | Text    |         |
+| Accounts     | Integer | 0       |
+| Transactions | Integer | 0       |
+| Balances     | Boolean | true    |
+
+Scenario A book written and opened again is the same book
+Description The round trip is the whole of what storage has to do, so it is
+Description stated as one scenario over a book with something in it: a chart,
+Description a transaction with two postings, and a cleared marker on one side.
+Given a new book named Business
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee         | Account            | Amount | Memo  | Cleared   |
+| T1  | 2026-01-15 | Harris Teeter | Assets:Checking    | -45.00 | none  | Cleared   |
+| T1  | 2026-01-15 | Harris Teeter | Expenses:Groceries | 45.00  | Apples | Uncleared |
+When the book is saved and opened again
+Then the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
+Then postings are : PostingRow
+| Ref | Date       | Payee         | Account            | Amount | Memo  | Cleared   |
+| T1  | 2026-01-15 | Harris Teeter | Assets:Checking    | -45.00 | none  | Cleared   |
+| T1  | 2026-01-15 | Harris Teeter | Expenses:Groceries | 45.00  | Apples | Uncleared |
+# Every field survives, including the per-posting memo and the cleared marker
+# that is on one side and not the other.
+
+Scenario Opening a book that is not there is refused
+Description And says so, rather than making one. A mistyped name is the likely
+Description cause, and an empty book would look like a catastrophe.
+When a book is opened named : BookName Vertical
+| Name | Typo |
+Then the book is refused saying
+"""
+There is no book named Typo
+"""
+
+Scenario Making a book that already exists is refused
+Description The existing one is not touched. Overwriting a book of twenty years
+Description of history because a name was reused is not a mistake worth making
+Description available.
+Given a new book named Business
+When a new book is made named : BookName Vertical
+| Name | Business |
+Then the book is refused saying
+"""
+A book named Business already exists
+"""
+
+Scenario A book from a later version of the program is refused
+Description Rather than opened and written back in a shape that drops whatever
+Description the later version added.
+Given a book whose schema version is 99
+When a book is opened named : BookName Vertical
+| Name | Business |
+Then the book is refused saying
+"""
+Business was written by a later version of SimpleAccount
+"""
+
+Scenario The books in the folder are listed by name
+Description What the open dialog offers. The name is the file name without its
+Description extension, because the extension is not the user's business.
+Given the books folder holds : BookFileList
+| FileName       |
+| Business.sadb  |
+| Personal.sadb  |
+| notes.txt      |
+When the books are listed
+Then the book names are : BookNameRow
+| Name     |
+| Business |
+| Personal |
+# notes.txt is not a book and is not offered as one.
+
+Attributes BookFileList
+| Attribute | Type | Default |
+| FileName  | Text |         |
+
+Attributes BookNameRow
+| Attribute | Type | Default |
+| Name      | Text |         |
 
 # ---------------------------------------------------------------------------
 # Opening and working in two books

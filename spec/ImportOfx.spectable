@@ -263,6 +263,37 @@ Examples: EnumerationValues
 | Matched   | Matches one entered by hand; that one is cleared instead    |
 | Possible  | Looks like one already present, but not certainly; asks     |
 
+BusinessRule An identifier is only an identifier to the file that gave it
+Description A CSV and a QFX describing the same transaction do not agree on what
+Description to call it. So an identifier is stored with the name of the source
+Description that gave it, and the identifier test applies only where the source
+Description matches the import being done. Against any other source the posting
+Description counts as having no identifier at all, and the weaker tests decide.
+Details Without this, importing a QFX after a CSV finds no FITID anywhere and
+Details calls the whole statement new, duplicating a month of transactions.
+Details With a single identifier field instead of one per source it is no
+Details better the other way round: stamping the FITID over the CSV reference
+Details would make the next CSV import offer every row again.
+Details
+Details So a posting collects identifiers rather than having one. A posting
+Details imported from a CSV and later recognised in a QFX carries both, and
+Details re-importing either file does nothing.
+Examples: IdentifierScope
+| PostingCarries        | ImportIs | TestOneApplies | Then                                 |
+| Nothing               | Ofx      | No               | The weaker tests decide            |
+| An Ofx id, the same   | Ofx      | Yes              | Duplicate                          |
+| An Ofx id, a different one | Ofx | No               | The weaker tests decide            |
+| A Csv id only         | Ofx      | No               | As if it had none; may match       |
+| A Csv id only         | Csv      | Yes, if it is the same | Duplicate                    |
+| A Csv id and an Ofx id | Ofx     | Yes, on the Ofx one | Duplicate                       |
+
+Attributes IdentifierScope
+| Attribute      | Type   | Default |
+| PostingCarries | String |         |
+| ImportIs       | String |         |
+| TestOneApplies | String |         |
+| Then           | String |         |
+
 BusinessRule How a downloaded transaction is identified
 Description In order. The first test that applies decides.
 Details The FITID test is what makes a second import of the same file do
@@ -270,9 +301,15 @@ Details nothing. It is scoped to the account, because two banks may issue the
 Details same identifier.
 Details The match test is what stops a check appearing twice: once when it was
 Details written, and again when it cleared.
+Details
+Details Tests two to four have no identifier behind them, so they are subject to
+Details the claim-pairing rule in ImportCsv: each downloaded transaction claims
+Details at most one of those already there, and a claimed one is not available
+Details to claim again. Test one needs none of that, because a FITID is unique
+Details within the account and cannot be claimed twice.
 Examples: DispositionRule
 | Test | Condition                                                             | Disposition |
-| 1    | A posting in this account already carries this FITID                  | Duplicate   |
+| 1    | A posting in this account carries this FITID, from an Ofx import       | Duplicate   |
 | 2    | An uncleared posting in this account has the same amount and check number | Matched  |
 | 3    | An uncleared posting in this account has the same amount within five days | Matched  |
 | 4    | A cleared posting in this account has the same amount and date, no FITID | Possible |
@@ -414,7 +451,11 @@ Scenario The same amount six days apart is not matched
 Description Five days is the window. Beyond it the two are taken to be two
 Description separate visits to the same shop for the same amount, which is
 Description commoner than a bank taking a week to post.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
 Given postings are : ImportedPostingRow
 | Ref | Date       | Payee         | Account            | Amount | Cleared   | FitId |
 | T1  | 2024-01-14 | Harris Teeter | Assets:Checking    | -45.00 | Uncleared | none  |
@@ -469,6 +510,131 @@ Then postings are : ImportedPostingRow
 | T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  | Uncleared | none        |
 # The payee is the raw NAME from the file. Tidying it is the business of
 # Payees, so that this file has one job.
+
+# ---------------------------------------------------------------------------
+# Resolving what the import was not sure about
+# ---------------------------------------------------------------------------
+
+BusinessRule A possible duplicate is the only disposition that waits
+Description The other three settle themselves. A new transaction is created, a
+Description duplicate is ignored, a match clears the one already there. A
+Description possible duplicate is the case the program cannot settle, so it is
+Description the one that asks, and nothing happens to it until it is answered.
+Details There are two answers and both are ordinary. Either it is the same
+Details transaction, in which case the one already in the book is the
+Details transaction and the downloaded row only tells us the bank has seen it;
+Details or it is a second one, in which case the bank is describing something
+Details the book does not have.
+Details
+Details An import left unanswered changes nothing, which is what makes it safe
+Details to put down and come back to. A possible duplicate quietly created
+Details would double a transaction and one quietly discarded would lose it.
+Details Over twenty years both happen, and the second is worse: an extra row is
+Details seen and deleted, a missing one is found a year later or never.
+Examples: PossibleAnswer
+| Answer     | TheOneAlreadyThere                       | TheDownloadedRow            |
+| TheSame    | Cleared, and stamped with the identifier | Nothing is created          |
+| Different  | Nothing                                  | A transaction is created    |
+| Unanswered | Nothing                                  | Nothing; it is asked again  |
+
+Attributes PossibleAnswer
+| Attribute          | Type   | Default |
+| Answer             | String |         |
+| TheOneAlreadyThere | String |         |
+| TheDownloadedRow   | String |         |
+
+Scenario Answering that a possible duplicate is the same transaction
+Description The one already in the book is the transaction. It is cleared and
+Description stamped, so the next import of the same file knows it outright
+Description rather than asking again.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : ImportedPostingRow
+| Ref | Date       | Payee         | Account            | Amount | Cleared   | FitId |
+| T1  | 2026-02-05 | Harris Teeter | Assets:Checking    | -88.20 | Cleared   | none  |
+| T1  | 2026-02-05 | Harris Teeter | Expenses:Groceries | 88.20  | Uncleared | none  |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId | Name          | Memo | CheckNum |
+| DEBIT   | 2026-02-05 | -88.20 | F003  | HARRIS TEETER | none | none     |
+When the possible duplicate is answered : PossibleResolution Vertical
+| FitId  | F003    |
+| Answer | TheSame |
+Then postings are : ImportedPostingRow
+| Ref | Date       | Payee         | Account            | Amount | Cleared   | FitId |
+| T1  | 2026-02-05 | Harris Teeter | Assets:Checking    | -88.20 | Cleared   | F003  |
+| T1  | 2026-02-05 | Harris Teeter | Expenses:Groceries | 88.20  | Uncleared | none  |
+# No transaction was created. T1 now carries F003 on the posting in the account
+# the statement was for, so reading the same file again reports a duplicate and
+# asks nothing. The other side carries none: the bank has never heard of the
+# category.
+
+Attributes PossibleResolution
+Description Which offered row is being answered, and what the answer is.
+| Attribute | Type  | Default |
+| FitId     | FitId |         |
+| Answer    | Text  | TheSame |
+
+Scenario Answering that a possible duplicate is a different transaction
+Description Two genuine visits to one shop on one day for one amount. The bank
+Description is describing the second, which the book does not have.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : ImportedPostingRow
+| Ref | Date       | Payee         | Account            | Amount | Cleared   | FitId |
+| T1  | 2026-02-05 | Harris Teeter | Assets:Checking    | -88.20 | Cleared   | none  |
+| T1  | 2026-02-05 | Harris Teeter | Expenses:Groceries | 88.20  | Uncleared | none  |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId | Name          | Memo | CheckNum |
+| DEBIT   | 2026-02-05 | -88.20 | F003  | HARRIS TEETER | none | none     |
+When the possible duplicate is answered : PossibleResolution Vertical
+| FitId  | F003      |
+| Answer | Different |
+Then postings are : ImportedPostingRow
+| Ref | Date       | Payee         | Account                | Amount | Cleared   | FitId |
+| T1  | 2026-02-05 | Harris Teeter | Assets:Checking        | -88.20 | Cleared   | none  |
+| T1  | 2026-02-05 | Harris Teeter | Expenses:Groceries     | 88.20  | Uncleared | none  |
+| T2  | 2026-02-05 | HARRIS TEETER | Assets:Checking        | -88.20 | Cleared   | F003  |
+| T2  | 2026-02-05 | HARRIS TEETER | Expenses:Uncategorized | 88.20  | Uncleared | none  |
+# The second is created like any new row, its category unknown until a payee
+# rule or the user says otherwise. F003 is on the new one and not on T1, so a
+# later file naming F003 is a duplicate of the second visit only.
+
+Scenario An unanswered possible duplicate changes nothing and is asked again
+Description Which is what makes it safe to put an import down and come back to
+Description it. Nothing is created and nothing is stamped, so reading the file
+Description again reaches the same question.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : ImportedPostingRow
+| Ref | Date       | Payee         | Account            | Amount | Cleared   | FitId |
+| T1  | 2026-02-05 | Harris Teeter | Assets:Checking    | -88.20 | Cleared   | none  |
+| T1  | 2026-02-05 | Harris Teeter | Expenses:Groceries | 88.20  | Uncleared | none  |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId | Name          | Memo | CheckNum |
+| DEBIT   | 2026-02-05 | -88.20 | F003  | HARRIS TEETER | none | none     |
+Then import summary is : ImportSummary Vertical
+| Possible | 1 |
+Then postings are : ImportedPostingRow
+| Ref | Date       | Payee         | Account            | Amount | Cleared   | FitId |
+| T1  | 2026-02-05 | Harris Teeter | Assets:Checking    | -88.20 | Cleared   | none  |
+| T1  | 2026-02-05 | Harris Teeter | Expenses:Groceries | 88.20  | Uncleared | none  |
+# Unchanged, and F003 is nowhere, so the same file asks the same question. An
+# import that was not answered is not a decision.
 
 # ---------------------------------------------------------------------------
 # Two downloaded transactions that are one transfer
@@ -649,8 +815,16 @@ Description The boundary. Two days is the window, so a third day makes these
 Description two ordinary transactions. The amounts and accounts still look like
 Description a transfer, which is the point: the window is what stops a pair of
 Description unrelated payments being merged on the strength of that alone.
-Given the chart of accounts is as previous
-Given account mappings are as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking Prime  | Bank       | false       |
+| Liabilities:WF Card    | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+| Income:Uncategorized   | Income     | false       |
+Given account mappings are : AccountMapping
+| BankId    | OfxAccountId  | AccountPath           |
+| 053000219 | 1023711843105 | Assets:Checking Prime |
+|           | 4111111111111333 | Liabilities:WF Card |
 When statements imported : OfxImportFile
 | OfxAccountId     | TrnType | DatePosted | Amount  | FitId | Name       |
 | 1023711843105    | DEBIT   | 2026-08-04 | -250.00 | D1    | A PAYMENT  |
@@ -666,8 +840,16 @@ Then import summary is : ImportSummary Vertical
 
 Scenario Two days apart is proposed
 Description The other side of the boundary, and the real autopay from the files.
-Given the chart of accounts is as previous
-Given account mappings are as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking Prime  | Bank       | false       |
+| Liabilities:WF Card    | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+| Income:Uncategorized   | Income     | false       |
+Given account mappings are : AccountMapping
+| BankId    | OfxAccountId  | AccountPath           |
+| 053000219 | 1023711843105 | Assets:Checking Prime |
+|           | 4111111111111333 | Liabilities:WF Card |
 When statements imported : OfxImportFile
 | OfxAccountId     | TrnType | DatePosted | Amount  | FitId | Name       |
 | 1023711843105    | DEBIT   | 2026-08-03 | -250.00 | D3    | A PAYMENT  |
@@ -683,8 +865,16 @@ Description accounts, and offers approve, reject, and approve-and-remember.
 Details A remembered rule can approve a later pair without asking again, and
 Details that is the only path that pairs anything silently. It exists because
 Details the user said so once, about those two payees in those two accounts.
-Given the chart of accounts is as previous
-Given account mappings are as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking Prime  | Bank       | false       |
+| Liabilities:WF Card    | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+| Income:Uncategorized   | Income     | false       |
+Given account mappings are : AccountMapping
+| BankId    | OfxAccountId  | AccountPath           |
+| 053000219 | 1023711843105 | Assets:Checking Prime |
+|           | 4111111111111333 | Liabilities:WF Card |
 When statements imported : OfxImportFile
 | OfxAccountId     | TrnType | DatePosted | Amount   | FitId | Name                        |
 | 1023711843105    | DEBIT   | 2026-08-03 | -3508.09 | C1    | WF Credit Card AUTO PAY     |
@@ -713,8 +903,16 @@ Attributes ConfirmationRow
 Scenario Rejecting a candidate leaves two transactions
 Description The user knows these were two separate payments. Nothing is merged,
 Description and each gets the Uncategorized side it would have had anyway.
-Given the chart of accounts is as previous
-Given account mappings are as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking Prime  | Bank       | false       |
+| Liabilities:WF Card    | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+| Income:Uncategorized   | Income     | false       |
+Given account mappings are : AccountMapping
+| BankId    | OfxAccountId  | AccountPath           |
+| 053000219 | 1023711843105 | Assets:Checking Prime |
+|           | 4111111111111333 | Liabilities:WF Card |
 When statements imported : OfxImportFile
 | OfxAccountId     | TrnType | DatePosted | Amount   | FitId | Name            |
 | 1023711843105    | DEBIT   | 2026-08-03 | -500.00  | C9    | PAYMENT TO SHOP |
@@ -788,8 +986,16 @@ Description Two transactions in one account with opposite amounts is a payment
 Description and a refund, or a mistake, and either way it is not a transfer.
 Description The rule in Transactions refuses a transaction posting twice to one
 Description account, and this is where that is kept from arising.
-Given the chart of accounts is as previous
-Given account mappings are as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking Prime  | Bank    | false       |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Uncategorized | Expense | false       |
+| Income:Uncategorized   | Income  | false       |
+Given account mappings are : AccountMapping
+| BankId    | OfxAccountId  | AccountPath           |
+| 053000219 | 1023711843105 | Assets:Checking Prime |
+| 053000219 | 1023711843112 | Assets:Checking       |
 When statements imported : OfxImportFile
 | OfxAccountId  | TrnType | DatePosted | Amount  | FitId | Name     |
 | 1023711843105 | DEBIT   | 2026-08-03 | -120.00 | S1    | A SHOP   |
@@ -802,8 +1008,16 @@ Scenario A candidate is not proposed when one half matches a transaction already
 Description The matching rules of this file run first. A downloaded transaction
 Description that clears something already in the book is accounted for, and is
 Description not then also offered as half of a transfer.
-Given the chart of accounts is as previous
-Given account mappings are as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking Prime  | Bank    | false       |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Uncategorized | Expense | false       |
+| Income:Uncategorized   | Income  | false       |
+Given account mappings are : AccountMapping
+| BankId    | OfxAccountId  | AccountPath           |
+| 053000219 | 1023711843105 | Assets:Checking Prime |
+| 053000219 | 1023711843112 | Assets:Checking       |
 Given postings are : ImportedPostingRow
 | Ref | Date       | Payee     | Account                | Amount  | Cleared   | FitId |
 | T0  | 2026-08-02 | A Payment | Assets:Checking Prime  | -750.00 | Uncleared | none  |
@@ -871,7 +1085,12 @@ Scenario A remembered rule pairs the next month without asking
 Description The same two names, a different amount and a different month. The
 Description candidate is approved automatically and still appears in the import
 Description summary, so that it is visible rather than silent.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking Prime  | Bank       | false       |
+| Liabilities:WF Card    | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+| Income:Uncategorized   | Income     | false       |
 Given account mappings are : AccountMapping
 | BankId    | OfxAccountId     | AccountPath           |
 | 053000219 | 1023711843105    | Assets:Checking Prime |
@@ -895,9 +1114,19 @@ Scenario A remembered rule still requires the amounts to be equal and opposite
 Description The rule says these two payees in these two accounts are worth
 Description pairing. It does not say any two transactions between them are one
 Description transfer, so the arithmetic is still checked.
-Given the chart of accounts is as previous
-Given account mappings are as previous
-Given transfer match rules are as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking Prime  | Bank       | false       |
+| Liabilities:WF Card    | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+| Income:Uncategorized   | Income     | false       |
+Given account mappings are : AccountMapping
+| BankId    | OfxAccountId     | AccountPath           |
+| 053000219 | 1023711843105    | Assets:Checking Prime |
+|           | 4111111111111333 | Liabilities:WF Card   |
+Given transfer match rules are : TransferMatchRules
+| FromAccount           | FromPattern             | ToAccount           | ToPattern         |
+| Assets:Checking Prime | WF Credit Card AUTO PAY | Liabilities:WF Card | AUTOMATIC PAYMENT |
 When statements imported : OfxImportFile
 | OfxAccountId     | TrnType | DatePosted | Amount   | FitId | Name                        |
 | 1023711843105    | DEBIT   | 2026-09-01 | -2026.95 | C2    | WF Credit Card AUTO PAY     |
@@ -910,8 +1139,16 @@ Scenario Candidates are shown before anything is written
 Description The import is one decision. The candidates, the duplicates and the
 Description matches are all presented together, and the file is committed once
 Description the user has been through them.
-Given the chart of accounts is as previous
-Given account mappings are as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking Prime  | Bank       | false       |
+| Liabilities:WF Card    | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+| Income:Uncategorized   | Income     | false       |
+Given account mappings are : AccountMapping
+| BankId    | OfxAccountId     | AccountPath           |
+| 053000219 | 1023711843105    | Assets:Checking Prime |
+|           | 4111111111111333 | Liabilities:WF Card   |
 When statements imported : OfxImportFile
 | OfxAccountId     | TrnType | DatePosted | Amount   | FitId | Name                        |
 | 1023711843105    | DEBIT   | 2026-09-01 | -2026.95 | C2    | WF Credit Card AUTO PAY     |
@@ -978,7 +1215,10 @@ Scenario A disagreement with the stated balance is reported
 Description The usual cause is a transaction entered by hand that the bank has
 Description not seen, wrongly marked cleared. The number is what makes it
 Description findable, so it is shown rather than hidden.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Uncategorized | Expense | false       |
 Given postings are : ImportedPostingRow
 | Ref | Date       | Account         | Amount  | Cleared | FitId |
 | T0  | 2024-01-01 | Assets:Checking | 1750.00 | Cleared | none  |
@@ -996,7 +1236,10 @@ Then balance check is : LedgerBalanceResult Vertical
 Scenario Only cleared postings count towards the stated balance
 Description A check written but not yet presented is in the register and not at
 Description the bank. Counting it would make every import look wrong.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Uncategorized | Expense | false       |
 Given postings are : ImportedPostingRow
 | Ref | Date       | Account         | Amount  | Cleared   | FitId |
 | T0  | 2024-01-01 | Assets:Checking | 1750.00 | Cleared   | none  |

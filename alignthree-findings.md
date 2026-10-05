@@ -213,6 +213,62 @@ each scenario that needs it. That is the right way to write it anyway, and it is
 what the feature exists for -- which is an argument for the analyzer pointing at
 it.
 
+### 5a. Measured scale, and a second failure mode
+
+Revisited later in the same project, once there was enough of a specification to
+count. There were **165 uses of `as previous` across twelve files**, and the
+behaviour divides by whether the file has a `Background`:
+
+| File | `as previous` | Background | Effect |
+|---|---|---|---|
+| UserInterface | 34 | yes | resolves to the Background |
+| Reports | 26 | yes | resolves to the Background |
+| ImportOfx | 21 | **no** | establishes nothing |
+| Accounts | 21 | yes | resolves to the Background |
+| Investments | 20 | yes | resolves to the Background |
+| ImportQif | 17 | **no** | establishes nothing |
+| TransactionRegister | 12 | **no** | establishes nothing |
+| Books | 11 | yes | resolves to the Background |
+| Payees | 8 | **no** | establishes nothing |
+| ImportCsv | 5 | **no** | establishes nothing |
+| Transactions | 4 | **no** | establishes nothing |
+| AcceptanceAgainstQuicken | 2 | **no** | establishes nothing |
+
+**72 of the 165 established nothing at all**, in the six files with no
+`Background` to fall back on. Spelling those tables out fixed three test
+failures in `ImportQif` alone and turned a long-standing puzzle into an obvious
+one: seven invoice scenarios had been throwing `an account path is required`,
+because `Given import target is as previous` left the target empty and the
+importer was then handed `""` as an account path. That read as a defect in the
+importer for some time.
+
+The second failure mode is worse than an empty table, because it is silent in
+the other direction. In a file that **does** have a `Background`, a scenario that
+declares its own table, followed by a scenario saying `as previous`, gets the
+**Background's** table rather than the one immediately above -- which is not what
+the words say. A scenario can therefore *pass for the wrong reason*: it is
+exercising data the author did not intend. That happened here when a new
+`Background` was added mid-file and five scenarios downstream changed behaviour
+without being touched, one of which had previously been passing against the
+wrong tables.
+
+So the two readings of `as previous` -- "the Background" and "the table just
+above" -- are both plausible to a reader, and the generator implements the first
+only by side effect of inlining Backgrounds. Either reading would be defensible
+if it were stated and checked; what is not defensible is a given that compiles to
+an empty function.
+
+**Suggested fix, refined:** reject `as previous` outright, or require it to name
+what it refers to (`as previous Background`, `as in <scenario>`). A no-arg glue
+method that establishes nothing should not be reachable from a passing build. In
+the meantime a lint that flags every `as previous` in a file with no `Background`
+would catch the clear half of this for nothing.
+
+**What was done here:** every `as previous` in the six Background-less files was
+replaced by the table it means, mechanically, by copying the nearest preceding
+table of the same kind. The five files with a `Background` were left alone,
+because inlining there would change meaning rather than restore it.
+
 ---
 
 ## 6. Something that works well and is worth keeping

@@ -978,7 +978,13 @@ Then comparison summary is : ComparisonSummary Vertical
 Scenario Importing the QFX twice changes no figure in the report
 Description The idempotency rule of ImportOfx, checked where it matters: in a
 Description report rather than in a count of rows.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                     | Type       | Placeholder |
+| Assets:Portfolio:Cash    | Investment | false       |
+| Income                   | Income     | true        |
+| Income:Dividends         | Income     | false       |
+| Expenses                 | Expense    | true        |
+| Expenses:Investment:Fees | Expense    | false       |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -1048,7 +1054,10 @@ Scenario The personal book covers nine years, not twenty
 Description Worth stating because the whole-period comparison for the personal
 Description book is a report of 2017 onwards and a figure for 2010 in it would
 Description be a fault rather than history.
-Given migrated books are as previous
+Given migrated books are : MigratedBook
+| Name     | SourceFile        | FirstDate  | LastDate   |
+| business | pughkilleen.QIF   | 2005-06-17 | 2026-01-31 |
+| personal | kenpugh.QIF       | 2017-01-02 | 2025-12-09 |
 Then book extents are : MigratedBook CompareOnly
 | Name     | FirstDate  | LastDate   |
 | business | 2005-06-17 | 2026-01-31 |

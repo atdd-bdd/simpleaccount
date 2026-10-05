@@ -183,9 +183,14 @@ LShopping
 """
 When qif file imported
 Then accounts created are : ChartOfAccounts
-| Path                   | Type       | Placeholder |
-| Assets:Checking        | Bank       | false       |
-| Liabilities:Visa       | CreditCard | false       |
+| Path             | Type       | Placeholder |
+| Assets           | Bank       | true        |
+| Assets:Checking  | Bank       | false       |
+| Liabilities      | CreditCard | true        |
+| Liabilities:Visa | CreditCard | false       |
+# The roots come with them: adding an account fills in every level above it as a
+# placeholder, and a filled-in parent takes the type of the child that caused it
+# so that a roll-up in a report adds up. See the chart rules in Accounts.
 Then qif records read are : QifRecord
 | Account          | Date       | Amount | Payee         | CategoryText |
 | Assets:Checking  | 2024-01-15 | -45.00 | Harris Teeter | Groceries    |
@@ -777,17 +782,26 @@ Description brackets. Quicken writes one in each of the two accounts, so a
 Description transfer appears in the file twice.
 
 BusinessRule When two transfer halves are the same transfer
-Description All four must hold. Nothing weaker is safe: two 500.00 movements
-Description between the same pair of accounts on the same day are a real thing
-Description that happens, and collapsing them would lose money.
-Details When more than two halves match each other, they are paired off in the
-Details order they appear in the file, and the pairing is reported.
+Description The accounts must cross-match and the amounts must be equal and
+Description opposite. The dates need not agree, and where several halves could
+Description pair the nearest date wins.
+Details This rule was wrong until the real export was measured against. It
+Details required the dates to be the same, and of the 4,025 pairs in the
+Details business file only 3,053 share one: 558 are a day apart, 174 two, 180
+Details three, 41 four or five, and 19 more than ten days apart.
+Details That mattered far more than a count suggests. A half with no partner
+Details still posts both of its sides, because the bracketed name tells us both
+Details accounts -- so each of the 972 pairs the rule missed had its transfer
+Details counted twice, once from each half, in both accounts. The card balances
+Details came out tens of thousands of dollars wrong.
+Details The nearest date is what keeps two separate transfers of one amount
+Details between one pair of accounts pairing with the right halves.
 Examples: TransferPairing
 | Test | Condition                                                          |
 | 1    | One names the account of the other in brackets, and the other names the first |
 | 2    | The amounts are equal and opposite                                 |
-| 3    | The dates are the same                                             |
-| 4    | Neither has already been paired with something else                |
+| 3    | Neither has already been paired with something else                |
+| 4    | Of those that remain, the one whose date is nearest                |
 
 Attributes TransferPairing
 | Attribute | Type    | Default |
@@ -848,7 +862,9 @@ Then import summary is : ImportSummary Vertical
 Scenario Two transfers of the same amount on the same day stay two transfers
 Description Both are real. Each half pairs with exactly one other half, and
 Description once a half is paired it is not available to pair again.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Expenses:Uncategorized | Expense | false       |
 Given the file contains
 """
 !Option:AutoSwitch
@@ -909,7 +925,9 @@ Description The bracketed account names both sides, so the transaction can be
 Description made from one half alone. It happens when only some accounts were
 Description exported, and it is reported because the other account may be
 Description about to be imported from a second file.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Expenses:Uncategorized | Expense | false       |
 Given the file contains
 """
 !Option:AutoSwitch
@@ -942,11 +960,13 @@ Then migration notes are : MigrationNote
 | Kind            | Detail                                                      |
 | UnpairedTransfer | 2024-03-01 Assets:Checking to Assets:Savings 500.00: only one half was in the file |
 
-Scenario Dates a day apart do not pair, and are reported as a likely pair
-Description Quicken writes both halves with the same date, so a day between
-Description them means something was edited. They are left as two transfers
-Description rather than collapsed, and listed so they can be looked at.
-Given the chart of accounts is as previous
+Scenario Dates a day apart do pair
+Description Quicken does not always write both halves with the same date: 558 of
+Description the pairs in the business file are exactly one day apart. Leaving
+Description them unpaired counted each of those transfers twice.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Expenses:Uncategorized | Expense | false       |
 Given the file contains
 """
 !Option:AutoSwitch
@@ -981,13 +1001,15 @@ L[Checking]
 """
 When qif file imported
 Then import summary is : ImportSummary Vertical
-| New       | 2 |
-| Duplicate | 0 |
+| New       | 1 |
+| Duplicate | 1 |
 | Matched   | 0 |
-| Possible  | 2 |
-Then migration notes are : MigrationNote
-| Kind          | Detail                                                        |
-| NearTransfer  | 2024-03-01 and 2024-03-02 between Assets:Checking and Assets:Savings for 500.00 may be one transfer |
+| Possible  | 0 |
+Then postings are : PostingRow
+| Ref | Date       | Payee        | Account         | Amount  |
+| T1  | 2024-03-01 | Transfer out | Assets:Checking | -500.00 |
+| T1  | 2024-03-01 | Transfer out | Assets:Savings  | 500.00  |
+# One transaction, dated and named from the account the money left.
 
 Scenario A transfer to the account itself is an opening balance
 Description Quicken writes the opening balance of an account as a transfer from
@@ -1026,7 +1048,9 @@ Scenario A category name in brackets that is not an account creates the account
 Description Brackets mean an account, so a bracketed name that is not in the
 Description account list is an account that was not exported rather than a
 Description category that happens to have brackets in its name.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type   | Placeholder |
+| Equity:Opening Balances | Equity | false       |
 Given the file contains
 """
 !Type:Bank
@@ -1231,7 +1255,11 @@ Then holdings are : Holdings
 | Assets:Brokerage:VTSAX | VTSAX  | 102.5  | 100.0000 | 2024-06-30 |
 
 Scenario A security with no symbol is named by its security name
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                        | Type   | Placeholder |
+| Income:Dividends            | Income | false       |
+| Equity:Market Value Changes | Equity | false       |
+| Equity:Opening Balances     | Equity | false       |
 Given the file contains
 """
 !Type:Security
@@ -1272,7 +1300,11 @@ Description The value of the holding is the same before and after, so there is
 Description nothing to post, and posting a revaluation of zero would clutter
 Description the register. The Q field holds the number of new shares for each
 Description old one, multiplied by ten, which is Quicken's own convention.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                        | Type   | Placeholder |
+| Income:Dividends            | Income | false       |
+| Equity:Market Value Changes | Equity | false       |
+| Equity:Opening Balances     | Equity | false       |
 Given holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-02-01 |
@@ -1318,7 +1350,11 @@ Scenario An unsupported action is reported and not imported
 Description Employee stock plan actions carry tax meaning this program does not
 Description model. Importing them as something else would be worse than
 Description leaving them out and saying so.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                        | Type   | Placeholder |
+| Income:Dividends            | Income | false       |
+| Equity:Market Value Changes | Equity | false       |
+| Equity:Opening Balances     | Equity | false       |
 Given the file contains
 """
 !Type:Invst
@@ -1339,7 +1375,11 @@ Scenario PositionsOnly skips the trades and establishes the holdings
 Description For an account whose twenty years of trades are not wanted. The
 Description holdings that result are posted once, at the last price in the
 Description file, against Equity:Opening Balances.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                        | Type   | Placeholder |
+| Income:Dividends            | Income | false       |
+| Equity:Market Value Changes | Equity | false       |
+| Equity:Opening Balances     | Equity | false       |
 Given the qif profile is : QifProfile Vertical
 | DateOrder      | MDY           |
 | InvestmentMode | PositionsOnly |
@@ -1392,7 +1432,11 @@ Description The price list is a comma-separated oddity in the middle of a
 Description field-per-line format. Only the latest price per security is used:
 Description the earlier ones would each post a revaluation, and twenty years of
 Description daily prices would bury the register.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                        | Type   | Placeholder |
+| Income:Dividends            | Income | false       |
+| Equity:Market Value Changes | Equity | false       |
+| Equity:Opening Balances     | Equity | false       |
 Given holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-02-01 |
@@ -1549,7 +1593,9 @@ Scenario A migration report is produced whether or not anything was odd
 Description The report is the deliverable of a migration, not a by-product. It
 Description is what makes it possible to say the twenty years came over, and
 Description to find the handful of things that did not.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Expenses:Uncategorized | Expense | false       |
 Given the file contains
 """
 !Option:AutoSwitch
@@ -1627,7 +1673,9 @@ Scenario Every transaction in the book balances after the migration
 Description The check from Transactions, run over the whole book at the end of
 Description the migration. It is the one assertion that catches a mistake in any
 Description of the rules above.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Expenses:Uncategorized | Expense | false       |
 Given the file contains
 """
 !Type:Bank
@@ -1658,7 +1706,9 @@ Description or because a second export was taken. Every record carries a
 Description fingerprint of its account, date, amount, payee and category, and
 Description a record whose fingerprint is already present is offered rather
 Description than created, as a CSV row is in ImportCsv.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Expenses:Uncategorized | Expense | false       |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 Given the file contains
@@ -1818,7 +1868,9 @@ Scenario A categorised investment cash movement does reach the spending report
 Description The twenty-one records that keep the investment sections in scope at
 Description all. A fee charged inside the account is an expense wherever it was
 Description charged.
-Given the qif profile is as previous
+Given the qif profile is : QifProfile Vertical
+| DateOrder      | MDY      |
+| InvestmentMode | CashOnly |
 Given the chart of accounts is : ChartOfAccounts
 | Path                  | Type       | Placeholder |
 | Assets:Vanguard       | Investment | false       |
@@ -1856,7 +1908,9 @@ Description A reinvested dividend in a retirement account changes what the
 Description account is worth and changes no spending figure. It is not
 Description imported this round, and the account is marked as holding an
 Description incomplete balance so that nobody reads the number as a valuation.
-Given the qif profile is as previous
+Given the qif profile is : QifProfile Vertical
+| DateOrder      | MDY      |
+| InvestmentMode | CashOnly |
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type       | Placeholder |
 | Assets:Vanguard | Investment | false       |
@@ -1901,7 +1955,9 @@ Scenario An incomplete balance is not offered as a figure to rely on
 Description The account appears in the chart, its transfers are right, and its
 Description balance is marked rather than shown as though it were a valuation.
 Description A net worth report is not in this round, and this is why.
-Given the qif profile is as previous
+Given the qif profile is : QifProfile Vertical
+| DateOrder      | MDY      |
+| InvestmentMode | CashOnly |
 Given accounts with incomplete balances are : IncompleteBalance
 | Account         | Reason                                        | SkippedRecords |
 | Assets:Vanguard | The securities side is not imported this round | 848            |
@@ -1948,68 +2004,175 @@ Attributes InvoiceRecordKind
 | CarriesCategories | Boolean | false   |
 | Count             | String  |         |
 
-BusinessRule The export does not say which payment paid which invoice
-Description So a payment cannot be given the categories of its invoice with
-Description certainty, and that is the obstacle to posting income at the payment
-Description date.
-Details The evidence, all from the business file:
-Details Not one of the 213 payment records carries a split line, so no payment
-Details names a category of its own.
-Details The only field that looked like a reference, XI, has two distinct values
-Details across all 425 records -- 1 and 3 -- so it is a record-type flag and
-Details not an identifier. XE is a due date and X# is a quantity.
-Details Matching on payee and amount, oldest invoice first, resolves 184 of the
-Details 213 payments exactly. A payee-only fallback reaches about 204. The
-Details remainder are partial payments, combined payments, or payments whose
-Details payee was edited.
-Details That residual is not good enough to post income from, because a
-Details comparison that has to agree to the cent cannot rest on a match that
-Details is right most of the time.
+BusinessRule What the N field is, and why nothing is posted from it
+Description N on an invoice is the invoice number and N on a payment is the
+Description number of the invoice being paid, which an earlier reading of this
+Description file missed: it examined XI, a record-type flag with two values
+Description across all 425 records, and did not look at N.
+Details The link is real. 194 of the 212 invoices carry N and 176 of the 213
+Details payments do; in 156 cases the N matches, the amount agrees and the
+Details payee agrees as well, all 156 of them, which is not a coincidence that
+Details is available. Payments also carry the number with a letter appended,
+Details one per instalment: 2820a, 2820b, 2820c and 2820d come to invoice 2820
+Details exactly, and two payments of 4,000.00 settle invoice 2050 of 8,000.00.
+Details
+Details It is not complete enough to post from, which is what matters here. Not
+Details one of the 32 inter-company invoices has a payment carrying its number.
+Details 37 payments carry no N at all. Numbers are reused, and some payments
+Details carry what looks like the customer's own cheque number instead.
+Details
+Details Reconstructing the allocation was tried twelve ways -- by N, by N with
+Details the instalment suffix stripped, by payee and amount, by letting a
+Details combined payment run on to the next open invoice, with and without
+Details credit notes offset -- and the best of them still put uncollected
+Details Consulting at -80.65 against the 975.00 that is wanted. So the N field
+Details is recorded here as a fact about the format and is not used to decide a
+Details figure. The cleared marker below is used instead, and it is one field.
 Examples: InvoiceLinkEvidence
-| Question                                | Answer                                  |
-| Do payments carry categories            | No; 0 of 213 have split lines           |
-| Is there a reference field              | No; XI has 2 distinct values over 425 records |
-| Does payee and amount recover the link  | Partly; 184 of 213 exactly              |
-| Is that enough to post income from      | No                                      |
+| Question                                      | Answer                                       |
+| Do payments carry categories                  | No; 0 of 213 have split lines                |
+| Is there a reference field                    | Yes; N, on 176 of 213 payments               |
+| Does it identify the invoice                  | Often; 156 agree on N, amount and payee      |
+| Does it survive an instalment                 | Yes; 2820a to 2820d come to invoice 2820     |
+| Is it on every payment                        | No; 37 carry none, and no inter-company one  |
+| Is it enough to post income from              | No; twelve reconstructions all missed        |
+| What was XI                                   | A record-type flag; 1 is a document, 3 a payment |
 
 Attributes InvoiceLinkEvidence
 | Attribute | Type   | Default |
 | Question  | String |         |
 | Answer    | String |         |
 
-BusinessRule How a payment is matched to the invoice it paid
-Description In three passes, and whatever is left over is reported rather than
-Description attached to something by guesswork.
-Details The link is not in the export, so it is reconstructed. Pass one is
-Details exact and settles most of it; pass two accepts a different amount from
-Details the same payee, which is a partial or combined payment; pass three
-Details gives up and says so.
-Details On the business file: 184 of 213 payments match exactly, 20 more match a
-Details payee with some invoice still open, and 9 match nothing at all.
-Examples: PaymentMatchPass
-| Pass | Rule                                                        | Matched |
-| 1    | Same payee and the same amount, oldest invoice first        | 184     |
-| 2    | Same payee, any open invoice, oldest first                  | 20      |
-| 3    | Nothing; the payment is reported and posted uncategorised    | 9       |
+BusinessRule The cleared marker says whether an invoice was collected
+Description Quicken marks a document cleared once the money is in, and leaves
+Description the C field off one that is still outstanding. That is the whole
+Description test, and it is exact.
+Details 203 of the 212 documents in the business file carry C*, and the nine
+Details that carry nothing hold 975.00 of Consulting, 378.75 of Uncategorized
+Details Income - Business and no Royalty. Those are each of the three figures
+Details the all-dates report gives, to the cent.
+Details
+Details Eight of the nine have no payment carrying their number either, which
+Details agrees. The ninth, Convregence for 300.00, does have one -- so it was
+Details paid and never marked -- and Quicken's own report leaves its 300.00 out
+Details as well. The marker is followed rather than second-guessed, because
+Details following it reproduces the report including that inconsistency.
+Details
+Details It governs income and not expense, which was measured rather than
+Details assumed. Four of the nine are reimbursement invoices to Ken's own
+Details companies and their lines are expense categories, not income: they are
+Details claims to be paid back for money already spent on a personal card.
+Details Quicken credits those whether or not the invoice has been collected.
+Details Treating all nine alike moved 2025 expenses from -198,939.00, which
+Details agrees with Quicken to the cent, to -212,342.46 -- out by 13,403.46,
+Details exactly the two reimbursement invoices outstanding at the export.
+Examples: CollectedTest
+| CField | Bills      | Documents | Recognised                              |
+| *      | Income     | 203       | Yes; its categories are income          |
+| (none) | Income     | 5         | No; none of it is income                |
+| (none) | An expense | 4         | Yes; the expense is credited regardless |
 
-Attributes PaymentMatchPass
-| Attribute | Type    | Default |
-| Pass      | Integer | 0       |
-| Rule      | String  |         |
-| Matched   | String  |         |
+Attributes CollectedTest
+| Attribute  | Type    | Default |
+| CField     | String  |         |
+| Bills      | String  |         |
+| Documents  | Integer | 0       |
+| Recognised | String  |         |
 
-Scenario Income posts at the payment date, not the invoice date
-Description The invoice is dated November 2025 and was paid in January 2026. On
-Description a cash basis the income is 2026 income, so the categories of the
-Description invoice are posted on the day the money arrived.
-Details The invoice itself posts nothing. It is the record of what the income
-Details is for, and it is held until a payment claims it.
+BusinessRule What the cash basis is worth, measured against the all-dates report
+Description Quicken's all-dates report is itself on a cash basis, so the gap
+Description between it and an accrual reading is exactly what was invoiced and
+Description never collected. That gave three equations, and the cleared marker
+Description satisfies all three.
+Details Ken confirmed the first of them from his own records before the code was
+Details written: an unpaid invoice from 2008 for 975.00. A report difference
+Details predicted a fact about the business and the fact held.
+Examples: CashBasisTarget
+| Category                        | QuickenAllDates | OnAccrual | Uncollected | Ours      |
+| Consulting                      | 311128.75       | 312103.75 | 975.00      | 311128.75 |
+| Royalty                         | 20977.40        | 20977.40  | 0.00        | 20977.40  |
+| Uncategorized Income - Business | 43770.73        | 44149.48  | 378.75      | 43770.73  |
+
+Attributes CashBasisTarget
+| Attribute       | Type  | Default |
+| Category        | Text  | none    |
+| QuickenAllDates | Money | 0.00    |
+| OnAccrual       | Money | 0.00    |
+| Uncollected     | Money | 0.00    |
+| Ours            | Money | 0.00    |
+
+BusinessRule Where an invoice that was never collected is parked
+Description It cannot credit an income category, because no money came. It
+Description cannot credit nothing, because then the book would not balance and a
+Description trial balance would be out by the amount outstanding. So it credits
+Description a holding account, and the receivable stands against it.
+Details It is a real account, which is what keeps it out of a spending report,
+Details and its balance is the whole of the income that was invoiced and never
+Details earned: 907.80 in the business file, being 975.00 of Consulting and
+Details 378.75 of Uncategorized Income - Business less a credit note of 445.95.
+Details That is the figure that answers "is anything outstanding", because the
+Details receivable itself nets to zero -- payments in that file come to the same
+Details total as invoices even though five invoices are open, which is an
+Details inconsistency in the source and not in the import.
+Details
+Details A collected invoice is posted in its own period, as it always was, and
+Details its receivable and categories are the two sides of one transaction. So
+Details is an uncollected one that bills for an expense rather than income.
+Details
+Details The asset holding account is the symmetric case, for a bill whose lines
+Details are income. Neither file in testdata has one, so it is specified and
+Details untested.
+Examples: InvoiceHoldingAccount
+| Document | DocumentAccount            | HoldingAccount                  |
+| Invoice  | Assets:Customer~Invoices   | Liabilities:Unrecognised~Income |
+| Bill     | Liabilities:Business~Bills | Assets:Unrecognised~Expense     |
+
+Attributes InvoiceHoldingAccount
+| Attribute       | Type        | Default |
+| Document        | String      |         |
+| DocumentAccount | AccountPath |         |
+| HoldingAccount  | AccountPath |         |
+
+BusinessRule Which period a collected invoice is reported in
+Description Its own, not the date the money arrived. This is a deviation from a
+Description strict cash basis and it is deliberate, because the alternative
+Description cannot be done honestly from this export.
+Details The payment date is not recoverable for a large part of the file: no
+Details inter-company invoice has a payment carrying its number and 37 payments
+Details carry none at all, so dating recognition by payment means guessing the
+Details date for those. Measured, guessing it moved 2021 expenses from 7,500.00
+Details away from Quicken to 27,777.72 away, and 2022 from 7,500.00 to
+Details 25,196.24. Posting in the invoice's own period left every one of those
+Details figures where it already was.
+Details
+Details The all-dates totals are the same under either reading, because an
+Details invoice collected at all is collected once. Only the year moves, and
+Details only for an invoice that crossed a year end before being paid.
+Details
+Details Put to Ken with the measurement above, and accepted: the deviation is
+Details fine. So this is a settled choice and not a thing to revisit when the
+Details next QIF arrives.
+Examples: RecognitionPeriod
+| Case                                    | ReportedIn           | Why                               |
+| Invoiced and collected in the same year | That year            | The two readings agree            |
+| Invoiced one year, collected the next   | The year invoiced    | The payment date is not reliable  |
+| Invoiced and never collected            | Not reported at all  | No money came                     |
+
+Attributes RecognitionPeriod
+| Attribute   | Type   | Default |
+| Case        | String |         |
+| ReportedIn  | String |         |
+| Why         | String |         |
+
+Scenario A collected invoice is income in its own period
+Description Marked cleared, so the money came. The receivable and the category
+Description are the two sides of one transaction, exactly as a bank record with
+Description a category is.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Customer Invoices |
 Given the chart of accounts is : ChartOfAccounts
 | Path                     | Type   | Placeholder |
 | Assets:Customer Invoices | Asset  | false       |
-| Assets:Checking          | Bank   | false       |
 | Income:Consulting        | Income | false       |
 Given the file contains
 """
@@ -2017,42 +2180,29 @@ Given the file contains
 D11/15'25
 T2500.00
 U2500.00
+C*
 PA Client
 L--Split--
 SConsulting
-$-2500.00
+$2500.00
 XI1
-^
-D1/20'26
-T-2500.00
-U-2500.00
-PA Client
-L[Checking]
-XI3
 ^
 """
 When qif file imported
 Then postings are : PostingRow
-| Ref | Date       | Payee    | Account           | Amount   |
-| T1  | 2026-01-20 | A Client | Assets:Checking   | 2500.00  |
-| T1  | 2026-01-20 | A Client | Income:Consulting | -2500.00 |
-# One transaction, dated when the money arrived. Assets:Customer Invoices is
-# never posted to: on a cash basis there is no receivable to carry.
-When report run : ReportSpec Vertical
-| GroupBy  | Category   |
-| From     | 2025-01-01 |
-| To       | 2025-12-31 |
-| Interval | Whole      |
-Then report rows are : ReportRow
-| Account | Level | Amount | IsSubtotal |
-# No rows in 2025: the income is in 2026.
+| Ref | Date       | Payee    | Account                  | Amount   | Memo | Cleared   |
+| T1  | 2025-11-15 | A Client | Assets:Customer Invoices | 2500.00  | none | Cleared   |
+| T1  | 2025-11-15 | A Client | Income:Consulting        | -2500.00 | none | Uncleared |
+# Raw postings, so the income line is negative and the two sum to zero. A reader
+# never sees that sign: the display sign of an income account is -1, so the
+# report shows 2500.00 of income. See the display sign rule in Accounts.
 
-Scenario A split invoice posts every one of its categories at the payment date
-Given import target is as previous
+Scenario A collected split invoice posts every one of its categories
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Customer Invoices |
 Given the chart of accounts is : ChartOfAccounts
 | Path                     | Type   | Placeholder |
 | Assets:Customer Invoices | Asset  | false       |
-| Assets:Checking          | Bank   | false       |
 | Income:Consulting        | Income | false       |
 | Income:Royalty           | Income | false       |
 Given the file contains
@@ -2061,188 +2211,58 @@ Given the file contains
 D3/15'25
 T1500.00
 U1500.00
+C*
 PA Client
 L--Split--
 SConsulting
-$-1000.00
+$1000.00
 SRoyalty
-$-500.00
+$500.00
 XI1
-^
-D4/20'25
-T-1500.00
-U-1500.00
-PA Client
-L[Checking]
-XI3
 ^
 """
 When qif file imported
 Then postings are : PostingRow
-| Ref | Date       | Payee    | Account           | Amount   |
-| T1  | 2025-04-20 | A Client | Assets:Checking   | 1500.00  |
-| T1  | 2025-04-20 | A Client | Income:Consulting | -1000.00 |
-| T1  | 2025-04-20 | A Client | Income:Royalty    | -500.00  |
+| Ref | Date       | Payee    | Account                  | Amount   | Memo | Cleared   |
+| T1  | 2025-03-15 | A Client | Assets:Customer Invoices | 1500.00  | none | Cleared   |
+| T1  | 2025-03-15 | A Client | Income:Consulting        | -1000.00 | none | Uncleared |
+| T1  | 2025-03-15 | A Client | Income:Royalty           | -500.00  | none | Uncleared |
+# The 1500.00 total gets no category posting of its own: the receivable is that
+# side. The dollar lines sum to T, as the split line rule requires.
 
-Scenario Royalty received both ways reaches the same category
-Description Some royalties were invoiced and paid off, others were banked
-Description straight to the category. Both paths exist in the file and both have
-Description to arrive in the same place, which is why the figure reconciles as
-Description banking plus invoices.
-Details Observed: Royalty is 20,977.40 in the report, 2,576.02 from banking
-Details records and 18,401.38 from invoices.
-Given import target is as previous
+Scenario An invoice never collected owes but earns nothing
+Description The 975.00 from 2008 that Ken confirmed was never paid. It has no
+Description cleared marker, so the amount is owed and none of it is income.
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Customer Invoices |
 Given the chart of accounts is : ChartOfAccounts
-| Path                     | Type   | Placeholder |
-| Assets:Customer Invoices | Asset  | false       |
-| Assets:Checking          | Bank   | false       |
-| Income:Royalty           | Income | false       |
+| Path                            | Type      | Placeholder |
+| Assets:Customer Invoices        | Asset     | false       |
+| Liabilities:Unrecognised Income | Liability | false       |
+| Income:Consulting               | Income    | false       |
 Given the file contains
 """
 !Type:Invoice
-D3/15'25
-T400.00
-U400.00
-PA Publisher
-L--Split--
-SRoyalty
-$-400.00
-XI1
-^
-D4/20'25
-T-400.00
-U-400.00
-PA Publisher
-L[Checking]
-XI3
-^
-"""
-Given the second file contains
-"""
-!Type:Bank
-D5/10'25
-T600.00
-U600.00
-PA Publisher
-LRoyalty
-^
-"""
-When qif file imported
-Then report rows are : ReportRow
-| Account        | Level | Amount  | IsSubtotal |
-| Income:Royalty | 0     | 1000.00 | false      |
-# Four hundred through an invoice and six hundred banked directly.
-
-Scenario A payment matched only by payee is posted and reported
-Description A different amount from the same customer is a partial payment or
-Description one cheque covering several invoices. The categories of the oldest
-Description open invoice are used, in the proportions that invoice gives, and
-Description the pairing is listed so it can be checked.
-Given import target is as previous
-Given the chart of accounts is : ChartOfAccounts
-| Path                     | Type   | Placeholder |
-| Assets:Customer Invoices | Asset  | false       |
-| Assets:Checking          | Bank   | false       |
-| Income:Consulting        | Income | false       |
-Given the file contains
-"""
-!Type:Invoice
-D3/15'25
-T1000.00
-U1000.00
-PA Client
-L--Split--
-SConsulting
-$-1000.00
-XI1
-^
-D4/20'25
-T-600.00
-U-600.00
-PA Client
-L[Checking]
-XI3
-^
-"""
-When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Payee    | Account           | Amount  |
-| T1  | 2025-04-20 | A Client | Assets:Checking   | 600.00  |
-| T1  | 2025-04-20 | A Client | Income:Consulting | -600.00 |
-Then migration notes are : MigrationNote
-| Kind            | Detail                                                        |
-| PaymentPartial  | 2025-04-20 A Client 600.00 matched the 2025-03-15 invoice for 1,000.00 by payee only; 400.00 of that invoice is still open |
-
-Scenario A payment matching no invoice is posted uncategorised and reported
-Description Nine of these in the business file, the largest 13,243.67. They are
-Description posted so that the bank balance is right, and listed so that the
-Description income can be categorised by hand.
-Given import target is as previous
-Given the chart of accounts is : ChartOfAccounts
-| Path                     | Type    | Placeholder |
-| Assets:Customer Invoices | Asset   | false       |
-| Assets:Checking          | Bank    | false       |
-| Income:Uncategorized     | Income  | false       |
-Given the file contains
-"""
-!Type:Invoice
-D6/15'24
-T-4000.00
-U-4000.00
-PAnother Client
-L[Checking]
-XI3
-^
-"""
-When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Payee          | Account              | Amount   |
-| T1  | 2024-06-15 | Another Client | Assets:Checking      | 4000.00  |
-| T1  | 2024-06-15 | Another Client | Income:Uncategorized | -4000.00 |
-Then migration notes are : MigrationNote
-| Kind              | Detail                                                      |
-| PaymentUnmatched  | 2024-06-15 Another Client 4,000.00 matched no invoice; posted to Income:Uncategorized |
-
-# ---------------------------------------------------------------------------
-# The unpaid invoices, in the migration report
-# ---------------------------------------------------------------------------
-
-Scenario An unpaid invoice posts nothing and is listed in full
-Description On a cash basis an invoice never paid is never income, so it posts
-Description nothing at all. It is listed with its date, payee, amount and
-Description categories, because it is the difference between what was invoiced
-Description and what was earned, and it is the only place that difference is
-Description visible.
-Details There are eight of these in the business file and every one of them is
-Details dated before 2020: one in 2006, five in 2007, one in 2009 and one in
-Details 2010. Three carry negative amounts, which are credit notes, and one is
-Details for zero.
-Given import target is as previous
-Given the chart of accounts is : ChartOfAccounts
-| Path                     | Type   | Placeholder |
-| Assets:Customer Invoices | Asset  | false       |
-| Income:Consulting        | Income | false       |
-Given the file contains
-"""
-!Type:Invoice
-D6/01'07
+D4/24'08
 T975.00
 U975.00
-PA Client
+PGuideline
 L--Split--
 SConsulting
-$-975.00
+$975.00
 XI1
-X#1.0
 ^
 """
 When qif file imported
-Then postings created are : PostingRow
-| Ref | Date | Account | Amount |
-# No rows.
+Then postings are : PostingRow
+| Ref | Date       | Payee     | Account                         | Amount  |
+| T1  | 2008-04-24 | Guideline | Assets:Customer Invoices        | 975.00  |
+| T1  | 2008-04-24 | Guideline | Liabilities:Unrecognised Income | -975.00 |
+# Income:Consulting is not posted to at all, which is what takes the 975.00 out
+# of the spending report and brings it to Quicken's 311,128.75.
 Then unpaid invoices are : UnpaidInvoice
-| Date       | Payee    | Amount | Category          | Note                    |
-| 2007-06-01 | A Client | 975.00 | Income:Consulting | No payment in the file  |
+| Date       | Payee     | Amount | Category          | Note                   |
+| 2008-04-24 | Guideline | 975.00 | Income:Consulting | Not cleared            |
 
 Attributes UnpaidInvoice
 | Attribute | Type        | Default    |
@@ -2252,57 +2272,131 @@ Attributes UnpaidInvoice
 | Category  | AccountPath | none       |
 | Note      | Text        | none       |
 
-Scenario An invoice for a negative amount is a credit note and is listed as one
-Description Three of the eight carry negative amounts. Calling them unpaid
+Scenario An uncollected invoice claiming an expense still credits it
+Description The four recent invoices to Warp And Bytes and Ken Pugh, Inc. are
+Description claims to be paid back for charges Ken put on a personal card. Their
+Description lines are expense categories, so the expense is credited when the
+Description claim is made, whether or not the company has paid it yet.
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Customer Invoices |
+Given the chart of accounts is : ChartOfAccounts
+| Path                                            | Type    | Placeholder |
+| Assets:Customer Invoices                        | Asset   | false       |
+| Expenses:Warp And Byte Expenses To be Reimbursed | Expense | false      |
+Given the file contains
+"""
+!Type:Invoice
+D12/9'25
+T9390.84
+U9390.84
+PWarp And Bytes
+L--Split--
+SWarp And Byte Expenses To be Reimbursed
+$9390.84
+XI1
+^
+"""
+When qif file imported
+Then postings are : PostingRow
+| Ref | Date       | Payee          | Account                                          | Amount   |
+| T1  | 2025-12-09 | Warp And Bytes | Assets:Customer Invoices                         | 9390.84  |
+| T1  | 2025-12-09 | Warp And Bytes | Expenses:Warp And Byte Expenses To be Reimbursed  | -9390.84 |
+# No cleared marker, and it is still posted. Leaving it out moved 2025 expenses
+# 13,403.46 away from Quicken's figure; see the cleared marker rule above.
+Then unpaid invoices are : UnpaidInvoice
+| Date       | Payee          | Amount  | Category                                         | Note                        |
+| 2025-12-09 | Warp And Bytes | 9390.84 | Expenses:Warp And Byte Expenses To be Reimbursed  | Not cleared; an expense claim |
+# It is on the list even though its expense was recognised. The list answers
+# what is owed, and 36,900.36 of these claims were outstanding at the export;
+# whether a figure counts as income is a separate question.
+
+Scenario A credit note is an uncollected invoice for a negative amount
+Description Three of the nine carry negative amounts. Calling them unpaid
 Description invoices in the report would be misleading, so they are named for
 Description what they are.
-Given import target is as previous
-Given the chart of accounts is as previous
+Details The chart is spelled out rather than taken as previous, because Misc
+Details Income has to be known to be income: the amount of a credit note runs
+Details the other way, so the sign of the posting would place it under Expenses.
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Customer Invoices |
+Given the chart of accounts is : ChartOfAccounts
+| Path                            | Type      | Placeholder |
+| Assets:Customer Invoices        | Asset     | false       |
+| Liabilities:Unrecognised Income | Liability | false       |
+| Income:Misc Income              | Income    | false       |
 Given the file contains
 """
 !Type:Invoice
-D7/01'07
+D12/11'09
 T-445.95
 U-445.95
-PA Client
+PBalancing Invoice
 L--Split--
-SConsulting
-$445.95
+SMisc Income
+$-445.95
 XI1
 ^
 """
 When qif file imported
 Then unpaid invoices are : UnpaidInvoice
-| Date       | Payee    | Amount  | Category          | Note                   |
-| 2007-07-01 | A Client | -445.95 | Income:Consulting | A credit note, unapplied |
+| Date       | Payee             | Amount  | Category          | Note                     |
+| 2009-12-11 | Balancing Invoice | -445.95 | Income:Misc Income | A credit note, unapplied |
 
-Scenario An invoice for zero is listed and posts nothing
-Given import target is as previous
-Given the chart of accounts is as previous
+Scenario A bill posts its expense whether or not it has been paid
+Description A bill is a payable, and its lines are expense categories, so the
+Description cleared marker does not govern it: the expense is recorded when the
+Description bill arrives either way. Ken pays most bills the day they arrive, so
+Description the distinction rarely shows.
+Details Unverified against Quicken. The bills are in the S corp book and no
+Details report for that book has been exported yet, so this follows the rule
+Details measured on the invoices rather than evidence of its own.
+Given the chart of accounts is : ChartOfAccounts
+| Path                        | Type      | Placeholder |
+| Liabilities:Business Bills  | Liability | false       |
+| Expenses:Office             | Expense   | false       |
+Given import target is : ImportTarget Vertical
+| AccountPath | Liabilities:Business Bills |
 Given the file contains
 """
-!Type:Invoice
-D8/01'07
-T0.00
-U0.00
-PA Client
+!Type:Bill
+D3/15'25
+T-400.00
+U-400.00
+C*
+PA Vendor
 L--Split--
-SConsulting
-$0.00
-XI1
+SOffice
+$-400.00
+^
+D4/10'25
+T-250.00
+U-250.00
+PA Vendor
+L--Split--
+SOffice
+$-250.00
 ^
 """
 When qif file imported
-Then unpaid invoices are : UnpaidInvoice
-| Date       | Payee    | Amount | Category          | Note                  |
-| 2007-08-01 | A Client | 0.00   | Income:Consulting | A zero invoice        |
+Then postings are : PostingRow
+| Ref | Date       | Payee    | Account                     | Amount  | Memo | Cleared   |
+| T1  | 2025-03-15 | A Vendor | Liabilities:Business Bills  | -400.00 | none | Cleared   |
+| T1  | 2025-03-15 | A Vendor | Expenses:Office             | 400.00  | none | Uncleared |
+| T2  | 2025-04-10 | A Vendor | Liabilities:Business Bills  | -250.00 | none | Uncleared |
+| T2  | 2025-04-10 | A Vendor | Expenses:Office             | 250.00  | none | Uncleared |
+# Both post their expense. T1 is cleared and T2 is not, and it makes no
+# difference here: what the marker decides is whether income is recognised.
 
 Scenario The migration report totals what invoicing left unresolved
 Description Four numbers that say how much of the invoice history did not
 Description resolve, so that the size of it is known before the figures are
 Description trusted.
-Given import target is as previous
-Given the chart of accounts is as previous
+Given import target is : ImportTarget Vertical
+| AccountPath | Liabilities:Business Bills |
+Given the chart of accounts is : ChartOfAccounts
+| Path                        | Type      | Placeholder |
+| Liabilities:Business Bills  | Liability | false       |
+| Expenses:Office             | Expense   | false       |
 When invoice reconciliation summarised
 Then invoice reconciliation is : InvoiceReconciliation Vertical
 | Invoices           | 212 |
@@ -2345,43 +2439,6 @@ Attributes InvoiceYearSpan
 | ToYear    | Integer | 2026    |
 | Invoices  | Integer | 0       |
 | Note      | Text    | none    |
-
-Scenario A bill is the same shape, owed the other way
-Description The bill section of the personal file has 68 records carrying 165
-Description expense references. A bill is a payable, and on a cash basis its
-Description expense is recognised when it is paid, by the same three passes.
-Given the chart of accounts is : ChartOfAccounts
-| Path                       | Type      | Placeholder |
-| Liabilities:Business Bills | Liability | false       |
-| Assets:Checking            | Bank      | false       |
-| Expenses:Office            | Expense   | false       |
-Given import target is : ImportTarget Vertical
-| AccountPath | Liabilities:Business Bills |
-Given the file contains
-"""
-!Type:Bill
-D3/15'25
-T-400.00
-U-400.00
-PA Vendor
-L--Split--
-SOffice
-$400.00
-^
-D4/10'25
-T400.00
-U400.00
-PA Vendor
-L[Checking]
-^
-"""
-When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Payee    | Account         | Amount  |
-| T1  | 2025-04-10 | A Vendor | Assets:Checking | -400.00 |
-| T1  | 2025-04-10 | A Vendor | Expenses:Office | 400.00  |
-# Dated when it was paid, not when the bill arrived.
-
 
 # ---------------------------------------------------------------------------
 # Things the two files in testdata settled
@@ -2510,9 +2567,11 @@ TBill
 """
 When qif file imported
 Then accounts created are : ChartOfAccounts
-| Path                | Type      | Placeholder |
-| Assets:Invoices     | Asset     | false       |
-| Liabilities:Bills   | Liability | false       |
+| Path              | Type      | Placeholder |
+| Assets            | Asset     | true        |
+| Assets:Invoices   | Asset     | false       |
+| Liabilities       | Liability | true        |
+| Liabilities:Bills | Liability | false       |
 
 Scenario No price list means the last price comes from the last transaction
 Description Neither file has a !Type:Prices section, so there is no price to
@@ -2624,7 +2683,11 @@ Scenario The one stock split in the business file
 Description Read with the ratio rule confirmed below. The holding is iShares US
 Description Transportation on 7 March 2024, which was a four-for-one split, and
 Description the Q field holds 40. That is what settles the factor of ten.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                     | Type       | Placeholder |
+| Assets:Portfolio         | Investment | true        |
+| Assets:Portfolio:Cash    | Investment | false       |
+| Expenses:Investment:Fees | Expense    | false       |
 Given holdings are : Holdings
 | Account                                         | SecurityName                   | Shares | Price    | PriceAsOf  |
 | Assets:Portfolio:ISHARES U S TRANSPORTATION ETF | ISHARES U S TRANSPORTATION ETF | 100    | 240.0000 | 2024-03-06 |
@@ -2693,7 +2756,7 @@ Examples: DialectRisk
 | Statement balance      | Settled | No account block carries one, so the import cannot check itself          |
 | Price list             | Settled | Absent from both, so a holding is priced from its last transaction       |
 | Security symbols       | Settled | None of the 44 securities has one; the name is the identifier            |
-| Transfer halves        | Assumed | Both written with the same date and opposite signs; 8,228 to pair        |
+| Transfer halves        | Settled | Both written, but only 3,053 of 4,025 pairs share a date; 558 are one day apart and 19 more than ten |
 | Multi-line values      | Assumed | A field that will not parse continues the one before                     |
 | Decimal comma          | Assumed | Not present in either file; kept for a European export                   |
 

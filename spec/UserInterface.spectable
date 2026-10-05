@@ -1,0 +1,540 @@
+Specification UserInterface
+
+Description The windows the program is worked in: a list of accounts, the
+Description register of the account selected in it, and an optional second pane
+Description that shows either another account or an import waiting to be reviewed.
+Details
+Details The shape is three regions. On the left, every account, grouped by the
+Details kind of thing it is. On the right, the register of whichever account is
+Details selected. The right may be split in two, so that two accounts can be
+Details read at once -- or so that an import can be looked over beside the
+Details register it is about to change.
+Details
+Details What is specified here is what the windows show and what selecting
+Details things does. Pixels, fonts and column widths are not: those are not
+Details worth agreeing in a table, and changing them should not fail a test.
+
+# ---------------------------------------------------------------------------
+# The account list
+# ---------------------------------------------------------------------------
+
+DataType AccountGroup
+Description The headings the account list is divided into. One per kind of real
+Description account, and the categories are not in the list at all: they are
+Description reached through a report, not browsed.
+Examples: EnumerationValues
+| Value       | Notes                                      |
+| Banking     | Bank and Cash accounts                     |
+| CreditCards | What is owed on a card                     |
+| Investments | Holdings and their cash                    |
+| Assets      | A house, a car, anything else owned        |
+| Liabilities | A mortgage or a loan                       |
+
+BusinessRule Which group an account is listed under
+Description Taken from the account type, so nothing has to be filed by hand.
+Details The nominal types have no group: Income, Expense and Equity are
+Details categories and the account list does not show them.
+Examples: GroupOfType
+| AccountType | AccountGroup | Listed |
+| Bank        | Banking      | true   |
+| Cash        | Banking      | true   |
+| CreditCard  | CreditCards  | true   |
+| Investment  | Investments  | true   |
+| Asset       | Assets       | true   |
+| Liability   | Liabilities  | true   |
+| Income      | Banking      | false  |
+| Expense     | Banking      | false  |
+| Equity      | Banking      | false  |
+
+Attributes GroupOfType
+| Attribute    | Type         | Default |
+| AccountType  | AccountType  | Bank    |
+| AccountGroup | AccountGroup | Banking |
+| Listed       | Boolean      | true    |
+
+Attributes AccountListRow
+Description One line of the account list. A group heading carries the total of
+Description the accounts under it and names no account.
+| Attribute | Type        | Default |
+| Group     | Text        | none    |
+| Account   | AccountPath | none    |
+| Name      | Text        | none    |
+| Indent    | Integer     | 0       |
+| Balance   | Money       | 0.00    |
+| IsHeading | Boolean     | false   |
+
+Background A book with a few accounts
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Bank       | false       |
+| Assets:Savings         | Bank       | false       |
+| Assets:Wallet          | Cash       | false       |
+| Liabilities:Visa       | CreditCard | false       |
+| Expenses:Groceries     | Expense    | false       |
+| Income:Salary          | Income     | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee         | Account            | Amount   |
+| T1  | 2026-01-05 | Acme Payroll  | Assets:Checking    | 3000.00  |
+| T1  | 2026-01-05 | Acme Payroll  | Income:Salary      | -3000.00 |
+| T2  | 2026-01-15 | Harris Teeter | Assets:Checking    | -45.00   |
+| T2  | 2026-01-15 | Harris Teeter | Expenses:Groceries | 45.00    |
+| T3  | 2026-01-20 | Amazon        | Liabilities:Visa   | -89.99   |
+| T3  | 2026-01-20 | Amazon        | Expenses:Groceries | 89.99    |
+| T4  | 2026-01-25 | Transfer      | Assets:Checking    | -500.00  |
+| T4  | 2026-01-25 | Transfer      | Assets:Savings     | 500.00   |
+
+Scenario The account list groups the real accounts and totals each group
+Description Each balance is the display balance, so a card reads as what is
+Description owed. A group heading carries the total of what is under it.
+Description The categories are absent: Expenses:Groceries and Income:Salary
+Description have postings and are not accounts to browse.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account list shown
+Then account list rows are : AccountListRow
+| Group       | Account          | Name     | Indent | Balance | IsHeading |
+| Banking     | none             | none     | 0      | 2955.00 | true      |
+| none        | Assets:Checking  | Checking | 1      | 2455.00 | false     |
+| none        | Assets:Savings   | Savings  | 1      | 500.00  | false     |
+| none        | Assets:Wallet    | Wallet   | 1      | 0.00    | false     |
+| CreditCards | none             | none     | 0      | 89.99   | true      |
+| none        | Liabilities:Visa | Visa     | 1      | 89.99   | false     |
+
+Scenario A group with no accounts is not shown
+Description There is nothing under Investments, Assets or Liabilities in this
+Description book, so those headings are left out rather than shown empty.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account list shown
+Then account list groups shown are : GroupShown
+| Group       |
+| Banking     |
+| CreditCards |
+
+Attributes GroupShown
+| Attribute | Type | Default |
+| Group     | Text |         |
+
+Scenario A hidden account is left out until it is asked for
+Description Hiding an account is how it is got out of the way without losing its
+Description history, so the list follows that. The total of the group follows
+Description the list, so hiding an account changes what the heading says.
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type | Placeholder | Hidden |
+| Assets:Checking | Bank | false       | false  |
+| Assets:Old      | Bank | false       | true   |
+Given postings are : PostingRow
+| Ref | Date       | Payee | Account         | Amount  |
+| T1  | 2026-01-05 | Open  | Assets:Checking | 100.00  |
+| T2  | 2026-01-06 | Open  | Assets:Old      | 25.00   |
+When account list shown
+Then account list rows are : AccountListRow
+| Group   | Account         | Name     | Indent | Balance | IsHeading |
+| Banking | none            | none     | 0      | 100.00  | true      |
+| none    | Assets:Checking | Checking | 1      | 100.00  | false     |
+When hidden accounts shown
+Then account list rows are : AccountListRow
+| Group   | Account         | Name     | Indent | Balance | IsHeading |
+| Banking | none            | none     | 0      | 125.00  | true      |
+| none    | Assets:Checking | Checking | 1      | 100.00  | false     |
+| none    | Assets:Old      | Old      | 1      | 25.00   | false     |
+
+Scenario A placeholder is a line in the list with its subtree beneath it
+Description A placeholder takes no postings of its own, so its balance is the
+Description roll-up. It is shown because it is how a deep tree is navigated.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type | Placeholder |
+| Assets:Brokerage        | Investment | true  |
+| Assets:Brokerage:Cash   | Investment | false |
+| Assets:Brokerage:Fund   | Investment | false |
+Given postings are : PostingRow
+| Ref | Date       | Payee | Account               | Amount  |
+| T1  | 2026-01-05 | Open  | Assets:Brokerage:Cash | 2500.00 |
+| T2  | 2026-01-06 | Open  | Assets:Brokerage:Fund | 7500.00 |
+When account list shown
+Then account list rows are : AccountListRow
+| Group       | Account               | Name      | Indent | Balance  | IsHeading |
+| Investments | none                  | none      | 0      | 10000.00 | true      |
+| none        | Assets:Brokerage      | Brokerage | 1      | 10000.00 | false     |
+| none        | Assets:Brokerage:Cash | Cash      | 2      | 2500.00  | false     |
+| none        | Assets:Brokerage:Fund | Fund      | 2      | 7500.00  | false     |
+
+# ---------------------------------------------------------------------------
+# Selecting an account
+# ---------------------------------------------------------------------------
+
+Attributes PaneState
+Description What one pane of the right-hand side is showing.
+| Attribute | Type        | Default  |
+| Pane      | Integer     | 1        |
+| Showing   | PaneContent | Register |
+| Account   | AccountPath | none     |
+| Active    | Boolean     | false    |
+
+DataType PaneContent
+Description What a pane can show.
+Examples: EnumerationValues
+| Value        | Notes                                                  |
+| Register     | The transactions of one account                        |
+| ImportReview | An import waiting to be looked over and accepted       |
+| Empty        | Nothing selected yet                                   |
+
+Scenario Selecting an account shows its register
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+Then panes are : PaneState
+| Pane | Showing  | Account         | Active |
+| 1    | Register | Assets:Checking | true   |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Payee         | Balance |
+| T1  | 2026-01-05 | Acme Payroll  | 3000.00 |
+| T2  | 2026-01-15 | Harris Teeter | 2955.00 |
+| T4  | 2026-01-25 | Transfer      | 2455.00 |
+
+Scenario Selecting a placeholder shows everything beneath it
+Description A placeholder has no postings of its own, so showing an empty
+Description register would be useless. It shows the subtree, which is what a
+Description reader of a brokerage account wants: the cash and the holdings
+Description together.
+Given the chart of accounts is : ChartOfAccounts
+| Path                  | Type       | Placeholder |
+| Assets:Brokerage      | Investment | true        |
+| Assets:Brokerage:Cash | Investment | false       |
+| Assets:Brokerage:Fund | Investment | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee | Account               | Amount  |
+| T1  | 2026-01-05 | Open  | Assets:Brokerage:Cash | 2500.00 |
+| T2  | 2026-01-06 | Open  | Assets:Brokerage:Fund | 7500.00 |
+When account selected : AccountSelect
+| Path             |
+| Assets:Brokerage |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Balance  |
+| T1  | 2026-01-05 | 2500.00  |
+| T2  | 2026-01-06 | 10000.00 |
+
+Scenario The other side of a transfer is named in the category column
+Description A transfer appears in both registers, and in each of them the
+Description category column names the other account. It is one transaction seen
+Description twice, not two.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Savings  |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Category        | Payment | Deposit |
+| T4  | 2026-01-25 | Assets:Checking | 0.00    | 500.00  |
+
+# ---------------------------------------------------------------------------
+# The split pane
+# ---------------------------------------------------------------------------
+
+Scenario The right-hand side is one pane until a split is asked for
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+Then split state is : SplitState Vertical
+| Open       | false |
+| PaneCount  | 1     |
+| ActivePane | 1     |
+
+Attributes SplitState
+| Attribute  | Type    | Default |
+| Open       | Boolean | false   |
+| PaneCount  | Integer | 1       |
+| ActivePane | Integer | 1       |
+
+Scenario Splitting the view opens a second pane on the same account
+Description The second pane starts where the first one is, so that splitting
+Description shows something rather than nothing, and the new pane becomes the
+Description active one for the next selection.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When view split
+Then split state is : SplitState Vertical
+| Open       | true |
+| PaneCount  | 2    |
+| ActivePane | 2    |
+Then panes are : PaneState
+| Pane | Showing  | Account         | Active |
+| 1    | Register | Assets:Checking | false  |
+| 2    | Register | Assets:Checking | true   |
+
+Scenario Two accounts can then be read at once
+Description Selecting an account changes the active pane and leaves the other
+Description one alone, which is the whole point of the split.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When view split
+When account selected : AccountSelect
+| Path             |
+| Liabilities:Visa |
+Then panes are : PaneState
+| Pane | Showing  | Account          | Active |
+| 1    | Register | Assets:Checking  | false  |
+| 2    | Register | Liabilities:Visa | true   |
+
+Scenario Making a pane active sends the next selection to it
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When view split
+When pane made active : PaneSelect
+| Pane |
+| 1    |
+When account selected : AccountSelect
+| Path           |
+| Assets:Savings |
+Then panes are : PaneState
+| Pane | Showing  | Account         | Active |
+| 1    | Register | Assets:Savings  | true   |
+| 2    | Register | Assets:Checking | false  |
+
+Attributes PaneSelect
+| Attribute | Type    | Default |
+| Pane      | Integer | 1       |
+
+Scenario Closing the split leaves the active pane
+Description Whichever pane was being worked in is the one that stays, because
+Description that is the one being read.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When view split
+When account selected : AccountSelect
+| Path             |
+| Liabilities:Visa |
+When split closed
+Then split state is : SplitState Vertical
+| Open       | false |
+| PaneCount  | 1     |
+| ActivePane | 1     |
+Then panes are : PaneState
+| Pane | Showing  | Account          | Active |
+| 1    | Register | Liabilities:Visa | true   |
+
+# ---------------------------------------------------------------------------
+# Reviewing an import in the split pane
+# ---------------------------------------------------------------------------
+
+Description An import is shown in the split pane rather than in a dialog of its
+Description own, so that the register it is about to change is beside it while it
+Description is read. Nothing reaches the book until it is accepted.
+
+Attributes ImportReviewRow
+Description One row of an import waiting to be reviewed. Account is where the
+Description money moved; Category is the other side as the import worked it out.
+| Attribute   | Type              | Default   |
+| Line        | Integer           | 0         |
+| Date        | Date              | 2026-01-01 |
+| Payee       | PayeeName         | none      |
+| Account      | AccountPath      | none      |
+| Category    | AccountPath       | none      |
+| Amount      | Money            | 0.00      |
+| Disposition | ImportDisposition | New       |
+| Accepted    | Boolean           | true      |
+
+Define AnImportOfThree
+Description The import the next several scenarios all read. A scenario cannot
+Description take a table from the scenario before it: every generated test stands
+Description alone, so the rows are named here and asked for by name.
+| Line | Date       | Payee         | Account         | Category               | Amount  | Disposition |
+| 1    | 2026-02-02 | Harris Teeter | Assets:Checking | Expenses:Groceries     | -52.10  | New         |
+| 2    | 2026-02-03 | Unknown Shop  | Assets:Checking | Expenses:Uncategorized | -23.75  | New         |
+| 3    | 2026-01-15 | Harris Teeter | Assets:Checking | Expenses:Groceries     | -45.00  | Duplicate   |
+
+Scenario An import opens in the split pane with every row proposed
+Description Splitting happens by itself if the view was not split: the point of
+Description showing an import here is to have the register beside it.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import reviewed : ImportReviewRow
+=AnImportOfThree
+Then split state is : SplitState Vertical
+| Open       | true |
+| PaneCount  | 2    |
+| ActivePane | 2    |
+Then panes are : PaneState
+| Pane | Showing      | Account         | Active |
+| 1    | Register     | Assets:Checking | false  |
+| 2    | ImportReview | Assets:Checking | true   |
+Then import review summary is : ImportReviewSummary Vertical
+| Rows       | 3     |
+| NewRows    | 2     |
+| Duplicates | 1     |
+| Accepted   | 2     |
+| Committed  | false |
+
+Attributes ImportReviewSummary
+| Attribute  | Type    | Default |
+| Rows       | Integer | 0       |
+| NewRows    | Integer | 0       |
+| Duplicates | Integer | 0       |
+| Accepted   | Integer | 0       |
+| Committed  | Boolean | false   |
+
+Scenario A row the import thinks is a duplicate starts unaccepted
+Description The import has already decided it has seen this one. It is shown
+Description rather than hidden, because the decision is worth disagreeing with,
+Description and it starts unticked so that accepting everything does not bring
+Description it in.
+Given the chart of accounts is as previous
+Given postings are as previous
+When import reviewed : ImportReviewRow
+=AnImportOfThree
+Then import review rows are : ImportReviewRow
+| Line | Payee         | Disposition | Accepted |
+| 1    | Harris Teeter | New         | true     |
+| 2    | Unknown Shop  | New         | true     |
+| 3    | Harris Teeter | Duplicate   | false    |
+
+Scenario Nothing is in the book until the import is accepted
+Description The register in the other pane is unchanged while the review is
+Description open, which is what makes it worth having beside it.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import reviewed : ImportReviewRow
+=AnImportOfThree
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Payee         | Balance |
+| T1  | 2026-01-05 | Acme Payroll  | 3000.00 |
+| T2  | 2026-01-15 | Harris Teeter | 2955.00 |
+| T4  | 2026-01-25 | Transfer      | 2455.00 |
+
+Scenario Accepting the import adds the ticked rows and closes the review
+Description The two new rows arrive, the duplicate does not, and the pane goes
+Description back to being a register of the same account so that the result can
+Description be read where the import was.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import reviewed : ImportReviewRow
+=AnImportOfThree
+When import accepted
+Then import review summary is : ImportReviewSummary Vertical
+| Rows       | 3    |
+| NewRows    | 2    |
+| Duplicates | 1    |
+| Accepted   | 2    |
+| Committed  | true |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Payee         | Balance |
+| T1  | 2026-01-05 | Acme Payroll  | 3000.00 |
+| T2  | 2026-01-15 | Harris Teeter | 2955.00 |
+| T4  | 2026-01-25 | Transfer      | 2455.00 |
+| T5  | 2026-02-02 | Harris Teeter | 2402.90 |
+| T6  | 2026-02-03 | Unknown Shop  | 2379.15 |
+Then panes are : PaneState
+| Pane | Showing  | Account         | Active |
+| 1    | Register | Assets:Checking | false  |
+| 2    | Register | Assets:Checking | true   |
+
+Scenario Unticking a row leaves it out
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import reviewed : ImportReviewRow
+=AnImportOfThree
+When review row unticked : ReviewRowSelect
+| Line |
+| 2    |
+When import accepted
+Then import review summary is : ImportReviewSummary Vertical
+| Rows       | 3    |
+| NewRows    | 2    |
+| Duplicates | 1    |
+| Accepted   | 1    |
+| Committed  | true |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Payee         | Balance |
+| T1  | 2026-01-05 | Acme Payroll  | 3000.00 |
+| T2  | 2026-01-15 | Harris Teeter | 2955.00 |
+| T4  | 2026-01-25 | Transfer      | 2455.00 |
+| T5  | 2026-02-02 | Harris Teeter | 2402.90 |
+
+Attributes ReviewRowSelect
+| Attribute | Type    | Default |
+| Line      | Integer | 0       |
+
+Scenario Ticking a duplicate brings it in after all
+Description The import's decision is a proposal. A user who knows the bank sent
+Description the same transaction twice for a real reason can say so.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import reviewed : ImportReviewRow
+=AnImportOfThree
+When review row ticked : ReviewRowSelect
+| Line |
+| 3    |
+When import accepted
+Then import review summary is : ImportReviewSummary Vertical
+| Rows       | 3    |
+| NewRows    | 2    |
+| Duplicates | 1    |
+| Accepted   | 3    |
+| Committed  | true |
+
+Scenario Cancelling the import changes nothing
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import reviewed : ImportReviewRow
+=AnImportOfThree
+When import cancelled
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Payee         | Balance |
+| T1  | 2026-01-05 | Acme Payroll  | 3000.00 |
+| T2  | 2026-01-15 | Harris Teeter | 2955.00 |
+| T4  | 2026-01-25 | Transfer      | 2455.00 |
+Then panes are : PaneState
+| Pane | Showing  | Account         | Active |
+| 1    | Register | Assets:Checking | false  |
+| 2    | Register | Assets:Checking | true   |
+
+Scenario A review of an import into an account that is not selected names it
+Description The import says which account it is for, and that is what the
+Description review shows regardless of what was selected, because the import is
+Description about that account and not about where the reader happened to be.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path           |
+| Assets:Savings |
+When import reviewed : ImportReviewRow
+| Line | Date       | Payee  | Account          | Category          | Amount | Disposition |
+| 1    | 2026-02-02 | Amazon | Liabilities:Visa | Expenses:Shopping | -31.00 | New         |
+Then panes are : PaneState
+| Pane | Showing      | Account          | Active |
+| 1    | Register     | Assets:Savings   | false  |
+| 2    | ImportReview | Liabilities:Visa | true   |

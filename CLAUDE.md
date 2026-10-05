@@ -64,6 +64,24 @@ glue-header style, are in `../SpecStudioExampleTests/CPlusPlus/ExampleTests/`.
 - Examples table column headings must match the attribute names exactly —
   `AssumedHere`, not `Assumed here`. A mismatched heading is a silently
   ignored column plus a missing-column error.
+- **Never write `as previous`.** Spell the table out, or use a table-form
+  `Define`. It compiles to a no-argument call that establishes nothing, and the
+  only reason it ever appears to work is that a `Background`'s givens are
+  inlined into every test in the file. So in a file with no `Background` it sets
+  up nothing at all, and in a file with one it silently resolves to the
+  *Background's* table rather than the table immediately above — which means a
+  scenario can pass while exercising data nobody intended.
+
+  This has cost real time four separate times here. The worst case was seven
+  invoice scenarios throwing `an account path is required`, which read as a
+  defect in the importer for days: `Given import target is as previous` left the
+  target empty and the importer was handed `""`. 72 of the 165 uses in this spec
+  established nothing. They are now spelled out in the six files that have no
+  `Background`; the five that have one still use it and are left alone, because
+  inlining there would change meaning rather than restore it.
+
+  If you add a `Background` to a file, check every scenario below it: they all
+  inherit it, and any `as previous` downstream now refers to yours.
 
 ## Domain conventions
 

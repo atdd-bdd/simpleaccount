@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <string>
 #include <vector>
 #include "account_type.h"
@@ -18,6 +19,15 @@ namespace ledger {
 // One side of a transaction. Debits are positive and credits are negative, for
 // every account type alike; what each type shows on screen is then the display
 // sign from Accounts.
+// An identifier a file gave to one posting, and which file gave it. Per posting
+// rather than per transaction, because a download describes one side of it: the
+// bank knows what left the chequing account and has never heard of the category
+// it was spent on.
+struct ImportId {
+    types::ImportSource source = types::ImportSource::Ofx;
+    std::string id;
+};
+
 struct Posting {
     types::AccountPath account;
     Money amount;
@@ -25,7 +35,34 @@ struct Posting {
     // Per posting, not per transaction: a transfer leaves one account and
     // arrives in another on two different statements, so it clears twice.
     types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
+    // The identifiers this posting has collected, at most one per source. More
+    // than one because a posting imported from a CSV and later recognised in a
+    // QFX has a name in each, and losing either would make that file import
+    // twice over. Empty for anything entered by hand.
+    std::vector<ImportId> import_ids;
 };
+
+// What this posting is called by that kind of file, if anything. An identifier
+// is only an identifier to the file that gave it: against any other source the
+// posting counts as having none, and the weaker tests decide.
+inline const std::string* id_from(const Posting& p, types::ImportSource source) {
+    for (const ImportId& one : p.import_ids)
+        if (one.source == source) return &one.id;
+    return nullptr;
+}
+
+// Recording what a file called it. Stamping the same source twice replaces the
+// identifier rather than collecting both, because a posting has one name in any
+// one file.
+inline void stamp(Posting* p, types::ImportSource source, const std::string& id) {
+    if (id.empty()) return;
+    for (ImportId& one : p->import_ids) {
+        if (one.source != source) continue;
+        one.id = id;
+        return;
+    }
+    p->import_ids.push_back(ImportId{source, id});
+}
 
 struct Transaction {
     types::TransactionRef ref;
@@ -89,6 +126,21 @@ inline Money category_amount_of(const Money& payment, const Money& deposit) {
 inline types::AccountPath uncategorized_for(const Money& known_amount) {
     return types::AccountPath(known_amount.cents() > 0 ? "Income:Uncategorized"
                                                        : "Expenses:Uncategorized");
+}
+
+// Removing one side would leave the book out of balance, so a delete is always
+// of the whole transaction, from whichever register it was asked for. See the
+// delete scenario in Transactions.spectable.
+//
+// True when something was removed, so a caller can tell a delete from a request
+// to delete something that is not there.
+inline bool erase_transaction(std::vector<Transaction>* transactions,
+                              const std::string& ref) {
+    const auto at = std::find_if(transactions->begin(), transactions->end(),
+        [&](const Transaction& t) { return t.ref.value() == ref; });
+    if (at == transactions->end()) return false;
+    transactions->erase(at);
+    return true;
 }
 
 // A transfer is recognised by its shape rather than recorded as its own kind:

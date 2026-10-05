@@ -18,6 +18,11 @@ enum class AccountClass { Real, Nominal };
 
 enum class ClearedStatus { Uncleared, Cleared, Reconciled };
 
+// Where an identifier came from. Two files describing one transaction do not
+// agree on what to call it, so the name of the source travels with the name of
+// the transaction; see the identifier rule in ImportOfx.spectable.
+enum class ImportSource { Ofx, Csv, Qif };
+
 inline AccountType account_type_from_string(const std::string& s) {
     if (s == "Bank")       return AccountType::Bank;
     if (s == "Cash")       return AccountType::Cash;
@@ -70,6 +75,22 @@ inline std::string to_string(ClearedStatus c) {
         case ClearedStatus::Reconciled: return "Reconciled";
     }
     throw std::invalid_argument("unknown cleared status");
+}
+
+inline std::string to_string(ImportSource s) {
+    switch (s) {
+        case ImportSource::Ofx: return "Ofx";
+        case ImportSource::Csv: return "Csv";
+        case ImportSource::Qif: return "Qif";
+    }
+    throw std::invalid_argument("unknown import source");
+}
+
+inline ImportSource import_source_from_string(const std::string& s) {
+    if (s == "Ofx") return ImportSource::Ofx;
+    if (s == "Csv") return ImportSource::Csv;
+    if (s == "Qif") return ImportSource::Qif;
+    throw std::invalid_argument("unknown import source: " + s);
 }
 
 // The types that hold money are real and are reconciled against a statement.

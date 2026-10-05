@@ -213,4 +213,116 @@ public:
         ADD_FAILURE() << "Not implemented: examples_businessrule_what_is_held_in_a_book_and_what_is_held_for_the_program";
     }
 
+public:
+
+    void given_no_settings_file_exists() {
+        ADD_FAILURE() << "Not implemented: given_no_settings_file_exists";
+    }
+
+    void when_a_qif_profile_is_saved_named(const std::vector<QifProfileSavedString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_a_qif_profile_is_saved_named";
+    }
+
+    void then_the_qif_profiles_are(const std::vector<QifProfileRowString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_the_qif_profiles_are";
+    }
+
+    void then_the_book_names_are(const std::vector<BookNameRowString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_the_book_names_are";
+    }
+
+    void when_a_new_book_is_made_named(const std::vector<BookNameString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_a_new_book_is_made_named";
+    }
+
+    void then_the_book_opened_is(const std::vector<OpenedBookString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_the_book_opened_is";
+    }
+
+    void given_a_new_book_named_business() {
+        ADD_FAILURE() << "Not implemented: given_a_new_book_named_business";
+    }
+
+    void given_the_chart_of_accounts_is(const std::vector<AccountString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: given_the_chart_of_accounts_is";
+    }
+
+    void given_postings_are(const std::vector<PostingRowString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: given_postings_are";
+    }
+
+    void when_the_book_is_saved_and_opened_again() {
+        ADD_FAILURE() << "Not implemented: when_the_book_is_saved_and_opened_again";
+    }
+
+    void then_the_chart_of_accounts_is(const std::vector<AccountString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_the_chart_of_accounts_is";
+    }
+
+    void then_postings_are(const std::vector<PostingRowString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_postings_are";
+    }
+
+    void when_a_book_is_opened_named(const std::vector<BookNameString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_a_book_is_opened_named";
+    }
+
+    void then_the_book_is_refused_saying(const std::string& value) {
+        std::cout << value << "\n";
+        ADD_FAILURE() << "Not implemented: then_the_book_is_refused_saying";
+    }
+
+    void given_a_book_whose_schema_version_is_99() {
+        ADD_FAILURE() << "Not implemented: given_a_book_whose_schema_version_is_99";
+    }
+
+    void given_the_books_folder_holds(const std::vector<BookFileListString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: given_the_books_folder_holds";
+    }
+
+    void when_the_books_are_listed() {
+        ADD_FAILURE() << "Not implemented: when_the_books_are_listed";
+    }
+
+    void examples_businessrule_everything_a_book_needs_is_in_the_book(const std::vector<BookScopeString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_everything_a_book_needs_is_in_the_book";
+    }
+
+    void examples_businessrule_a_book_is_one_sqlite_database_in_one_known_folder(const std::vector<BookFileString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_a_book_is_one_sqlite_database_in_one_known_folder";
+    }
+
+    void examples_businessrule_one_table_per_collection_one_row_per_entity(const std::vector<EntityStorageString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_one_table_per_collection_one_row_per_entity";
+    }
+
+    void examples_businessrule_what_a_book_s_file_holds_besides_its_entities(const std::vector<BookInfrastructureString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_what_a_book_s_file_holds_besides_its_entities";
+    }
+
+    void examples_businessrule_how_an_attribute_becomes_a_column(const std::vector<ColumnTypeString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_how_an_attribute_becomes_a_column";
+    }
+
+    void examples_businessrule_the_qif_profiles_live_in_one_file_beside_the_books_under_a_name(const std::vector<BesideTheBooksString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_the_qif_profiles_live_in_one_file_beside_the_books_under_a_name";
+    }
+
 };

@@ -61,8 +61,20 @@ Scenario The same transaction seen from the other account
 Description T2 above, in the register of the category rather than the bank. The
 Description amount is on the other side and the category column names the bank.
 Description Nothing was stored twice to make this possible.
-Given the chart of accounts is as previous
-Given postings are as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Income:Salary      | Income  | false       |
+| Expenses:Groceries | Expense | false       |
+| Expenses:Auto:Fuel | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee         | Account            | Amount   |
+| T1  | 2024-01-01 | Acme Payroll  | Assets:Checking    | 3000.00  |
+| T1  | 2024-01-01 | Acme Payroll  | Income:Salary      | -3000.00 |
+| T2  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00   |
+| T2  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00    |
+| T3  | 2024-01-20 | Shell         | Assets:Checking    | -52.00   |
+| T3  | 2024-01-20 | Shell         | Expenses:Auto:Fuel | 52.00    |
 When register opened on : AccountSelect
 | Path               |
 | Expenses:Groceries |
@@ -201,8 +213,18 @@ Description A running balance down a list that is not in date order is a column
 Description of meaningless numbers. Sorting by payee is useful for finding
 Description something, so it is allowed, and the balance column is emptied
 Description rather than filled with figures that do not add up.
-Given the chart of accounts is as previous
-Given postings in entry order are as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
+Given postings in entry order are : SequencedPostingRow
+| EntrySeq | Ref | Date       | Payee | Account            | Amount |
+| 1        | T1  | 2024-01-20 | Shop A | Assets:Checking   | -10.00 |
+| 1        | T1  | 2024-01-20 | Shop A | Expenses:Groceries | 10.00 |
+| 2        | T2  | 2024-01-15 | Shop B | Assets:Checking   | -20.00 |
+| 2        | T2  | 2024-01-15 | Shop B | Expenses:Groceries | 20.00 |
+| 3        | T3  | 2024-01-20 | Shop C | Assets:Checking   | -30.00 |
+| 3        | T3  | 2024-01-20 | Shop C | Expenses:Groceries | 30.00 |
 When register sorted by : SortBy
 | Column |
 | Payee  |
@@ -258,8 +280,18 @@ Then register lines are : RegisterLine
 | T1  | 2024-04-02 | Home Depot | --Split-- | 184.50 | 0.00    | -184.50 |
 
 Scenario An expanded split shows its lines beneath
-Given the chart of accounts is as previous
-Given postings are as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type    | Placeholder |
+| Assets:Checking           | Bank    | false       |
+| Expenses:Home:Maintenance | Expense | false       |
+| Expenses:Home:Garden      | Expense | false       |
+| Expenses:Auto:Repairs     | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee      | Account                   | Amount  | Memo         |
+| T1  | 2024-04-02 | Home Depot | Assets:Checking           | -184.50 | none         |
+| T1  | 2024-04-02 | Home Depot | Expenses:Home:Maintenance | 100.00  | Paint        |
+| T1  | 2024-04-02 | Home Depot | Expenses:Home:Garden      | 54.50   | Compost      |
+| T1  | 2024-04-02 | Home Depot | Expenses:Auto:Repairs     | 30.00   | Wiper blades |
 When register opened on : AccountSelect
 | Path            |
 | Assets:Checking |
@@ -282,8 +314,18 @@ Scenario A split seen from one of its category registers shows only its own line
 Description The register of Expenses:Home:Garden shows 54.50, not 184.50, and
 Description names the bank account as the category. The other legs of the split
 Description are not its business.
-Given the chart of accounts is as previous
-Given postings are as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type    | Placeholder |
+| Assets:Checking           | Bank    | false       |
+| Expenses:Home:Maintenance | Expense | false       |
+| Expenses:Home:Garden      | Expense | false       |
+| Expenses:Auto:Repairs     | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee      | Account                   | Amount  | Memo         |
+| T1  | 2024-04-02 | Home Depot | Assets:Checking           | -184.50 | none         |
+| T1  | 2024-04-02 | Home Depot | Expenses:Home:Maintenance | 100.00  | Paint        |
+| T1  | 2024-04-02 | Home Depot | Expenses:Home:Garden      | 54.50   | Compost      |
+| T1  | 2024-04-02 | Home Depot | Expenses:Auto:Repairs     | 30.00   | Wiper blades |
 When register opened on : AccountSelect
 | Path                 |
 | Expenses:Home:Garden |
@@ -443,8 +485,17 @@ Examples: ValidValues
 |       | true    | Empty clears the search      |
 
 Scenario Searching for an amount matches either column
-Given the chart of accounts is as previous
-Given postings are as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
+| Expenses:Auto:Fuel | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee         | Account            | Amount | Memo          |
+| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 | weekly shop   |
+| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00  | none          |
+| T2  | 2024-01-20 | Shell         | Assets:Checking    | -52.00 | shop on route |
+| T2  | 2024-01-20 | Shell         | Expenses:Auto:Fuel | 52.00  | none          |
 When register searched for : SearchTerm
 | Term  |
 | 52.00 |
@@ -475,8 +526,12 @@ Then blank line is : RegisterLine CompareOnly
 Scenario Leaving a part-filled blank line with no amount discards it
 Description A payee typed and then thought better of does not become a zero
 Description transaction.
-Given the chart of accounts is as previous
-Given today is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
+Given today is : Today Vertical
+| Date | 2024-05-15 |
 When blank line filled : RegisterLine Vertical CompareOnly
 | Payee | Harris Teeter |
 When blank line left
