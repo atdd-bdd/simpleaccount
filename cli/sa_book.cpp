@@ -13,7 +13,7 @@
 //   sa_book account  <book> <path> <Type> [opening] [YYYY-MM-DD]
 //   sa_book entry    <book> <YYYY-MM-DD> <payee> <account> <category> <amount>
 //   sa_book register <book> <account>
-//   sa_book import   <book> <file.qfx> <account> [--accept] [--same <id>...]
+//   sa_book import   <book> <file.qfx|file.csv> <account> [--accept] [--same <id>...]
 //                                               [--different <id>...]
 //   sa_book delete   <book> <ref>
 //   sa_book report   <book> <from> <to> [--quicken]
@@ -29,6 +29,7 @@
 #include "ofx_import.h"
 #include "register_lines.h"
 #include "report.h"
+#include "csv_import.h"
 #include "store_sqlite.h"
 #include "transaction_id.h"
 
@@ -43,7 +44,7 @@ int usage() {
         "  sa_book account  <book> <path> <Type> [opening] [YYYY-MM-DD]\n"
         "  sa_book entry    <book> <YYYY-MM-DD> <payee> <account> <category> <amount>\n"
         "  sa_book register <book> <account>\n"
-        "  sa_book import   <book> <file.qfx> <account> [--accept]\n"
+        "  sa_book import   <book> <file.qfx|file.csv> <account> [--accept]\n"
         "                   [--same <id>] [--different <id>]   resolve a Possible\n"
         "  sa_book delete   <book> <ref>\n"
         "  sa_book report   <book> <from> <to> [--quicken]\n"
@@ -78,6 +79,98 @@ std::string next_ref(const std::vector<ledger::Transaction>& transactions) {
 }
 
 }  // namespace
+
+
+// What kind of file this is, by what it holds. An OFX file opens a tag before
+// anything else; anything else with a delimiter in its first line is a CSV.
+bool looks_like_a_csv(const std::string& text) {
+    for (const char c : text) {
+        if (c == ' ' || c == '\r' || c == '\n' || c == '\t') continue;
+        return c != '<' && c != 'O';     // '<' opens OFX 2, 'O' starts OFXHEADER
+    }
+    return false;
+}
+
+// Importing a delimited file. The columns are matched against the alias table,
+// and anything the table cannot place is reported rather than guessed at -- the
+// user can then say what it is, and that answer belongs in a profile.
+int import_csv(const std::string& text, const std::string& account, bool accept,
+               Loaded* open) {
+    const csv::Read file = csv::read(text);
+    if (file.refused) {
+        std::fprintf(stderr, "%s\n", file.refusal.c_str());
+        return 1;
+    }
+    const csv::Matching matching = csv::match_headers(file.headings);
+    if (matching.refused) {
+        std::fprintf(stderr, "%s\n", matching.refusal.c_str());
+        return 1;
+    }
+    for (const csv::Ambiguity& one : matching.ambiguous) {
+        std::fprintf(stderr, "two columns both look like %s: %s\n",
+                     csv::to_string(one.field).c_str(),
+                     csv::detail::joined(one.headers).c_str());
+        return 1;
+    }
+    for (const csv::HeaderMatch& one : matching.unmatched)
+        std::printf("column %d, %s, was not recognised%s\n", one.position,
+                    one.source_header.c_str(),
+                    one.field == csv::Field::Ignore
+                        ? ""
+                        : (" -- it may be the " + csv::to_string(one.field)).c_str());
+    for (const csv::Field missing : matching.missing) {
+        std::fprintf(stderr, "no column holds the %s, which is required\n",
+                     csv::to_string(missing).c_str());
+        return 1;
+    }
+
+    const csv::StyleChoice style = csv::style_for(
+        matching.for_field(csv::Field::Amount) != nullptr,
+        matching.for_field(csv::Field::Debit) != nullptr,
+        matching.for_field(csv::Field::Credit) != nullptr);
+    const csv::Rows rows = csv::rows_of(file, matching, types::DateOrder::MDY,
+                                        style.style, csv::OutwardSign::Negative);
+    for (const csv::RowError& bad : rows.rejected)
+        std::printf("line %d was not imported: %s\n", bad.line, bad.reason.c_str());
+
+    const csv::Imported decided = csv::decide(rows.rows, account, open->transactions);
+    std::printf("%-10s %-28s %10s %-12s\n", "date", "payee", "amount", "decision");
+    for (const csv::Decided& one : decided.decided)
+        std::printf("%-10s %-28s %10s %-12s\n", one.row.date.iso().c_str(),
+                    one.row.payee.substr(0, 28).c_str(),
+                    one.row.amount.in_register().c_str(),
+                    ofx::to_string(one.disposition).c_str());
+    std::printf("\nNew %d  Matched %d  Possible %d\n", decided.summary.New,
+                decided.summary.Matched, decided.summary.Possible);
+
+    if (!accept) {
+        std::printf("nothing written; pass --accept to keep it\n");
+        return 0;
+    }
+    const std::vector<ledger::Transaction> made = csv::transactions_for(
+        decided, account, open->transactions.size(), &open->accounts);
+    open->transactions.insert(open->transactions.end(), made.begin(), made.end());
+
+    // The balance the file states against what the import makes it, which is the
+    // strongest check a CSV offers and the nearest thing it has to a statement.
+    ledger::Ledger book;
+    for (const ledger::Transaction& t : open->transactions)
+        for (const ledger::Posting& posting : t.postings)
+            book.add({t.date, posting.account, posting.amount, t.ref.value()});
+    for (const csv::BalanceAtRow& check : csv::balance_checks(rows.rows, book, account))
+        if (!check.agrees)
+            std::printf("line %d says the balance is %s; the book makes it %s\n",
+                        check.line, check.row_balance.in_register().c_str(),
+                        check.computed.in_register().c_str());
+
+    const store::Failure no = open->book.write(open->accounts, open->transactions);
+    if (no.refused) {
+        std::fprintf(stderr, "%s\n", no.reason.c_str());
+        return 1;
+    }
+    std::printf("added %zu transactions\n", made.size());
+    return 0;
+}
 
 int main(int argc, char** argv) {
     if (argc < 2) return usage();
@@ -297,7 +390,18 @@ int main(int argc, char** argv) {
         std::ostringstream buffer;
         buffer << in.rdbuf();
 
-        const ofx::Read parsed = ofx::read(buffer.str());
+        const std::string text = buffer.str();
+        // A CSV import is its own path: the file says nothing about statements,
+        // the rows are matched by fingerprint rather than by an identifier the
+        // bank promises to repeat, and the columns have to be understood first.
+        if (looks_like_a_csv(text)) {
+            bool accept_csv = false;
+            for (int i = 5; i < argc; ++i)
+                if (std::strcmp(argv[i], "--accept") == 0) accept_csv = true;
+            return import_csv(text, account, accept_csv, &open);
+        }
+
+        const ofx::Read parsed = ofx::read(text);
         if (parsed.refused) {
             std::fprintf(stderr, "%s\n", parsed.refusal.c_str());
             return 1;
