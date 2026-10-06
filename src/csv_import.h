@@ -13,6 +13,7 @@
 #include "date.h"
 #include "ledger.h"
 #include "money.h"
+#include "payee_rules.h"
 #include "posting.h"
 #include "transaction_id.h"
 
@@ -625,13 +626,20 @@ inline Imported decide(const std::vector<RowRead>& rows, const std::string& acco
 // Uncategorized chosen by the sign.
 inline std::vector<ledger::Transaction> transactions_for(
         const Imported& decided, const std::string& account,
-        std::size_t already_in_book, chart::Chart* accounts) {
+        std::size_t already_in_book, chart::Chart* accounts,
+        const std::vector<payees::Rule>& rules = {}) {
     std::vector<ledger::Transaction> out;
     for (const Decided& one : decided.decided) {
         if (one.disposition != ofx::Disposition::New) continue;
         const Money amount = one.row.amount;
 
+        // A category the file itself carried is used as it stands: the file has
+        // said more than any rule could work out. Where it said nothing, a rule
+        // may know, and failing that the sign decides.
+        const payees::Applied named = payees::apply(rules, one.row.payee);
         std::string other = one.row.category;
+        if ((other.empty() || other == "none") && !named.category.empty())
+            other = named.category;
         if (other.empty() || other == "none") {
             other = ledger::uncategorized_for(amount).value();
             accounts->add(types::AccountPath(other),
@@ -651,7 +659,8 @@ inline std::vector<ledger::Transaction> transactions_for(
         t.ref = types::TransactionRef(
             "T" + std::to_string(already_in_book + out.size() + 1));
         t.date = one.row.date;
-        t.payee = types::PayeeName(one.row.payee);
+        t.payee = types::PayeeName(named.payee);
+        t.raw_name = named.raw_name;
         t.check_no = types::CheckNumber(one.row.check_no);
         t.memo = one.row.memo;
 

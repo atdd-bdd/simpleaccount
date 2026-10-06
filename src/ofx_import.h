@@ -8,6 +8,7 @@
 #include "ledger.h"
 #include "money.h"
 #include "ofx_reader.h"
+#include "payee_rules.h"
 #include "posting.h"
 #include "transaction_id.h"
 
@@ -379,7 +380,8 @@ inline Imported decide(const Statement& statement, const std::string& account,
 // or the user says otherwise.
 inline std::vector<ledger::Transaction> transactions_for(
         const Imported& decided, const std::string& account,
-        std::size_t already_in_book, chart::Chart* accounts) {
+        std::size_t already_in_book, chart::Chart* accounts,
+        const std::vector<payees::Rule>& rules = {}) {
     std::vector<ledger::Transaction> out;
     for (const Decided& one : decided.decided) {
         if (one.disposition != Disposition::New) continue;
@@ -388,13 +390,19 @@ inline std::vector<ledger::Transaction> transactions_for(
         // amount: money in is income, money out is an expense. Passing its
         // opposite put every payment under Income and every deposit under
         // Expenses, which reads plausibly in a summary and is backwards.
-        // A payment waits in Unassigned for the account it went to; anything
-        // else goes to a category chosen by the sign. Two different unknowns,
-        // two different accounts, and the difference is whether anything in this
-        // book could be the other half.
-        const std::string other = one.other_side_waits
-                                      ? ledger::unassigned().value()
-                                      : ledger::uncategorized_for(amount).value();
+        // What the rules make of the name the bank sent: the payee to record and,
+        // where a rule says so, the category to post the other side to. A rule
+        // that names a category is the user having answered this question once
+        // already, so it is not asked again.
+        const payees::Applied named = payees::apply(rules, one.downloaded.name);
+
+        // A payment waits in Unassigned for the account it went to; a row a rule
+        // has categorised goes where the rule says; anything else goes to a
+        // category chosen by the sign.
+        std::string other = one.other_side_waits
+                                ? ledger::unassigned().value()
+                                : ledger::uncategorized_for(amount).value();
+        if (!one.other_side_waits && !named.category.empty()) other = named.category;
         accounts->add(types::AccountPath(other),
                       one.other_side_waits
                           ? types::AccountType::Asset
@@ -406,7 +414,8 @@ inline std::vector<ledger::Transaction> transactions_for(
         t.ref = types::TransactionRef(
             "T" + std::to_string(already_in_book + out.size() + 1));
         t.date = one.downloaded.date_posted;
-        t.payee = types::PayeeName(one.downloaded.name);
+        t.payee = types::PayeeName(named.payee);
+        t.raw_name = named.raw_name;
         t.check_no = types::CheckNumber(one.downloaded.check_num);
         t.memo = one.downloaded.memo;
 

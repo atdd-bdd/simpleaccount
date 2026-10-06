@@ -141,6 +141,9 @@ CREATE TABLE transactions (
   ref       TEXT NOT NULL,
   date      TEXT NOT NULL,
   payee     TEXT NOT NULL DEFAULT '',
+  -- What the bank sent, where a rule renamed it. A rule written next year has
+  -- to be able to match what the bank sent this year.
+  raw_name  TEXT NOT NULL DEFAULT '',
   check_no  TEXT NOT NULL DEFAULT '',
   memo      TEXT NOT NULL DEFAULT '',
   tag       TEXT NOT NULL DEFAULT '');
@@ -392,8 +395,9 @@ public:
         }
 
         detail::Statement header(db_.get(),
-            "INSERT INTO transactions (id, ref, date, payee, check_no, memo, tag) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)");
+            "INSERT INTO transactions "
+            "(id, ref, date, payee, raw_name, check_no, memo, tag) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
         if (!header.ok()) return fail(header.why());
         detail::Statement line(db_.get(),
             "INSERT INTO postings "
@@ -417,9 +421,10 @@ public:
             header.bind(2, t.ref.value());
             header.bind(3, t.date.iso());
             header.bind(4, t.payee.value());
-            header.bind(5, t.check_no.value());
-            header.bind(6, t.memo);
-            header.bind(7, t.tag);
+            header.bind(5, t.raw_name);
+            header.bind(6, t.check_no.value());
+            header.bind(7, t.memo);
+            header.bind(8, t.tag);
             if (!header.run()) return fail(header.why());
 
             // The line number keeps the order the postings were entered in, so
@@ -470,7 +475,8 @@ public:
         }
 
         detail::Statement header(db_.get(),
-            "SELECT id, ref, date, payee, check_no, memo, tag FROM transactions "
+            "SELECT id, ref, date, payee, raw_name, check_no, memo, tag "
+            "FROM transactions "
             "ORDER BY date, rowid");
         if (!header.ok()) return {true, header.why()};
         while (header.step_row()) {
@@ -481,9 +487,10 @@ public:
             if (!on) return {true, header.text(2) + " is not a date"};
             t.date = *on;
             t.payee = types::PayeeName(header.text(3));
-            t.check_no = types::CheckNumber(header.text(4));
-            t.memo = header.text(5);
-            t.tag = header.text(6);
+            t.raw_name = header.text(4);
+            t.check_no = types::CheckNumber(header.text(5));
+            t.memo = header.text(6);
+            t.tag = header.text(7);
             transactions->push_back(t);
         }
 

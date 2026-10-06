@@ -119,9 +119,11 @@ When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name                    | Memo | CheckNum |
 | DEBIT   | 2024-02-01 | -89.99 | A1    | AMAZON MKTPLACE PMTS WA | none | none     |
 Then postings are : PostingRow
-| Ref | Date       | Payee  | Account                | Amount |
-| T1  | 2024-02-01 | Amazon | Assets:Checking        | -89.99 |
-| T1  | 2024-02-01 | Amazon | Expenses:Uncategorized | 89.99  |
+| Ref | Date       | Payee  | Account                | Amount | Cleared   |
+| T1  | 2024-02-01 | Amazon | Assets:Checking        | -89.99 | Cleared   |
+| T1  | 2024-02-01 | Amazon | Expenses:Uncategorized | 89.99  | Uncleared |
+# The side the statement is for is cleared, because the bank has reported it.
+# The category has not been reported by anyone and is not.
 
 Scenario With no rule the raw name is kept
 Description Nothing is invented. The raw name is what the bank said, and it is
@@ -139,9 +141,9 @@ When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name              | Memo | CheckNum |
 | DEBIT   | 2024-02-02 | -12.00 | A2    | SOME SHOP 4471 NC | none | none     |
 Then postings are : PostingRow
-| Ref | Date       | Payee             | Account                | Amount |
-| T1  | 2024-02-02 | SOME SHOP 4471 NC | Assets:Checking        | -12.00 |
-| T1  | 2024-02-02 | SOME SHOP 4471 NC | Expenses:Uncategorized | 12.00  |
+| Ref | Date       | Payee             | Account                | Amount | Cleared   |
+| T1  | 2024-02-02 | SOME SHOP 4471 NC | Assets:Checking        | -12.00 | Cleared   |
+| T1  | 2024-02-02 | SOME SHOP 4471 NC | Expenses:Uncategorized | 12.00 | Uncleared |
 
 Scenario The raw name is kept even after a rule has renamed the payee
 Description A rule written next year must be able to match what the bank sent
@@ -187,11 +189,11 @@ When transactions imported : OfxTransactions
 | DEBIT   | 2024-02-03 | -31.00 | A3    | AMAZON GROCERY SUBS WA  | none | none     |
 | DEBIT   | 2024-02-04 | -89.99 | A4    | AMAZON MKTPLACE PMTS WA | none | none     |
 Then postings are : PostingRow
-| Ref | Date       | Payee          | Account            | Amount |
-| T1  | 2024-02-03 | Amazon Grocery | Assets:Checking    | -31.00 |
-| T1  | 2024-02-03 | Amazon Grocery | Expenses:Groceries | 31.00  |
-| T2  | 2024-02-04 | Amazon         | Assets:Checking    | -89.99 |
-| T2  | 2024-02-04 | Amazon         | Expenses:Shopping  | 89.99  |
+| Ref | Date       | Payee          | Account            | Amount | Cleared   |
+| T1  | 2024-02-03 | Amazon Grocery | Assets:Checking    | -31.00 | Cleared   |
+| T1  | 2024-02-03 | Amazon Grocery | Expenses:Groceries | 31.00 | Uncleared |
+| T2  | 2024-02-04 | Amazon         | Assets:Checking    | -89.99 | Cleared   |
+| T2  | 2024-02-04 | Amazon         | Expenses:Shopping  | 89.99 | Uncleared |
 
 Scenario A disabled rule is passed over
 Description Rules are kept rather than deleted, because a rule that was wrong
@@ -211,9 +213,9 @@ When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name                    | Memo | CheckNum |
 | DEBIT   | 2024-02-04 | -89.99 | A4    | AMAZON MKTPLACE PMTS WA | none | none     |
 Then postings are : PostingRow
-| Ref | Date       | Payee                   | Account                | Amount |
-| T1  | 2024-02-04 | AMAZON MKTPLACE PMTS WA | Assets:Checking        | -89.99 |
-| T1  | 2024-02-04 | AMAZON MKTPLACE PMTS WA | Expenses:Uncategorized | 89.99  |
+| Ref | Date       | Payee                   | Account                | Amount | Cleared   |
+| T1  | 2024-02-04 | AMAZON MKTPLACE PMTS WA | Assets:Checking        | -89.99 | Cleared   |
+| T1  | 2024-02-04 | AMAZON MKTPLACE PMTS WA | Expenses:Uncategorized | 89.99 | Uncleared |
 
 # ---------------------------------------------------------------------------
 # A rule that carries a split
@@ -436,13 +438,13 @@ Then would change : RuleApplication Vertical
 | AlreadyCorrect | 0 |
 | Skipped        | 1 |
 Then postings are : PostingRow
-| Ref | Date       | Payee          | Account                | Amount |
-| T1  | 2024-01-15 | Harris Teeter  | Assets:Checking        | -45.00 |
-| T1  | 2024-01-15 | Harris Teeter  | Expenses:Groceries     | 45.00  |
-| T2  | 2024-02-20 | Harris Teeter  | Assets:Checking        | -62.10 |
-| T2  | 2024-02-20 | Harris Teeter  | Expenses:Groceries     | 62.10  |
-| T3  | 2024-03-02 | SHELL OIL 4471 | Assets:Checking        | -52.00 |
-| T3  | 2024-03-02 | SHELL OIL 4471 | Expenses:Uncategorized | 52.00  |
+| Ref | Date       | Payee          | Account                | Amount | Cleared   |
+| T1  | 2024-01-15 | Harris Teeter  | Assets:Checking        | -45.00 | Cleared   |
+| T1  | 2024-01-15 | Harris Teeter  | Expenses:Groceries     | 45.00 | Uncleared |
+| T2  | 2024-02-20 | Harris Teeter  | Assets:Checking        | -62.10 | Cleared   |
+| T2  | 2024-02-20 | Harris Teeter  | Expenses:Groceries     | 62.10 | Uncleared |
+| T3  | 2024-03-02 | SHELL OIL 4471 | Assets:Checking        | -52.00 | Cleared   |
+| T3  | 2024-03-02 | SHELL OIL 4471 | Expenses:Uncategorized | 52.00 | Uncleared |
 
 Attributes RuleApplication
 | Attribute      | Type    | Default |
@@ -475,11 +477,11 @@ Then would change : RuleApplication Vertical
 | AlreadyCorrect | 0 |
 | Skipped        | 1 |
 Then postings are : PostingRow
-| Ref | Date       | Payee         | Account            | Amount |
-| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 |
-| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00  |
-| T2  | 2024-02-20 | Harris Teeter | Assets:Checking    | -8.50  |
-| T2  | 2024-02-20 | Harris Teeter | Expenses:Dining    | 8.50   |
+| Ref | Date       | Payee         | Account            | Amount | Cleared   |
+| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 | Cleared   |
+| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00 | Uncleared |
+| T2  | 2024-02-20 | Harris Teeter | Assets:Checking    | -8.50 | Cleared   |
+| T2  | 2024-02-20 | Harris Teeter | Expenses:Dining    | 8.50 | Uncleared |
 # The payee of T2 is tidied, because that is not a judgement. Its category is
 # left, because it is.
 

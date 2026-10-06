@@ -1,4 +1,5 @@
 #pragma once
+#include <vector>
 #include <regex>
 #include <string>
 #include "text_types.h"
@@ -80,6 +81,60 @@ inline bool wins(const std::string& pattern_a, MatchType type_a,
     if (specificity_of(type_a) != specificity_of(type_b))
         return specificity_of(type_a) > specificity_of(type_b);
     return false;  // added earlier wins, and A is taken to be the earlier one
+}
+
+// One rule: what to look for, and what to do when it is found. A rule with no
+// category tidies the name and leaves the category alone, which is the common
+// case for a shop whose charges go to different places.
+struct Rule {
+    std::string pattern;
+    MatchType match_type = MatchType::Contains;
+    std::string payee;
+    std::string category;
+    bool enabled = true;
+};
+
+// The rule that applies to this name, or nothing. Several may match and the most
+// specific wins -- taken to be the longest pattern, because a user who adds a
+// longer pattern expects it to win and that needs no explaining.
+//
+// A disabled rule is passed over rather than deleted: a rule turned off to see
+// what happens without it should be easy to turn back on.
+inline const Rule* best_for(const std::vector<Rule>& rules, const std::string& raw_name) {
+    const Rule* best = nullptr;
+    for (const Rule& rule : rules) {
+        if (!rule.enabled) continue;
+        if (!matches(rule.match_type, rule.pattern, raw_name)) continue;
+        if (best == nullptr ||
+            wins(rule.pattern, rule.match_type, best->pattern, best->match_type))
+            best = &rule;
+    }
+    return best;
+}
+
+// What a rule makes of a downloaded name: the payee to record, the category to
+// post the other side to, and the raw name to keep. Returned together because a
+// caller that applies one without the others would lose something.
+struct Applied {
+    std::string payee;
+    std::string category;      // empty leaves the category to be chosen by sign
+    std::string raw_name;      // empty where nothing was renamed
+    bool renamed = false;
+};
+
+inline Applied apply(const std::vector<Rule>& rules, const std::string& raw_name) {
+    Applied out;
+    out.payee = raw_name;
+    const Rule* rule = best_for(rules, raw_name);
+    if (rule == nullptr) return out;
+
+    if (!rule->payee.empty() && rule->payee != raw_name) {
+        out.payee = rule->payee;
+        out.raw_name = raw_name;
+        out.renamed = true;
+    }
+    if (rule->category != "none") out.category = rule->category;
+    return out;
 }
 
 }  // namespace payees

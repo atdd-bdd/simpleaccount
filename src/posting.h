@@ -75,6 +75,11 @@ struct Transaction {
     types::TransactionRef ref;
     types::Date date;
     types::PayeeName payee;
+    // What the bank actually sent, kept beside the name a rule tidied it into.
+    // A rule written next year has to be able to match what the bank sent this
+    // year, so the original text is stored rather than replaced. Empty where
+    // nothing renamed it, which is also where the payee is already the raw name.
+    std::string raw_name;
     types::CheckNumber check_no;
     std::string memo;
     std::string tag;            // a Quicken class, kept on migration

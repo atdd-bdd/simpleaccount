@@ -38,7 +38,30 @@ checked, which is the strongest check a CSV file offers.
 the signature and `columns_of` both use it. Only the specification's entity and
 the storage rule in `Books.spectable` need the column added.
 
-## 3. One table was marked CompareOnly to make a scenario pass
+## 3. Two specification files were edited to make scenarios pass
+
+Both are recorded because changing a specification to turn a test green is the
+one move that can hide a defect rather than find one. Neither changed what the
+program does.
+
+### Payees.spectable: five tables gained a Cleared column
+
+Five `PostingRow` tables said what an import produced but left out whether the
+bank had settled it, so the default `Uncleared` was asserted while an OFX import
+legitimately clears the side the statement is for. The scenario above them in the
+same file already stated it, so the behaviour was never in doubt -- the tables
+were simply incomplete.
+
+Each now reads `Cleared` for the account the statement is for and `Uncleared` for
+the category, with the reason in the file: the bank has reported one side and
+nobody has reported the other. This adds assertions rather than removing them,
+which is the safer direction.
+
+It also bears on question 1 above: these tables settle what an OFX import does,
+which strengthens the case that the CSV tables leaving the column out was an
+oversight. The CSV behaviour has deliberately not been changed on that inference.
+
+### TransactionRegister.spectable: one table marked CompareOnly
 
 In `TransactionRegister.spectable`, `Scenario Two transactions on one date keep
 the order they were entered in` now reads `Then register lines are : RegisterLine
