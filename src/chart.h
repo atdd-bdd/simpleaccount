@@ -16,6 +16,14 @@ struct Account {
     types::AccountType type = types::AccountType::Bank;
     bool placeholder = false;   // a grouping node; takes no postings
     bool hidden = false;        // kept out of pickers, history retained
+    // A short way to type this account when categorising; see the finding rule
+    // in Accounts.spectable. Empty for most accounts.
+    std::string alias;
+    // What a payment to this account is called on the statement of whatever
+    // account pays it -- CHASEBANK on the bank statement, for a Chase card.
+    // It is how a payment on one side finds the account on the other without
+    // searching every account in the book. Several accounts may share one.
+    std::string payment_payee;
 };
 
 // Why an operation was refused. The text is what the register shows, so it names

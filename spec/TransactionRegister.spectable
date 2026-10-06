@@ -193,11 +193,14 @@ Given postings in entry order are : SequencedPostingRow
 When register opened on : AccountSelect
 | Path            |
 | Assets:Checking |
-Then register lines are : RegisterLine
+Then register lines are : RegisterLine CompareOnly
 | Ref | Date       | Payee  | Payment | Deposit | Balance |
 | T2  | 2024-01-15 | Shop B | 20.00   | 0.00    | -20.00  |
 | T1  | 2024-01-20 | Shop A | 10.00   | 0.00    | -30.00  |
 | T3  | 2024-01-20 | Shop C | 30.00   | 0.00    | -60.00  |
+# CompareOnly because this scenario is about the order of the lines. Without it
+# the columns it does not name are asserted to be their defaults, and Category
+# would have to be empty -- which it is not, and should not be.
 
 Attributes SequencedPostingRow
 | Attribute | Type           | Default    |

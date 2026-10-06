@@ -17,7 +17,11 @@
 // ImportCsv.spectable.
 namespace ofx {
 
-enum class Disposition { New, Duplicate, Matched, Possible };
+// Completes is the fifth: this row is the other half of a payment already in the
+// book, waiting with its account unassigned. Nothing is created and nothing is
+// cleared on this row's behalf -- the transaction already there gains an account
+// and this file's identifier. See the payment rule in ImportOfx.spectable.
+enum class Disposition { New, Duplicate, Matched, Possible, Completes };
 
 inline std::string to_string(Disposition d) {
     switch (d) {
@@ -25,6 +29,7 @@ inline std::string to_string(Disposition d) {
         case Disposition::Duplicate: return "Duplicate";
         case Disposition::Matched:   return "Matched";
         case Disposition::Possible:  return "Possible";
+        case Disposition::Completes: return "Completes";
     }
     return "New";
 }
@@ -38,6 +43,12 @@ struct Decided {
     // The same transaction's label, for saying which one in a message. Never
     // used to find it again.
     std::string claimed_ref;
+    // Which posting of the claimed transaction is the unassigned one, where this
+    // row completes a payment.
+    std::size_t completes_posting = 0;
+    // Whether this row's other side should wait in Unassigned rather than go to
+    // a category: true only where something in the book could be the other half.
+    bool other_side_waits = false;
 };
 
 struct Summary {
@@ -154,12 +165,81 @@ inline constexpr long long kMatchWindow = 5;
 // only within a day, and beyond that it is treated as coincidence.
 inline constexpr long long kCheckWindow = 1;
 
+// Two halves of one electronic transfer are a day or two apart at most, and
+// every extra day is another chance to pair two payments that were never one
+// transfer. Narrower than the window for matching a download against something
+// entered by hand, and the two are deliberately separate: see the two-windows
+// rule in ImportOfx.spectable.
+inline constexpr long long kTransferWindow = 2;
+
 // The tests in order; the first that applies decides. Tests two to four have no
 // identifier behind them, so each claims at most one of what is already there.
+// The accounts a payment with this payee could be paying. One payee can name
+// several -- several cards paid from one bank all say CHASEBANK -- so this
+// narrows the search and decides nothing. Empty where the payee names no
+// account, which means the row is not a payment at all: the money went to
+// somebody the book does not keep, and its other side is a category.
+inline std::vector<std::string> accounts_paid_by(const chart::Chart& accounts,
+                                                 const std::string& payee) {
+    std::vector<std::string> out;
+    if (payee.empty()) return out;
+    for (const chart::Account& a : accounts.all()) {
+        if (a.payment_payee.empty()) continue;
+        if (detail::fold(a.payment_payee) == detail::fold(payee))
+            out.push_back(a.path.value());
+    }
+    return out;
+}
+
+// A transaction already in the book whose unassigned side this row could fill
+// in, and which of its postings that is. Equal and opposite amount, within the
+// transfer window, and the unassigned posting is the one that gets the account.
+struct Waiting {
+    std::string transaction_id;
+    std::size_t posting = 0;
+    bool found = false;
+};
+
+inline Waiting waiting_for(const std::vector<ledger::Transaction>& transactions,
+                           const Transaction& downloaded, const std::string& account) {
+    Waiting out;
+    for (const ledger::Transaction& t : transactions) {
+        // The row being imported describes one side; the side that is waiting is
+        // the other one, so a transaction already holding a posting in this
+        // account is this row's own transaction and not a half to complete.
+        bool here = false;
+        for (const ledger::Posting& p : t.postings)
+            if (p.account.value() == account) here = true;
+        if (here) continue;
+
+        for (std::size_t i = 0; i < t.postings.size(); ++i) {
+            if (!ledger::is_unassigned(t.postings[i].account)) continue;
+            if (t.postings[i].amount.cents() != downloaded.amount.cents()) continue;
+            if (std::abs(types::Date::days_between(t.date, downloaded.date_posted))
+                > kTransferWindow)
+                continue;
+            out.transaction_id = t.id.value();
+            out.posting = i;
+            out.found = true;
+            return out;
+        }
+    }
+    return out;
+}
+
+// The chart is needed to tell a payment from a payment to nobody: whether a
+// payee names an account this book keeps is the question that decides whether
+// the other side is an account or a category.
 inline Imported decide(const Statement& statement, const std::string& account,
-                       const std::vector<ledger::Transaction>& transactions) {
+                       const std::vector<ledger::Transaction>& transactions,
+                       const chart::Chart& accounts) {
     Imported out;
     std::vector<detail::Existing> already = existing_in(transactions, account);
+    // What a payment to the account being imported into is called elsewhere, so
+    // a card's own statement can recognise a payment received as a payment.
+    std::string statement_payee;
+    if (const chart::Account* mine = accounts.find(account))
+        statement_payee = mine->payment_payee;
 
     for (const Transaction& downloaded : statement.transactions) {
         Decided decided;
@@ -251,8 +331,40 @@ inline Imported decide(const Statement& statement, const std::string& account,
             continue;
         }
 
-        // 5. Nothing above applies.
+        // 5. A transaction already here is waiting for this side. The other
+        // half of a payment, downloaded from the other account's statement on
+        // another day -- which is the ordinary way a payment arrives, since the
+        // two sides are two files read whenever each is downloaded.
+        //
+        // Only asked where the payee names an account this book keeps, or where
+        // this row's own account is one such. Without that, two unrelated
+        // payments of the same amount in the same week would complete each
+        // other, and the narrowing is the whole protection against it.
+        const bool could_be_a_payment =
+            !accounts_paid_by(accounts, downloaded.name).empty() ||
+            !accounts_paid_by(accounts, statement_payee).empty();
+        if (could_be_a_payment) {
+            const Waiting waiting = waiting_for(transactions, downloaded, account);
+            if (waiting.found) {
+                decided.disposition = Disposition::Completes;
+                decided.claimed_id = waiting.transaction_id;
+                decided.completes_posting = waiting.posting;
+                // Counted as a match: it joined this row to a transaction
+                // already here, which is what Matched means to a reader. The
+                // disposition stays its own thing because the action differs --
+                // a match clears a posting, a completion fills in an account.
+                ++out.summary.Matched;
+                out.decided.push_back(decided);
+                continue;
+            }
+        }
+
+        // 6. Nothing above applies.
         decided.disposition = Disposition::New;
+        // The other side is Unassigned only where something in the book could be
+        // the other half. Otherwise the money went to somebody the book does not
+        // keep, and that is a category -- a paycheck is not a failed transfer.
+        decided.other_side_waits = could_be_a_payment;
         ++out.summary.New;
         out.decided.push_back(decided);
     }
@@ -276,10 +388,18 @@ inline std::vector<ledger::Transaction> transactions_for(
         // amount: money in is income, money out is an expense. Passing its
         // opposite put every payment under Income and every deposit under
         // Expenses, which reads plausibly in a summary and is backwards.
-        const std::string other = ledger::uncategorized_for(amount).value();
+        // A payment waits in Unassigned for the account it went to; anything
+        // else goes to a category chosen by the sign. Two different unknowns,
+        // two different accounts, and the difference is whether anything in this
+        // book could be the other half.
+        const std::string other = one.other_side_waits
+                                      ? ledger::unassigned().value()
+                                      : ledger::uncategorized_for(amount).value();
         accounts->add(types::AccountPath(other),
-                      amount.cents() < 0 ? types::AccountType::Expense
-                                         : types::AccountType::Income);
+                      one.other_side_waits
+                          ? types::AccountType::Asset
+                          : (amount.cents() < 0 ? types::AccountType::Expense
+                                                : types::AccountType::Income));
 
         ledger::Transaction t;
         t.id = ledger::new_id();
@@ -305,6 +425,32 @@ inline std::vector<ledger::Transaction> transactions_for(
         out.push_back(t);
     }
     return out;
+}
+
+// Filling in the account a payment went to, on the transaction that was waiting
+// for it, and stamping this file's identifier on the posting it describes.
+//
+// The payee is not touched. Each side of a payment has its own word for it -- a
+// bank says CHASEBANK, a card says PAYMENT RECEIVED -- and the first is both the
+// more useful and the one already on the screen, so overwriting it would be a
+// surprise with nothing to recommend it.
+inline int apply_completions(const Imported& decided, const std::string& account,
+                             std::vector<ledger::Transaction>* transactions) {
+    int completed = 0;
+    for (const Decided& one : decided.decided) {
+        if (one.disposition != Disposition::Completes) continue;
+        for (ledger::Transaction& t : *transactions) {
+            if (t.id.value() != one.claimed_id) continue;
+            if (one.completes_posting >= t.postings.size()) break;
+            ledger::Posting& waiting = t.postings[one.completes_posting];
+            waiting.account = types::AccountPath(account);
+            waiting.cleared = types::ClearedStatus::Cleared;
+            ledger::stamp(&waiting, types::ImportSource::Ofx, one.downloaded.fit_id);
+            ++completed;
+            break;
+        }
+    }
+    return completed;
 }
 
 // A match is not a new transaction: the one entered by hand is the transaction,

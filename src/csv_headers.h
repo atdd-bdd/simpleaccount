@@ -1,4 +1,5 @@
 #pragma once
+#include <set>
 #include <map>
 #include <optional>
 #include <string>
@@ -31,6 +32,19 @@ inline std::string to_string(Field f) {
     return "Ignore";
 }
 
+inline Field field_from_string(const std::string& name) {
+    if (name == "Date")     return Field::Date;
+    if (name == "Payee")    return Field::Payee;
+    if (name == "Amount")   return Field::Amount;
+    if (name == "Debit")    return Field::Debit;
+    if (name == "Credit")   return Field::Credit;
+    if (name == "Memo")     return Field::Memo;
+    if (name == "CheckNo")  return Field::CheckNo;
+    if (name == "Category") return Field::Category;
+    if (name == "Balance")  return Field::Balance;
+    return Field::Ignore;
+}
+
 enum class AmountStyle { Signed, DebitCredit, SignedPaired };
 
 inline std::string to_string(AmountStyle s) {
@@ -52,6 +66,10 @@ inline AmountStyle amount_style_from_string(const std::string& s) {
 // the bank's point of view has the signs the other way round from one written for
 // the customer, and both exist.
 enum class OutwardSign { Negative, Positive };
+
+inline std::string to_string(OutwardSign s) {
+    return s == OutwardSign::Positive ? "Positive" : "Negative";
+}
 
 inline OutwardSign outward_sign_from_string(const std::string& s) {
     return s == "Positive" ? OutwardSign::Positive : OutwardSign::Negative;
@@ -118,8 +136,9 @@ inline const std::map<std::string, Field>& heading_aliases() {
 
 // Nothing matched is not an error by itself: the column is simply not read.
 inline std::optional<Field> field_for_heading(const std::string& heading) {
+    const std::string normalised = normalise_heading(heading);
     const auto& table = heading_aliases();
-    const auto at = table.find(normalise_heading(heading));
+    const auto at = table.find(normalised);
     if (at == table.end()) return std::nullopt;
     return at->second;
 }

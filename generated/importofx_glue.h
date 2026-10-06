@@ -48,6 +48,8 @@ public:
             a.type = types::account_type_from_string(value.type);
             a.placeholder = parse_bool_cell(value.placeholder);
             a.hidden = parse_bool_cell(value.hidden);
+            a.alias = blank(value.alias);
+            a.payment_payee = blank(value.paymentpayee);
             chart_.put(a);
         }
     }
@@ -202,7 +204,7 @@ public:
             EXPECT_EQ(blank(values[i].payee), blank(got[i].payee))
                 << "posting " << i << " payee";
             EXPECT_EQ(values[i].account, got[i].account) << "posting " << i << " account";
-            EXPECT_EQ(Money(values[i].amount).cents(), Money(got[i].amount).cents())
+            EXPECT_EQ(Money(values[i].amount), Money(got[i].amount))
                 << "posting " << i << " amount";
             EXPECT_EQ(values[i].cleared, got[i].cleared) << "posting " << i << " cleared";
             EXPECT_EQ(blank(values[i].checkno), blank(got[i].checkno))
@@ -212,17 +214,21 @@ public:
         }
     }
 
+    // Money against Money, so a cell written 1200.00 or $1,200.00 is the same
+    // amount and the comparison says so. A column a CompareOnly table did not
+    // name arrives as "?DNC?", which is not an amount, so it is not asserted.
     void then_balances_are(const std::vector<AccountBalanceString>& values) {
         const ledger::Ledger ledger = as_ledger();
         for (const auto& value : values) {
             const chart::Account* a = chart_.find(value.account);
             ASSERT_NE(nullptr, a) << "no account " << value.account;
-            EXPECT_EQ(Money(value.rawbalance).cents(),
-                      ledger.raw_balance(value.account).cents())
-                << value.account << " raw -- " << value.notes;
-            EXPECT_EQ(Money(value.displaybalance).cents(),
-                      ledger.display_balance(value.account, a->type).cents())
-                << value.account << " display -- " << value.notes;
+            if (value.rawbalance != DNCString)
+                EXPECT_EQ(Money(value.rawbalance), ledger.raw_balance(value.account))
+                    << value.account << " raw -- " << value.notes;
+            if (value.displaybalance != DNCString)
+                EXPECT_EQ(Money(value.displaybalance),
+                          ledger.display_balance(value.account, a->type))
+                    << value.account << " display -- " << value.notes;
         }
     }
 
@@ -384,7 +390,7 @@ public:
                     << value.theonealreadythere;
                 // And the same file reaches the same question again.
                 const ofx::Imported again =
-                    ofx::decide(offered_statement(), target_, transactions_);
+                    ofx::decide(offered_statement(), target_, transactions_, chart_);
                 EXPECT_EQ(1, again.summary.Possible) << "the question was not asked again";
             } else {
                 FAIL() << "there is no answer called " << value.answer;
@@ -541,11 +547,12 @@ private:
     // then clear what was matched. Nothing is written for a duplicate or for a
     // possible duplicate, which is what the summary then shows.
     void import(const ofx::Statement& statement) {
-        decided_ = ofx::decide(statement, target_, transactions_);
+        decided_ = ofx::decide(statement, target_, transactions_, chart_);
         summary_ = decided_.summary;
         const std::vector<ledger::Transaction> made =
             ofx::transactions_for(decided_, target_, transactions_.size(), &chart_);
         ofx::apply_matches(decided_, target_, &transactions_);
+        ofx::apply_completions(decided_, target_, &transactions_);
         transactions_.insert(transactions_.end(), made.begin(), made.end());
     }
 
@@ -607,6 +614,50 @@ private:
                "<STMTTRN><TRNTYPE>" + trn_type + "<DTPOSTED>20240115<TRNAMT>" + amount +
                "<FITID>X1<NAME>WHOEVER</STMTTRN>\n"
                "</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>";
+    }
+
+    // --- the payment rows --------------------------------------------------
+
+    static constexpr const char* kBank = "Assets:Checking";
+    static constexpr const char* kCard = "Liabilities:Chase Visa";
+
+    static chart::Account card_of(const std::string& path, const std::string& payee) {
+        chart::Account a = account_of(path, types::AccountType::CreditCard);
+        a.payment_payee = payee;
+        return a;
+    }
+
+    // A bank, a card that says CHASEBANK when it is paid, and somewhere for a
+    // half-known payment to wait.
+    void a_book_with_two_accounts() {
+        chart_ = chart::Chart();
+        chart_.put(account_of(kBank, types::AccountType::Bank));
+        chart_.put(card_of(kCard, "CHASEBANK"));
+        chart_.put(account_of(ledger::kUnassigned, types::AccountType::Asset));
+        chart_.put(account_of("Expenses:Uncategorized", types::AccountType::Expense));
+        transactions_.clear();
+    }
+
+    // One side of the same payment, as that side's own file describes it: the
+    // bank calls it CHASEBANK and the money leaves; the card calls it a payment
+    // received and the balance owed falls.
+    static ofx::Statement payment_side(const std::string& account) {
+        ofx::Statement statement;
+        ofx::Transaction row;
+        row.trn_type = "XFER";
+        if (account == kBank) {
+            row.date_posted = types::Date(2026, 4, 10);
+            row.amount = Money("-1200.00");
+            row.fit_id = "BNK-77";
+            row.name = "CHASEBANK";
+        } else {
+            row.date_posted = types::Date(2026, 4, 11);
+            row.amount = Money("1200.00");
+            row.fit_id = "CC-901";
+            row.name = "PAYMENT RECEIVED";
+        }
+        statement.transactions.push_back(row);
+        return statement;
     }
 
     // --- the identifier-scope rows ----------------------------------------
@@ -837,6 +888,82 @@ public:
     void given_the_book_setting_is(const std::vector<BookSettingString>& values) {
         for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
         ADD_FAILURE() << "Not implemented: given_the_book_setting_is";
+    }
+
+public:
+
+    // Each row driven both ways round: the bank first then the card, and the
+    // card first then the bank. The claim is that the order does not matter, so
+    // testing one order would not be testing the rule.
+    void examples_businessrule_a_payment_is_completed_by_whichever_import_arrives_second(
+            const std::vector<PaymentCompletionString>& values) {
+        for (const auto& value : values) {
+            const bool bank_first = value.whicharrivesfirst == "The bank";
+            const bool only_one = value.whicharrivesfirst == "Only one ever";
+            const std::string first = bank_first || only_one ? kBank : kCard;
+            const std::string second = first == kBank ? kCard : kBank;
+
+            a_book_with_two_accounts();
+            target_ = first;
+            import(payment_side(first));
+            ASSERT_EQ(1, summary_.New) << value.whicharrivesfirst;
+
+            // Whatever arrives first records the payment with its other side
+            // waiting, which is what the second column says.
+            const ledger::Posting* waiting = posting_in(ledger::kUnassigned);
+            ASSERT_NE(nullptr, waiting) << value.whatitrecords;
+
+            if (only_one) {
+                EXPECT_EQ(1u, transactions_.size()) << value.whattheseconddoes;
+                continue;
+            }
+
+            target_ = second;
+            import(payment_side(second));
+            // One transaction still, with the account filled in and this file's
+            // identifier on the posting it describes.
+            EXPECT_EQ(1u, transactions_.size()) << value.whattheseconddoes;
+            EXPECT_EQ(nullptr, posting_in(ledger::kUnassigned)) << value.whattheseconddoes;
+            const ledger::Posting* filled = posting_in(second);
+            ASSERT_NE(nullptr, filled) << value.whattheseconddoes;
+            const std::string* id = ledger::id_from(*filled, types::ImportSource::Ofx);
+            ASSERT_NE(nullptr, id) << value.whattheseconddoes;
+            EXPECT_EQ(second == kBank ? "BNK-77" : "CC-901", *id)
+                << value.whattheseconddoes;
+            // And the payee is still the one the first side gave it.
+            EXPECT_EQ(first == kBank ? "CHASEBANK" : "PAYMENT RECEIVED",
+                      transactions_.front().payee.value())
+                << "the second import overwrote the payee";
+        }
+    }
+
+    void examples_businessrule_the_payment_payee_says_which_accounts_a_payment_could_belong_to(
+            const std::vector<PaymentPayeeNarrowingString>& values) {
+        for (const auto& value : values) {
+            chart_ = chart::Chart();
+            chart_.put(account_of(kBank, types::AccountType::Bank));
+            chart_.put(account_of(ledger::kUnassigned, types::AccountType::Asset));
+            if (value.theypayeematches == "One account") {
+                chart_.put(card_of(kCard, "CHASEBANK"));
+            } else if (value.theypayeematches == "Several accounts" ||
+                       value.theypayeematches == "Several, and all match") {
+                chart_.put(card_of(kCard, "CHASEBANK"));
+                chart_.put(card_of("Liabilities:Chase Amazon", "CHASEBANK"));
+            }
+            // "No account" leaves nothing carrying the payee at all.
+
+            const std::vector<std::string> narrowed =
+                ofx::accounts_paid_by(chart_, "CHASEBANK");
+            const std::size_t wanted =
+                value.theypayeematches == "One account" ? 1u
+                    : value.theypayeematches == "No account" ? 0u : 2u;
+            EXPECT_EQ(wanted, narrowed.size())
+                << value.theypayeematches << " -- " << value.thenthesearchis;
+            // Folded, so the payee on the statement need not match in case.
+            if (wanted > 0)
+                EXPECT_EQ(wanted, ofx::accounts_paid_by(chart_, "chasebank").size())
+                    << "the payee should match whatever its case";
+        }
     }
 
 };

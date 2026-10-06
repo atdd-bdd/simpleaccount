@@ -176,4 +176,41 @@ public:
         ADD_FAILURE() << "Not implemented: examples_datatype_transactionid";
     }
 
+public:
+
+    void when_the_other_account_is_assigned(const std::vector<AccountAssignmentString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_the_other_account_is_assigned";
+    }
+
+    void when_the_other_entry_is_matched(const std::vector<EntryMatchString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_the_other_entry_is_matched";
+    }
+
+    void when_entries_offered_for(const std::vector<AccountAssignmentString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_entries_offered_for";
+    }
+
+    void then_entries_offered_are(const std::vector<OfferedEntryString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_entries_offered_are";
+    }
+
+    void examples_businessrule_an_unknown_category_and_an_unknown_account_are_different_unknowns(const std::vector<TwoUnknownsString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_an_unknown_category_and_an_unknown_account_are_different_unknowns";
+    }
+
+    void examples_businessrule_whether_the_other_side_is_an_account_or_a_category(const std::vector<WhereTheOtherSideLivesString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_whether_the_other_side_is_an_account_or_a_category";
+    }
+
+    void examples_businessrule_assigning_an_account_asks_whether_the_other_entry_already_exists(const std::vector<AssignmentOutcomeString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_assigning_an_account_asks_whether_the_other_entry_already_exists";
+    }
+
 };

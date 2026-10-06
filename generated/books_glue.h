@@ -350,6 +350,8 @@ public:
             a.type = types::account_type_from_string(value.type);
             a.placeholder = parse_bool_cell(value.placeholder);
             a.hidden = parse_bool_cell(value.hidden);
+            a.alias = blank(value.alias);
+            a.payment_payee = blank(value.paymentpayee);
             chart_.put(a);
         }
     }
@@ -657,6 +659,8 @@ private:
             a.type = types::account_type_from_string(value.type);
             a.placeholder = parse_bool_cell(value.placeholder);
             a.hidden = parse_bool_cell(value.hidden);
+            a.alias = blank(value.alias);
+            a.payment_payee = blank(value.paymentpayee);
             accounts.put(a);
         }
         write_back(name, accounts, transactions);

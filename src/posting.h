@@ -135,6 +135,23 @@ inline types::AccountPath uncategorized_for(const Money& known_amount) {
                                                        : "Expenses:Uncategorized");
 }
 
+// Where the other side of a payment goes until the account is known. A different
+// unknown from Uncategorized and so a different account: Uncategorized asks what
+// the money was for and may be left for ever, Unassigned asks which account it
+// went to and is expected to reach zero. See the two-unknowns rule in
+// Transactions.spectable.
+//
+// A real account rather than a category, because money in transit is an asset
+// and because a category would put it in a spending report, where it is not
+// spending at all.
+inline const char* kUnassigned = "Unassigned";
+
+inline types::AccountPath unassigned() { return types::AccountPath(kUnassigned); }
+
+inline bool is_unassigned(const types::AccountPath& path) {
+    return path.value() == kUnassigned;
+}
+
 // Removing one side would leave the book out of balance, so a delete is always
 // of the whole transaction, from whichever register it was asked for. See the
 // delete scenario in Transactions.spectable.

@@ -327,6 +327,7 @@ int main(int argc, char** argv) {
         // import is looked at before it changes anything.
         ofx::Summary total;
         int matched_clear = 0;
+        int completed = 0;
         int answered_same = 0;
         int answered_different = 0;
         int left_open = 0;
@@ -337,7 +338,7 @@ int main(int argc, char** argv) {
                         statement.start_date.iso().c_str(), statement.end_date.iso().c_str(),
                         statement.ledger_balance.in_register().c_str());
             const ofx::Imported decided =
-                ofx::decide(statement, account, open.transactions);
+                ofx::decide(statement, account, open.transactions, open.accounts);
             std::printf("%-10s %-30s %12s %-11s %s\n", "date", "payee", "amount",
                         "decision", "claims");
             for (const ofx::Decided& one : decided.decided)
@@ -355,6 +356,8 @@ int main(int argc, char** argv) {
             // A match clears the transaction already there rather than making a
             // second copy of it.
             matched_clear += ofx::apply_matches(decided, account, &open.transactions);
+            // And the payments this file is the other half of.
+            completed += ofx::apply_completions(decided, account, &open.transactions);
 
             // Then whatever was answered about the rows it could not settle.
             for (const ofx::Decided& one : decided.decided) {
@@ -393,6 +396,8 @@ int main(int argc, char** argv) {
         }
         std::printf("\nNew %d  Duplicate %d  Matched %d  Possible %d\n",
                     total.New, total.Duplicate, total.Matched, total.Possible);
+        if (completed > 0)
+            std::printf("completed %d payment(s) already in the book\n", completed);
         if (total.Possible > 0)
             std::printf("of the possible: %d answered the same, %d different, "
                         "%d left to answer\n",

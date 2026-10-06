@@ -1,4 +1,6 @@
 #pragma once
+#include <vector>
+#include <algorithm>
 #include <string>
 #include "account_type.h"
 #include "money.h"

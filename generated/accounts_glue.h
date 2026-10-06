@@ -35,6 +35,8 @@ public:
             a.type = types::account_type_from_string(value.type);
             a.placeholder = parse_bool_cell(value.placeholder);
             a.hidden = parse_bool_cell(value.hidden);
+            a.alias = blank(value.alias);
+            a.payment_payee = blank(value.paymentpayee);
             chart_.put(a);
         }
         apply_counts();
@@ -260,6 +262,11 @@ public:
     }
 
 private:
+    // A Default of "none" arrives as the literal word.
+    static std::string blank(const std::string& s) {
+        return (s == "none" || s == DNCString) ? std::string() : s;
+    }
+
     chart::Chart chart_;
     ledger::Ledger ledger_;
     chart::Rejection rejection_;

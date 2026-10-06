@@ -1,4 +1,5 @@
 #pragma once
+#include <ostream>
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
@@ -121,3 +122,9 @@ private:
         return s.substr(b, e - b + 1);
     }
 };
+// So a failing comparison prints the amount rather than a row of bytes. Only
+// ostream support; nothing here depends on it.
+inline std::ostream& operator<<(std::ostream& out, const Money& money) {
+    return out << money.in_register();
+}
+
