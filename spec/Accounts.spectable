@@ -19,6 +19,8 @@ Uses AccountPath and AccountType from CoreTypes
 | Type        | AccountType | Bank    | Fixed once the account has postings |
 | Placeholder | Boolean     | false   | A grouping node; takes no postings  |
 | Hidden      | Boolean     | false   | Kept out of pickers, history kept   |
+| Alias       | Text        | none    | A short way to type it; see finding a category |
+| PaymentPayee | Text       | none    | What a payment to this account is called on the paying account's statement; see ImportOfx |
 
 Collection ChartOfAccounts
 Description Every account in the book, in one tree.
@@ -223,6 +225,208 @@ Then category picker offers : ChartOfAccounts CompareOnly
 | Expenses:Auto:Repairs |
 # Expenses:Groceries is absent from the picker, and its 412 postings still
 # report under it.
+
+# ---------------------------------------------------------------------------
+# What identifies an account
+# ---------------------------------------------------------------------------
+
+BusinessRule An account is identified by something that is not its path
+Description The path is a label. It is what people read, what they type and what
+Description every table in this specification names an account by, and it can
+Description change: a category can be renamed, and it can be moved under a
+Description different parent. What identifies the account does not change when
+Description either of those happens.
+Details The identifier is the one the transactions use, from the same generator:
+Details the moment the account was created, to the millisecond. One scheme for
+Details both is easier to reason about than two, and accounts are made rarely
+Details enough that waiting a millisecond for one costs nothing.
+Details
+Details It is deliberately absent from every table in this specification. Nobody
+Details types it, nobody reads it, and a scenario that stated one would be
+Details stating something no scenario controls. Accounts are named here by path,
+Details which is what a reader understands.
+Details
+Details What this buys is that rearranging categories is a small operation. With
+Details the path as the identity, moving Auto:Fuel under Vehicle means rewriting
+Details every posting that named it -- tens of thousands of rows for one
+Details decision, and a book that refers to a category that no longer exists if
+Details it stops half way. With the path derived from the tree, the same move
+Details changes which parent the account points at, and the paths are worked out
+Details again afterwards. No posting is touched, because no posting ever named
+Details the path in the first place.
+Examples: AccountRearranged
+| WhatChanges              | ThePath | TheIdentity | ThePostings |
+| Renaming a category      | Yes     | No          | Untouched   |
+| Moving it under another  | Yes     | No          | Untouched   |
+| Hiding it                | No      | No          | Untouched   |
+| Changing its type        | No      | No          | Untouched   |
+
+Attributes AccountRearranged
+| Attribute    | Type   | Default |
+| WhatChanges  | String |         |
+| ThePath      | Text   | No      |
+| TheIdentity  | Text   | No      |
+| ThePostings  | Text   | Untouched |
+
+Scenario Moving a category under another parent leaves its postings alone
+Description The postings named the account, not the path, so moving it is a
+Description change to one account and to nothing else. The paths underneath are
+Description worked out again, which is why Fuel reads as Vehicle:Fuel
+Description afterwards without anything having rewritten it.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Auto          | Expense | true        |
+| Expenses:Auto:Fuel     | Expense | false       |
+| Expenses:Vehicle       | Expense | true        |
+Given postings are : PostingLine
+| Account            | Amount |
+| Assets:Checking    | -40.00 |
+| Expenses:Auto:Fuel | 40.00  |
+When account moved under : AccountMove Vertical
+| Path      | Expenses:Auto:Fuel |
+| NewParent | Expenses:Vehicle   |
+Then the chart of accounts is : ChartOfAccounts CompareOnly
+| Path                  |
+| Expenses:Vehicle:Fuel |
+Then balances are : AccountBalance CompareOnly
+| Account               | RawBalance |
+| Expenses:Vehicle:Fuel | 40.00      |
+# The forty pounds did not move and was never rewritten: the posting names the
+# account, and the account is the same account.
+
+Attributes AccountMove
+| Attribute | Type        | Default |
+| Path      | AccountPath |         |
+| NewParent | AccountPath |         |
+
+# ---------------------------------------------------------------------------
+# Finding a category
+# ---------------------------------------------------------------------------
+
+BusinessRule Typing part of a category offers it and everything under it
+Description Categorising a transaction by hand starts with typing. Whatever is
+Description typed is matched against every part of every path, and a category
+Description that matches is offered along with all the categories beneath it --
+Description because typing a parent is how a person says "somewhere in here".
+Details Matching is on any segment, not only the first, so "fuel" finds
+Details Expenses:Auto:Fuel without anyone having typed Expenses or Auto. It
+Details ignores case, because nobody capitalises while typing fast.
+Details
+Details Offering the children of a match is the part that matters. There are
+Details nearly four hundred categories here and the useful ones sit two levels
+Details down; a picker that offered only exact matches would mean typing the
+Details whole path, and one that offered only leaves would make a parent
+Details untypeable.
+Details
+Details A hidden category is not offered. Nor is one that has not been used for
+Details years: the book has categories last used in 2008, and a list that offers
+Details them alongside the ones in weekly use is a list nobody reads to the
+Details bottom. Both stay in the book and both keep their history -- this is
+Details about what is offered while typing, not about what exists.
+Examples: CategoryMatch
+| Typed | Offered                                            | Notes                                  |
+| fuel  | Expenses:Auto:Fuel                                 | Any segment, not just the first        |
+| FUEL  | Expenses:Auto:Fuel                                 | Case is ignored                        |
+| auto  | Expenses:Auto, and every category under it         | Typing a parent means somewhere in here |
+| @FU   | Expenses:Auto:Fuel                                 | An alias stands for one category        |
+| zzz   | Nothing                                            | No match is not an error               |
+
+Attributes CategoryMatch
+| Attribute | Type        | Default |
+| Typed     | SearchText  |         |
+| Offered   | String      |         |
+| Notes     | String      | none    |
+
+Scenario Typing part of a name offers the category and its children
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type    | Placeholder | Hidden |
+| Expenses:Auto           | Expense | true        | false  |
+| Expenses:Auto:Fuel      | Expense | false       | false  |
+| Expenses:Auto:Insurance | Expense | false       | false  |
+| Expenses:Groceries      | Expense | false       | false  |
+When category typed : CategorySearch Vertical
+| Typed | auto |
+Then categories offered are : CategoryOffered
+| Path                    |
+| Expenses:Auto           |
+| Expenses:Auto:Fuel      |
+| Expenses:Auto:Insurance |
+# Groceries is not offered: nothing in its path matches.
+
+Attributes CategorySearch
+Description What has been typed so far, and whether the search was asked to
+Description include the categories it normally leaves out.
+| Attribute      | Type       | Default |
+| Typed          | SearchText |         |
+| IncludeUnused  | Boolean    | false   |
+
+Attributes CategoryOffered
+| Attribute | Type        | Default |
+| Path      | AccountPath |         |
+
+Scenario An alias stands for one category however little is typed
+Description A category used weekly should not need its name typed. The alias is
+Description the user's own, a couple of letters after an at sign, and it offers
+Description exactly the one category rather than everything that matches.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type    | Placeholder | Alias |
+| Expenses:Auto           | Expense | true        | none  |
+| Expenses:Auto:Fuel      | Expense | false       | @FU   |
+| Expenses:Auto:Insurance | Expense | false       | none  |
+When category typed : CategorySearch Vertical
+| Typed | @FU |
+Then categories offered are : CategoryOffered
+| Path               |
+| Expenses:Auto:Fuel |
+# Only the one. An alias is a person saying exactly which category they mean,
+# so the children are not brought along as they are for a typed parent.
+
+Scenario A category not used for years is left out while typing
+Description It is still in the book, still has its history, and still appears in
+Description a report that covers the years it was used. It is simply not put in
+Description front of someone categorising a transaction today.
+Given today is : Today Vertical
+| Date | 2026-10-05 |
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Expenses:Auto          | Expense | true        |
+| Expenses:Auto:Fuel     | Expense | false       |
+| Expenses:Auto:Carriage | Expense | false       |
+Given dated postings are : DatedPostingLine
+| Date       | Account                | Amount |
+| 2026-09-01 | Expenses:Auto:Fuel     | 40.00  |
+| 2009-04-02 | Expenses:Auto:Carriage | 12.00  |
+When category typed : CategorySearch Vertical
+| Typed | auto |
+Then categories offered are : CategoryOffered
+| Path               |
+| Expenses:Auto      |
+| Expenses:Auto:Fuel |
+# Carriage last saw a posting in 2009, so it is not offered. Asking to see
+# everything brings it back.
+
+Scenario Asking for the unused ones brings them back
+Given today is : Today Vertical
+| Date | 2026-10-05 |
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Expenses:Auto          | Expense | true        |
+| Expenses:Auto:Fuel     | Expense | false       |
+| Expenses:Auto:Carriage | Expense | false       |
+Given dated postings are : DatedPostingLine
+| Date       | Account                | Amount |
+| 2026-09-01 | Expenses:Auto:Fuel     | 40.00  |
+| 2009-04-02 | Expenses:Auto:Carriage | 12.00  |
+When category typed : CategorySearch Vertical
+| Typed         | auto |
+| IncludeUnused | true |
+Then categories offered are : CategoryOffered
+| Path                   |
+| Expenses:Auto          |
+| Expenses:Auto:Carriage |
+| Expenses:Auto:Fuel     |
+# Which is the point of it being a search and not a deletion.
 
 # ---------------------------------------------------------------------------
 # What a balance is

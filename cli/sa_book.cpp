@@ -30,6 +30,7 @@
 #include "register_lines.h"
 #include "report.h"
 #include "store_sqlite.h"
+#include "transaction_id.h"
 
 namespace {
 
@@ -164,6 +165,7 @@ int main(int argc, char** argv) {
                 open.accounts.add(types::AccountPath("Equity:Opening Balances"),
                                   types::AccountType::Equity);
                 ledger::Transaction t;
+                t.id = ledger::new_id();
                 t.ref = types::TransactionRef(next_ref(open.transactions));
                 t.date = *when;
                 t.payee = types::PayeeName("Opening Balance");
@@ -205,6 +207,7 @@ int main(int argc, char** argv) {
         // named, and its opposite on the category. The sign is the user's --
         // money out is negative -- because that is how a register reads.
         ledger::Transaction t;
+        t.id = ledger::new_id();
         t.ref = types::TransactionRef(next_ref(open.transactions));
         t.date = *when;
         t.payee = types::PayeeName(argv[4]);
@@ -248,8 +251,28 @@ int main(int argc, char** argv) {
         const std::string ref = argv[3];
         // Always the whole transaction: removing one side would leave the book
         // out of balance. See the delete scenario in Transactions.spectable.
-        if (!ledger::erase_transaction(&open.transactions, ref)) {
-            std::fprintf(stderr, "There is no transaction %s\n", ref.c_str());
+        // An id outright, or a ref that names exactly one transaction. A ref
+        // that names two is refused rather than guessed at: both are real
+        // transactions and only the person asking knows which they meant.
+        std::string id = ref;
+        if (ref.size() != 18) {
+            const std::vector<std::string> named =
+                ledger::ids_labelled(open.transactions, ref);
+            if (named.empty()) {
+                std::fprintf(stderr, "There is no transaction %s\n", ref.c_str());
+                return 1;
+            }
+            if (named.size() > 1) {
+                std::fprintf(stderr, "%s names %zu transactions; say which:\n",
+                             ref.c_str(), named.size());
+                for (const std::string& one : named)
+                    std::fprintf(stderr, "  %s\n", one.c_str());
+                return 1;
+            }
+            id = named.front();
+        }
+        if (!ledger::erase_transaction(&open.transactions, id)) {
+            std::fprintf(stderr, "There is no transaction %s\n", id.c_str());
             return 1;
         }
         no = open.book.write(open.accounts, open.transactions);

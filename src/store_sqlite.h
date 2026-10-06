@@ -128,7 +128,17 @@ CREATE TABLE accounts (
   hidden      INTEGER NOT NULL DEFAULT 0);
 
 CREATE TABLE transactions (
-  ref       TEXT NOT NULL PRIMARY KEY,
+  -- The name the transaction was given when it was created, and what it is
+  -- stored under for the rest of its life. UNIQUE because the generator
+  -- promises it, and declared so here anyway: a promise the database enforces
+  -- cannot be broken by a bug upstream of it.
+  id        TEXT NOT NULL PRIMARY KEY,
+  -- What the register groups by, and nothing the database relies on. It was the
+  -- key once, assigned as "T" plus the number of transactions, and a delete of
+  -- any but the last made the count disagree with the names -- so the next
+  -- transaction collided with one still there and the whole save was refused.
+  -- Names that are positions cannot be keys.
+  ref       TEXT NOT NULL,
   date      TEXT NOT NULL,
   payee     TEXT NOT NULL DEFAULT '',
   check_no  TEXT NOT NULL DEFAULT '',
@@ -136,22 +146,22 @@ CREATE TABLE transactions (
   tag       TEXT NOT NULL DEFAULT '');
 
 CREATE TABLE postings (
-  transaction_ref TEXT    NOT NULL REFERENCES transactions(ref) ON DELETE CASCADE,
+  transaction_id  TEXT    NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
   line            INTEGER NOT NULL,
   account         TEXT    NOT NULL,
   amount_cents    INTEGER NOT NULL,
   memo            TEXT    NOT NULL DEFAULT '',
   cleared         TEXT    NOT NULL DEFAULT 'Uncleared',
-  PRIMARY KEY (transaction_ref, line));
+  PRIMARY KEY (transaction_id, line));
 
 CREATE TABLE posting_import_ids (
-  transaction_ref TEXT    NOT NULL,
+  transaction_id  TEXT    NOT NULL,
   line            INTEGER NOT NULL,
   source          TEXT    NOT NULL,
   id              TEXT    NOT NULL,
-  PRIMARY KEY (transaction_ref, line, source),
-  FOREIGN KEY (transaction_ref, line)
-    REFERENCES postings(transaction_ref, line) ON DELETE CASCADE);
+  PRIMARY KEY (transaction_id, line, source),
+  FOREIGN KEY (transaction_id, line)
+    REFERENCES postings(transaction_id, line) ON DELETE CASCADE);
 
 CREATE TABLE payee_rules (
   pattern    TEXT    NOT NULL,
@@ -361,6 +371,9 @@ public:
             return {true, reason};
         };
 
+        // Still a whole-book rewrite, which is the next thing to go: the store
+        // should be the record and a save should touch the rows that changed.
+        // See the note in development.txt.
         if (!detail::exec(db_.get(), "DELETE FROM posting_import_ids; "
                                      "DELETE FROM postings; DELETE FROM transactions; "
                                      "DELETE FROM accounts;", &why))
@@ -379,27 +392,34 @@ public:
         }
 
         detail::Statement header(db_.get(),
-            "INSERT INTO transactions (ref, date, payee, check_no, memo, tag) "
-            "VALUES (?, ?, ?, ?, ?, ?)");
+            "INSERT INTO transactions (id, ref, date, payee, check_no, memo, tag) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)");
         if (!header.ok()) return fail(header.why());
         detail::Statement line(db_.get(),
             "INSERT INTO postings "
-            "(transaction_ref, line, account, amount_cents, memo, cleared) "
+            "(transaction_id, line, account, amount_cents, memo, cleared) "
             "VALUES (?, ?, ?, ?, ?, ?)");
         if (!line.ok()) return fail(line.why());
         detail::Statement mark(db_.get(),
-            "INSERT INTO posting_import_ids (transaction_ref, line, source, id) "
+            "INSERT INTO posting_import_ids (transaction_id, line, source, id) "
             "VALUES (?, ?, ?, ?)");
         if (!mark.ok()) return fail(mark.why());
 
         for (const ledger::Transaction& t : transactions) {
             header.reset();
-            header.bind(1, t.ref.value());
-            header.bind(2, t.date.iso());
-            header.bind(3, t.payee.value());
-            header.bind(4, t.check_no.value());
-            header.bind(5, t.memo);
-            header.bind(6, t.tag);
+            // A transaction reaching the store without a name has not been
+            // created properly. Giving it one here would hide where that
+            // happened and would hand it a name from the wrong moment, so it is
+            // refused instead.
+            if (t.id.value().empty())
+                return fail("transaction " + t.ref.value() + " has no id");
+            header.bind(1, t.id.value());
+            header.bind(2, t.ref.value());
+            header.bind(3, t.date.iso());
+            header.bind(4, t.payee.value());
+            header.bind(5, t.check_no.value());
+            header.bind(6, t.memo);
+            header.bind(7, t.tag);
             if (!header.run()) return fail(header.why());
 
             // The line number keeps the order the postings were entered in, so
@@ -407,7 +427,7 @@ public:
             int at = 0;
             for (const ledger::Posting& p : t.postings) {
                 line.reset();
-                line.bind(1, t.ref.value());
+                line.bind(1, t.id.value());
                 line.bind(2, at++);
                 line.bind(3, p.account.value());
                 line.bind(4, static_cast<long long>(p.amount.cents()));
@@ -416,7 +436,7 @@ public:
                 if (!line.run()) return fail(line.why());
                 for (const ledger::ImportId& one : p.import_ids) {
                     mark.reset();
-                    mark.bind(1, t.ref.value());
+                    mark.bind(1, t.id.value());
                     mark.bind(2, at - 1);
                     mark.bind(3, types::to_string(one.source));
                     mark.bind(4, one.id);
@@ -450,28 +470,29 @@ public:
         }
 
         detail::Statement header(db_.get(),
-            "SELECT ref, date, payee, check_no, memo, tag FROM transactions "
+            "SELECT id, ref, date, payee, check_no, memo, tag FROM transactions "
             "ORDER BY date, rowid");
         if (!header.ok()) return {true, header.why()};
         while (header.step_row()) {
             ledger::Transaction t;
-            t.ref = types::TransactionRef(header.text(0));
-            const auto on = types::Date::from_iso(header.text(1));
-            if (!on) return {true, header.text(1) + " is not a date"};
+            t.id = types::TransactionId(header.text(0));
+            t.ref = types::TransactionRef(header.text(1));
+            const auto on = types::Date::from_iso(header.text(2));
+            if (!on) return {true, header.text(2) + " is not a date"};
             t.date = *on;
-            t.payee = types::PayeeName(header.text(2));
-            t.check_no = types::CheckNumber(header.text(3));
-            t.memo = header.text(4);
-            t.tag = header.text(5);
+            t.payee = types::PayeeName(header.text(3));
+            t.check_no = types::CheckNumber(header.text(4));
+            t.memo = header.text(5);
+            t.tag = header.text(6);
             transactions->push_back(t);
         }
 
         for (ledger::Transaction& t : *transactions) {
             detail::Statement line(db_.get(),
                 "SELECT account, amount_cents, memo, cleared, line FROM postings "
-                "WHERE transaction_ref = ? ORDER BY line");
+                "WHERE transaction_id = ? ORDER BY line");
             if (!line.ok()) return {true, line.why()};
-            line.bind(1, t.ref.value());
+            line.bind(1, t.id.value());
             while (line.step_row()) {
                 ledger::Posting p;
                 p.account = types::AccountPath(line.text(0));
@@ -481,9 +502,9 @@ public:
 
                 detail::Statement mark(db_.get(),
                     "SELECT source, id FROM posting_import_ids "
-                    "WHERE transaction_ref = ? AND line = ? ORDER BY source");
+                    "WHERE transaction_id = ? AND line = ? ORDER BY source");
                 if (!mark.ok()) return {true, mark.why()};
-                mark.bind(1, t.ref.value());
+                mark.bind(1, t.id.value());
                 mark.bind(2, line.integer(4));
                 while (mark.step_row())
                     p.import_ids.push_back(ledger::ImportId{

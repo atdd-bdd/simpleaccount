@@ -4,6 +4,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 #include "account_type.h"
 #include "chart.h"
@@ -159,6 +160,10 @@ inline CategoryReport category_report(const chart::Chart& accounts,
             if (root_of(p) == root) paths.push_back(p);
         std::sort(paths.begin(), paths.end());   // a path sorts into preorder
 
+        // Other rows, kept aside until the categories they belong under are all
+        // placed. Pairs of the category and the row that follows its subtree.
+        std::vector<std::pair<std::string, Row>> trailing;
+
         for (const std::string& path : paths) {
             const int level = detail::level_of(path);
             if (spec.depth > 0 && level > spec.depth) continue;
@@ -196,7 +201,39 @@ inline CategoryReport category_report(const chart::Chart& accounts,
                 row.amount = -row.amount;
             row.is_subtotal = shows_children;
             out.rows.push_back(row);
+
+            // A category that holds both transactions and other categories owes
+            // the reader a row for its own transactions, or the rows beneath it
+            // do not add up to it and the difference is unexplained on the page.
+            // See the Other-row rule in Reports.spectable.
+            if (!shows_children) continue;
+            const auto mine = own.find(path);
+            if (mine == own.end() || mine->second.cents() == 0) continue;
+            Row other;
+            // Named as Quicken names it -- the word, then the path without the
+            // section -- because these reports are checked against Quicken's.
+            const std::string under = std::string(root) + ":";
+            other.account = "Other " + (path.rfind(under, 0) == 0
+                                            ? path.substr(under.size()) : path);
+            other.level = level + 1;
+            other.amount = sign < 0 ? -mine->second : mine->second;
+            if (spec.quicken_signs && std::string(root) == "Expenses")
+                other.amount = -other.amount;
+            other.is_subtotal = false;
+            // Held back and placed after this category's descendants, which is
+            // where Quicken puts it.
+            trailing.push_back({path, other});
         }
+
+        // Each held-back row goes after the last row belonging to its category.
+        for (const auto& held : trailing) {
+            std::size_t at = out.rows.size();
+            for (std::size_t i = 0; i < out.rows.size(); ++i)
+                if (chart::Chart::is_descendant_or_self(out.rows[i].account, held.first))
+                    at = i + 1;
+            out.rows.insert(out.rows.begin() + static_cast<long>(at), held.second);
+        }
+        trailing.clear();
     }
 
     // Income and expenses are both shown positive and the net is their

@@ -296,4 +296,41 @@ public:
     // was added to the specification, which is how it adds a new step to glue
     // that is already written by hand.
     void given_postings_are_as_previous() {}
+public:
+
+    void when_account_moved_under(const std::vector<AccountMoveString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_account_moved_under";
+    }
+
+    void then_the_chart_of_accounts_is(const std::vector<AccountString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_the_chart_of_accounts_is";
+    }
+
+    void when_category_typed(const std::vector<CategorySearchString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_category_typed";
+    }
+
+    void then_categories_offered_are(const std::vector<CategoryOfferedString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_categories_offered_are";
+    }
+
+    void given_today_is(const std::vector<TodayString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: given_today_is";
+    }
+
+    void examples_businessrule_an_account_is_identified_by_something_that_is_not_its_path(const std::vector<AccountRearrangedString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_an_account_is_identified_by_something_that_is_not_its_path";
+    }
+
+    void examples_businessrule_typing_part_of_a_category_offers_it_and_everything_under_it(const std::vector<CategoryMatchString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_typing_part_of_a_category_offers_it_and_everything_under_it";
+    }
+
 };

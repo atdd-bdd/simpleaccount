@@ -65,6 +65,13 @@ inline void stamp(Posting* p, types::ImportSource source, const std::string& id)
 }
 
 struct Transaction {
+    // Given once when the transaction is created and never changed. See
+    // transaction_id.h and the naming rule in Transactions.spectable. Empty only
+    // on a transaction that has not been created yet -- a candidate being shown
+    // in a dialog, say.
+    types::TransactionId id;
+    // What the register shows and what postings are grouped by in the spec
+    // tables. Not the identity: see id.
     types::TransactionRef ref;
     types::Date date;
     types::PayeeName payee;
@@ -132,12 +139,27 @@ inline types::AccountPath uncategorized_for(const Money& known_amount) {
 // of the whole transaction, from whichever register it was asked for. See the
 // delete scenario in Transactions.spectable.
 //
+// By id, never by ref. A ref is a label and two transactions can carry the same
+// one, so a delete by ref would remove whichever happened to come first -- which
+// is the quiet version of the bug that made this an id in the first place.
+//
 // True when something was removed, so a caller can tell a delete from a request
 // to delete something that is not there.
+// The transactions a label names. More than one is possible -- a ref is a label,
+// not an identity -- and a caller that means to act on one of them has to say
+// which, so this returns all of them and decides nothing.
+inline std::vector<std::string> ids_labelled(
+        const std::vector<Transaction>& transactions, const std::string& ref) {
+    std::vector<std::string> out;
+    for (const Transaction& t : transactions)
+        if (t.ref.value() == ref) out.push_back(t.id.value());
+    return out;
+}
+
 inline bool erase_transaction(std::vector<Transaction>* transactions,
-                              const std::string& ref) {
+                              const std::string& id) {
     const auto at = std::find_if(transactions->begin(), transactions->end(),
-        [&](const Transaction& t) { return t.ref.value() == ref; });
+        [&](const Transaction& t) { return t.id.value() == id; });
     if (at == transactions->end()) return false;
     transactions->erase(at);
     return true;

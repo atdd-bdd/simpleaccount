@@ -11,6 +11,7 @@
 #include "ledger.h"
 #include "money.h"
 #include "posting.h"
+#include "transaction_id.h"
 #include "register_lines.h"
 #include "text_types.h"
 
@@ -250,6 +251,7 @@ public:
         for (const ReviewRow& r : review_) {
             if (!r.accepted) continue;
             ledger::Transaction t;
+            t.id = ledger::new_id();
             t.ref = types::TransactionRef("T" + std::to_string(transactions_.size() + 1));
             t.date = r.date;
             t.payee = types::PayeeName(r.payee);

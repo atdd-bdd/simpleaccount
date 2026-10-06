@@ -332,4 +332,16 @@ public:
         }
     }
 
+public:
+
+    void given_dated_postings_are(const std::vector<DatedPostingLineString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: given_dated_postings_are";
+    }
+
+    void examples_businessrule_a_category_with_its_own_transactions_shows_them_on_an_other_row(const std::vector<OtherRowNamingString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_a_category_with_its_own_transactions_shows_them_on_an_other_row";
+    }
+
 };

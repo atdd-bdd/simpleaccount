@@ -81,6 +81,7 @@ SIMPLEACCOUNT_TEXT_TYPE(Heading)
 SIMPLEACCOUNT_TEXT_TYPE(SearchText)
 SIMPLEACCOUNT_TEXT_TYPE(ProfileName)
 SIMPLEACCOUNT_TEXT_TYPE(TransactionRef)
+SIMPLEACCOUNT_TEXT_TYPE(TransactionId)
 SIMPLEACCOUNT_TEXT_TYPE(Shares)
 SIMPLEACCOUNT_TEXT_TYPE(Price)
 
@@ -156,6 +157,23 @@ inline std::string SearchText::check(const std::string& text) { return text; }
 inline std::string ProfileName::check(const std::string& text) {
     const std::string s = detail::trim(text);
     if (s.empty()) throw std::invalid_argument("a saved profile is named");
+    return s;
+}
+
+// The creation moment, to the millisecond: eight digits of date, a T, then nine
+// of time. Checked for shape rather than for being a real instant, because a
+// name is not a date and nothing reads it back as one -- what matters is that
+// every name has the same shape, so they sort into creation order as text.
+inline std::string TransactionId::check(const std::string& text) {
+    const std::string s = detail::trim(text);
+    if (s.empty()) throw std::invalid_argument("a transaction always has an id");
+    if (s.size() != 18 || s[8] != 'T')
+        throw std::invalid_argument("an id is YYYYMMDDThhmmssSSS: " + s);
+    for (std::size_t i = 0; i < s.size(); ++i) {
+        if (i == 8) continue;
+        if (s[i] < '0' || s[i] > '9')
+            throw std::invalid_argument("an id is YYYYMMDDThhmmssSSS: " + s);
+    }
     return s;
 }
 

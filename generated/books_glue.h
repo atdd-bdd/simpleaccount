@@ -16,6 +16,7 @@
 #include "money.h"
 #include "posting.h"
 #include "store_sqlite.h"
+#include "transaction_id.h"
 #include "text_types.h"
 
 // Glue for Books.spectable.
@@ -361,6 +362,9 @@ public:
                 if (t.ref.value() == value.ref) into = &t;
             if (into == nullptr) {
                 ledger::Transaction made;
+                // Named here as any creator must name one: the store refuses a
+                // transaction with no id rather than inventing one.
+                made.id = ledger::new_id();
                 made.ref = types::TransactionRef(value.ref);
                 const auto on = types::Date::from_iso(value.date);
                 ASSERT_TRUE(on.has_value()) << value.date;
@@ -669,6 +673,9 @@ private:
                 if (t.ref.value() == value.ref) into = &t;
             if (into == nullptr) {
                 ledger::Transaction made;
+                // Named here as any creator must name one: the store refuses a
+                // transaction with no id rather than inventing one.
+                made.id = ledger::new_id();
                 made.ref = types::TransactionRef(value.ref);
                 const auto on = types::Date::from_iso(value.date);
                 ASSERT_TRUE(on.has_value()) << value.date;

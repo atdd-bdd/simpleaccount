@@ -1,0 +1,439 @@
+WHERE     CATEGORY                                              ALL DATES  LAST USED
+-----------------------------------------------------------------------------------
+
+INCOME      Uncategorized                                      190,801.51  ?
+INCOME      Amex Airline Reimbursement                             174.19  2013
+INCOME      Consulting                                         311,128.75  2024
+INCOME      Div Income                                           1,040.75  2011
+INCOME        Other Div Income                                   1,040.75  (posted to the parent itself)
+INCOME      Dividens                                               188.53  2023
+INCOME      Expense Reimbursement - Other                        2,532.43  2012
+INCOME      Expense Reimbursement from NO                      373,076.99  2016
+INCOME      Fee                                                   -401.21  2022
+INCOME      Gift Received                                       37,679.69  2023
+INCOME      Income Madeup                                        9,075.44  2008
+INCOME      Interest Inc                                        37,782.84  2026
+INCOME      Invest Inc                                          62,085.35  2025
+INCOME      Investment transfer                                177,627.51  2021
+INCOME      Ken Pugh Inc. Transfers                             16,685.00  2022
+INCOME      Medical Reimbursement to Leslie                     14,546.34  2011
+INCOME      Misc Income                                         17,267.07  2025
+INCOME      Net Objective Salary                               630,412.46  2017
+INCOME      Net Objectives Travel Reimbursement                  7,120.82  2017
+INCOME      Profit Sharing                                       1,000.00  2010
+INCOME      Rent - Shed                                         17,454.39  2020
+INCOME      Retirement Income from IRA                          62,921.17  2024
+INCOME      Reversal of General Account Hold                        73.21  2022
+INCOME      Reward Credit                                          395.10  2021
+INCOME      Royalty                                             20,977.40  2025
+INCOME      Salary Income (Leslie)                             163,513.30  2024
+INCOME      Salary Ken                                         149,112.00  2025
+INCOME      Social Security                                    231,142.70  2024
+INCOME      Social Security - Ken                              282,415.60  2026
+INCOME      Tax Refund                                          29,293.07  2024
+INCOME        Other Tax Refund                                  29,293.07  (posted to the parent itself)
+INCOME      Training                                               364.08  2021
+INCOME      Transfer - Income                                    3,457.25  2024
+INCOME        Wachovia High Per Money Market                   -10,000.00  2009
+INCOME        Other Transfer - Income                           13,457.25  (posted to the parent itself)
+INCOME      Transfer Ken Pugh, Inc.                            135,000.00  2024
+INCOME      Uncategorized Income - Business                     43,770.73  2008
+INCOME      Uncategorized Income-Personal                        6,665.00  2014
+INCOME      weaving income                                          60.00  2011
+INCOME      Withholding for Medicare                             7,891.20  2021
+INCOME      writing                                             21,704.75  2023
+INCOME      _DivInc                                             90,694.38  ?
+INCOME      _RlzdGain                                          585,709.61  ?
+
+EXPENSES    Uncategorized                                     -193,971.89  ?
+EXPENSES    401K Contrib                                       -15,105.25  2011
+EXPENSES    Accident                                            -5,074.96  2026
+EXPENSES    Aging in Place                                         -30.51  2021
+EXPENSES    Amazon Purchases                                   -19,214.01  2023
+EXPENSES    Amazon Spending - Uncategorized                    -12,171.57  2026
+EXPENSES    Auto                                              -100,948.56  2025
+EXPENSES      car wash                                          -1,534.75  2025
+EXPENSES      Ford Escape                                      -19,768.16  2025
+EXPENSES      Fuel                                             -28,602.51  2026
+EXPENSES      inspection                                        -1,202.90  2024
+EXPENSES      Insurance                                           -884.18  2026
+EXPENSES      License                                           -3,899.08  2025
+EXPENSES      Mazda 3 2018                                      -2,311.08  2024
+EXPENSES      Miata                                             -1,249.96  2024
+EXPENSES      Mr. III Mazda 3                                   -5,030.00  2020
+EXPENSES      parking                                             -373.90  2026
+EXPENSES      quick pass                                          -122.16  2025
+EXPENSES      Registration                                        -795.30  2025
+EXPENSES      Service                                          -34,066.10  2025
+EXPENSES      TIRES                                               -717.90  2021
+EXPENSES      Transit Ford                                      -1,476.17  2024
+EXPENSES      Other Auto                                         1,085.59  (posted to the parent itself)
+EXPENSES    balance adjustments                                 22,286.11  2024
+EXPENSES    Bank and Credit Charges                             -8,036.26  2024
+EXPENSES    Books and Magazines                                 -7,300.44  2026
+EXPENSES    Boy's Mountain Bike 2022                              -588.99  2024
+EXPENSES    Building                                            -9,634.18  2011
+EXPENSES    Business Meal                                         -151.87  2025
+EXPENSES    Camera                                              -1,149.37  2024
+EXPENSES    Capital Expenditures                                -4,786.01  2009
+EXPENSES    CARE Actions                                           352.99  2025
+EXPENSES    CARE for Durham                                       -280.70  2025
+EXPENSES    Cash Expenditures                                 -108,302.45  2025
+EXPENSES      Cash - International Expenditures                -19,183.82  2009
+EXPENSES        Amsterdam Nov 2010                              -1,964.64  2010
+EXPENSES        China June 2011                                 -3,597.61  2011
+EXPENSES        Copenhagen August 2010                            -356.51  2010
+EXPENSES        India-Nepal-Tibet2011                           -1,191.00  2011
+EXPENSES        Montreal - Jan 2010                               -292.51  2010
+EXPENSES        ScandinaviaJune2010                             -2,672.71  2010
+EXPENSES        Other Cash Expenditures:Cash - International Expenditures        -9,108.84  (posted to the parent itself)
+EXPENSES      Cash Ken Expenses                                -47,208.48  2024
+EXPENSES      Cash Leslie Expenses                             -11,567.14  2024
+EXPENSES      Foreign Travel                                   -15,143.25  2017
+EXPENSES        Other Cash Expenditures:Foreign Travel         -15,143.25  (posted to the parent itself)
+EXPENSES      Germany Feb 2011                                  -2,314.32  2011
+EXPENSES      Other Cash Expenditures                          -12,885.44  (posted to the parent itself)
+EXPENSES    Cleaning                                            -5,387.09  2026
+EXPENSES    Clear Out Balances                                 -38,696.58  2021
+EXPENSES    Clothing                                           -29,935.29  2025
+EXPENSES      Ken                                              -11,189.78  2025
+EXPENSES      Leslie                                           -17,209.82  2024
+EXPENSES        shoes                                           -2,678.32  2024
+EXPENSES        Other Clothing:Leslie                          -14,531.50  (posted to the parent itself)
+EXPENSES      Other Clothing                                    -1,535.69  (posted to the parent itself)
+EXPENSES    Computer                                            -3,475.45  2013
+EXPENSES      Repair                                              -495.65  2026
+EXPENSES      Other Computer                                    -2,979.80  (posted to the parent itself)
+EXPENSES    Credit Card                                         35,677.23  2021
+EXPENSES      AA MC Citi                                        11,995.05  2011
+EXPENSES      American Express                                   3,155.81  2021
+EXPENSES      Bank of America USAir                             33,905.06  2011
+EXPENSES      Chase British Airwasy                             -4,164.81  2024
+EXPENSES      Citi Card                                         -4,583.28  2011
+EXPENSES      Citi Card LK                                           0.00  2006
+EXPENSES      Master Card                                       -4,869.70  2015
+EXPENSES      REI                                                  334.10  2011
+EXPENSES      Other Credit Card                                    -95.00  (posted to the parent itself)
+EXPENSES    CRUT Expenses                                       -2,831.49  2017
+EXPENSES    Denied Travel Expenses                                -262.40  2006
+EXPENSES    Dining                                              -1,848.42  2016
+EXPENSES    Donation Payment                                      -475.00  2024
+EXPENSES    Donations                                          -72,209.80  2025
+EXPENSES      arrowhead                                         -2,275.00  2026
+EXPENSES      toys for tots                                     -1,170.50  2025
+EXPENSES      Other Donations                                  -68,764.30  (posted to the parent itself)
+EXPENSES    Duplicated Downloaded Transaction                        0.00  2017
+EXPENSES    ebay                                                  -674.70  2024
+EXPENSES    Education                                             -380.99  2017
+EXPENSES    Entertainment                                      -85,934.52  2025
+EXPENSES      Admissions Tickets                               -12,518.11  2025
+EXPENSES      Boy's Mountain                                   2023250.00  ?
+EXPENSES      boy's mountain 2024                                 -338.42  2024
+EXPENSES      Boy's Mountain Bike 2018                             -95.00  2018
+EXPENSES      Boys Mountain Bike                                    21.00  2022
+EXPENSES      Boys Mountain Bike 2015                              -23.85  2015
+EXPENSES      Boys Mountain bike 2016                             -504.00  2016
+EXPENSES      Boys Mountain Bike 2017                              -16.09  2017
+EXPENSES      Boys Mountain bike                               2021110.08  ?
+EXPENSES      Boys Mountain Bike 2025                             -501.02  2025
+EXPENSES      boys mountain bike 2026                           -1,008.76  2026
+EXPENSES      Boys Mountain Bike Trip 2014                         -64.47  2015
+EXPENSES      BoysMountain2013                                    -976.75  2013
+EXPENSES      Dating                                              -283.01  2025
+EXPENSES      DPAC                                              -1,160.10  2022
+EXPENSES      Entertainment paid by Leslie                        -134.40  2014
+EXPENSES      Entrance Fees                                       -112.74  2007
+EXPENSES      fishing                                             -170.99  2025
+EXPENSES      Food                                                -219.06  2026
+EXPENSES      Games                                               -358.36  2022
+EXPENSES      Games,TV,Etc.                                       -197.60  2008
+EXPENSES      Golf                                                -166.40  2025
+EXPENSES      Hotel                                                -53.92  2024
+EXPENSES      meals                                            -24,775.53  2026
+EXPENSES      Men's Bike Trip - May                              3,904.28  2008
+EXPENSES      Netflix                                           -1,527.96  2022
+EXPENSES      Parking                                             -113.50  2024
+EXPENSES      Pugh Reunion May                                   06575.39  ?
+EXPENSES      sports                                            -1,590.00  2026
+EXPENSES      Streaming                                         -4,114.39  2026
+EXPENSES      Xmas Party                                          -577.62  2025
+EXPENSES      Other Entertainment                              -39,193.22  (posted to the parent itself)
+EXPENSES    estate planning                                       -776.25  2013
+EXPENSES    Expenses Pugh-Killeen                               -1,726.96  2017
+EXPENSES    Express Checkout Payment                            -1,405.08  2022
+EXPENSES    Flying                                              -1,346.90  2020
+EXPENSES    Foreign Transaction Fee                               -735.94  2013
+EXPENSES    General Authorization                                 -169.30  2020
+EXPENSES    General Payment                                        189.36  2022
+EXPENSES    Gifts Given                                        -24,669.01  2026
+EXPENSES    Groceries                                         -175,525.11  2026
+EXPENSES      Alcohol                                           -8,754.20  2026
+EXPENSES      delivered                                           -309.07  2025
+EXPENSES      meals                                             -1,078.03  2026
+EXPENSES      Other Groceries                                 -165,383.81  (posted to the parent itself)
+EXPENSES    Home                                               -43,839.37  2026
+EXPENSES      Insulation                                        -1,118.12  2010
+EXPENSES      Painting Interior house                           -3,176.45  2018
+EXPENSES      Repair                                            -8,366.39  2026
+EXPENSES      Supplies                                          -2,073.51  2026
+EXPENSES      Yard Work                                        -15,624.33  2024
+EXPENSES      Other Home                                       -13,480.57  (posted to the parent itself)
+EXPENSES    Household                                         -143,691.38  2026
+EXPENSES      bees                                                -316.56  2012
+EXPENSES      Ken's bathroom                                    -2,831.82  2019
+EXPENSES      Lowes                                               -520.61  2024
+EXPENSES      Permanent                                        -47,916.01  2025
+EXPENSES        pickle ball court                               -4,208.92  2024
+EXPENSES        sideporch                                      -22,338.25  2021
+EXPENSES        Other Household:Permanent                      -21,368.84  (posted to the parent itself)
+EXPENSES      Services                                          -9,855.52  2026
+EXPENSES      Supplies                                         -10,987.22  2026
+EXPENSES      swim pool                                        -10,652.72  2026
+EXPENSES      Trees                                             -6,085.00  2024
+EXPENSES      Other Household                                  -54,525.92  (posted to the parent itself)
+EXPENSES    Insurance                                          -87,655.26  2026
+EXPENSES      Amica                                            -30,893.17  2026
+EXPENSES      Cancer                                              -546.00  2022
+EXPENSES      Car Personal                                      -1,669.52  2025
+EXPENSES      Disability Insurance                              -2,650.66  2008
+EXPENSES      Home Insurance                                   -16,555.93  2024
+EXPENSES      IEEE Cancer                                         -468.00  2022
+EXPENSES      Life Insurance                                   -19,101.62  2023
+EXPENSES      Medical Insurance                                -12,777.35  2024
+EXPENSES      Medicare Ken                                         104.90  2014
+EXPENSES      Other Insurance                                   -3,097.91  (posted to the parent itself)
+EXPENSES    Interest Exp                                        -2,534.81  2025
+EXPENSES    Invest Contributions                               -69,688.21  2020
+EXPENSES    IRA Contrib                                         -7,500.00  2023
+EXPENSES    Italy and Greece                                    -1,386.32  2017
+EXPENSES    Jamaica                                                 -3.92  ?
+EXPENSES      Fees                                                  -3.92  2007
+EXPENSES    Ken Pugh Inc Expenses to be Reimbursed              -1,988.98  2025
+EXPENSES      Advertising                                            2.08  2023
+EXPENSES      airline                                             -158.79  2024
+EXPENSES      Amazon purchases                                       0.00  2021
+EXPENSES      class                                                500.00  2022
+EXPENSES      conference in cloud                                 -288.00  2021
+EXPENSES      Insurance                                           -798.79  2026
+EXPENSES      Internet                                          -7,644.06  2026
+EXPENSES      lodging                                           -3,200.69  2025
+EXPENSES      meals                                               -942.03  2026
+EXPENSES      Membership                                        -1,369.63  2026
+EXPENSES      miscellaneous                                     -2,467.98  2024
+EXPENSES      office expenses                                   -2,404.63  2025
+EXPENSES      repairs                                                0.00  2022
+EXPENSES      smart phone                                       -2,998.24  2026
+EXPENSES      supplies                                               0.00  2021
+EXPENSES      transportation                                     1,271.94  2022
+EXPENSES      Other Ken Pugh Inc Expenses to be Reimbursed        18,509.84  (posted to the parent itself)
+EXPENSES    Ken's Expenses                                        -175.54  2024
+EXPENSES    Legal-Prof Fees                                     -3,399.34  2019
+EXPENSES    Leslie Stuff                                           -88.11  2026
+EXPENSES    Leslie's Ending                                     -8,547.49  2025
+EXPENSES    Leslie's Expenses                                   -1,943.50  2024
+EXPENSES      Hair                                              -1,610.38  2024
+EXPENSES      Other Leslie's Expenses                             -333.12  (posted to the parent itself)
+EXPENSES    Licenses and Permits                                  -251.00  2018
+EXPENSES    Loan                                                -8,115.83  2020
+EXPENSES    Loan Payment                                       -30,327.67  2019
+EXPENSES      Interest                                          -1,119.52  2021
+EXPENSES      Principal                                        -27,271.42  2021
+EXPENSES      Other Loan Payment                                -1,936.73  (posted to the parent itself)
+EXPENSES    Magic                                                  -49.06  2018
+EXPENSES    Meal With Ken NO                                       956.53  2010
+EXPENSES    Meals                                                 -561.23  2024
+EXPENSES    Medical Direct from PK                              -6,295.00  2007
+EXPENSES    Medical Expense                                     -2,112.40  2018
+EXPENSES      Doctor                                                61.00  2008
+EXPENSES      Other Medical Expense                             -2,173.40  (posted to the parent itself)
+EXPENSES    Medical Ken Paid by HSA (or should be)              -4,824.17  2014
+EXPENSES    Membership                                         -14,196.07  2026
+EXPENSES      Business                                          -1,544.97  2026
+EXPENSES      Other Membership                                 -12,651.10  (posted to the parent itself)
+EXPENSES    membership personal                                 -1,521.12  2025
+EXPENSES    Misc Expense                                       -17,247.12  2025
+EXPENSES    music                                               -2,997.34  2025
+EXPENSES    Net Objective Expenses                            -368,279.49  2017
+EXPENSES      Airline                                         -121,335.64  2023
+EXPENSES      Car                                              -49,754.38  2024
+EXPENSES      Class Supplies                                    -1,767.39  2017
+EXPENSES      Food                                             -39,526.40  2026
+EXPENSES        reimbursement                                      323.91  2017
+EXPENSES        Other Net Objective Expenses:Food              -39,850.31  (posted to the parent itself)
+EXPENSES      Hotel                                           -157,797.40  2024
+EXPENSES      Miscellaneous                                    -13,519.24  2016
+EXPENSES      parking                                             -443.94  2026
+EXPENSES      taxi                                              -5,244.49  2016
+EXPENSES      Other Net Objective Expenses                      21,109.39  (posted to the parent itself)
+EXPENSES    Office Expense- PK                                  -5,940.54  2023
+EXPENSES    Paypal-Amazon-To-Breakdown                         -21,011.99  2022
+EXPENSES    paypal-transfer                                     -1,572.95  2016
+EXPENSES    Phone                                              -21,394.85  2024
+EXPENSES    Photography                                           -928.26  2022
+EXPENSES    political donations                                 -1,075.00  2020
+EXPENSES    Postage                                            -12,282.36  2026
+EXPENSES    Reimbursement to Joint                              -2,143.23  2009
+EXPENSES    Repair                                              -5,688.64  2026
+EXPENSES    Retirement Contributions                           -17,915.53  2012
+EXPENSES    Retirement Investment Expenses                          -1.58  2016
+EXPENSES    Ruth                                                -7,665.65  2026
+EXPENSES    Salary Expense                                     -38,740.00  2007
+EXPENSES    Sport Equipment                                    -10,254.14  2024
+EXPENSES    Sports                                                -685.03  2023
+EXPENSES      Pickle Ball                                         -388.49  2026
+EXPENSES      Other Sports                                        -296.54  (posted to the parent itself)
+EXPENSES    Subscriptions                                          -67.19  2025
+EXPENSES    Tax                                               -312,724.27  2025
+EXPENSES      Fed                                              -80,701.53  2026
+EXPENSES      Fed For Leslie                                   -17,238.00  2007
+EXPENSES      Fica                                                -882.69  2009
+EXPENSES      Medicare                                          -9,325.79  2017
+EXPENSES      Medicare - Leslie                                   -150.80  2014
+EXPENSES      Other                                            -37,940.39  2023
+EXPENSES      Soc Sec                                          -31,948.40  2017
+EXPENSES      Soc Sec - Leslie                                   2,494.20  2023
+EXPENSES      State                                            -56,375.96  2023
+EXPENSES      Tax Federal Payments                             -54,512.24  2025
+EXPENSES      Tax State Payments                               -13,000.00  2025
+EXPENSES      Other Tax                                        -13,142.67  (posted to the parent itself)
+EXPENSES    Tax State Payments                                   4,198.00  2025
+EXPENSES    Transfer Only                                      -83,438.83  2025
+EXPENSES    Transfer to E*trade                                 -3,006.00  2021
+EXPENSES    Travel                                            -293,508.05  2026
+EXPENSES      ABQ December 2025                                 -3,354.50  2026
+EXPENSES      Alaska                                           -23,827.73  2025
+EXPENSES        admissions                                        -418.27  2023
+EXPENSES        camping                                         -2,078.75  2024
+EXPENSES        Excursion                                       -4,718.91  2023
+EXPENSES        food                                            -3,149.62  2024
+EXPENSES        fuel                                            -3,416.32  2023
+EXPENSES        misc                                              -424.69  2023
+EXPENSES        souvenier                                         -970.18  2025
+EXPENSES        Transportation                                  -2,748.95  2024
+EXPENSES        van supplies                                      -237.04  2023
+EXPENSES        Other Travel:Alaska                             -5,665.00  (posted to the parent itself)
+EXPENSES      alaska northern lights                              -219.04  2026
+EXPENSES      Antartica                                         -2,082.02  2025
+EXPENSES      Canada                                                 9.00  2025
+EXPENSES      Canada Oct 2017 part of Class in Regina           -2,412.06  2017
+EXPENSES      leslie trip Albuquerque                           -1,650.14  2024
+EXPENSES      Local                                               -823.58  2023
+EXPENSES      Personal                                        -211,502.33  2026
+EXPENSES        Airline                                         -8,500.47  2023
+EXPENSES        Australia 2019                                 -26,468.47  2019
+EXPENSES          Trip insurance claim Australia                  -280.75  2019
+EXPENSES          Other Travel:Personal:Australia 2019         -26,187.72  (posted to the parent itself)
+EXPENSES        Barcelona and Ireland                           -4,829.30  2016
+EXPENSES        Camping                                         -1,884.84  2025
+EXPENSES        Car                                             -9,503.31  2024
+EXPENSES        ChinaMongolia May 2013                          -6,849.48  2014
+EXPENSES        Egypt                                          -15,607.15  2016
+EXPENSES        entertainment                                     -431.99  2024
+EXPENSES        Entrances                                       -6,311.16  2023
+EXPENSES        Food                                           -14,149.11  2026
+EXPENSES        foreign                                         -8,979.39  2016
+EXPENSES        Galapagos                                      -13,339.66  2014
+EXPENSES        Hotel                                          -30,683.49  2024
+EXPENSES        Italy 2018                                      -6,624.24  2018
+EXPENSES        Italy,Greece, Iseral Oct 2018                  -15,358.11  2018
+EXPENSES        Japan                                               20.00  2013
+EXPENSES        Malaysia                                        -2,152.18  2014
+EXPENSES        misc                                            -6,883.47  2023
+EXPENSES        Snobasin 2022                                   -6,059.43  2022
+EXPENSES        Snowbasin 2022                                    -452.52  2022
+EXPENSES        Snowbasin 2023                                  -5,727.60  2024
+EXPENSES        Snowbasin Feb 2014                              -2,277.34  2014
+EXPENSES        Snowbasin Feb 2015                              -1,537.66  2015
+EXPENSES        Snowbasin January 2016                          -2,188.60  2016
+EXPENSES        Snowboard 2024                                  -5,310.76  2024
+EXPENSES        souvenier                                         -761.94  2025
+EXPENSES        Taxi                                              -118.92  2017
+EXPENSES        transportation                                  -1,197.14  2022
+EXPENSES        Trip - Africa                                   -8,234.22  2013
+EXPENSES        Other Travel:Personal                              899.62  (posted to the parent itself)
+EXPENSES      Portugal and Marocco                              -8,500.26  2023
+EXPENSES      Ruth With                                            -57.43  2026
+EXPENSES      SC Trip                                              -46.93  2025
+EXPENSES      Short Trip                                          -717.09  2025
+EXPENSES      Snowbasin 2019                                    -2,575.30  2019
+EXPENSES      Snowbasin 2020                                    -4,335.05  2020
+EXPENSES      Snowbasin 2021                                      -614.45  2022
+EXPENSES      snowboard 2017 Feb                                -1,631.47  2017
+EXPENSES      Travel Meals                                        -378.80  2026
+EXPENSES      Trip - ABQ - Sept 2025                            -4,709.70  2025
+EXPENSES      Trip - China                                      -7,778.71  2009
+EXPENSES      Trip - China 2011                                   -769.04  ?
+EXPENSES        airline                                           -769.04  2024
+EXPENSES      Trip - India                                        -356.18  2009
+EXPENSES      Trip - India Nepal Tipet Sept 2011                -2,325.51  2011
+EXPENSES      Trip - Jamaica                                    -1,367.46  2007
+EXPENSES      Trip Gemany Feb 2011                                -515.94  2011
+EXPENSES      US1 South trip April 2024                         -2,803.49  2024
+EXPENSES      Other Travel                                      -8,162.84  (posted to the parent itself)
+EXPENSES    Uncategorized                                            0.00  ?
+EXPENSES      Uncategorized                                     -1,866.64  ?
+EXPENSES        Airlines                                          -348.59  2007
+EXPENSES        Fees                                               -18.21  2007
+EXPENSES        gifts                                             -496.79  2007
+EXPENSES        Hotel                                              -69.73  2024
+EXPENSES    Uncategorized Expenses                             -37,561.57  2010
+EXPENSES    Uncategorized Expenses - Personal                   -7,628.99  2025
+EXPENSES    Unknown - Not Paypal.Amazon                             -9.47  2017
+EXPENSES    Utilities                                          -42,306.90  2018
+EXPENSES      Electric                                         -25,685.19  2026
+EXPENSES      Gas - Propane                                    -13,999.73  2026
+EXPENSES      Internet                                          -1,189.97  2026
+EXPENSES      Other Utilities                                   -1,432.01  (posted to the parent itself)
+EXPENSES    Van Conversion                                     -16,273.31  2023
+EXPENSES      Van Labor                                         -7,883.00  2023
+EXPENSES      Other Van Conversion                              -8,390.31  (posted to the parent itself)
+EXPENSES    Van Trip                                               -27.95  2024
+EXPENSES    warp and Byte Expense - Already Accounte            13,912.05  2017
+EXPENSES    Warp And Byte Expenses To be Reimbursed            -79,547.46  2025
+EXPENSES      airline                                          -60,141.12  2024
+EXPENSES      amazon purchases                                       0.00  2022
+EXPENSES      Assets                                            -7,059.67  2022
+EXPENSES      Books                                                -58.62  2017
+EXPENSES      conferences                                       -2,604.25  2022
+EXPENSES      consultants camp                                  -2,980.48  2021
+EXPENSES      Dental Insurance                                  -7,655.64  2026
+EXPENSES      electric                                          -7,907.85  2025
+EXPENSES      Equipment                                         -2,097.96  2022
+EXPENSES      food                                              -8,943.16  2024
+EXPENSES      Health and wellness                               -1,230.37  2024
+EXPENSES      hotel                                             -2,732.31  2022
+EXPENSES      insurance                                           -729.50  2021
+EXPENSES        Medicare Premiums                                  -48.50  2024
+EXPENSES        Other Warp And Byte Expenses To be Reimbursed:insurance          -681.00  (posted to the parent itself)
+EXPENSES      Internet                                         -11,924.58  2026
+EXPENSES      Leslie Drugs                                      -3,751.59  2024
+EXPENSES      medical Ken                                      -12,182.57  2026
+EXPENSES        Dental                                          -8,373.16  2025
+EXPENSES        Insurance                                       -2,818.75  2026
+EXPENSES        Other Warp And Byte Expenses To be Reimbursed:medical Ken          -990.66  (posted to the parent itself)
+EXPENSES      Medical Ken - put in Medical Ken HSA             -18,179.20  2024
+EXPENSES      Medical Leslie                                   -25,745.90  2025
+EXPENSES        Dental                                          -4,335.04  2025
+EXPENSES        Other Warp And Byte Expenses To be Reimbursed:Medical Leslie       -21,410.86  (posted to the parent itself)
+EXPENSES      Medicare (deducted from deposit)                   2,632.80  2020
+EXPENSES      Medicare Insurance                                  -135.50  2021
+EXPENSES      membership                                       -13,160.00  2025
+EXPENSES      Office Expense                                   -13,418.65  2025
+EXPENSES      Office Repair                                     -4,442.20  2022
+EXPENSES      Office Supplies                                   -7,236.69  2025
+EXPENSES      Other Expenses                                    -1,979.73  (posted to the parent itself)
+EXPENSES      phone                                             -3,673.92  2025
+EXPENSES      Phone cellular                                    -3,390.23  2026
+EXPENSES      Postage                                           -1,009.63  2026
+EXPENSES      Reimbursement From W&B                            16,824.22  2022
+EXPENSES      taxes fees                                        -1,033.88  2026
+EXPENSES      Travel - Other                                    13,199.94  2022
+EXPENSES      weaving - warp and byte reimbursable              -1,575.56  2025
+EXPENSES      Other Warp And Byte Expenses To be Reimbursed       114,776.34  (posted to the parent itself)
+EXPENSES    Weaving and Sewing Expenses                        -14,998.18  2024
+EXPENSES    Website Payment                                     10,746.00  2022
+
+TRANSFERS   Uncategorized                                      -63,888.84  ?
+
+431 rows: 393 categories to pick from, 38 Other rows holding transactions posted to a parent
+171 of the categories were last used before 2023

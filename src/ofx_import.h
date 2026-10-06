@@ -9,6 +9,7 @@
 #include "money.h"
 #include "ofx_reader.h"
 #include "posting.h"
+#include "transaction_id.h"
 
 // Deciding what to do with each downloaded transaction: create it, recognise it
 // as one already imported, match it to one entered by hand, or offer it as a
@@ -31,7 +32,11 @@ inline std::string to_string(Disposition d) {
 struct Decided {
     Transaction downloaded;
     Disposition disposition = Disposition::New;
-    // Which transaction already in the book it claimed, where it claimed one.
+    // Which transaction already in the book it claimed, where it claimed one,
+    // by identity rather than by label. Empty where it claimed nothing.
+    std::string claimed_id;
+    // The same transaction's label, for saying which one in a message. Never
+    // used to find it again.
     std::string claimed_ref;
 };
 
@@ -90,6 +95,11 @@ inline std::string fingerprint(const types::Date& on, const Money& amount,
 // One posting already in the book, in the account being imported into, with
 // whatever is needed to decide a claim against it.
 struct Existing {
+    // What the transaction is, as opposed to what it is labelled. Anything that
+    // acts on a claim acts through this: a ref is a label and two transactions
+    // can share one, so finding a transaction by ref would act on whichever
+    // came first.
+    std::string id;
     std::string ref;
     types::Date date;
     Money amount;
@@ -119,6 +129,7 @@ inline std::vector<detail::Existing> existing_in(
         for (const ledger::Posting& p : t.postings) {
             if (p.account.value() != account) continue;
             detail::Existing one;
+            one.id = t.id.value();
             one.ref = t.ref.value();
             one.date = t.date;
             one.amount = p.amount;
@@ -161,6 +172,7 @@ inline Imported decide(const Statement& statement, const std::string& account,
                 [&](const detail::Existing& e) { return e.ofx_id == downloaded.fit_id; });
             if (same != already.end()) {
                 decided.disposition = Disposition::Duplicate;
+                decided.claimed_id = same->id;
                 decided.claimed_ref = same->ref;
                 ++out.summary.Duplicate;
                 out.decided.push_back(decided);
@@ -212,6 +224,7 @@ inline Imported decide(const Statement& statement, const std::string& account,
         if (found != already.end()) {
             found->claimed = true;
             decided.disposition = Disposition::Matched;
+            decided.claimed_id = found->id;
             decided.claimed_ref = found->ref;
             ++out.summary.Matched;
             out.decided.push_back(decided);
@@ -231,6 +244,7 @@ inline Imported decide(const Statement& statement, const std::string& account,
         if (found != already.end()) {
             found->claimed = true;
             decided.disposition = Disposition::Possible;
+            decided.claimed_id = found->id;
             decided.claimed_ref = found->ref;
             ++out.summary.Possible;
             out.decided.push_back(decided);
@@ -268,6 +282,7 @@ inline std::vector<ledger::Transaction> transactions_for(
                                          : types::AccountType::Income);
 
         ledger::Transaction t;
+        t.id = ledger::new_id();
         t.ref = types::TransactionRef(
             "T" + std::to_string(already_in_book + out.size() + 1));
         t.date = one.downloaded.date_posted;
@@ -306,7 +321,7 @@ inline int apply_matches(const Imported& decided, const std::string& account,
     for (const Decided& one : decided.decided) {
         if (one.disposition != Disposition::Matched) continue;
         for (ledger::Transaction& t : *transactions) {
-            if (t.ref.value() != one.claimed_ref) continue;
+            if (t.id.value() != one.claimed_id) continue;
             for (ledger::Posting& p : t.postings) {
                 if (p.account.value() != account) continue;
                 p.cleared = types::ClearedStatus::Cleared;
@@ -352,7 +367,7 @@ enum class Answer { TheSame, Different };
 inline bool answer_the_same(const Decided& offered, const std::string& account,
                             std::vector<ledger::Transaction>* transactions) {
     for (ledger::Transaction& t : *transactions) {
-        if (t.ref.value() != offered.claimed_ref) continue;
+        if (t.id.value() != offered.claimed_id) continue;
         for (ledger::Posting& p : t.postings) {
             if (p.account.value() != account) continue;
             p.cleared = types::ClearedStatus::Cleared;
@@ -373,6 +388,7 @@ inline ledger::Transaction answer_different(const Decided& offered,
     Imported one;
     Decided as_new = offered;
     as_new.disposition = Disposition::New;
+    as_new.claimed_id.clear();
     as_new.claimed_ref.clear();
     one.decided.push_back(as_new);
     const std::vector<ledger::Transaction> made =

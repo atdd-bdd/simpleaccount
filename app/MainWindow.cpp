@@ -1,5 +1,7 @@
 #include "MainWindow.h"
 
+#include "transaction_id.h"
+
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
@@ -354,6 +356,7 @@ void MainWindow::newAccount() {
                 types::AccountPath(wanted), kind, amount, when);
 
             ledger::Transaction t;
+            t.id = ledger::new_id();
             t.ref = types::TransactionRef("T" + std::to_string(transactions_.size() + 1));
             t.date = when;
             t.payee = types::PayeeName("Opening Balance");

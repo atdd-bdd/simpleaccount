@@ -863,13 +863,182 @@ Details 3 August, which posted to the card on the 1st. Nothing is further
 Details apart than two days.
 Examples: TransferCandidateRule
 | Test | Condition                                                            |
-| 1    | Both are new in this import, neither matched to anything already there |
+| 1    | Neither has been claimed by this import already                       |
 | 2    | They are in two different accounts, and both accounts are real        |
 | 3    | The amounts are equal and opposite                                    |
 | 4    | The dates are within two days                                         |
 | 5    | Neither has already been proposed as half of another pair             |
 
-BusinessRule The two date windows, and why they differ
+BusinessRule A payment is completed by whichever import arrives second
+Description A payment from a bank account to a credit card is downloaded twice,
+Description once from each side, and the two downloads usually happen on
+Description different days in either order. Whichever arrives first records the
+Description payment with its other side Unassigned. Whichever arrives second
+Description finds that transaction and completes it, rather than recording the
+Description same payment again.
+Details So the two halves of a transfer do not have to arrive together, which
+Details the first version of this rule required and which no real month looks
+Details like. The side that arrives second brings two things: the account, which
+Details fills in the Unassigned side, and its own identifier, which is stamped
+Details on the posting it describes. Each side keeps the name its own file gave
+Details it, which is why an identifier belongs to a posting and not to a
+Details transaction.
+Details
+Details The payee is whatever the first side called it and the second never
+Details overwrites it. A bank calls it a payment to the card; a card calls it a
+Details payment received. The first is the useful one and it is also the one
+Details already on the screen, so changing it under the user would be a
+Details surprise with nothing to recommend it.
+Details
+Details Matching needs the amount equal and opposite and the dates within the
+Details transfer window. What it must not do is search every account in the
+Details book: two cards paid in the same week for similar amounts would pair
+Details with each other's payments. The payment payee is what narrows it.
+Examples: PaymentCompletion
+| WhichArrivesFirst | WhatItRecords                         | WhatTheSecondDoes              |
+| The bank          | The payment, other side Unassigned    | Fills in the card, stamps its id |
+| The card          | The payment, other side Unassigned    | Fills in the bank, stamps its id |
+| Only one ever     | The payment, other side Unassigned    | Nothing; it stays to be assigned |
+
+Attributes PaymentCompletion
+| Attribute         | Type   | Default |
+| WhichArrivesFirst | String |         |
+| WhatItRecords     | String |         |
+| WhatTheSecondDoes | String |         |
+
+BusinessRule The payment payee says which accounts a payment could belong to
+Description A credit card is paid by a transfer that appears on the bank
+Description statement as a payee -- CHASEBANK, say. Recording that payee against
+Description the card account is what lets a payment on the bank side find the
+Description card side without searching the whole book.
+Details One payee can belong to several accounts, because several cards are paid
+Details from one bank and all of them say CHASEBANK. So the payee narrows the
+Details search to the accounts that carry it, and among those the amount and the
+Details date decide. Two cards from one bank paid different amounts in the same
+Details week are told apart by the amount; paid the same amount in the same week
+Details they are not, and that is asked rather than guessed.
+Details
+Details Where the payee matches nothing, there is no narrowing and no match: the
+Details payment is recorded with its other side Unassigned and waits for a
+Details person. That is the honest outcome -- a payment whose destination nobody
+Details can work out is not improved by being attached to the wrong card.
+Examples: PaymentPayeeNarrowing
+| TheyPayeeMatches        | ThenTheSearchIs                                  |
+| One account             | That account, on amount and date                  |
+| Several accounts        | Each of them, on amount and date                  |
+| Several, and all match  | Asked, because only a person knows which          |
+| No account              | Not searched; the payment stays Unassigned        |
+
+Attributes PaymentPayeeNarrowing
+| Attribute        | Type   | Default |
+| TheyPayeeMatches | String |         |
+| ThenTheSearchIs  | String |         |
+
+Scenario A card payment downloaded from the bank waits with its other side unassigned
+Description The bank is read first. It knows the money left and it knows the payee,
+Description and it does not know which card was paid, because the card has not
+Description been read yet.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder | PaymentPayee |
+| Assets:Checking        | Bank       | false       | none         |
+| Liabilities:Chase Visa | CreditCard | false       | CHASEBANK    |
+| Unassigned             | Asset      | false       | none         |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount   | FitId  | Name      | Memo | CheckNum |
+| XFER    | 2026-04-10 | -1200.00 | BNK-77 | CHASEBANK | none | none     |
+Then postings are : ImportedPostingRow
+| Ref | Date       | Payee     | Account         | Amount   | Cleared   | FitId  |
+| T1  | 2026-04-10 | CHASEBANK | Assets:Checking | -1200.00 | Cleared   | BNK-77 |
+| T1  | 2026-04-10 | CHASEBANK | Unassigned      | 1200.00  | Uncleared | none   |
+# Unassigned rather than Uncategorized: this is not a question about which
+# expense it was, it is a question about which account the money went to.
+
+Scenario The card import completes the payment the bank import recorded
+Description The card is read a week later. It finds the payment already there with
+Description its other side unassigned, and completes it rather than recording the
+Description same payment again.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder | PaymentPayee |
+| Assets:Checking        | Bank       | false       | none         |
+| Liabilities:Chase Visa | CreditCard | false       | CHASEBANK    |
+| Unassigned             | Asset      | false       | none         |
+Given postings are : ImportedPostingRow
+| Ref | Date       | Payee     | Account         | Amount   | Cleared   | FitId  |
+| T1  | 2026-04-10 | CHASEBANK | Assets:Checking | -1200.00 | Cleared   | BNK-77 |
+| T1  | 2026-04-10 | CHASEBANK | Unassigned      | 1200.00  | Uncleared | none   |
+Given import target is : ImportTarget Vertical
+| AccountPath | Liabilities:Chase Visa |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount  | FitId  | Name             | Memo | CheckNum |
+| XFER    | 2026-04-11 | 1200.00 | CC-901 | PAYMENT RECEIVED | none | none     |
+Then import summary is : ImportSummary Vertical
+| New     | 0 |
+| Matched | 1 |
+Then postings are : ImportedPostingRow
+| Ref | Date       | Payee     | Account                | Amount   | Cleared | FitId  |
+| T1  | 2026-04-10 | CHASEBANK | Assets:Checking        | -1200.00 | Cleared | BNK-77 |
+| T1  | 2026-04-10 | CHASEBANK | Liabilities:Chase Visa | 1200.00  | Cleared | CC-901 |
+# One transaction, not two. The payee is still CHASEBANK -- the bank's word for
+# it, kept because the card's "PAYMENT RECEIVED" says less and because it is
+# what is already on the screen. Each posting carries the identifier from the
+# file that described it, which is why an identifier belongs to a posting.
+
+Scenario Two cards from one bank are told apart by the amount
+Description Both cards say CHASEBANK, so the payee narrows the search to both and
+Description the amount decides between them.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type       | Placeholder | PaymentPayee |
+| Assets:Checking         | Bank       | false       | none         |
+| Liabilities:Chase Visa  | CreditCard | false       | CHASEBANK    |
+| Liabilities:Chase Amazon | CreditCard | false      | CHASEBANK    |
+| Unassigned              | Asset      | false       | none         |
+Given postings are : ImportedPostingRow
+| Ref | Date       | Payee     | Account         | Amount   | Cleared   | FitId  |
+| T1  | 2026-04-10 | CHASEBANK | Assets:Checking | -1200.00 | Cleared   | BNK-77 |
+| T1  | 2026-04-10 | CHASEBANK | Unassigned      | 1200.00  | Uncleared | none   |
+| T2  | 2026-04-10 | CHASEBANK | Assets:Checking | -340.00  | Cleared   | BNK-78 |
+| T2  | 2026-04-10 | CHASEBANK | Unassigned      | 340.00   | Uncleared | none   |
+Given import target is : ImportTarget Vertical
+| AccountPath | Liabilities:Chase Amazon |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId  | Name             | Memo | CheckNum |
+| XFER    | 2026-04-11 | 340.00 | CC-902 | PAYMENT RECEIVED | none | none     |
+Then import summary is : ImportSummary Vertical
+| New     | 0 |
+| Matched | 1 |
+Then postings are : ImportedPostingRow
+| Ref | Date       | Payee     | Account                  | Amount   | Cleared   | FitId  |
+| T1  | 2026-04-10 | CHASEBANK | Assets:Checking          | -1200.00 | Cleared   | BNK-77 |
+| T1  | 2026-04-10 | CHASEBANK | Unassigned               | 1200.00  | Uncleared | none   |
+| T2  | 2026-04-10 | CHASEBANK | Assets:Checking          | -340.00  | Cleared   | BNK-78 |
+| T2  | 2026-04-10 | CHASEBANK | Liabilities:Chase Amazon | 340.00   | Cleared   | CC-902 |
+# The twelve hundred is still waiting for the Visa file. Nothing about reading
+# the Amazon card tells us anything about it.
+
+Scenario A payment whose payee matches no account stays unassigned
+Description There is nothing to narrow the search to, so nothing is searched. The
+Description payment is recorded and waits.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder | PaymentPayee |
+| Assets:Checking        | Bank       | false       | none         |
+| Liabilities:Chase Visa | CreditCard | false       | CHASEBANK    |
+| Unassigned             | Asset      | false       | none         |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount  | FitId  | Name          | Memo | CheckNum |
+| XFER    | 2026-04-10 | -500.00 | BNK-79 | SOME OTHER CO | none | none     |
+Then postings are : ImportedPostingRow
+| Ref | Date       | Payee         | Account         | Amount  | Cleared   | FitId  |
+| T1  | 2026-04-10 | SOME OTHER CO | Assets:Checking | -500.00 | Cleared   | BNK-79 |
+| T1  | 2026-04-10 | SOME OTHER CO | Unassigned      | 500.00  | Uncleared | none   |
+# A payment nobody can place is not improved by being attached to the wrong
+# card. It sits in Unassigned, where its balance is the list of what is left to
+# do.
+
+
 Description Written down together because having two windows in one importer
 Description invites someone to unify them, and unifying them breaks one case or
 Description the other.

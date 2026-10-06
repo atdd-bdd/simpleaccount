@@ -324,6 +324,126 @@ Then report rows are : ReportRow
 | Expenses:Groceries | 1     | 45.00  | false      |
 
 # ---------------------------------------------------------------------------
+# A category that holds both transactions and other categories
+# ---------------------------------------------------------------------------
+
+BusinessRule A category with its own transactions shows them on an Other row
+Description A category that contains other categories can still be chosen for a
+Description transaction. Expenses:Auto has Fuel and Insurance under it and also
+Description has petrol bought before anyone made a Fuel category, and cash spent
+Description on the car that belongs nowhere more precise.
+Description
+Description The transaction is associated with the containing category, exactly as
+Description chosen. The report is where it shows differently: the containing
+Description category carries the total of everything beneath it, and its own
+Description transactions appear as a row under it called Other, so that the rows
+Description underneath add up to the row above.
+Details Without that row the arithmetic of the report is wrong in a way that is
+Details hard to see: Auto reads 100,948.56, its children add to 99,862.97, and
+Details the missing 1,085.59 is money posted to Auto itself with nothing on the
+Details page to say so. A reader checking the column would find the error and
+Details have no way to explain it.
+Details
+Details The row is not a category. Nobody chooses it, nothing is posted to it,
+Details and it is not in the chart of accounts. It exists for the length of the
+Details report, which is why choosing the containing category is the whole of
+Details what a person does.
+Details
+Details The name follows Quicken, because the reports are checked against
+Details Quicken's: the word Other, then the containing category's path with the
+Details section name taken off. So Expenses:Auto gives "Other Auto", and
+Details Expenses:Cash Expenditures:Foreign Travel gives "Other Cash
+Details Expenditures:Foreign Travel".
+Examples: OtherRowNaming
+| ContainingCategory                         | TheRowIsCalled                         |
+| Expenses:Auto                              | Other Auto                             |
+| Expenses:Cash Expenditures                 | Other Cash Expenditures                |
+| Expenses:Cash Expenditures:Foreign Travel  | Other Cash Expenditures:Foreign Travel |
+| Income:Div Income                          | Other Div Income                       |
+| Income:Tax Refund                          | Other Tax Refund                       |
+
+Attributes OtherRowNaming
+| Attribute          | Type        | Default |
+| ContainingCategory | AccountPath |         |
+| TheRowIsCalled     | Text        |         |
+
+Scenario A category with its own transactions and children shows an Other row
+Description Forty on petrol under Fuel, ten on something to do with the car
+Description posted to Auto itself. Auto totals fifty, and the two rows beneath it
+Description add to fifty.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Auto          | Expense | false       |
+| Expenses:Auto:Fuel     | Expense | false       |
+Given dated postings are : DatedPostingLine
+| Date       | Account            | Amount |
+| 2026-03-01 | Assets:Checking    | -40.00 |
+| 2026-03-01 | Expenses:Auto:Fuel | 40.00  |
+| 2026-03-02 | Assets:Checking    | -10.00 |
+| 2026-03-02 | Expenses:Auto      | 10.00  |
+When report run : ReportSpec Vertical
+| GroupBy | Category |
+| From | 2026-01-01 |
+| To   | 2026-12-31 |
+Then report rows are : ReportRow
+| Account            | Amount | Level | IsSubtotal |
+| Expenses:Auto      | 50.00  | 1     | true       |
+| Expenses:Auto:Fuel | 40.00  | 2     | false      |
+| Other Auto         | 10.00  | 2     | false      |
+# Auto is the total of everything in it. Beneath it, Fuel's forty and its own
+# ten, which add to the fifty above. The Other row comes last, after the real
+# categories, which is where Quicken puts it -- and these reports are checked
+# against Quicken's.
+
+Scenario A category with its own transactions and no children shows no Other row
+Description There is nothing for the row to distinguish: the category's figure
+Description is already its own transactions and nothing else.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
+Given dated postings are : DatedPostingLine
+| Date       | Account            | Amount |
+| 2026-03-01 | Assets:Checking    | -25.00 |
+| 2026-03-01 | Expenses:Groceries | 25.00  |
+When report run : ReportSpec Vertical
+| GroupBy | Category |
+| From | 2026-01-01 |
+| To   | 2026-12-31 |
+Then report rows are : ReportRow
+| Account            | Amount | Level | IsSubtotal |
+| Expenses:Groceries | 25.00  | 1     | false      |
+# One row, because an Other row under a category with no children would be the
+# same figure written twice.
+
+Scenario A category with children and no transactions of its own shows no Other row
+Description Which is the ordinary case: a category made only to hold others.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type    | Placeholder |
+| Assets:Checking         | Bank    | false       |
+| Expenses:Auto           | Expense | true        |
+| Expenses:Auto:Fuel      | Expense | false       |
+| Expenses:Auto:Insurance | Expense | false       |
+Given dated postings are : DatedPostingLine
+| Date       | Account                 | Amount |
+| 2026-03-01 | Assets:Checking         | -40.00 |
+| 2026-03-01 | Expenses:Auto:Fuel      | 40.00  |
+| 2026-03-02 | Assets:Checking         | -15.00 |
+| 2026-03-02 | Expenses:Auto:Insurance | 15.00  |
+When report run : ReportSpec Vertical
+| GroupBy | Category |
+| From | 2026-01-01 |
+| To   | 2026-12-31 |
+Then report rows are : ReportRow
+| Account                 | Amount | Level | IsSubtotal |
+| Expenses:Auto           | 55.00  | 1     | true       |
+| Expenses:Auto:Fuel      | 40.00  | 2     | false      |
+| Expenses:Auto:Insurance | 15.00  | 2     | false      |
+# Nothing was posted to Auto, so there is no Other row and the two children add
+# to the total above them.
+
+# ---------------------------------------------------------------------------
 # Investment activity
 # ---------------------------------------------------------------------------
 

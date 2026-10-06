@@ -11,6 +11,7 @@
 #include "ledger.h"
 #include "money.h"
 #include "posting.h"
+#include "transaction_id.h"
 #include "qif_reader.h"
 
 // Turning the records of a QIF file into a book: accounts, categories,
@@ -679,6 +680,7 @@ private:
 
     void commit(const std::vector<ledger::Posting>& postings, const ReadRecord& from) {
         ledger::Transaction t;
+        t.id = ledger::new_id();
         t.ref = types::TransactionRef("T" + std::to_string(result_.transactions.size() + 1));
         t.date = from.date;
         t.payee = types::PayeeName(from.payee);
