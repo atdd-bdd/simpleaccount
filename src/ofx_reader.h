@@ -123,6 +123,21 @@ inline std::vector<Token> tokenise(const std::string& text) {
     return out;
 }
 
+// What to add to a refusal when there was no OFX in the file at all. Only ever
+// a guess, so it is worded as one; the point is to name the likeliest mistake
+// rather than to be certain.
+inline std::string what_it_looks_like(const std::string& text) {
+    std::string first;
+    for (const char c : text) {
+        if (c == '\n' || c == '\r') { if (!trim(first).empty()) break; first.clear(); continue; }
+        first += c;
+    }
+    first = trim(first);
+    if (first.find('<') == std::string::npos && first.find(',') != std::string::npos)
+        return "; this looks like a CSV file";
+    return "; nothing was imported";
+}
+
 // OFX writes a date as YYYYMMDD and may append a time and a time zone:
 // 20240115120000[-5:EST]. The day is what matters here, and the time zone is
 // deliberately ignored -- shifting a posting date by a zone would move a
@@ -250,7 +265,13 @@ inline Read read(const std::string& text) {
 
     if (out.statements.empty()) {
         out.refused = true;
-        out.refusal = "no statement was found in the file; nothing was imported";
+        // Named rather than guessed at. A file nobody meant to import -- a CSV
+        // dropped on the wrong menu item -- is the ordinary case here, and
+        // "no statement was found" reads as though the download were empty,
+        // which sends the user back to the bank for a file that was never
+        // wrong. See the rejection scenario in ImportOfx.spectable.
+        out.refusal = tokens.empty() ? "No OFX header found" + detail::what_it_looks_like(text)
+                                     : "no statement was found in the file; nothing was imported";
     }
     return out;
 }

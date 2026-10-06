@@ -103,7 +103,7 @@ glue file once as failing stubs and never overwrites it, so **never `rm -rf
 generated/`** — that deletes hand-written glue. Regenerate in place; only
 `test_*.cpp` is rewritten.
 
-Two traps already paid for:
+Three traps already paid for:
 
 - **Braces, not parentheses, when constructing to test validity.** `T(cell);`
   inside a `try` declares a variable named `cell` rather than calling the
@@ -112,6 +112,14 @@ Two traps already paid for:
 - **A table cell cannot hold a leading or trailing blank**, so the convention is
   to wrap such a value in double quotes in the spec and call
   `spec_cell::unquote()` in the glue. It is safe on every cell.
+- **Writing C++ escapes through a script is where the time goes.** A backslash
+  has to survive the shell, then Python, then the regex replacement, and it
+  usually does not. `'\\n'` in a heredoc has arrived as a real newline inside a
+  char literal more than once, and `re.sub` interprets escapes in the
+  *replacement* string too, so a repair written as a plain template breaks the
+  file a second time in the same place. Pass a lambda as the replacement and
+  build the backslash as `chr(92)`, or write the file with the editing tool and
+  leave the shell out of it.
 
 Findings worth sending upstream to AlignThree are collected in
 `alignthree-findings.md`.

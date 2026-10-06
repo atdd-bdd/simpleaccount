@@ -41,6 +41,10 @@ struct Failure {
 struct BookInfo {
     std::string name;
     int fiscal_year_start = 1;
+    // One day unless it is changed: in a book whose checks are never entered
+    // before the bank reports them nothing is outstanding, so a number that
+    // matches anything older is more likely a number reused.
+    int check_window_days = 1;
 };
 
 namespace detail {
@@ -112,7 +116,10 @@ CREATE TABLE schema (version INTEGER NOT NULL);
 
 CREATE TABLE book (
   name              TEXT    NOT NULL,
-  fiscal_year_start INTEGER NOT NULL DEFAULT 1);
+  fiscal_year_start INTEGER NOT NULL DEFAULT 1,
+  -- How long a check number is trusted to settle a match. See the
+  -- check-number rule in ImportOfx.spectable.
+  check_window_days INTEGER NOT NULL DEFAULT 1);
 
 CREATE TABLE accounts (
   path        TEXT    NOT NULL PRIMARY KEY,
@@ -247,10 +254,23 @@ class Book {
 public:
     // Opens an existing book. A path that is not there is refused rather than
     // created: a mistyped name must not look like a book that lost everything.
+    // Opening by name, which is how a person asks for a book: the folder is
+    // known and the name is what they chose. Refusals name the book rather than
+    // the file, because a path tells them where the program looked and a name
+    // tells them what they asked for.
+    static Failure open_named(const std::string& name, Book* into) {
+        return open_at(path_for(name), name, into);
+    }
+
     static Failure open(const std::string& path, Book* into) {
+        return open_at(path, path, into);
+    }
+
+private:
+    static Failure open_at(const std::string& path, const std::string& label, Book* into) {
         std::FILE* probe = std::fopen(path.c_str(), "rb");
         if (probe == nullptr)
-            return {true, "There is no book at " + path};
+            return {true, "There is no book named " + label};
         std::fclose(probe);
 
         sqlite3* raw = nullptr;
@@ -266,16 +286,17 @@ public:
         // drops whatever that version added.
         detail::Statement read(db.get(), "SELECT version FROM schema");
         if (!read.ok() || !read.step_row())
-            return {true, path + " is not a SimpleAccount book"};
+            return {true, label + " is not a SimpleAccount book"};
         const long long version = read.integer(0);
         if (version > kSchemaVersion)
-            return {true, path + " was written by a later version of SimpleAccount"};
+            return {true, label + " was written by a later version of SimpleAccount"};
 
         into->db_ = std::move(db);
         into->path_ = path;
         return {};
     }
 
+public:
     // Creates and initialises one. An existing file is refused: overwriting
     // twenty years of history because a name was reused is not a mistake worth
     // making available.
@@ -305,7 +326,7 @@ public:
         if (!version.run()) return {true, version.why()};
 
         detail::Statement info(db.get(),
-                               "INSERT INTO book (name, fiscal_year_start) VALUES (?, 1)");
+                               "INSERT INTO book (name, fiscal_year_start, check_window_days) VALUES (?, 1, 1)");
         if (!info.ok()) return {true, info.why()};
         info.bind(1, name);
         if (!info.run()) return {true, info.why()};

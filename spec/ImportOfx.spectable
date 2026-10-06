@@ -310,7 +310,7 @@ Details within the account and cannot be claimed twice.
 Examples: DispositionRule
 | Test | Condition                                                             | Disposition |
 | 1    | A posting in this account carries this FITID, from an Ofx import       | Duplicate   |
-| 2    | An uncleared posting in this account has the same amount and check number | Matched  |
+| 2    | An uncleared posting in this account has the same amount and check number, within the book's check-number window | Matched |
 | 3    | An uncleared posting in this account has the same amount within five days | Matched  |
 | 4    | A cleared posting in this account has the same amount and date, no FITID | Possible |
 | 5    | Nothing above applies                                                 | New         |
@@ -393,10 +393,13 @@ Description A posting row that also carries the identifier it was imported with.
 | Account   | AccountPath    |            |
 | Amount    | Money          | 0.00       |
 | Cleared   | ClearedStatus  | Uncleared  |
+| CheckNo   | CheckNumber    | none       |
 | FitId     | FitId          | none       |
 
 Scenario A check entered by hand is matched when it clears
-Description The check was written on the second and cleared on the eighteenth.
+Description The check was written on the second and reached the bank on the
+Description third. One day, so the check number is trusted and the two are the
+Description same check.
 Description The import does not create a second transaction: it marks the one
 Description already there as cleared, and records the FITID on it so that a
 Description later import recognises it immediately.
@@ -406,23 +409,23 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Rates    | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : ImportedPostingRow
-| Ref | Date       | Payee             | Account             | Amount   | Cleared   | FitId |
-| T1  | 2024-01-02 | County Tax Office | Assets:Checking     | -1250.00 | Uncleared | none  |
-| T1  | 2024-01-02 | County Tax Office | Expenses:Home:Rates | 1250.00  | Uncleared | none  |
+| Ref | Date       | Payee             | Account             | Amount   | Cleared   | CheckNo | FitId |
+| T1  | 2024-01-02 | County Tax Office | Assets:Checking     | -1250.00 | Uncleared | 2041    | none  |
+| T1  | 2024-01-02 | County Tax Office | Expenses:Home:Rates | 1250.00  | Uncleared | 2041    | none  |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount   | FitId       | Name              | Memo | CheckNum |
-| CHECK   | 2024-01-18 | -1250.00 | 20240118002 | COUNTY TAX OFFICE | none | 2041     |
+| CHECK   | 2024-01-03 | -1250.00 | 20240103002 | COUNTY TAX OFFICE | none | 2041     |
 Then import summary is : ImportSummary Vertical
 | New       | 0 |
 | Duplicate | 0 |
 | Matched   | 1 |
 | Possible  | 0 |
 Then postings are : ImportedPostingRow
-| Ref | Date       | Payee             | Account             | Amount   | Cleared   | FitId       |
-| T1  | 2024-01-02 | County Tax Office | Assets:Checking     | -1250.00 | Cleared   | 20240118002 |
-| T1  | 2024-01-02 | County Tax Office | Expenses:Home:Rates | 1250.00  | Uncleared | none        |
+| Ref | Date       | Payee             | Account             | Amount   | Cleared   | CheckNo | FitId       |
+| T1  | 2024-01-02 | County Tax Office | Assets:Checking     | -1250.00 | Cleared   | 2041    | 20240103002 |
+| T1  | 2024-01-02 | County Tax Office | Expenses:Home:Rates | 1250.00  | Uncleared | 2041    | none        |
 # The date entered by hand is kept. It is the date the check was written, which
 # is what the register is ordered by; the clearing date belongs to the bank.
 
@@ -510,6 +513,175 @@ Then postings are : ImportedPostingRow
 | T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  | Uncleared | none        |
 # The payee is the raw NAME from the file. Tidying it is the business of
 # Payees, so that this file has one job.
+
+# ---------------------------------------------------------------------------
+# What a check number is worth, and for how long
+# ---------------------------------------------------------------------------
+
+BusinessRule A check number is trusted for a day and no longer
+Description A check number is the strongest thing in a bank file: it is written
+Description on the check itself, so the book and the download are naming the
+Description same piece of paper. But only for as long as the number means what
+Description it says. Check numbers are reused -- a new book of checks starts
+Description where an old one left off, and over twenty years the same number
+Description comes round again.
+Details So a number settles a match only when the two are dated within the
+Details book's check-number window of each other. Beyond that the number is
+Details treated as coincidence and the weaker tests decide, which usually means
+Details the transaction is created.
+Details
+Details The window is a setting on the book, a whole number of days, and it is
+Details one day unless it is changed. One day is right for a book whose checks
+Details are never entered before the bank reports them: nothing is outstanding,
+Details so there is nothing for a number to reach back to, and a number that
+Details matches anything older is more likely a number reused than a check
+Details still in the post.
+Details
+Details At one day the number settles nothing the amount would not have settled
+Details on its own, because the window on amount alone is five days and wholly
+Details contains it. That is not a defect and the test is not dead: it is what
+Details the setting is for. A book that records checks when they are written
+Details has checks outstanding for a week or three, and widening the window is
+Details what makes the number worth having. Recording a check when it is
+Details written is not a thing this program does yet.
+Details
+Details What happens then is the point of the rule. A number that matched while
+Details the dates did not is exactly the case worth seeing: either a check
+Details really did take a fortnight to clear, in which case the book now holds
+Details two of it and one should be deleted, or the number came round again
+Details and the import was right to create one. The program cannot tell those
+Details apart, so it does not try: it writes a note against the import and
+Details shows the notes when the import finishes.
+Details
+Details Nothing is silently reconciled on a number alone, and nothing is
+Details silently left out. A note that nobody reads costs a line on a screen;
+Details a check quietly matched to the wrong year costs an afternoon with a
+Details statement.
+# Every row here is at the default window of one day.
+Examples: CheckNumberWindow
+| DaysApart | NumberMatches | Matched | NoteWritten | Notes                                              |
+| 0         | Yes           | Yes     | No          | The number settles it                              |
+| 1         | Yes           | Yes     | No          | Still within the day                               |
+| 2         | Yes           | Yes     | Yes         | The number is stale, but the amount still reaches  |
+| 16        | Yes           | No      | Yes         | Nothing reaches; created, and the note says why    |
+| 16        | No            | No      | No          | A different number, and nothing else reaches       |
+
+Attributes CheckNumberWindow
+Description Whether a check number settles a match, by how far apart the two are
+Description dated, and whether the import wrote a note about it.
+Details Matched is the disposition, not the reason for it. The row two days
+Details apart is matched on the amount within five days, which is the other
+Details window and a weaker thing to match on -- so the note is still written,
+Details because the number said one check and the dates said another and that
+Details is what a person needs to see. The two windows are independent and the
+Details table is where they are shown together.
+| Attribute     | Type    | Default |
+| DaysApart     | Integer | 0       |
+| NumberMatches | Text    | Yes     |
+| Matched       | Text    | No      |
+| NoteWritten   | Text    | No      |
+| Notes         | String  | none    |
+
+Scenario A check number that matches too long afterwards is not matched
+Description The same number sixteen days later. The number alone is not enough
+Description to reconcile a check across that gap, so the transaction is created
+Description and a note says what was seen -- leaving a person to decide whether
+Description it is the same check or the number come round again.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Home:Rates    | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : ImportedPostingRow
+| Ref | Date       | Payee             | Account             | Amount   | Cleared   | CheckNo | FitId |
+| T1  | 2024-01-02 | County Tax Office | Assets:Checking     | -1250.00 | Uncleared | 2041    | none  |
+| T1  | 2024-01-02 | County Tax Office | Expenses:Home:Rates | 1250.00  | Uncleared | 2041    | none  |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount   | FitId       | Name              | Memo | CheckNum |
+| CHECK   | 2024-01-18 | -1250.00 | 20240118002 | COUNTY TAX OFFICE | none | 2041     |
+Then import summary is : ImportSummary Vertical
+| New      | 1 |
+| Matched  | 0 |
+Then import notes are : ImportNote
+| Kind             | Detail                                                       |
+| CheckNumberStale | Check 2041 is dated 2024-01-02 here and 2024-01-18 in the file |
+# The one entered by hand is untouched and uncleared; the downloaded one is a
+# new transaction. The note is what tells a person to look, because only a
+# person knows whether that check took a fortnight or whether the numbers came
+# round again.
+
+Attributes ImportNote
+Description Something the import saw and could not decide, kept against the
+Description import and shown when it finishes. Modelled on MigrationNote, which
+Description does the same job for a QIF.
+| Attribute | Type | Default |
+| Kind      | Text |         |
+| Detail    | Text |         |
+
+Scenario A wider check-number window reaches a check that took a fortnight
+Description The same check sixteen days later, in a book whose window is thirty
+Description days. The number settles it, so the one entered by hand is cleared
+Description rather than a second one created -- which is what a book that
+Description records checks when they are written needs.
+Given the book setting is : BookSetting Vertical
+| CheckWindowDays | 30 |
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Home:Rates    | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : ImportedPostingRow
+| Ref | Date       | Payee             | Account             | Amount   | Cleared   | CheckNo | FitId |
+| T1  | 2024-01-02 | County Tax Office | Assets:Checking     | -1250.00 | Uncleared | 2041    | none  |
+| T1  | 2024-01-02 | County Tax Office | Expenses:Home:Rates | 1250.00  | Uncleared | 2041    | none  |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount   | FitId       | Name              | Memo | CheckNum |
+| CHECK   | 2024-01-18 | -1250.00 | 20240118002 | COUNTY TAX OFFICE | none | 2041     |
+Then import summary is : ImportSummary Vertical
+| New      | 0 |
+| Matched  | 1 |
+Then import notes are : ImportNote
+| Kind | Detail |
+# No note: inside the window the number is trusted, so there is nothing a
+# person needs to decide. This is the one test the amount window cannot do --
+# sixteen days is well past its five.
+
+Attributes BookSetting
+Description A setting the book carries, in its own single row. Defaulted here as
+Description it is defaulted on a new book.
+| Attribute       | Type    | Default |
+| CheckWindowDays | Integer | 1       |
+
+Scenario The notes are shown when the import finishes
+Description An import that wrote notes says so at the end, with the notes. A
+Description note nobody is shown is a note nobody acts on, and the whole reason
+Description for writing one is that the program could not decide.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : ImportedPostingRow
+| Ref | Date       | Payee     | Account                | Amount  | Cleared   | CheckNo | FitId |
+| T1  | 2024-03-01 | Plumber   | Assets:Checking        | -420.00 | Uncleared | 3100    | none  |
+| T1  | 2024-03-01 | Plumber   | Expenses:Uncategorized | 420.00  | Uncleared | 3100    | none  |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount  | FitId | Name    | Memo | CheckNum |
+| CHECK   | 2024-03-20 | -420.00 | F900  | PLUMBER | none | 3100     |
+Then import finishes with : ImportCompletion Vertical
+| NoteCount | 1                                     |
+| Summary   | 1 new, 1 note to look at              |
+
+Attributes ImportCompletion
+Description What the import says when it is done.
+| Attribute | Type    | Default |
+| NoteCount | Integer | 0       |
+| Summary   | Text    | none    |
 
 # ---------------------------------------------------------------------------
 # Resolving what the import was not sure about

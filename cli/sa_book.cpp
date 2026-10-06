@@ -66,7 +66,7 @@ struct Loaded {
 };
 
 bool load(const std::string& name, Loaded* into, store::Failure* no) {
-    *no = store::Book::open(store::path_for(name), &into->book);
+    *no = store::Book::open_named(name, &into->book);
     if (no->refused) return false;
     *no = into->book.read(&into->accounts, &into->ledger, &into->transactions);
     return !no->refused;

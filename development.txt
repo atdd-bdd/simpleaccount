@@ -1,9 +1,9 @@
 
-I decided that I needed something to replace Quicken.  I was thinking of doing that when it started charging a subscription, but the situation didn't allow it at that time.   It's become so much more complex with continually adding features, of which I only use a very small portion.   So I called it SimpleAccount, sort of like a MS-DOS program that I had developed and used for several years.    
+I decided that I needed something to replace Quicken.  I was thinking of doing that when it started charging a subscription, but the situation didn't allow it at that time.   It's become so much more complex with continually adding features, of which I only use a very small portion.   So I called my new application SimpleAccount,  like a MS-DOS program that I had developed and used for several years.    
 
 Having finished the first version of AlignThree, with its spectable form of documenting behavior, I needed another project.  I gave Claude a minimal set of features and asked it to create spectables for me that include scenarios and datatypes.  This style allows for easy review by non-technical people.  The spectables can get converted into unit tests that run against the production code. 
 
-Now when you have Claude implement the program, you tell it put calls to the production code in the glue code that AlignThree creates.  Now every step is tied to the production code.   You can examine each glue code method to see what production methods are being called.   
+Now when you have Claude implement the program, you tell it to put calls to the production code in the glue code that AlignThree creates.  Now every step is tied to the production code.   You can examine each glue code method to see what production methods are being called.   
 
 As far as overall acceptance, the new program's reports should match in amounts those produced by Quicken.  Several PDFs were given it, so that it could match those values.   In addition, a few QFX files were imported into both Quicken and SimpleAccount and the new reports checked against each other. 
 

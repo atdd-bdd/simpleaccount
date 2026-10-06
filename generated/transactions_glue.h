@@ -151,4 +151,29 @@ public:
         ADD_FAILURE() << "Not implemented: examples_datatype_importsource";
     }
 
+public:
+
+    void when_transactions_are_created_in_a_row(const std::vector<TransactionsCreatedString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_transactions_are_created_in_a_row";
+    }
+
+    void then_the_names_are_all_different() {
+        ADD_FAILURE() << "Not implemented: then_the_names_are_all_different";
+    }
+
+    void then_the_names_increase() {
+        ADD_FAILURE() << "Not implemented: then_the_names_increase";
+    }
+
+    void examples_businessrule_a_transaction_is_named_when_it_is_created_and_keeps_that_name(const std::vector<TransactionNamingString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_a_transaction_is_named_when_it_is_created_and_keeps_that_name";
+    }
+
+    void examples_datatype_transactionid(const std::vector<ValidValuesString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_datatype_transactionid";
+    }
+
 };

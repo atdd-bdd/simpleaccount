@@ -42,9 +42,21 @@ struct Summary {
     int Possible = 0;
 };
 
+// Something the import saw and could not decide. Kept against the import and
+// shown when it finishes: see the check-number rule in ImportOfx.spectable.
+// Modelled on qif::Note, which does the same job for a migration.
+struct Note {
+    std::string kind;
+    std::string detail;
+};
+
 struct Imported {
     std::vector<Decided> decided;
     Summary summary;
+    // Written where the program could not decide something and a person has to
+    // look. A note nobody is shown is a note nobody acts on, so an import that
+    // wrote any says so at the end.
+    std::vector<Note> notes;
     bool refused = false;
     std::string refusal;
 };
@@ -123,6 +135,14 @@ inline std::vector<detail::Existing> existing_in(
 
 inline constexpr long long kMatchWindow = 5;
 
+// A check number is the strongest thing in a bank file -- it is written on the
+// check itself, so the book and the download are naming one piece of paper --
+// but only for as long as the number means what it says. Check numbers are
+// reused: a new book of checks starts where the old one left off, and over
+// twenty years the same number comes round again. So a number settles a match
+// only within a day, and beyond that it is treated as coincidence.
+inline constexpr long long kCheckWindow = 1;
+
 // The tests in order; the first that applies decides. Tests two to four have no
 // identifier behind them, so each claims at most one of what is already there.
 inline Imported decide(const Statement& statement, const std::string& account,
@@ -150,16 +170,34 @@ inline Imported decide(const Statement& statement, const std::string& account,
 
         const auto unclaimed = [&](const detail::Existing& e) { return !e.claimed; };
 
-        // 2. An uncleared posting with the same amount and check number: the
-        // cheque written by hand, now cleared by the bank.
+        // 2. An uncleared posting with the same amount and check number, dated
+        // within a day: the check written by hand, now reached the bank.
         auto found = already.end();
         if (!downloaded.check_num.empty()) {
+            const auto same_number = [&](const detail::Existing& e) {
+                return unclaimed(e) && e.cleared == types::ClearedStatus::Uncleared &&
+                       e.amount.cents() == downloaded.amount.cents() &&
+                       !e.check_no.empty() && e.check_no == downloaded.check_num;
+            };
+            const auto within_a_day = [&](const detail::Existing& e) {
+                return std::abs(types::Date::days_between(e.date, downloaded.date_posted))
+                       <= kCheckWindow;
+            };
             found = std::find_if(already.begin(), already.end(),
-                [&](const detail::Existing& e) {
-                    return unclaimed(e) && e.cleared == types::ClearedStatus::Uncleared &&
-                           e.amount.cents() == downloaded.amount.cents() &&
-                           !e.check_no.empty() && e.check_no == downloaded.check_num;
-                });
+                [&](const detail::Existing& e) { return same_number(e) && within_a_day(e); });
+
+            // The number matched and the day did not. Either the check really
+            // took that long to clear, in which case the book is about to hold
+            // two of it, or the number came round again and creating one is
+            // right. Nothing here can tell those apart, so it does not try.
+            if (found == already.end()) {
+                const auto stale = std::find_if(already.begin(), already.end(), same_number);
+                if (stale != already.end())
+                    out.notes.push_back(Note{
+                        "CheckNumberStale",
+                        "Check " + downloaded.check_num + " is dated " + stale->date.iso() +
+                            " here and " + downloaded.date_posted.iso() + " in the file"});
+            }
         }
         // 3. An uncleared posting with the same amount within five days.
         if (found == already.end()) {
@@ -282,6 +320,27 @@ inline int apply_matches(const Imported& decided, const std::string& account,
 
 // What to do with a row the import could not settle. There are two answers and
 // both are ordinary; see the rule in ImportOfx.spectable.
+// What the import says when it is done. Only what happened is listed, so a
+// clean import reads "4 new" rather than naming three kinds of nothing, and a
+// note is never buried in a row of zeroes.
+inline std::string completion_of(const Imported& result) {
+    std::vector<std::string> parts;
+    const auto count = [&](int many, const std::string& what) {
+        if (many > 0) parts.push_back(std::to_string(many) + " " + what);
+    };
+    count(result.summary.New, "new");
+    count(result.summary.Duplicate, "already here");
+    count(result.summary.Matched, "matched");
+    count(result.summary.Possible, "to answer");
+    if (!result.notes.empty())
+        parts.push_back(std::to_string(result.notes.size()) +
+                        (result.notes.size() == 1 ? " note to look at" : " notes to look at"));
+    if (parts.empty()) return "nothing to import";
+    std::string out = parts.front();
+    for (std::size_t i = 1; i < parts.size(); ++i) out += ", " + parts[i];
+    return out;
+}
+
 enum class Answer { TheSame, Different };
 
 // Answering that the offered row is the transaction already in the book. The one

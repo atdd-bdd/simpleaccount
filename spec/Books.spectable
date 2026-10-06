@@ -398,10 +398,16 @@ Details
 Details Amounts are stored as whole cents in an integer column. A binary
 Details floating-point column cannot hold 0.10, and a book that cannot add up
 Details is the one thing this program may not be.
+Details
+Details The settings a book carries go in that same row rather than in a table
+Details of name and value pairs. There are few of them, each means something
+Details different, and a row of named columns can be read without a join and
+Details cannot hold a setting nobody recognises. See the check-number window in
+Details ImportOfx for the first one that is not simply descriptive.
 Examples: BookInfrastructure
 | Table  | Columns                        | Notes                              |
 | schema | version                        | One row; read before anything else |
-| book   | name, fiscal_year_start        | One row; the Book entity's own data |
+| book   | name, fiscal_year_start, check_window_days | One row; the Book entity's own data |
 
 Attributes BookInfrastructure
 | Attribute | Type   | Default |

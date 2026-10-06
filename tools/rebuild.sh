@@ -26,7 +26,19 @@ for f in "$ROOT"/spec/*.spectable; do
 done
 
 echo "== build =="
-"$CMAKE" --build build --config Debug 2>&1 | grep -E "error C|warning C4|spec_tests.vcxproj ->" | head -20
+# One compiler process. Several of them write the same vc143.pdb and the build
+# then dies with C1041, which leaves the previous binary in place -- so the
+# tests run and report a result that belongs to the specification of an hour
+# ago. That has been read as a passing suite twice.
+BUILD_LOG="$ROOT/build/last-build.log"
+"$CMAKE" --build build --config Debug -- -m:1 -p:CL_MPCount=1 > "$BUILD_LOG" 2>&1
+BUILT=$?
+grep -E "error C|error MSB|warning C4|spec_tests.vcxproj ->" "$BUILD_LOG" | head -20
+if [ $BUILT -ne 0 ]; then
+  echo "== BUILD FAILED -- not running the tests =="
+  echo "   the binary on disk is older than the spec; see $BUILD_LOG"
+  exit 1
+fi
 
 echo "== run =="
 "$ROOT/build/Debug/spec_tests.exe" "$@" 2>&1 | tail -4

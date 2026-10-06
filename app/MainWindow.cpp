@@ -233,7 +233,7 @@ void MainWindow::openNamed(const QString& name) {
     if (name.isEmpty()) return;
     store::Book opened;
     store::Failure no =
-        store::Book::open(store::path_for(name.toStdString()), &opened);
+        store::Book::open_named(name.toStdString(), &opened);
     if (no.refused) {
         QMessageBox::warning(this, "SimpleAccount", QString::fromStdString(no.reason));
         return;

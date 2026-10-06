@@ -13,6 +13,16 @@ FetchContent_Declare(googletest
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
+# /FS, which the compiler itself asks for by name in C1041. Without it a build
+# of this suite dies partway through on "cannot open program database", leaving
+# the previous binary on disk -- so the tests then run and report a result that
+# belongs to an older specification. Forcing synchronous PDB writes costs a
+# little build time and removes a failure that looks exactly like a passing
+# suite.
+if(MSVC)
+  add_compile_options(/FS)
+endif()
+
 enable_testing()
 
 # ---------------------------------------------------------------------------

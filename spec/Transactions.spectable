@@ -6,11 +6,15 @@ Description they are what a transaction looks like with three postings, or with
 Description two postings to real accounts.
 Details
 Details Tables in this file group postings into transactions with a Ref column.
-Details Ref is the identity of the transaction, and is how a table says that two
-Details rows belong together. It is not shown anywhere in the program.
+Details Ref is how a table says that two rows belong together, and nothing more
+Details than that: a device of these tables, short enough to read. It is not
+Details shown anywhere in the program and it is not what a transaction is stored
+Details under. That is its Id, given once when the transaction is created and
+Details never changed afterwards. See the rule on naming a transaction.
 
 DataType TransactionRef
-Description The identity of one transaction.
+Description How a table in this specification says which postings belong to one
+Description transaction. Not the stored identity, which is the Id.
 Uses Text
 Examples: ValidValues
 | Value | IsValid | Notes                               |
@@ -66,7 +70,8 @@ Description in each, and losing either would make that file import twice.
 Entity Transaction
 Description What the two or more postings share.
 | Attribute | Type           | Default    | Notes                        |
-| Ref       | TransactionRef |            | Identity                     |
+| Id        | TransactionId  | none       | Identity; given once, never changes. These tables never name one: it is given by whatever creates the transaction, so a table that stated one would be stating something no scenario controls |
+| Ref       | TransactionRef |            | A device of these tables; not stored |
 | Date      | Date           | 2024-01-01 | The date it is posted on     |
 | Payee     | PayeeName      | none       | Optional                     |
 | CheckNo   | CheckNumber    | none       | Optional                     |
@@ -83,6 +88,76 @@ Description A posting with its transaction, which is how these tables are writte
 | Amount    | Money          | 0.00      |
 | Memo      | Text           | none      |
 | Cleared   | ClearedStatus  | Uncleared |
+
+# ---------------------------------------------------------------------------
+# Naming a transaction
+# ---------------------------------------------------------------------------
+
+BusinessRule A transaction is named when it is created and keeps that name
+Description The name is the moment it was created: the date and the time to the
+Description millisecond. The generator waits if the clock has not moved since the
+Description last name it gave out, so no two can be the same, and a name sorts
+Description into the order things were entered.
+Details The name is given once, by whatever creates the transaction, and never
+Details changes. That is the whole of the rule, and the reason for it is that
+Details the alternatives cannot promise it. A name taken from where a
+Details transaction came from -- a FITID, a CSV row -- is a fact about a file,
+Details and a transaction can collect one of those from every kind of file it is
+Details ever recognised in. A posting imported from a CSV and later matched in a
+Details QFX has a name in each, which is why ImportIds is a collection.
+Details Identity cannot be one of several, and it cannot change when a later
+Details import learns something, so it is kept apart from all of them.
+Details
+Details The import identifiers are still kept and still do the work they always
+Details did: they are what makes the same file read twice import nothing the
+Details second time. They are facts about the transaction rather than its name.
+Details
+Details The cost is a millisecond for each transaction created in a run. That is
+Details nothing while a person types, and about forty-three seconds for the
+Details forty-three thousand transactions of the business QIF -- paid once, on
+Details the slowest thing the program already does.
+Details
+Details What it buys is worth more than the second. A transaction can be traced:
+Details a name carrying the minute it was entered answers "when did this appear,
+Details and what else appeared with it" without anything having had to record it.
+Examples: TransactionNaming
+| CreatedBy       | TheNameComesFrom              | Notes                              |
+| Typing it in    | The clock, to the millisecond | Nothing else is consulted          |
+| An OFX import   | The clock, to the millisecond | The FITID is kept, but as a fact   |
+| A CSV import    | The clock, to the millisecond | The row id is kept, but as a fact  |
+| A QIF migration | The clock, to the millisecond | A millisecond apart, in file order |
+
+Attributes TransactionNaming
+| Attribute        | Type   | Default |
+| CreatedBy        | String |         |
+| TheNameComesFrom | String |         |
+| Notes            | String | none    |
+
+Scenario Two transactions created in the same millisecond cannot happen
+Description The generator waits for the clock rather than giving out a name it
+Description has given before. So transactions created as fast as the program can
+Description create them are still a millisecond apart, and in order.
+When transactions are created in a row : TransactionsCreated Vertical
+| HowMany | 3 |
+Then the names are all different
+Then the names increase
+# Which is why the database can hold the Id unique and never refuse a write
+# that a person did nothing wrong to cause.
+
+Attributes TransactionsCreated
+| Attribute | Type    | Default |
+| HowMany   | Integer | 2       |
+
+DataType TransactionId
+Description The name a transaction is stored under: the date and the time it was
+Description created, to the millisecond. Sorts into creation order as text.
+Uses Text
+Examples: ValidValues
+| Value              | IsValid | Notes                                     |
+| 20261005T194233123 | true    | The fifth of October, to the millisecond  |
+| 20240102T000000000 | true    | Midnight is a time like any other         |
+|                    | false   | A transaction always has one              |
+| T1                 | false   | That is a Ref, which is a different thing |
 
 # ---------------------------------------------------------------------------
 # The balancing rule
