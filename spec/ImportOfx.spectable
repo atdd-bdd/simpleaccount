@@ -1017,13 +1017,19 @@ Then postings are : ImportedPostingRow
 # The twelve hundred is still waiting for the Visa file. Nothing about reading
 # the Amazon card tells us anything about it.
 
-Scenario A payment whose payee matches no account stays unassigned
-Description There is nothing to narrow the search to, so nothing is searched. The
-Description payment is recorded and waits.
+Scenario A row whose payee matches no account is money leaving the book
+Description There is no account for it to be a transfer to, so it is not a
+Description transfer and nothing is waiting: the other side is a category, like
+Description any other payment to anyone the book does not keep.
+Description
+Description This is the common case and not a failure. Most of what leaves a
+Description current account goes to somebody outside the book, and a payee that
+Description matches no PaymentPayee is how that is recognised.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder | PaymentPayee |
 | Assets:Checking        | Bank       | false       | none         |
 | Liabilities:Chase Visa | CreditCard | false       | CHASEBANK    |
+| Expenses:Uncategorized | Expense    | false       | none         |
 | Unassigned             | Asset      | false       | none         |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
@@ -1031,12 +1037,15 @@ When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount  | FitId  | Name          | Memo | CheckNum |
 | XFER    | 2026-04-10 | -500.00 | BNK-79 | SOME OTHER CO | none | none     |
 Then postings are : ImportedPostingRow
-| Ref | Date       | Payee         | Account         | Amount  | Cleared   | FitId  |
-| T1  | 2026-04-10 | SOME OTHER CO | Assets:Checking | -500.00 | Cleared   | BNK-79 |
-| T1  | 2026-04-10 | SOME OTHER CO | Unassigned      | 500.00  | Uncleared | none   |
-# A payment nobody can place is not improved by being attached to the wrong
-# card. It sits in Unassigned, where its balance is the list of what is left to
-# do.
+| Ref | Date       | Payee         | Account                | Amount  | Cleared   | FitId  |
+| T1  | 2026-04-10 | SOME OTHER CO | Assets:Checking        | -500.00 | Cleared   | BNK-79 |
+| T1  | 2026-04-10 | SOME OTHER CO | Expenses:Uncategorized | 500.00  | Uncleared | none   |
+Then balances are : AccountBalance CompareOnly
+| Account    | RawBalance |
+| Unassigned | 0.00       |
+# Unassigned is empty, because nothing is waiting. An XFER type in the file does
+# not make something a transfer: what makes it one is both halves being accounts
+# this book keeps, and that is decided by the payee, not by the type.
 
 
 Description Written down together because having two windows in one importer

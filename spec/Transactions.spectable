@@ -90,6 +90,246 @@ Description A posting with its transaction, which is how these tables are writte
 | Cleared   | ClearedStatus  | Uncleared |
 
 # ---------------------------------------------------------------------------
+# The two kinds of unknown
+# ---------------------------------------------------------------------------
+
+BusinessRule An unknown category and an unknown account are different unknowns
+Description A charge whose category nobody has chosen is Uncategorized. A payment
+Description whose other account nobody has worked out is Unassigned. They are
+Description separate because they are different questions with different answers
+Description and different ways of being resolved.
+Details Uncategorized asks what the money was for. It is answered by choosing a
+Details category, by a payee rule, or by leaving it: a spending report with a
+Details line called Uncategorized is telling the truth about money that was
+Details spent on something nobody classified, and Quicken's own reports have had
+Details such a line for twenty years.
+Details
+Details Unassigned asks which account the money went to. It is answered by the
+Details other side of the transfer turning up in a later import, or by a person
+Details assigning it in the register. It is never answered by leaving it, because
+Details money that left one account and arrived nowhere is not a fact about the
+Details world -- it is a fact about what has been imported so far.
+Details
+Details That difference is why Unassigned is a real account and Uncategorized is
+Details a category. Unassigned holds money in transit, its balance is the work
+Details outstanding, and that balance is expected to reach zero. A book whose
+Details Unassigned balance is not zero is not wrong: it is telling its owner how
+Details many halves of transfers are still waiting for the other half.
+Examples: TwoUnknowns
+| TheUnknown     | TheQuestion                      | WhereItLives | ClearedBy                        |
+| Uncategorized  | What was the money for           | A category   | A category, a payee rule, or left |
+| Unassigned     | Which account did the money go to | A real account | The other import, or the register |
+
+Attributes TwoUnknowns
+| Attribute   | Type   | Default |
+| TheUnknown  | Text   |         |
+| TheQuestion | String |         |
+| WhereItLives | Text  |         |
+| ClearedBy   | String |         |
+
+Scenario Assigning the other account in the register empties Unassigned
+Description The last resort, and the one that always works. A payment nothing
+Description matched is sitting with its other side in Unassigned; the user picks
+Description the account in the register and the suspense balance goes to zero.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Bank       | false       |
+| Liabilities:Chase Visa | CreditCard | false       |
+| Unassigned             | Asset      | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee     | Account         | Amount   | Memo | Cleared   |
+| T1  | 2026-04-10 | CHASEBANK | Assets:Checking | -1200.00 | none | Cleared   |
+| T1  | 2026-04-10 | CHASEBANK | Unassigned      | 1200.00  | none | Uncleared |
+When the other account is assigned : AccountAssignment Vertical
+| Ref     | T1                     |
+| Account | Liabilities:Chase Visa |
+Then postings are : PostingRow
+| Ref | Date       | Payee     | Account                | Amount   | Memo | Cleared   |
+| T1  | 2026-04-10 | CHASEBANK | Assets:Checking        | -1200.00 | none | Cleared   |
+| T1  | 2026-04-10 | CHASEBANK | Liabilities:Chase Visa | 1200.00  | none | Uncleared |
+Then balances are : AccountBalance CompareOnly
+| Account    | RawBalance |
+| Unassigned | 0.00       |
+# The posting was not added and nothing was deleted: the one posting that said
+# Unassigned now says which account, which is the whole of the change. It stays
+# uncleared, because the card has still not reported it.
+
+Attributes AccountAssignment
+Description Assigning the other account of a transfer by hand, in the register.
+| Attribute | Type           | Default |
+| Ref       | TransactionRef |         |
+| Account   | AccountPath    |         |
+
+# ---------------------------------------------------------------------------
+# Money from outside the book
+# ---------------------------------------------------------------------------
+
+BusinessRule Whether the other side is an account or a category
+Description The other side of a downloaded row is an account when the money came
+Description from or went to something this book keeps, and a category when it did
+Description not. That single question decides which of the two unknowns is used,
+Description and nothing else about the row decides it.
+Details A payment from the bank to a credit card the book keeps is a transfer and
+Details nothing else: both halves are accounts here, the money never left the
+Details book, and the two halves add to nothing. The book balances because it
+Details should -- that is the whole of double entry and there is no income or
+Details expense anywhere in it.
+Details
+Details A paycheck is not a transfer. The money came from an employer this book
+Details does not keep, so there is no second account for it to have come out of,
+Details and the other side is a category: Income:Salary. The same goes for a
+Details royalty, and for a distribution from an IRA or a trust that the book does
+Details not itself hold -- money arriving from outside is income, however
+Details institutional the sender.
+Details
+Details This is why a payee that matches no account's PaymentPayee is not a
+Details failed transfer. It is an ordinary deposit, and recording it as a
+Details category is correct rather than second best. Unassigned is only for a row
+Details that is known to have another side in this book and does not yet know
+Details which.
+Examples: WhereTheOtherSideLives
+| TheRow                                | TheOtherSide          | Because                               |
+| A payment to a card the book keeps    | The card account      | Both halves are in the book           |
+| A transfer between two bank accounts  | The other bank account | Both halves are in the book          |
+| A paycheck                            | An income category    | The employer is not in the book       |
+| A royalty                             | An income category    | The publisher is not in the book      |
+| A distribution from an IRA not held here | An income category | The IRA is not in the book            |
+| A distribution from an IRA held here  | The IRA account       | It is in the book, so it is a transfer |
+| A card charge                         | An expense category   | The shop is not in the book           |
+
+Attributes WhereTheOtherSideLives
+| Attribute    | Type   | Default |
+| TheRow       | String |         |
+| TheOtherSide | String |         |
+| Because      | String |         |
+
+Scenario A deposit from outside the book is a category, not an unassigned transfer
+Description A paycheck. Nothing in the book is the other side of it, so there is
+Description nothing for Unassigned to be waiting for and the row is categorised
+Description like any other.
+Given the chart of accounts is : ChartOfAccounts
+| Path                 | Type   | Placeholder |
+| Assets:Checking      | Bank   | false       |
+| Income:Uncategorized | Income | false       |
+| Unassigned           | Asset  | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee        | Account              | Amount   | Memo | Cleared   |
+| T1  | 2026-04-15 | ACME PAYROLL | Assets:Checking      | 3000.00  | none | Cleared   |
+| T1  | 2026-04-15 | ACME PAYROLL | Income:Uncategorized | -3000.00 | none | Uncleared |
+Then balances are : AccountBalance CompareOnly
+| Account    | RawBalance |
+| Unassigned | 0.00       |
+# Nothing is waiting. Choosing Income:Salary later is a category being chosen,
+# not a transfer being completed, and the book balanced all along.
+
+# ---------------------------------------------------------------------------
+# Matching an entry in another register by hand
+# ---------------------------------------------------------------------------
+
+BusinessRule Assigning an account asks whether the other entry already exists
+Description Assigning a real account to an Unassigned side says where the money
+Description went. It does not say whether that account already has a row for it.
+Description Both are possible and they are different outcomes, so the program
+Description asks rather than choosing.
+Details Making a new entry is right when the other account has no row for this
+Details money -- usually because it has not been imported yet. The transfer
+Details becomes one transaction with two real postings and the second account
+Details will recognise its own row when its file is read.
+Details
+Details Matching an existing entry is right when the other account already has
+Details the row, entered by hand or imported too long ago or too far out for the
+Details windows to have paired them. Then there are two transactions describing
+Details one movement of money, and leaving both would double it. They become one.
+Details
+Details So the register offers the other account's entries to scroll through,
+Details nearest in date and amount first, and the user picks the one that is the
+Details same movement of money. Picking nothing and making a new entry instead is
+Details always available, because a user who cannot find it is better served by a
+Details new row than by being made to choose wrongly.
+Examples: AssignmentOutcome
+| TheOtherAccount                | WhatHappens                                        |
+| Has no row for this money      | A new entry is made there; one transaction, two postings |
+| Has the row, found by the user | The two become one transaction; nothing is doubled  |
+| Has the row, not found         | A new entry is made; the duplicate is left to be seen later |
+
+Attributes AssignmentOutcome
+| Attribute       | Type   | Default |
+| TheOtherAccount | String |         |
+| WhatHappens     | String |         |
+
+Scenario Matching an entry in the other register joins two transactions into one
+Description The card was imported weeks ago and the payment never paired, because
+Description the dates were further apart than the window allows. Both sides are
+Description in the book as separate transactions. Matching them makes one.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Bank       | false       |
+| Liabilities:Chase Visa | CreditCard | false       |
+| Unassigned             | Asset      | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee            | Account                | Amount   | Memo | Cleared   |
+| T1  | 2026-04-10 | CHASEBANK        | Assets:Checking        | -1200.00 | none | Cleared   |
+| T1  | 2026-04-10 | CHASEBANK        | Unassigned             | 1200.00  | none | Uncleared |
+| T2  | 2026-04-25 | PAYMENT RECEIVED | Liabilities:Chase Visa | 1200.00  | none | Cleared   |
+| T2  | 2026-04-25 | PAYMENT RECEIVED | Unassigned             | -1200.00 | none | Uncleared |
+When the other entry is matched : EntryMatch Vertical
+| Ref      | T1 |
+| OtherRef | T2 |
+Then postings are : PostingRow
+| Ref | Date       | Payee     | Account                | Amount   | Memo | Cleared |
+| T1  | 2026-04-10 | CHASEBANK | Assets:Checking        | -1200.00 | none | Cleared |
+| T1  | 2026-04-10 | CHASEBANK | Liabilities:Chase Visa | 1200.00  | none | Cleared |
+Then balances are : AccountBalance CompareOnly
+| Account    | RawBalance |
+| Unassigned | 0.00       |
+# One transaction where there were two. The date is the one the money left, the
+# payee is the bank's word for it, and both postings are cleared because both
+# banks reported them. The fifteen-day gap was the reason nothing paired it
+# automatically and is no reason not to pair it now.
+
+Attributes EntryMatch
+Description Matching an Unassigned side against an entry the user picked from
+Description another account's register.
+| Attribute | Type           | Default |
+| Ref       | TransactionRef |         |
+| OtherRef  | TransactionRef |         |
+
+Scenario The entries offered to match are the other account's, nearest first
+Description Scrolling someone through four hundred rows is not offering a choice.
+Description The entries offered are the ones in the account being assigned, with
+Description the closest in amount and date at the top.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Bank       | false       |
+| Liabilities:Chase Visa | CreditCard | false       |
+| Unassigned             | Asset      | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee            | Account                | Amount   | Memo | Cleared   |
+| T1  | 2026-04-10 | CHASEBANK        | Assets:Checking        | -1200.00 | none | Cleared   |
+| T1  | 2026-04-10 | CHASEBANK        | Unassigned             | 1200.00  | none | Uncleared |
+| T2  | 2026-04-25 | PAYMENT RECEIVED | Liabilities:Chase Visa | 1200.00  | none | Cleared   |
+| T2  | 2026-04-25 | PAYMENT RECEIVED | Unassigned             | -1200.00 | none | Uncleared |
+| T3  | 2026-04-26 | SOME SHOP        | Liabilities:Chase Visa | -45.00   | none | Cleared   |
+| T3  | 2026-04-26 | SOME SHOP        | Expenses:Uncategorized | 45.00    | none | Uncleared |
+When entries offered for : AccountAssignment Vertical
+| Ref     | T1                     |
+| Account | Liabilities:Chase Visa |
+Then entries offered are : OfferedEntry
+| Ref | Date       | Payee            | Amount  |
+| T2  | 2026-04-25 | PAYMENT RECEIVED | 1200.00 |
+| T3  | 2026-04-26 | SOME SHOP        | -45.00  |
+# Both are in the card, so both can be chosen; the one whose amount is equal and
+# opposite to the unassigned side is first, because it is the one meant nine
+# times in ten.
+
+Attributes OfferedEntry
+| Attribute | Type           | Default    |
+| Ref       | TransactionRef |            |
+| Date      | Date           | 2024-01-01 |
+| Payee     | PayeeName      | none       |
+| Amount    | Money          | 0.00       |
+
+# ---------------------------------------------------------------------------
 # Naming a transaction
 # ---------------------------------------------------------------------------
 
