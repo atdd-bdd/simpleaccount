@@ -4,6 +4,8 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QCheckBox>
+#include <QAbstractItemView>
 #include <QComboBox>
 #include <QDateEdit>
 #include <QDialog>
@@ -28,9 +30,16 @@
 #include <QTableWidget>
 #include <QTreeWidget>
 #include <QVBoxLayout>
+#include <QKeyEvent>
+#include <functional>
 #include <fstream>
 #include <sstream>
 
+#include "import_review.h"
+#include "register_entry.h"
+#include "report.h"
+#include "report_ranges.h"
+#include "payee_rules.h"
 #include "qif_import.h"
 #include "register_lines.h"
 #include "register_view.h"
@@ -48,6 +57,46 @@ void setAmount(QTableWidget* table, int row, int column, const Money& m) {
     table->setItem(row, column, item);
 }
 
+// Enter records the line being typed. No Q_OBJECT: it declares no signals or
+// slots, so nothing here needs moc.
+class EnterRecords : public QObject {
+public:
+    explicit EnterRecords(QObject* parent, std::function<void()> record)
+        : QObject(parent), record_(std::move(record)) {}
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (event->type() == QEvent::KeyPress) {
+            auto* key = static_cast<QKeyEvent*>(event);
+            if (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) {
+                record_();
+                return true;
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    std::function<void()> record_;
+};
+
+// A figure typed by a person, which may be anything at all. Nothing is reported
+// for text that is not a number: the cell simply holds no amount, which is the
+// same as not having typed one.
+Money moneyTyped(const QString& text) {
+    const QString said = text.trimmed();
+    if (said.isEmpty()) return Money();
+    try {
+        return Money(said.toStdString());
+    } catch (const std::exception&) {
+        return Money();
+    }
+}
+
+types::Date asDate(const QDate& date) {
+    return types::Date(date.year(), date.month(), date.day());
+}
+
 QTableWidgetItem* text(const std::string& s) {
     return new QTableWidgetItem(QString::fromStdString(s));
 }
@@ -60,6 +109,67 @@ QTableWidgetItem* text(const std::string& s, const std::string& tooltip) {
     item->setToolTip(QString::fromStdString(tooltip.empty() ? s : tooltip));
     return item;
 }
+
+// A form for one rule. No Q_OBJECT: it declares no signals or slots of its own,
+// and its buttons are connected to lambdas.
+class RuleForm : public QDialog {
+public:
+    RuleForm(QWidget* parent, const QString& title, const payees::Rule& start)
+        : QDialog(parent) {
+        setWindowTitle(title);
+        auto* form = new QFormLayout(this);
+
+        pattern_ = new QLineEdit(QString::fromStdString(start.pattern));
+        // Said here because it is the one thing about a rule that is not obvious:
+        // the part of the name that repeats is what a rule should look for.
+        pattern_->setToolTip(
+            "The part of the name that identifies the payee. SHELL OIL rather "
+            "than SHELL OIL 3344, so the next visit matches too.");
+        form->addRow("Looks for", pattern_);
+
+        match_ = new QComboBox;
+        match_->addItems({"Contains", "StartsWith", "Exact", "Regex"});
+        match_->setCurrentText(QString::fromStdString(payees::to_string(start.match_type)));
+        form->addRow("How", match_);
+
+        payee_ = new QLineEdit(QString::fromStdString(start.payee));
+        payee_->setToolTip("The name to record instead of what the bank sent.");
+        form->addRow("Payee", payee_);
+
+        category_ = new QLineEdit(QString::fromStdString(start.category));
+        category_->setToolTip("Left empty, the rule tidies the name and leaves "
+                              "the category alone.");
+        form->addRow("Category", category_);
+
+        enabled_ = new QCheckBox("Apply this rule");
+        enabled_->setChecked(start.enabled);
+        form->addRow(QString(), enabled_);
+
+        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok |
+                                             QDialogButtonBox::Cancel);
+        form->addRow(buttons);
+        connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    }
+
+    payees::Rule rule() const {
+        payees::Rule out;
+        out.pattern = pattern_->text().trimmed().toStdString();
+        out.match_type = payees::match_type_from_string(
+            match_->currentText().toStdString());
+        out.payee = payee_->text().trimmed().toStdString();
+        out.category = category_->text().trimmed().toStdString();
+        out.enabled = enabled_->isChecked();
+        return out;
+    }
+
+private:
+    QLineEdit* pattern_ = nullptr;
+    QComboBox* match_ = nullptr;
+    QLineEdit* payee_ = nullptr;
+    QLineEdit* category_ = nullptr;
+    QCheckBox* enabled_ = nullptr;
+};
 
 }  // namespace
 
@@ -153,10 +263,20 @@ void MainWindow::buildMenus() {
     file->addAction("Import QIF for &review...", this,
                     &MainWindow::importQifForReview);
     file->addSeparator();
+    // The ordinary way transactions arrive: a download for one account, looked
+    // over in the pane beside its register before it changes anything.
+    file->addAction("&Import transactions...", this,
+                    &MainWindow::importTransactions);
+    file->addSeparator();
     file->addAction("E&xit", this, &QWidget::close);
 
     QMenu* accounts = menuBar()->addMenu("&Accounts");
     accounts->addAction("&New account...", this, &MainWindow::newAccount);
+    accounts->addSeparator();
+    accounts->addAction("Payee &rules...", this, &MainWindow::editRules);
+
+    QMenu* reports = menuBar()->addMenu("&Reports");
+    reports->addAction("&Spending by category...", this, &MainWindow::showReport);
 
     QMenu* view = menuBar()->addMenu("&View");
     auto* split = view->addAction("&Split view");
@@ -172,7 +292,31 @@ void MainWindow::buildMenus() {
 }
 
 void MainWindow::rebuildWorkspace() {
+    // Which account each pane was showing, so that it still is afterwards.
+    // Rebuilding is how the workspace is handed the book again after it changes;
+    // it is not a request to forget what was being read. Without this, recording
+    // a transaction emptied the register it was recorded in.
+    std::vector<std::string> showing;
+    bool wasSplit = false;
+    int active = 1;
+    if (workspace_) {
+        for (const ui::Pane& pane : workspace_->panes())
+            showing.push_back(pane.account);
+        wasSplit = workspace_->split_open();
+        active = workspace_->active_pane();
+    }
+
     workspace_ = std::make_unique<ui::Workspace>(chart_, book_, transactions_);
+
+    if (showing.empty()) return;
+    workspace_->select(showing.front());
+    if (wasSplit) {
+        // Splitting makes the new pane the active one, which is where the
+        // second account goes.
+        workspace_->split();
+        if (showing.size() > 1) workspace_->select(showing[1]);
+    }
+    workspace_->make_active(active);
 }
 
 std::string MainWindow::selectedAccount() const {
@@ -210,6 +354,7 @@ void MainWindow::newBook() {
     chart_ = chart::Chart();
     book_ = ledger::Ledger();
     transactions_.clear();
+    rules_.clear();
     bookChanged(name);
 }
 
@@ -243,7 +388,8 @@ void MainWindow::openNamed(const QString& name) {
     chart::Chart accounts;
     ledger::Ledger ledger;
     std::vector<ledger::Transaction> transactions;
-    no = opened.read(&accounts, &ledger, &transactions);
+    std::vector<payees::Rule> rules;
+    no = opened.read(&accounts, &ledger, &transactions, &rules);
     if (no.refused) {
         QMessageBox::warning(this, "SimpleAccount", QString::fromStdString(no.reason));
         return;
@@ -252,6 +398,7 @@ void MainWindow::openNamed(const QString& name) {
     chart_ = accounts;
     book_ = ledger;
     transactions_ = transactions;
+    rules_ = rules;
     bookChanged(name);
 }
 
@@ -259,7 +406,7 @@ void MainWindow::openNamed(const QString& name) {
 // Closing the window is not a way to lose a morning's entry.
 bool MainWindow::save() {
     if (!store_.is_open()) return false;
-    const store::Failure no = store_.write(chart_, transactions_);
+    const store::Failure no = store_.write(chart_, transactions_, rules_);
     if (no.refused) {
         QMessageBox::warning(this, "SimpleAccount", QString::fromStdString(no.reason));
         return false;
@@ -473,6 +620,352 @@ void MainWindow::importQifForReview() {
     refresh();
 }
 
+void MainWindow::importTransactions() {
+    if (!store_.is_open()) {
+        QMessageBox::information(this, "SimpleAccount",
+                                 "Open a book before importing into it.");
+        return;
+    }
+    // A download is for one account, and which account is not in the file in any
+    // form this program can trust: a QFX names the bank's own number for it and a
+    // CSV usually names nothing. So the account is the one being read.
+    const std::string account = selectedAccount();
+    if (account.empty()) {
+        QMessageBox::information(
+            this, "SimpleAccount",
+            "Select the account this download is for, then import into it.");
+        return;
+    }
+    const QString path = QFileDialog::getOpenFileName(
+        this, QString("Import into %1").arg(QString::fromStdString(account)), {},
+        "Downloaded transactions (*.qfx *.QFX *.ofx *.OFX *.csv *.CSV);;All files (*)");
+    if (path.isEmpty()) return;
+    importTransactionsFrom(path);
+}
+
+void MainWindow::importTransactionsFrom(const QString& path) {
+    const std::string account = selectedAccount();
+    if (account.empty()) return;
+    std::ifstream in(path.toStdString(), std::ios::binary);
+    if (!in) {
+        QMessageBox::warning(this, "SimpleAccount",
+                             QString("%1 could not be read").arg(path));
+        return;
+    }
+    std::ostringstream buffer;
+    buffer << in.rdbuf();
+
+    // Everything about reading the file is production code with no Qt in it, so
+    // what happens here is the same as what the command line does.
+    chart::Chart accounts = chart_;
+    const review::Prepared prepared = review::from_file(
+        buffer.str(), account, transactions_, &accounts, rules_);
+    if (prepared.refused) {
+        QMessageBox::warning(this, "SimpleAccount",
+                             QString::fromStdString(prepared.refusal));
+        return;
+    }
+    if (prepared.rows.empty()) {
+        QMessageBox::information(this, "SimpleAccount",
+                                 "There is nothing in that file to review.");
+        return;
+    }
+
+    // Categories the import had to invent are needed for the register to resolve
+    // them once the rows are accepted.
+    chart_ = accounts;
+    // The pane keeps the account it was showing, so the review opens beside the
+    // register it is about to change. That is the whole reason it is shown here
+    // rather than in a dialog of its own.
+    rebuildWorkspace();
+    workspace_->review_import(prepared.rows, prepared.into);
+    refresh();
+
+    // Said out loud rather than swallowed. A note nobody is shown is a note
+    // nobody acts on.
+    if (!prepared.notes.empty()) {
+        QString said;
+        for (const std::string& note : prepared.notes)
+            said += QString::fromStdString(note) + "\n";
+        QMessageBox::information(this, "Worth a look", said.trimmed());
+    }
+}
+
+void MainWindow::showReport() {
+    if (!store_.is_open()) {
+        QMessageBox::information(this, "SimpleAccount",
+                                 "Open a book before reporting on it.");
+        return;
+    }
+
+    QDialog box(this);
+    box.setWindowTitle("Spending by category");
+    box.resize(820, 640);
+    auto* layout = new QVBoxLayout(&box);
+
+    // The periods Quicken offers, by the names it uses, because the figures are
+    // read against its reports. All Dates runs from the first posting to today.
+    auto* period = new QComboBox;
+    period->addItems({"YearToDate", "ThisYear", "LastYear", "ThisQuarter",
+                      "ThisMonth", "MonthToDate", "LastMonth", "Last12Months",
+                      "All"});
+    auto* from = new QDateEdit;
+    auto* to = new QDateEdit;
+    for (QDateEdit* edit : {from, to}) {
+        edit->setCalendarPopup(true);
+        edit->setDisplayFormat("yyyy-MM-dd");
+    }
+    auto* quicken = new QCheckBox("Quicken signs");
+    quicken->setToolTip("Expenses negative, as Quicken writes them, so a figure "
+                        "can be read straight against one of its reports.");
+    auto* zero = new QCheckBox("Show empty categories");
+
+    auto* chooser = new QHBoxLayout;
+    chooser->addWidget(new QLabel("Period"));
+    chooser->addWidget(period);
+    chooser->addWidget(new QLabel("from"));
+    chooser->addWidget(from);
+    chooser->addWidget(new QLabel("to"));
+    chooser->addWidget(to);
+    chooser->addStretch(1);
+    chooser->addWidget(quicken);
+    chooser->addWidget(zero);
+    layout->addLayout(chooser);
+
+    auto* table = new QTableWidget;
+    table->setColumnCount(2);
+    table->setHorizontalHeaderLabels({"Category", "Amount"});
+    table->verticalHeader()->setVisible(false);
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    layout->addWidget(table, 1);
+
+    auto* totals = new QLabel;
+    QFont bold = appFont_;
+    bold.setBold(true);
+    totals->setFont(bold);
+    layout->addWidget(totals);
+
+    auto* close = new QPushButton("&Close");
+    close->setDefault(true);
+    auto* row = new QHBoxLayout;
+    row->addStretch(1);
+    row->addWidget(close);
+    layout->addLayout(row);
+
+    // The earliest posting in the book, which is where All Dates starts.
+    types::Date earliest = asDate(QDate::currentDate());
+    for (const ledger::DatedPosting& one : book_.postings())
+        if (one.date < earliest) earliest = one.date;
+
+    const auto run = [&]() {
+        reports::Spec spec;
+        spec.from = asDate(from->date());
+        spec.to = asDate(to->date());
+        spec.quicken_signs = quicken->isChecked();
+        spec.zero_rows = zero->isChecked();
+        const reports::CategoryReport report =
+            reports::category_report(chart_, book_, spec);
+
+        table->setRowCount(static_cast<int>(report.rows.size()));
+        for (int r = 0; r < static_cast<int>(report.rows.size()); ++r) {
+            const reports::Row& line = report.rows[static_cast<std::size_t>(r)];
+            // Indented by its depth in the tree, so a child reads as one.
+            const std::string name =
+                std::string(static_cast<std::size_t>(line.level) * 2, ' ') +
+                types::name_of(types::AccountPath(line.account));
+            auto* item = new QTableWidgetItem(QString::fromStdString(name));
+            item->setToolTip(QString::fromStdString(line.account));
+            if (line.is_subtotal) item->setFont(bold);
+            table->setItem(r, 0, item);
+            setAmount(table, r, 1, line.amount);
+            if (line.is_subtotal && table->item(r, 1) != nullptr)
+                table->item(r, 1)->setFont(bold);
+        }
+        totals->setText(QString("Income %1        Expenses %2        Net %3")
+                            .arg(money(report.totals.income))
+                            .arg(money(report.totals.expenses))
+                            .arg(money(report.totals.net)));
+    };
+
+    const auto takePeriod = [&]() {
+        const auto range = reports::named_range(
+            period->currentText().toStdString(), asDate(QDate::currentDate()),
+            earliest);
+        if (!range) return;
+        const QSignalBlocker quietFrom(from);
+        const QSignalBlocker quietTo(to);
+        from->setDate(QDate(range->from.year(), range->from.month(), range->from.day()));
+        to->setDate(QDate(range->to.year(), range->to.month(), range->to.day()));
+        run();
+    };
+
+    QObject::connect(period, &QComboBox::currentTextChanged, &box, takePeriod);
+    // Typing a date of your own is not the same as asking for a named period, so
+    // it runs the report without moving the period back.
+    QObject::connect(from, &QDateEdit::dateChanged, &box, run);
+    QObject::connect(to, &QDateEdit::dateChanged, &box, run);
+    QObject::connect(quicken, &QCheckBox::toggled, &box, run);
+    QObject::connect(zero, &QCheckBox::toggled, &box, run);
+    QObject::connect(close, &QPushButton::clicked, &box, &QDialog::accept);
+
+    takePeriod();
+    box.exec();
+}
+
+void MainWindow::editRules() {
+    if (!store_.is_open()) {
+        QMessageBox::information(this, "SimpleAccount",
+                                 "Open a book before working on its rules.");
+        return;
+    }
+
+    QDialog box(this);
+    box.setWindowTitle("Payee rules");
+    box.resize(900, 520);
+    auto* layout = new QVBoxLayout(&box);
+
+    auto* explain = new QLabel(
+        "In the order they are tried: a rule above another is the one that wins. "
+        "A rule applies when a transaction is imported or categorised, so "
+        "changing one here does not alter what it has already done.");
+    explain->setWordWrap(true);
+    layout->addWidget(explain);
+
+    auto* table = new QTableWidget;
+    table->setColumnCount(5);
+    table->setHorizontalHeaderLabels({"Looks for", "How", "Payee", "Category", "On"});
+    table->verticalHeader()->setVisible(false);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setSelectionMode(QAbstractItemView::SingleSelection);
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
+    layout->addWidget(table, 1);
+
+    auto* row = new QHBoxLayout;
+    auto* add = new QPushButton("&Add...");
+    auto* edit = new QPushButton("&Edit...");
+    auto* drop = new QPushButton("&Delete");
+    auto* toggle = new QPushButton("Turn o&ff");
+    auto* close = new QPushButton("&Close");
+    close->setDefault(true);
+    row->addWidget(add);
+    row->addWidget(edit);
+    row->addWidget(drop);
+    row->addWidget(toggle);
+    row->addStretch(1);
+    row->addWidget(close);
+    layout->addLayout(row);
+
+    // The rules are held in the order they are tried, so a row of the table is
+    // the rule at the same index. Sorting is stable and idempotent, so keeping
+    // them sorted loses nothing: two rules the precedence rule cannot separate
+    // stay in the order they were added.
+    const auto fill = [&](int select) {
+        rules_ = payees::in_order(rules_);
+        table->setRowCount(static_cast<int>(rules_.size()));
+        for (std::size_t i = 0; i < rules_.size(); ++i) {
+            const payees::Rule& one = rules_[i];
+            const int at = static_cast<int>(i);
+            table->setItem(at, 0, text(one.pattern));
+            table->setItem(at, 1, text(payees::to_string(one.match_type)));
+            table->setItem(at, 2, text(one.payee));
+            table->setItem(at, 3, text(one.category));
+            table->setItem(at, 4, text(one.enabled ? "yes" : "no"));
+            if (!one.enabled)
+                for (int c = 0; c < 5; ++c)
+                    table->item(at, c)->setForeground(QColor(130, 130, 130));
+        }
+        if (select >= 0 && select < table->rowCount()) table->selectRow(select);
+        const bool any = table->currentRow() >= 0;
+        edit->setEnabled(any);
+        drop->setEnabled(any);
+        toggle->setEnabled(any);
+        if (any) {
+            toggle->setText(rules_[static_cast<std::size_t>(table->currentRow())].enabled
+                                ? "Turn o&ff" : "Turn o&n");
+        }
+    };
+
+    const auto chosen = [&]() { return table->currentRow(); };
+
+    QObject::connect(add, &QPushButton::clicked, &box, [&]() {
+        RuleForm form(&box, "Add a rule", payees::Rule{});
+        if (form.exec() != QDialog::Accepted) return;
+        const payees::Refusal no = payees::add(&rules_, form.rule());
+        if (no.refused) {
+            QMessageBox::warning(&box, "SimpleAccount",
+                                 QString::fromStdString(no.reason));
+            return;
+        }
+        save();
+        fill(-1);
+    });
+
+    QObject::connect(edit, &QPushButton::clicked, &box, [&]() {
+        const int at = chosen();
+        if (at < 0) return;
+        const payees::Rule was = rules_[static_cast<std::size_t>(at)];
+        RuleForm form(&box, "Edit a rule", was);
+        if (form.exec() != QDialog::Accepted) return;
+        const payees::Refusal no =
+            payees::change(&rules_, was.pattern, was.match_type, form.rule());
+        if (no.refused) {
+            QMessageBox::warning(&box, "SimpleAccount",
+                                 QString::fromStdString(no.reason));
+            return;
+        }
+        save();
+        fill(at);
+    });
+
+    QObject::connect(drop, &QPushButton::clicked, &box, [&]() {
+        const int at = chosen();
+        if (at < 0) return;
+        const payees::Rule one = rules_[static_cast<std::size_t>(at)];
+        // Asked, because the usual move is to turn a rule off rather than lose
+        // it: one that was wrong once is usually wanted again in a changed form.
+        const QMessageBox::StandardButton said = QMessageBox::question(
+            &box, "Delete this rule?",
+            QString("Delete the rule looking for %1?\n\nTransactions it has "
+                    "already categorised are left as they are. Turning it off "
+                    "instead keeps it to come back to.")
+                .arg(QString::fromStdString(one.pattern)),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (said != QMessageBox::Yes) return;
+        payees::remove(&rules_, one.pattern, one.match_type);
+        save();
+        fill(at - 1);
+    });
+
+    QObject::connect(toggle, &QPushButton::clicked, &box, [&]() {
+        const int at = chosen();
+        if (at < 0) return;
+        const payees::Rule one = rules_[static_cast<std::size_t>(at)];
+        payees::set_enabled(&rules_, one.pattern, one.match_type, !one.enabled);
+        save();
+        fill(at);
+    });
+
+    QObject::connect(table, &QTableWidget::itemSelectionChanged, &box, [&]() {
+        const bool any = table->currentRow() >= 0;
+        edit->setEnabled(any);
+        drop->setEnabled(any);
+        toggle->setEnabled(any);
+        if (any)
+            toggle->setText(rules_[static_cast<std::size_t>(table->currentRow())].enabled
+                                ? "Turn o&ff" : "Turn o&n");
+    });
+
+    QObject::connect(close, &QPushButton::clicked, &box, &QDialog::accept);
+    QObject::connect(table, &QTableWidget::doubleClicked, edit, &QPushButton::click);
+
+    fill(rules_.empty() ? -1 : 0);
+    box.exec();
+}
+
 void MainWindow::toggleSplit() {
     if (workspace_->split_open()) workspace_->close_split();
     else workspace_->split();
@@ -501,6 +994,9 @@ void MainWindow::acceptImport() {
     // follow it rather than the other way round.
     transactions_ = workspace_->transactions();
     book_ = workspace_->book();
+    // A book is a file rather than a session: an import that is not written is
+    // an import that is lost when the window closes.
+    save();
     refresh();
 }
 
@@ -512,6 +1008,7 @@ void MainWindow::cancelImport() {
 MainWindow::PaneWidgets MainWindow::makePane(int paneOneBased) {
     PaneWidgets p;
     p.stack = new QStackedWidget;
+    p.blank = reg::blank_line_on(asDate(QDate::currentDate()));
 
     p.reg = new QTableWidget;
     p.reg->setColumnCount(8);
@@ -519,7 +1016,15 @@ MainWindow::PaneWidgets MainWindow::makePane(int paneOneBased) {
         {"Date", "Num", "Payee", "Category", "Memo", "Payment", "Deposit", "Balance"});
     p.reg->verticalHeader()->setVisible(false);
     p.reg->setSelectionBehavior(QAbstractItemView::SelectRows);
-    p.reg->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    // Typing is allowed, and only the blank line's cells carry the editable
+    // flag, so the rest of a register stays read-only: a stray keypress must
+    // not change a transaction from 2009.
+    p.reg->setEditTriggers(QAbstractItemView::DoubleClicked |
+                           QAbstractItemView::EditKeyPressed |
+                           QAbstractItemView::AnyKeyPressed);
+    p.reg->installEventFilter(new EnterRecords(p.reg, [this, paneOneBased]() {
+        recordBlankLine(paneOneBased);
+    }));
     p.reg->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
     p.reg->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
     p.stack->addWidget(p.reg);
@@ -690,8 +1195,93 @@ void MainWindow::refreshPane(int paneOneBased) {
         setAmount(p.reg, r, 6, line.deposit);
         setAmount(p.reg, r, 7, line.balance);
     }
+    // The blank line: one more row at the end, which is where a transaction is
+    // entered. It is not in the book and nothing is written until an amount is
+    // typed -- see the entry section of TransactionRegister.spectable.
+    const bool canEnter = !state.account.empty() && a != nullptr &&
+                          types::class_of(a->type) == types::AccountClass::Real;
+    p.reg->setRowCount(static_cast<int>(lines.size()) + (canEnter ? 1 : 0));
+    if (canEnter) {
+        const int at = static_cast<int>(lines.size());
+        const reg::BlankLine& line = p.blank;
+        const auto typed = [](const std::string& value) {
+            auto* item = new QTableWidgetItem(QString::fromStdString(value));
+            item->setFlags(item->flags() | Qt::ItemIsEditable);
+            return item;
+        };
+        p.reg->setItem(at, 0, typed(line.date.iso()));
+        p.reg->setItem(at, 1, typed(line.check_no));
+        p.reg->setItem(at, 2, typed(line.payee));
+        p.reg->setItem(at, 3, typed(line.category));
+        p.reg->setItem(at, 4, typed(line.memo));
+        p.reg->setItem(at, 5, typed(line.payment.cents() == 0
+                                        ? std::string() : line.payment.in_register()));
+        p.reg->setItem(at, 6, typed(line.deposit.cents() == 0
+                                        ? std::string() : line.deposit.in_register()));
+        auto* balance = new QTableWidgetItem;
+        balance->setFlags(Qt::ItemIsEnabled);
+        p.reg->setItem(at, 7, balance);
+        for (int c = 0; c <= 7; ++c)
+            p.reg->item(at, c)->setBackground(QColor(248, 248, 230));
+    }
+
     // Opening on the most recent transactions: twenty years is tens of thousands
     // of lines, and starting at the top would mean scrolling through 2005.
     if (!lines.empty()) p.reg->scrollToBottom();
     refreshing_ = was;
+}
+
+// What is on the blank line now, read back out of the table. Called before
+// anything is done with it, so that a cell still being typed in is included.
+void MainWindow::readBlankLine(int paneOneBased) {
+    PaneWidgets& p = paneWidgets_[static_cast<std::size_t>(paneOneBased - 1)];
+    const int at = p.reg->rowCount() - 1;
+    if (at < 0) return;
+    const auto cell = [&](int column) {
+        const QTableWidgetItem* item = p.reg->item(at, column);
+        return item == nullptr ? QString() : item->text();
+    };
+    const auto date = types::Date::from_iso(cell(0).trimmed().toStdString());
+    if (date) p.blank.date = *date;
+    p.blank.check_no = cell(1).trimmed().toStdString();
+    p.blank.payee = cell(2).trimmed().toStdString();
+    p.blank.category = cell(3).trimmed().toStdString();
+    p.blank.memo = cell(4).trimmed().toStdString();
+    p.blank.payment = moneyTyped(cell(5));
+    p.blank.deposit = moneyTyped(cell(6));
+}
+
+void MainWindow::recordBlankLine(int paneOneBased) {
+    if (refreshing_) return;
+    const ui::Pane& state =
+        workspace_->panes()[static_cast<std::size_t>(paneOneBased - 1)];
+    if (state.showing != ui::PaneContent::Register || state.account.empty()) return;
+    readBlankLine(paneOneBased);
+    PaneWidgets& p = paneWidgets_[static_cast<std::size_t>(paneOneBased - 1)];
+
+    const reg::Committed done = reg::commit(p.blank, state.account,
+                                            transactions_.size(), &chart_);
+    if (!done.committed) {
+        // A line with no amount is a line nobody meant, and is not an error.
+        // Anything else is, and is worth saying.
+        if (!done.reason.empty() && done.reason != "nothing was entered")
+            QMessageBox::warning(this, "SimpleAccount",
+                                 QString::fromStdString(done.reason));
+        return;
+    }
+    transactions_.push_back(done.transaction);
+    for (const ledger::Posting& posting : done.transaction.postings)
+        book_.add({done.transaction.date, posting.account, posting.amount,
+                   done.transaction.ref.value()});
+    // A book is a file rather than a session, so an entry is written as it is
+    // made. The next blank line keeps the date just used, because entering a
+    // morning of receipts means typing the same date over and over otherwise.
+    const types::Date keep = p.blank.date;
+    p.blank = reg::blank_line_on(keep);
+    save();
+    rebuildWorkspace();
+    refresh();
+    status_->setText(QString("Recorded %1  --  %2 transactions")
+                         .arg(QString::fromStdString(done.transaction.payee.value()))
+                         .arg(transactions_.size()));
 }

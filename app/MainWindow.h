@@ -6,6 +6,8 @@
 #include "chart.h"
 #include "ledger.h"
 #include "posting.h"
+#include "payee_rules.h"
+#include "register_entry.h"
 #include "store_sqlite.h"
 #include "ui_model.h"
 
@@ -36,12 +38,19 @@ public:
     // from Quicken. Not how a book is opened; see File > Open book.
     void importHistoryFrom(const QString& path);
 
+    // Reads a downloaded QFX or CSV into the review pane, for the account that
+    // is selected. Nothing reaches the book until the review is accepted.
+    void importTransactionsFrom(const QString& path);
+
 private slots:
     void newBook();
     void openBook();
     void newAccount();
     void importHistory();
     void importQifForReview();
+    void importTransactions();
+    void editRules();
+    void showReport();
     void toggleSplit();
     void toggleHidden();
     void accountClicked();
@@ -57,6 +66,10 @@ private:
         QWidget* review = nullptr;
         QTableWidget* reviewTable = nullptr;
         QLabel* heading = nullptr;
+        // What has been typed on the blank line at the end of this register.
+        // Per pane, because the same account may be open in both and a line
+        // half typed in one is not a line in the other.
+        reg::BlankLine blank;
     };
 
     void buildMenus();
@@ -74,6 +87,11 @@ private:
     void refresh();
     void refreshAccounts();
     void refreshPane(int paneOneBased);
+    // Reads what was typed on the blank line of that pane back out of the
+    // table, and records it if an amount was entered. An amount is what makes
+    // it a transaction: a payee typed and thought better of leaves nothing.
+    void readBlankLine(int paneOneBased);
+    void recordBlankLine(int paneOneBased);
     PaneWidgets makePane(int paneOneBased);
     std::string selectedAccount() const;
 
@@ -84,6 +102,9 @@ private:
     chart::Chart chart_;
     ledger::Ledger book_;
     std::vector<ledger::Transaction> transactions_;
+    // The book's payee rules, held with it because they are part of it: an
+    // import asks them for the payee and the category of every row.
+    std::vector<payees::Rule> rules_;
     std::unique_ptr<ui::Workspace> workspace_;
     bool showHidden_ = false;
     QFont appFont_;

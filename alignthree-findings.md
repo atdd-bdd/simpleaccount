@@ -271,7 +271,26 @@ because inlining there would change meaning rather than restore it.
 
 ---
 
-## 6. Something that works well and is worth keeping
+## 6. A table with a heading and no rows is dropped without a word
+
+`Then rule list rows are : RuleListRow` followed by a heading row and nothing
+else is the natural way to say "and now there are none". The converter emits no
+call for it at all: no empty vector, no step, nothing. The scenario still passes,
+and it passes because the assertion is absent rather than because it held.
+
+That is the dangerous shape of all of these -- the file says a thing is checked
+and nothing checks it. A reader of `Payees.spectable` would have believed the
+list was asserted empty after a delete.
+
+Found by reading the generated test rather than by it failing, which is luck.
+Either the step should be generated with an empty vector, or the analyzer should
+say that an empty table generates nothing.
+
+The same shape appears in a `Given`: `Given payee rules are : PayeeRules` with a
+heading and no rows reads as "no rules", and whether it clears anything depends
+on whether the glue happens to have been called.
+
+## 7. Something that works well and is worth keeping
 
 When a step is added to a specification whose glue is already written by hand, the
 converter **appends a stub for the new step** in a fresh `public:` section rather
@@ -282,7 +301,7 @@ sustainable.
 
 ---
 
-## 7. Small things
+## 8. Small things
 
 - **`Examples:` column headings must match attribute names exactly**, which is
   right, but a mismatch produces both a warning (*column 'Assumed here' … will be

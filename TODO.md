@@ -75,3 +75,40 @@ only what it names is the smaller change.
 
 The alternative is to list `Category` in that table instead. This is the only
 `.spectable` edit made to turn a test green, which is why it is written down.
+
+## 4. A matched or completing row does nothing when accepted in the window
+
+`sa_book import --accept` calls `ofx::apply_matches`, which clears the
+transaction a downloaded row matched rather than adding a second copy of it. The
+window does not: `review::from_ofx` shows the row with disposition `Matched` and
+leaves it unticked, and accepting the review adds the ticked rows only.
+
+So nothing is duplicated and nothing is lost -- but a check entered by hand and
+then seen on a statement stays `Uncleared` when the statement is imported through
+the window, where the command line would have cleared it. That matters for
+reconciliation, which is the acceptance test for this program.
+
+The same is true of a payment's other half. `ofx::decide` calls such a row
+`Completes`, and `ofx::apply_completions` fills in the account the payment went
+to on the transaction that was waiting for it. The window does neither, so a card
+payment imported from both sides through the window leaves the bank side sitting
+in `Unassigned` -- which is exactly the case the two-unknowns rule was written
+for. The register can still be used to assign it by hand.
+
+Doing it properly means the review knowing which transaction each row claimed,
+so that accepting can clear that one: `ui::ReviewRow` would carry the claimed
+id, `UserInterface.spectable` would gain a scenario for a matched row clearing
+rather than adding, and `MainWindow::acceptImport` would ask `ofx::apply_matches`.
+It was left out rather than half-done, because a window that silently cleared
+rows nobody ticked would be worse than one that clears nothing.
+
+## 5. CLAUDE.md names a helper this project does not have
+
+CLAUDE.md says a cell holding a leading or trailing blank is wrapped in double
+quotes in the spec and unwrapped by calling `spec_cell::unquote()` in the glue.
+There is no `spec_cell` namespace anywhere in this checkout -- it is presumably
+in the AlignThree example tests.
+
+`generated/payees_glue.h` now defines a local `unquoted()` for the two refusal
+scenarios that need an empty pattern and an empty payee. If AlignThree does
+provide one, the glue should use that instead and the local copy should go.
