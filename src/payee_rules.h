@@ -1,4 +1,7 @@
 #pragma once
+#include <cstddef>
+#include <algorithm>
+#include <set>
 #include <vector>
 #include <regex>
 #include <string>
@@ -29,6 +32,15 @@ inline std::string to_string(MatchType t) {
 }
 
 namespace detail {
+// A pattern typed with nothing but blanks in it is a pattern of nothing.
+inline std::string trimmed(const std::string& s) {
+    std::size_t from = 0;
+    while (from < s.size() && (s[from] == ' ' || s[from] == 9)) ++from;
+    std::size_t to = s.size();
+    while (to > from && (s[to - 1] == ' ' || s[to - 1] == 9)) --to;
+    return s.substr(from, to - from);
+}
+
 inline std::string upper(const std::string& s) {
     std::string out;
     out.reserve(s.size());
@@ -83,6 +95,74 @@ inline bool wins(const std::string& pattern_a, MatchType type_a,
     return false;  // added earlier wins, and A is taken to be the earlier one
 }
 
+// Words a card network adds to a name that say nothing about who was paid.
+inline const std::set<std::string>& noise_words() {
+    static const std::set<std::string> table = {
+        "PMTS", "PMT", "PAYMENT", "PURCHASE", "POS", "DEBIT", "CREDIT", "CARD",
+        "XXXXX", "ACH", "EFT", "WEB", "RECUR", "RECURRING", "ONLINE", "BILLPAY",
+    };
+    return table;
+}
+
+// The two-letter codes a till adds for the state it stands in. Only dropped at
+// the end of a name, where they are a location rather than a word.
+inline bool looks_like_a_state(const std::string& word) {
+    if (word.size() != 2) return false;
+    for (const char c : word)
+        if (c < 'A' || c > 'Z') return false;
+    return true;
+}
+
+inline bool carries_a_digit(const std::string& word) {
+    for (const char c : word)
+        if (c >= '0' && c <= '9') return true;
+    return false;
+}
+
+// The part of a name that identifies the payee, which is what a rule is made
+// from. See the significant-name rule in Payees.spectable.
+//
+// A bank writes the shop, then whatever that shop's till, branch or town adds.
+// The shop repeats; the rest changes every visit, so a rule made from the whole
+// name would match once and never again -- SHELL OIL 3344 today, SHELL OIL 2343
+// next week, and the second one uncategorised.
+//
+// A guess, and offered rather than applied: a payee whose name genuinely carries
+// a digit would be cut too short, and only the user can see that. The first word
+// is always kept, because a pattern of nothing would match everything.
+inline std::string pattern_for(const std::string& raw_name) {
+    std::vector<std::string> words;
+    std::string current;
+    for (const char c : raw_name + " ") {
+        if (c == ' ' || c == '\t') {
+            if (!current.empty()) words.push_back(current);
+            current.clear();
+            continue;
+        }
+        current += c;
+    }
+    if (words.empty()) return raw_name;
+
+    // Everything from the first word carrying a digit is a number, a date or a
+    // reference, and none of those repeat.
+    std::vector<std::string> kept;
+    for (std::size_t i = 0; i < words.size(); ++i) {
+        if (i > 0 && (carries_a_digit(words[i]) || words[i].front() == '#')) break;
+        kept.push_back(words[i]);
+    }
+    // Then whatever a card network or a till added at the end.
+    while (kept.size() > 1 &&
+           (looks_like_a_state(kept.back()) || noise_words().count(kept.back()) == 1))
+        kept.pop_back();
+
+    std::string out;
+    for (std::size_t i = 0; i < kept.size(); ++i) {
+        if (i > 0) out += ' ';
+        out += kept[i];
+    }
+    return out;
+}
+
 // One rule: what to look for, and what to do when it is found. A rule with no
 // category tidies the name and leaves the category alone, which is the common
 // case for a shop whose charges go to different places.
@@ -135,6 +215,112 @@ inline Applied apply(const std::vector<Rule>& rules, const std::string& raw_name
     }
     if (rule->category != "none") out.category = rule->category;
     return out;
+}
+
+// The rule a categorisation suggests: made from the significant part of the name,
+// recording that name as the payee and the category that was just chosen.
+//
+// Offered, not taken. The user is the only one who knows whether this payee
+// always takes this category, and whether the shortening went too far.
+inline Rule suggest(const std::string& raw_name, const std::string& category) {
+    Rule rule;
+    rule.pattern = pattern_for(raw_name);
+    rule.match_type = MatchType::Contains;
+    rule.payee = rule.pattern;
+    rule.category = category;
+    rule.enabled = true;
+    return rule;
+}
+
+// ---------------------------------------------------------------------------
+// Keeping the rules
+// ---------------------------------------------------------------------------
+//
+// The rules are worked on in a window of their own. See the keeping-the-rules
+// section of Payees.spectable.
+
+// Why a rule was not taken. Refused where it is typed rather than allowed to
+// reach the rules, because both of these would do damage quietly.
+struct Refusal {
+    bool refused = false;
+    std::string reason;
+};
+
+// The rules in the order they are tried, which is the order they are listed in:
+// a rule above another in the list is a rule that beats it. Disabled rules keep
+// their place rather than being moved out of the way.
+//
+// A stable sort, so that two rules the precedence rule cannot separate stay in
+// the order they were added -- which is what that rule says happens.
+inline std::vector<Rule> in_order(const std::vector<Rule>& rules) {
+    std::vector<Rule> out = rules;
+    std::stable_sort(out.begin(), out.end(), [](const Rule& a, const Rule& b) {
+        return wins(a.pattern, a.match_type, b.pattern, b.match_type);
+    });
+    return out;
+}
+
+// What is wrong with a rule, if anything. A pattern of nothing is contained in
+// every name, so it would rename every payee in the book; a rule with no payee
+// would blank the name the bank sent and leave nothing in its place.
+inline Refusal check(const Rule& one) {
+    if (detail::trimmed(one.pattern).empty())
+        return {true, "a rule needs something to look for"};
+    if (detail::trimmed(one.payee).empty())
+        return {true, "a rule needs a payee name"};
+    return {};
+}
+
+inline Refusal add(std::vector<Rule>* rules, const Rule& one) {
+    const Refusal no = check(one);
+    if (no.refused) return no;
+    rules->push_back(one);
+    return {};
+}
+
+// Which rule is meant, by what it looks for. Two rules may share a pattern, so
+// the match type is part of naming one. The first that matches is the one
+// changed, which is the one the list showed.
+inline Rule* find(std::vector<Rule>* rules, const std::string& pattern,
+                  MatchType type) {
+    for (Rule& one : *rules)
+        if (one.pattern == pattern && one.match_type == type) return &one;
+    return nullptr;
+}
+
+inline Refusal change(std::vector<Rule>* rules, const std::string& was_pattern,
+                      MatchType was_type, const Rule& to) {
+    const Refusal no = check(to);
+    if (no.refused) return no;
+    Rule* at = find(rules, was_pattern, was_type);
+    if (at == nullptr) return {true, "there is no rule looking for " + was_pattern};
+    *at = to;
+    return {};
+}
+
+// Deleting a rule stops it applying from then on. It does not undo the
+// categorising it already did: a rule applies when a transaction is imported or
+// categorised, not continuously, and a delete that rewrote a year of history
+// would be a surprise nobody asked for.
+inline bool remove(std::vector<Rule>* rules, const std::string& pattern,
+                   MatchType type) {
+    for (std::size_t i = 0; i < rules->size(); ++i) {
+        if ((*rules)[i].pattern != pattern) continue;
+        if ((*rules)[i].match_type != type) continue;
+        rules->erase(rules->begin() + static_cast<std::ptrdiff_t>(i));
+        return true;
+    }
+    return false;
+}
+
+// Disabling is the usual move: a rule that was wrong once is usually wanted
+// again in a changed form.
+inline bool set_enabled(std::vector<Rule>* rules, const std::string& pattern,
+                        MatchType type, bool enabled) {
+    Rule* at = find(rules, pattern, type);
+    if (at == nullptr) return false;
+    at->enabled = enabled;
+    return true;
 }
 
 }  // namespace payees

@@ -15,6 +15,7 @@
 #include "date.h"
 #include "ledger.h"
 #include "money.h"
+#include "payee_rules.h"
 #include "posting.h"
 #include "text_types.h"
 
@@ -365,7 +366,8 @@ public:
     // Writes the whole book. One transaction around the lot, so an interrupted
     // save leaves the file as it was rather than half of each.
     Failure write(const chart::Chart& accounts,
-                  const std::vector<ledger::Transaction>& transactions) {
+                  const std::vector<ledger::Transaction>& transactions,
+                  const std::vector<payees::Rule>& rules = {}) {
         std::string why;
         if (!detail::exec(db_.get(), "BEGIN IMMEDIATE", &why)) return {true, why};
 
@@ -379,7 +381,8 @@ public:
         // See the note in development.txt.
         if (!detail::exec(db_.get(), "DELETE FROM posting_import_ids; "
                                      "DELETE FROM postings; DELETE FROM transactions; "
-                                     "DELETE FROM accounts;", &why))
+                                     "DELETE FROM accounts; DELETE FROM payee_rules;",
+                          &why))
             return fail(why);
 
         detail::Statement account(db_.get(),
@@ -450,6 +453,20 @@ public:
             }
         }
 
+        detail::Statement rule(db_.get(),
+            "INSERT INTO payee_rules (pattern, match_type, payee, category, enabled) "
+            "VALUES (?, ?, ?, ?, ?)");
+        if (!rule.ok()) return fail(rule.why());
+        for (const payees::Rule& one : rules) {
+            rule.reset();
+            rule.bind(1, one.pattern);
+            rule.bind(2, payees::to_string(one.match_type));
+            rule.bind(3, one.payee);
+            rule.bind(4, one.category);
+            rule.bind(5, one.enabled ? 1 : 0);
+            if (!rule.run()) return fail(rule.why());
+        }
+
         if (!detail::exec(db_.get(), "COMMIT", &why)) return fail(why);
         return {};
     }
@@ -457,7 +474,8 @@ public:
     // Reads it back. The ledger is built from the postings rather than stored,
     // so a balance can never disagree with the register.
     Failure read(chart::Chart* accounts, ledger::Ledger* book,
-                 std::vector<ledger::Transaction>* transactions) const {
+                 std::vector<ledger::Transaction>* transactions,
+                 std::vector<payees::Rule>* rules = nullptr) const {
         *accounts = chart::Chart();
         *book = ledger::Ledger();
         transactions->clear();
@@ -518,6 +536,23 @@ public:
                         types::import_source_from_string(mark.text(0)), mark.text(1)});
                 t.postings.push_back(p);
                 book->add({t.date, p.account, p.amount, t.ref.value()});
+            }
+        }
+
+        if (rules != nullptr) {
+            rules->clear();
+            detail::Statement rule(db_.get(),
+                "SELECT pattern, match_type, payee, category, enabled "
+                "FROM payee_rules ORDER BY rowid");
+            if (!rule.ok()) return {true, rule.why()};
+            while (rule.step_row()) {
+                payees::Rule one;
+                one.pattern = rule.text(0);
+                one.match_type = payees::match_type_from_string(rule.text(1));
+                one.payee = rule.text(2);
+                one.category = rule.text(3);
+                one.enabled = rule.integer(4) != 0;
+                rules->push_back(one);
             }
         }
         return {};

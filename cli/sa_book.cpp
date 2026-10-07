@@ -30,6 +30,7 @@
 #include "register_lines.h"
 #include "report.h"
 #include "csv_import.h"
+#include "payee_rules.h"
 #include "store_sqlite.h"
 #include "transaction_id.h"
 
@@ -46,6 +47,8 @@ int usage() {
         "  sa_book register <book> <account>\n"
         "  sa_book import   <book> <file.qfx|file.csv> <account> [--accept]\n"
         "                   [--same <id>] [--different <id>]   resolve a Possible\n"
+        "  sa_book rule     <book> <raw name> <category> [payee]\n"
+        "  sa_book rules    <book>\n"
         "  sa_book delete   <book> <ref>\n"
         "  sa_book report   <book> <from> <to> [--quicken]\n"
         "\nBooks live in %s\n", store::books_folder().c_str());
@@ -61,6 +64,7 @@ int complain(const store::Failure& no) {
 // this size is read in a blink, and the alternative is a second way to be wrong
 // about what is in it.
 struct Loaded {
+    std::vector<payees::Rule> rules;
     store::Book book;
     chart::Chart accounts;
     ledger::Ledger ledger;
@@ -70,7 +74,7 @@ struct Loaded {
 bool load(const std::string& name, Loaded* into, store::Failure* no) {
     *no = store::Book::open_named(name, &into->book);
     if (no->refused) return false;
-    *no = into->book.read(&into->accounts, &into->ledger, &into->transactions);
+    *no = into->book.read(&into->accounts, &into->ledger, &into->transactions, &into->rules);
     return !no->refused;
 }
 
@@ -148,7 +152,7 @@ int import_csv(const std::string& text, const std::string& account, bool accept,
         return 0;
     }
     const std::vector<ledger::Transaction> made = csv::transactions_for(
-        decided, account, open->transactions.size(), &open->accounts);
+        decided, account, open->transactions.size(), &open->accounts, open->rules);
     open->transactions.insert(open->transactions.end(), made.begin(), made.end());
 
     // The balance the file states against what the import makes it, which is the
@@ -163,7 +167,7 @@ int import_csv(const std::string& text, const std::string& account, bool accept,
                         check.line, check.row_balance.in_register().c_str(),
                         check.computed.in_register().c_str());
 
-    const store::Failure no = open->book.write(open->accounts, open->transactions);
+    const store::Failure no = open->book.write(open->accounts, open->transactions, open->rules);
     if (no.refused) {
         std::fprintf(stderr, "%s\n", no.reason.c_str());
         return 1;
@@ -272,7 +276,7 @@ int main(int argc, char** argv) {
                 open.transactions.push_back(t);
             }
         }
-        no = open.book.write(open.accounts, open.transactions);
+        no = open.book.write(open.accounts, open.transactions, open.rules);
         if (no.refused) return complain(no);
         std::printf("added %s\n", path.c_str());
         return 0;
@@ -313,7 +317,7 @@ int main(int argc, char** argv) {
         t.postings = {here, there};
         open.transactions.push_back(t);
 
-        no = open.book.write(open.accounts, open.transactions);
+        no = open.book.write(open.accounts, open.transactions, open.rules);
         if (no.refused) return complain(no);
         std::printf("%s  %s  %s %s  %s\n", t.ref.value().c_str(), when->iso().c_str(),
                     account.c_str(), amount.in_register().c_str(), category.c_str());
@@ -368,9 +372,43 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "There is no transaction %s\n", id.c_str());
             return 1;
         }
-        no = open.book.write(open.accounts, open.transactions);
+        no = open.book.write(open.accounts, open.transactions, open.rules);
         if (no.refused) return complain(no);
         std::printf("deleted %s\n", ref.c_str());
+        return 0;
+    }
+
+    if (command == "rule") {
+        if (argc < 5) return usage();
+        // The name as the bank writes it, which is what a person has in front of
+        // them. What is stored is the part of it that identifies the payee, so
+        // the next visit to the same shop matches too.
+        const std::string raw_name = argv[3];
+        const std::string category = argv[4];
+        const std::string payee = argc > 5 ? argv[5] : payees::pattern_for(raw_name);
+
+        payees::Rule made = payees::suggest(raw_name, category);
+        made.payee = payee;
+        open.rules.push_back(made);
+
+        no = open.book.write(open.accounts, open.transactions, open.rules);
+        if (no.refused) return complain(no);
+        std::printf("%s -> pattern %s, payee %s, category %s\n",
+                    raw_name.c_str(), made.pattern.c_str(), made.payee.c_str(),
+                    made.category.c_str());
+        return 0;
+    }
+
+    if (command == "rules") {
+        if (open.rules.empty()) {
+            std::printf("no rules yet\n");
+            return 0;
+        }
+        std::printf("%-24s %-10s %-20s %s\n", "pattern", "match", "payee", "category");
+        for (const payees::Rule& one : open.rules)
+            std::printf("%-24s %-10s %-20s %s%s\n", one.pattern.c_str(),
+                        payees::to_string(one.match_type).c_str(), one.payee.c_str(),
+                        one.category.c_str(), one.enabled ? "" : "  (off)");
         return 0;
     }
 
@@ -511,7 +549,7 @@ int main(int argc, char** argv) {
             std::printf("nothing written; pass --accept to keep it\n");
             return 0;
         }
-        no = open.book.write(open.accounts, open.transactions);
+        no = open.book.write(open.accounts, open.transactions, open.rules);
         if (no.refused) return complain(no);
         std::printf("added %zu transactions, cleared %d already there\n",
                     adding.size(), matched_clear + answered_same);

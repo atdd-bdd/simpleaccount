@@ -402,14 +402,56 @@ When category changed : CategoryChange Vertical
 | FromAccount | Expenses:Uncategorized |
 | ToAccount   | Expenses:Groceries     |
 Then rule offered is : PayeeRule Vertical
-| Pattern   | HARRIS TEETER #231 |
+| Pattern   | HARRIS TEETER      |
 | MatchType | Contains           |
-| Payee     | HARRIS TEETER #231 |
+| Payee     | HARRIS TEETER      |
 | Category  | Expenses:Groceries |
 | Enabled   | true               |
-# The pattern offered is the whole raw name, which is safe but narrow. The
-# user shortens it to HARRIS TEETER, which is the point of offering it in an
-# editable form rather than just writing it.
+# The pattern offered is the part of the name that identifies the shop, with the
+# store number and the town dropped. Offering the whole raw name would be safe
+# and nearly useless: the next visit to the same shop carries a different number
+# and would match nothing. It is still offered in an editable form, because only
+# the user knows whether the shortening went too far.
+
+# ---------------------------------------------------------------------------
+# What part of a name identifies a payee
+# ---------------------------------------------------------------------------
+
+BusinessRule The significant part of a name is what a rule is made from
+Description A bank writes a payee as the shop, then whatever that shop's till,
+Description branch or town adds to it. The shop is the part that repeats; the
+Description rest changes every visit, and a rule made from the whole name would
+Description match once and never again.
+Details So a rule is offered on the part that identifies the payee, and the rest
+Details is dropped. What is dropped is anything from the first thing that carries
+Details a digit onwards -- a store number, a till number, a date, a reference --
+Details and then any trailing word that is a state code or one of the handful of
+Details words a card network adds.
+Details
+Details The raw name is kept on the transaction either way, so a rule written next
+Details year can still match what the bank sent this year, and shortening the
+Details pattern loses nothing.
+Details
+Details This is a guess, and it is offered rather than applied. A payee whose name
+Details genuinely carries a digit -- 7-ELEVEN, SHELL 24 HOUR -- would be cut too
+Details short, and the user is the one who can see that. The first word is always
+Details kept for that reason: a pattern of nothing would match everything.
+Examples: SignificantName
+| RawName                      | Pattern         | Notes                           |
+| SHELL OIL 3344               | SHELL OIL       | The store number is dropped     |
+| SHELL OIL 2343               | SHELL OIL       | So the next visit matches too   |
+| HARRIS TEETER #231 DURHAM NC | HARRIS TEETER   | Number and town both dropped    |
+| AMAZON MKTPLACE PMTS WA      | AMAZON MKTPLACE | PMTS and the state are dropped  |
+| ACME PAYROLL                 | ACME PAYROLL    | Nothing to drop                 |
+| COUNTY TAX OFFICE            | COUNTY TAX OFFICE | Nothing to drop               |
+| 7-ELEVEN 2201                | 7-ELEVEN        | The first word is always kept   |
+| SQ *THE COFFEE PLACE         | SQ *THE COFFEE PLACE | Nothing carries a digit    |
+
+Attributes SignificantName
+| Attribute | Type   | Default |
+| RawName   | Text   |         |
+| Pattern   | Text   |         |
+| Notes     | String | none    |
 
 Scenario Accepting a learned rule categorises the transactions already there
 Description Twenty years of imported history is mostly uncategorised. A rule is
@@ -584,3 +626,231 @@ Then payee list is : PayeeListEntry
 Attributes PayeeMerge
 | Attribute | Type      | Default |
 | NewName   | PayeeName |         |
+
+# ---------------------------------------------------------------------------
+# Keeping the rules
+# ---------------------------------------------------------------------------
+
+Description The rules are worked on in a window of their own: every rule listed,
+Description and one added, changed, disabled or removed. Until there was such a
+Description window a rule could only be made by agreeing to remember a
+Description categorisation, which meant one that came out slightly wrong could
+Description not be put right.
+
+BusinessRule The rules are listed in the order they are tried
+Description Which rule wins is decided by the pattern and the match type rather
+Description than by where it sits in the list, so a list in the order it was
+Description typed would leave a reader working out the precedence in their head.
+Details So the list is in the order the rules are tried: longest pattern first,
+Details ties by match type in the order Exact, StartsWith, Regex, Contains, and
+Details then by the order they were added. A rule above another in the list is
+Details a rule that beats it, which is the question a reader of this window
+Details actually has.
+Details
+Details Disabled rules are listed with the rest, in their place, rather than
+Details being moved to the bottom or hidden: a rule is disabled to stop it
+Details applying, not to get it out of the way.
+Examples: RuleOrdering
+| FirstPattern    | FirstType | SecondPattern | SecondType | Notes                                |
+| AMAZON MKTPLACE | Contains  | AMAZON        | Contains   | Longer pattern is tried first        |
+| SHELL           | Exact     | SHELL          | Contains  | Same length; Exact is tried first    |
+| HARRIS TEETER   | Contains  | TEETER        | Contains   | Longer pattern, whichever was added first |
+| SHELL           | StartsWith | SHELL        | Regex      | StartsWith beats Regex on a tie      |
+
+Attributes RuleOrdering
+Description Two rules, named in the order the list puts them in. The glue adds
+Description them in the opposite order, because a rule about which comes first
+Description is worth nothing if it only holds when they were typed that way.
+| Attribute     | Type      | Default  |
+| FirstPattern  | Text      |          |
+| FirstType     | MatchType | Contains |
+| SecondPattern | Text      |          |
+| SecondType    | MatchType | Contains |
+| Notes         | String    | none     |
+
+Attributes RuleListRow
+Description One line of the rule list. Position is the place in the order the
+Description rules are tried, counted from one.
+| Attribute | Type        | Default  |
+| Position  | Integer     | 0        |
+| Pattern   | Text        |          |
+| MatchType | MatchType   | Contains |
+| Payee     | PayeeName   |          |
+| Category  | AccountPath | none     |
+| Enabled   | Boolean     | true     |
+
+Scenario The rule list is in the order the rules are tried
+Description The three were added in the order below, which is not the order they
+Description are tried in.
+Given payee rules are : PayeeRules
+| Pattern         | MatchType | Payee         | Category           | Enabled |
+| SHELL           | Contains  | Shell         | Expenses:Auto:Fuel | true    |
+| AMAZON MKTPLACE | Contains  | Amazon        | Expenses:Shopping  | true    |
+| SHELL           | Exact     | Shell Exactly | Expenses:Auto:Fuel | false   |
+When rule list shown
+Then rule list rows are : RuleListRow
+| Position | Pattern         | MatchType | Payee         | Category           | Enabled |
+| 1        | AMAZON MKTPLACE | Contains  | Amazon        | Expenses:Shopping  | true    |
+| 2        | SHELL           | Exact     | Shell Exactly | Expenses:Auto:Fuel | false   |
+| 3        | SHELL           | Contains  | Shell         | Expenses:Auto:Fuel | true    |
+
+Attributes RuleSelect
+Description Which rule is meant, by what it looks for. Two rules may share a
+Description pattern, so the match type is part of naming one.
+| Attribute | Type      | Default  |
+| Pattern   | Text      |          |
+| MatchType | MatchType | Contains |
+
+Attributes RuleEdit
+Description A rule being added or changed. Which rule is being changed is named
+Description by the pattern and match type it had before.
+| Attribute    | Type        | Default  |
+| WasPattern   | Text        | none     |
+| WasMatchType | MatchType   | Contains |
+| Pattern      | Text        |          |
+| MatchType    | MatchType   | Contains |
+| Payee        | PayeeName   |          |
+| Category     | AccountPath | none     |
+| Enabled      | Boolean     | true     |
+
+Attributes RuleRefusal
+| Attribute | Type    | Default |
+| Refused   | Boolean | false   |
+| Because   | String  | none    |
+
+Scenario A rule added by hand takes its place in the order
+Given payee rules are : PayeeRules
+| Pattern | MatchType | Payee | Category           | Enabled |
+| SHELL   | Contains  | Shell | Expenses:Auto:Fuel | true    |
+When rule added : RuleEdit Vertical
+| Pattern   | HARRIS TEETER      |
+| MatchType | Contains           |
+| Payee     | Harris Teeter      |
+| Category  | Expenses:Groceries |
+| Enabled   | true               |
+Then rule list rows are : RuleListRow
+| Position | Pattern       | MatchType | Payee         | Category           | Enabled |
+| 1        | HARRIS TEETER | Contains  | Harris Teeter | Expenses:Groceries | true    |
+| 2        | SHELL         | Contains  | Shell         | Expenses:Auto:Fuel | true    |
+
+Scenario A rule changed applies in its changed form from then on
+Description The pattern was too narrow to catch the second filling station, so
+Description it is shortened. This is the repair the window exists for.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Auto:Fuel     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given payee rules are : PayeeRules
+| Pattern        | MatchType | Payee | Category           | Enabled |
+| SHELL OIL 3344 | Contains  | Shell | Expenses:Auto:Fuel | true    |
+When rule changed : RuleEdit Vertical
+| WasPattern   | SHELL OIL 3344     |
+| WasMatchType | Contains           |
+| Pattern      | SHELL OIL          |
+| MatchType    | Contains           |
+| Payee        | Shell              |
+| Category     | Expenses:Auto:Fuel |
+| Enabled      | true               |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId | Name           | Memo | CheckNum |
+| DEBIT   | 2024-03-01 | -40.00 | S1    | SHELL OIL 2343 | none | none     |
+Then postings are : PostingRow
+| Ref | Date       | Payee | Account            | Amount | Cleared   |
+| T1  | 2024-03-01 | Shell | Assets:Checking    | -40.00 | Cleared   |
+| T1  | 2024-03-01 | Shell | Expenses:Auto:Fuel | 40.00  | Uncleared |
+
+Scenario A rule deleted stops applying
+Description Disabling is the usual move, because a rule that was wrong once is
+Description usually wanted again in a changed form. Deleting is for a rule that
+Description was a mistake, and it is offered because a list that only grows
+Description becomes one nobody reads.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Auto:Fuel     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given payee rules are : PayeeRules
+| Pattern   | MatchType | Payee | Category           | Enabled |
+| SHELL OIL | Contains  | Shell | Expenses:Auto:Fuel | true    |
+When rule deleted : RuleSelect Vertical
+| Pattern   | SHELL OIL |
+| MatchType | Contains  |
+# No table of the empty list here: a table with a heading and no rows is
+# dropped by the generator, so one would read as a check and be none. What the
+# delete did is shown by the import below it instead.
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId | Name           | Memo | CheckNum |
+| DEBIT   | 2024-03-01 | -40.00 | S1    | SHELL OIL 2343 | none | none     |
+Then postings are : PostingRow
+| Ref | Date       | Payee          | Account                | Amount | Cleared   |
+| T1  | 2024-03-01 | SHELL OIL 2343 | Assets:Checking        | -40.00 | Cleared   |
+| T1  | 2024-03-01 | SHELL OIL 2343 | Expenses:Uncategorized | 40.00  | Uncleared |
+
+Scenario Deleting a rule leaves the transactions it already categorised alone
+Description A rule applies when a transaction is imported or categorised, not
+Description continuously. Deleting one is not a way to undo the categorising it
+Description did, and must not quietly rewrite a year of history.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Auto:Fuel     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given payee rules are : PayeeRules
+| Pattern   | MatchType | Payee | Category           | Enabled |
+| SHELL OIL | Contains  | Shell | Expenses:Auto:Fuel | true    |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId | Name           | Memo | CheckNum |
+| DEBIT   | 2024-03-01 | -40.00 | S1    | SHELL OIL 2343 | none | none     |
+When rule deleted : RuleSelect Vertical
+| Pattern   | SHELL OIL |
+| MatchType | Contains  |
+Then postings are : PostingRow
+| Ref | Date       | Payee | Account            | Amount | Cleared   |
+| T1  | 2024-03-01 | Shell | Assets:Checking    | -40.00 | Cleared   |
+| T1  | 2024-03-01 | Shell | Expenses:Auto:Fuel | 40.00  | Uncleared |
+
+Scenario A rule with nothing to look for is refused
+Description A pattern of nothing is contained in every name, so the rule would
+Description rename every payee in the book. It is refused where it is typed
+Description rather than being allowed to reach the rules.
+When rule added : RuleEdit Vertical
+| Pattern   | ""                 |
+| MatchType | Contains           |
+| Payee     | Harris Teeter      |
+| Category  | Expenses:Groceries |
+| Enabled   | true               |
+Then rule refused because : RuleRefusal Vertical
+| Refused | true                               |
+| Because | a rule needs something to look for |
+
+Scenario A rule with no name to record is refused
+Description The point of a rule is the name it records instead. One with no
+Description payee would blank the name the bank sent and leave nothing in its
+Description place.
+When rule added : RuleEdit Vertical
+| Pattern   | HARRIS TEETER      |
+| MatchType | Contains           |
+| Payee     | ""                 |
+| Category  | Expenses:Groceries |
+| Enabled   | true               |
+Then rule refused because : RuleRefusal Vertical
+| Refused | true                      |
+| Because | a rule needs a payee name |
+
+Scenario A rule may be disabled from the list without being deleted
+Given payee rules are : PayeeRules
+| Pattern   | MatchType | Payee | Category           | Enabled |
+| SHELL OIL | Contains  | Shell | Expenses:Auto:Fuel | true    |
+When rule disabled : RuleSelect Vertical
+| Pattern   | SHELL OIL |
+| MatchType | Contains  |
+Then rule list rows are : RuleListRow
+| Position | Pattern   | MatchType | Payee | Category           | Enabled |
+| 1        | SHELL OIL | Contains  | Shell | Expenses:Auto:Fuel | false   |

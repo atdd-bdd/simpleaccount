@@ -284,7 +284,35 @@ private:
     chart::Chart chart_;
     std::vector<ledger::Transaction> transactions_;
     std::vector<payees::Rule> rules_;
+    payees::Refusal refusal_;
     std::string target_ = "Assets:Checking";
+
+    // A table cell cannot hold a leading or trailing blank, so a value that is
+    // one is written in double quotes in the spec and the quotes come off here.
+    // Safe on every cell: one that is not quoted is returned as it stands.
+    static std::string unquoted(const std::string& s) {
+        if (s.size() >= 2 && s.front() == '"' && s.back() == '"')
+            return s.substr(1, s.size() - 2);
+        return s;
+    }
+
+    static payees::Rule rule_from(const RuleEditString& edit) {
+        payees::Rule rule;
+        rule.pattern = unquoted(edit.pattern);
+        rule.match_type = payees::match_type_from_string(edit.matchtype);
+        rule.payee = unquoted(edit.payee);
+        rule.category = blank(edit.category);
+        rule.enabled = parse_bool_cell(edit.enabled);
+        return rule;
+    }
+
+    static std::string listing_rules(const std::vector<payees::Rule>& rules) {
+        std::string out;
+        for (const payees::Rule& one : rules)
+            out += "  " + one.pattern + " (" + payees::to_string(one.match_type) +
+                   ") -> " + one.payee + " " + one.category + "\n";
+        return out;
+    }
 
     // A Default of "none" arrives as the literal word.
     static std::string blank(const std::string& s) {
@@ -314,4 +342,110 @@ private:
         for (const auto& row : rows) out += "  " + row.to_string() + "\n";
         return out;
     }
+public:
+
+    // The one function the whole rule turns on: what part of a bank's name a
+    // rule should be made from, so that the next visit to the same shop matches
+    // too. Notes is prose for a reader and is not asserted.
+    void examples_businessrule_the_significant_part_of_a_name_is_what_a_rule_is_made_from(
+            const std::vector<SignificantNameString>& values) {
+        for (const auto& value : values) {
+            EXPECT_EQ(value.pattern, payees::pattern_for(value.rawname))
+                << "the significant part of \"" << value.rawname << "\"";
+        }
+    }
+
+public:
+
+    // --------------------------------------------------------- keeping them
+
+    // Nothing to do: the list is asked for in the Then, which is the only place
+    // the order can be seen. Kept so that reading the scenario shows a window
+    // being opened rather than a table appearing from nowhere.
+    void when_rule_list_shown() {}
+
+    void then_rule_list_rows_are(const std::vector<RuleListRowString>& values) {
+        const std::vector<payees::Rule> got = payees::in_order(rules_);
+        ASSERT_EQ(values.size(), got.size()) << "rules listed:\n" << listing_rules(got);
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            RuleListRowString back = values[i];
+            back.position = std::to_string(i + 1);
+            back.pattern = got[i].pattern;
+            back.matchtype = payees::to_string(got[i].match_type);
+            back.payee = got[i].payee;
+            back.category = got[i].category.empty() ? "none" : got[i].category;
+            back.enabled = got[i].enabled ? "true" : "false";
+            EXPECT_EQ(values[i], back) << "rule " << i << ": wanted "
+                                       << values[i].to_string() << " got "
+                                       << back.to_string();
+        }
+    }
+
+    void when_rule_added(const std::vector<RuleEditString>& values) {
+        ASSERT_FALSE(values.empty());
+        refusal_ = payees::add(&rules_, rule_from(values.front()));
+    }
+
+    void when_rule_changed(const std::vector<RuleEditString>& values) {
+        ASSERT_FALSE(values.empty());
+        const RuleEditString& edit = values.front();
+        refusal_ = payees::change(
+            &rules_, unquoted(edit.waspattern),
+            payees::match_type_from_string(edit.wasmatchtype), rule_from(edit));
+        EXPECT_FALSE(refusal_.refused) << refusal_.reason;
+    }
+
+    void when_rule_deleted(const std::vector<RuleSelectString>& values) {
+        ASSERT_FALSE(values.empty());
+        EXPECT_TRUE(payees::remove(&rules_, values.front().pattern,
+                                   payees::match_type_from_string(
+                                       values.front().matchtype)))
+            << "no rule looking for " << values.front().pattern;
+    }
+
+    void when_rule_disabled(const std::vector<RuleSelectString>& values) {
+        ASSERT_FALSE(values.empty());
+        EXPECT_TRUE(payees::set_enabled(&rules_, values.front().pattern,
+                                        payees::match_type_from_string(
+                                            values.front().matchtype),
+                                        false))
+            << "no rule looking for " << values.front().pattern;
+    }
+
+    void then_rule_refused_because(const std::vector<RuleRefusalString>& values) {
+        ASSERT_FALSE(values.empty());
+        RuleRefusalString back = values.front();
+        back.refused = refusal_.refused ? "true" : "false";
+        back.because = refusal_.reason.empty() ? "none" : refusal_.reason;
+        EXPECT_EQ(values.front(), back) << "wanted " << values.front().to_string()
+                                        << " got " << back.to_string();
+    }
+
+    // Driven with the two rules added in the opposite order to the one the list
+    // is expected to put them in, because a rule about which comes first is
+    // worth nothing if it only holds when they were typed that way.
+    void examples_businessrule_the_rules_are_listed_in_the_order_they_are_tried(
+            const std::vector<RuleOrderingString>& values) {
+        for (const auto& value : values) {
+            std::vector<payees::Rule> rules;
+            payees::Rule second;
+            second.pattern = value.secondpattern;
+            second.match_type = payees::match_type_from_string(value.secondtype);
+            second.payee = "Second";
+            payees::Rule first;
+            first.pattern = value.firstpattern;
+            first.match_type = payees::match_type_from_string(value.firsttype);
+            first.payee = "First";
+            rules.push_back(second);
+            rules.push_back(first);
+
+            const std::vector<payees::Rule> listed = payees::in_order(rules);
+            ASSERT_EQ(2u, listed.size());
+            EXPECT_EQ("First", listed.front().payee)
+                << value.firstpattern << " (" << value.firsttype << ") should be "
+                << "listed before " << value.secondpattern << " ("
+                << value.secondtype << "): " << value.notes;
+        }
+    }
+
 };
