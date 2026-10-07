@@ -176,6 +176,23 @@ struct ReviewRow {
     Money amount;
     std::string disposition = "New";
     bool accepted = true;
+    // What the file called this row, and which kind of file said so. This is
+    // what makes a second download of the same statement do nothing, so it is
+    // carried through the review to the posting rather than being rebuilt from
+    // the five columns above -- which could not carry it. See the accepted-row
+    // rule in UserInterface.spectable.
+    std::string identifier;
+    types::ImportSource source = types::ImportSource::Ofx;
+    // The name as the bank wrote it, kept so that a rule written next year can
+    // still match what arrived this year.
+    std::string raw_name;
+    // Both sent by a download and both worth keeping: the check number is how a
+    // check already written is recognised when it clears.
+    std::string memo;
+    std::string check_no;
+    // Whether the bank has settled this row, which the import says and the
+    // review carries: an OFX file's rows are a statement, a CSV's are not.
+    types::ClearedStatus cleared = types::ClearedStatus::Cleared;
 };
 
 struct Pane {
@@ -248,6 +265,7 @@ public:
     // The accepted rows become transactions, and the pane goes back to being a
     // register of the same account so the result can be read where the import was.
     void accept_import() {
+        accepted_.clear();
         for (const ReviewRow& r : review_) {
             if (!r.accepted) continue;
             ledger::Transaction t;
@@ -255,15 +273,22 @@ public:
             t.ref = types::TransactionRef("T" + std::to_string(transactions_.size() + 1));
             t.date = r.date;
             t.payee = types::PayeeName(r.payee);
+            t.raw_name = r.raw_name;
+            t.memo = r.memo;
+            t.check_no = types::CheckNumber(r.check_no);
             ledger::Posting here;
             here.account = types::AccountPath(r.account);
             here.amount = r.amount;
-            here.cleared = types::ClearedStatus::Cleared;
+            here.cleared = r.cleared;
+            // The identifier belongs to the side the statement is for. The bank
+            // has never heard of the category, so the other side carries none.
+            ledger::stamp(&here, r.source, r.identifier);
             ledger::Posting other;
             other.account = types::AccountPath(r.category);
             other.amount = -r.amount;
             t.postings = {here, other};
             transactions_.push_back(t);
+            accepted_.push_back(t);
             book_.add({r.date, here.account, here.amount});
             book_.add({r.date, other.account, other.amount});
         }
@@ -273,6 +298,7 @@ public:
 
     void cancel_import() {
         review_.clear();
+        accepted_.clear();
         committed_ = false;
         panes_[active_].showing = PaneContent::Register;
     }
@@ -285,6 +311,9 @@ public:
     const std::vector<Pane>& panes() const { return panes_; }
     const std::vector<ReviewRow>& review() const { return review_; }
     bool committed() const { return committed_; }
+    // The transactions the last accept added, in the order it added them. Only
+    // those: what the book already held is not an outcome of the import.
+    const std::vector<ledger::Transaction>& accepted() const { return accepted_; }
 
     int accepted_count() const {
         return static_cast<int>(std::count_if(review_.begin(), review_.end(),
@@ -317,6 +346,7 @@ private:
     std::vector<Pane> panes_;
     std::size_t active_ = 0;
     std::vector<ReviewRow> review_;
+    std::vector<ledger::Transaction> accepted_;
     bool committed_ = false;
 
     void set_accepted(int line, bool accepted) {

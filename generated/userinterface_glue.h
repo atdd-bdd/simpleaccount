@@ -101,6 +101,14 @@ public:
             row.category = value.category;
             row.amount = Money(value.amount);
             row.disposition = value.disposition;
+            // What the file called the row, which the review carries through to
+            // the posting rather than losing on the way.
+            row.identifier = blank(value.identifier);
+            row.source = types::import_source_from_string(value.source);
+            row.raw_name = blank(value.rawname);
+            row.memo = blank(value.memo);
+            row.check_no = blank(value.checkno);
+            row.cleared = types::cleared_status_from_string(value.cleared);
             last_review_.push_back(row);
             if (into.empty()) into = value.account;
         }
@@ -296,4 +304,52 @@ private:
                 return workspace().register_lines(pane);
         return {};
     }
+public:
+
+    // The sides of the transactions the accept just added, in order, with the
+    // identifier each was stored under. Only those: what the book already held
+    // is not an outcome of the import.
+    void then_accepted_postings_are(const std::vector<AcceptedPostingString>& values) {
+        std::vector<AcceptedPostingString> got;
+        for (const ledger::Transaction& t : workspace().accepted()) {
+            for (const ledger::Posting& p : t.postings) {
+                AcceptedPostingString row;
+                row.account = p.account.value();
+                row.amount = p.amount.in_register();
+                // A posting carries at most one identifier per source, and an
+                // imported row has one source, so the first is the one.
+                row.identifier = p.import_ids.empty() ? "none" : p.import_ids.front().id;
+                row.source = types::to_string(p.import_ids.empty()
+                                                  ? types::ImportSource::Ofx
+                                                  : p.import_ids.front().source);
+                row.rawname = t.raw_name.empty() ? "none" : t.raw_name;
+                row.memo = t.memo.empty() ? "none" : t.memo;
+                row.checkno = t.check_no.value().empty() ? "none" : t.check_no.value();
+                row.cleared = types::to_string(p.cleared);
+                got.push_back(row);
+            }
+        }
+        ASSERT_EQ(values.size(), got.size()) << "accepted postings:\n" << listing(got);
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            AcceptedPostingString back = got[i];
+            if (values[i].amount != DNCString)
+                EXPECT_EQ(Money(values[i].amount), Money(got[i].amount))
+                    << "accepted posting " << i << " amount";
+            back.amount = values[i].amount;
+            // A posting carrying no identifier has no source to report either,
+            // so the source of such a row is not compared.
+            if (got[i].identifier == "none") back.source = values[i].source;
+            EXPECT_EQ(values[i], back)
+                << "accepted posting " << i << ": wanted " << values[i].to_string()
+                << " got " << got[i].to_string();
+        }
+    }
+
+private:
+    static std::string listing(const std::vector<AcceptedPostingString>& rows) {
+        std::string out;
+        for (const auto& row : rows) out += "  " + row.to_string() + "\n";
+        return out;
+    }
+
 };

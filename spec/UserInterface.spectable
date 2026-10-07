@@ -340,15 +340,21 @@ Description is read. Nothing reaches the book until it is accepted.
 Attributes ImportReviewRow
 Description One row of an import waiting to be reviewed. Account is where the
 Description money moved; Category is the other side as the import worked it out.
-| Attribute   | Type              | Default   |
-| Line        | Integer           | 0         |
+| Attribute   | Type              | Default    |
+| Line        | Integer           | 0          |
 | Date        | Date              | 2026-01-01 |
-| Payee       | PayeeName         | none      |
-| Account      | AccountPath      | none      |
-| Category    | AccountPath       | none      |
-| Amount      | Money            | 0.00      |
-| Disposition | ImportDisposition | New       |
-| Accepted    | Boolean           | true      |
+| Payee       | PayeeName         | none       |
+| Account     | AccountPath       | none       |
+| Category    | AccountPath       | none       |
+| Amount      | Money             | 0.00       |
+| Disposition | ImportDisposition | New        |
+| Accepted    | Boolean           | true       |
+| Identifier  | FitId             | none       |
+| Source      | ImportSource      | Ofx        |
+| RawName     | Text              | none       |
+| Memo        | Text              | none       |
+| CheckNo     | CheckNumber       | none       |
+| Cleared     | ClearedStatus     | Cleared    |
 
 Define AnImportOfThree
 Description The import the next several scenarios all read. A scenario cannot
@@ -538,3 +544,113 @@ Then panes are : PaneState
 | Pane | Showing      | Account          | Active |
 | 1    | Register     | Assets:Savings   | false  |
 | 2    | ImportReview | Liabilities:Visa | true   |
+
+# ---------------------------------------------------------------------------
+# What accepting an import keeps
+# ---------------------------------------------------------------------------
+
+Description An accepted row keeps what the file called it.
+Description
+Description A downloaded row arrives with the name the file gave it -- a FITID
+Description from a QFX, whatever the bank's CSV uses for a reference -- and that
+Description name is the whole reason a second download of the same statement
+Description does nothing. So it has to reach the posting that is stored.
+Details The review shows a row as date, payee, account, category and amount,
+Details because that is what a person reads. Building the transaction back out
+Details of those five columns would lose the identifier, and the loss would be
+Details silent: the import would look right, the register would look right,
+Details and next month's download of the same account would offer every
+Details transaction in it again as new.
+Details
+Details So what the import prepared is what is stored. The columns on the
+Details screen are a view of it, not the source of it.
+Details
+Details The raw name travels the same way and for a related reason: a rule
+Details written next year has to be able to match what the bank sent this
+Details year, so what the bank sent is kept rather than only what it was
+Details turned into. The memo, the check number and whether the bank has
+Details settled the row travel with it for no deeper reason than that the file
+Details said so and the review is not the place to lose it.
+Details
+Details Whether a row arrives settled is the import's to say, not the review's:
+Details an OFX file's rows are a statement and are cleared, and a CSV says
+Details nothing about what the bank has settled. So the review carries what it
+Details was given rather than deciding.
+
+Attributes AcceptedPosting
+Description One side of a transaction that accepting the review has just added,
+Description with the identifier it was imported under. Only the sides of the
+Description accepted rows are listed; what the book already held is not.
+| Attribute  | Type          | Default   |
+| Account    | AccountPath   |           |
+| Amount     | Money         | 0.00      |
+| Identifier | FitId         | none      |
+| Source     | ImportSource  | Ofx       |
+| RawName    | Text          | none      |
+| Memo       | Text          | none      |
+| CheckNo    | CheckNumber   | none      |
+| Cleared    | ClearedStatus | Uncleared |
+
+Scenario Accepting an import keeps the identifier the file gave each row
+Description The identifier belongs to the side the statement is for. The bank
+Description has never heard of the category, so that side carries none.
+Given the chart of accounts is as previous
+Given postings are as previous
+When import reviewed : ImportReviewRow
+| Line | Date       | Payee         | Account         | Category           | Amount | Disposition | Identifier  | Source | RawName                      | Memo          | CheckNo |
+| 1    | 2026-02-02 | Harris Teeter | Assets:Checking | Expenses:Groceries | -52.10 | New         | 20260202001 | Ofx    | HARRIS~TEETER~#231~DURHAM~NC | Weekly~shop   | none    |
+When import accepted
+Then accepted postings are : AcceptedPosting
+| Account            | Amount | Identifier  | Source | RawName                      | Memo        | CheckNo | Cleared   |
+| Assets:Checking    | -52.10 | 20260202001 | Ofx    | HARRIS~TEETER~#231~DURHAM~NC | Weekly~shop | none    | Cleared   |
+| Expenses:Groceries | 52.10  | none        | Ofx    | HARRIS~TEETER~#231~DURHAM~NC | Weekly~shop | none    | Uncleared |
+
+Scenario A CSV row keeps its reference under its own source
+Description Two files describing one transaction do not agree on what to call
+Description it, so the source travels with the identifier. A reference kept
+Description under Csv does not make a later QFX of the same account do nothing,
+Description and that is deliberate -- see the identifier scope rule.
+Given the chart of accounts is as previous
+Given postings are as previous
+When import reviewed : ImportReviewRow
+| Line | Date       | Payee  | Account         | Category          | Amount | Disposition | Identifier | Source | RawName       |
+| 1    | 2026-02-04 | Amazon | Assets:Checking | Expenses:Shopping | -31.00 | New         | REF-99812  | Csv    | AMAZON~MKTPLACE |
+When import accepted
+Then accepted postings are : AcceptedPosting
+| Account           | Amount | Identifier | Source | RawName         | Cleared   |
+| Assets:Checking   | -31.00 | REF-99812  | Csv    | AMAZON~MKTPLACE | Cleared   |
+| Expenses:Shopping | 31.00  | none       | Csv    | AMAZON~MKTPLACE | Uncleared |
+
+Scenario A row the file gave no identifier is still accepted
+Description A QIF carries no identifier, and a row read from one is still worth
+Description bringing in. It is the weaker tests -- the date, the amount, the
+Description check number -- that keep a second reading of the same QIF from
+Description duplicating it.
+Given the chart of accounts is as previous
+Given postings are as previous
+When import reviewed : ImportReviewRow
+| Line | Date       | Payee        | Account         | Category           | Amount | Disposition | Identifier | Source | RawName |
+| 1    | 2026-02-05 | Corner Store | Assets:Checking | Expenses:Groceries | -12.00 | New         | none       | Qif    | none    |
+When import accepted
+Then accepted postings are : AcceptedPosting
+| Account            | Amount | Identifier | Source | RawName | Cleared   |
+| Assets:Checking    | -12.00 | none       | Qif    | none    | Cleared   |
+| Expenses:Groceries | 12.00  | none       | Qif    | none    | Uncleared |
+
+Scenario An unticked row contributes no posting at all
+Description The identifier of a row that was not accepted must not be stored
+Description either, or the row could never be imported again.
+Given the chart of accounts is as previous
+Given postings are as previous
+When import reviewed : ImportReviewRow
+| Line | Date       | Payee         | Account         | Category           | Amount | Disposition | Identifier  | Source | RawName        |
+| 1    | 2026-02-02 | Harris Teeter | Assets:Checking | Expenses:Groceries | -52.10 | New         | 20260202001 | Ofx    | HARRIS~TEETER  |
+| 2    | 2026-02-03 | Unknown Shop  | Assets:Checking | Expenses:Shopping  | -23.75 | New         | 20260203002 | Ofx    | UNKNOWN~SHOP   |
+When review row unticked : ReviewRowSelect
+| Line |
+| 2    |
+When import accepted
+Then accepted postings are : AcceptedPosting
+| Account            | Amount | Identifier  | Source | RawName       | Cleared   |
+| Assets:Checking    | -52.10 | 20260202001 | Ofx    | HARRIS~TEETER | Cleared   |
+| Expenses:Groceries | 52.10  | none        | Ofx    | HARRIS~TEETER | Uncleared |
