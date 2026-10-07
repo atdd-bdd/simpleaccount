@@ -308,6 +308,8 @@ src/         production code
 generated/   generated tests, and the glue that joins them to src/
 testdata/    real QIF exports, QFX files and Quicken PDFs; git-ignored
 tools/       compare.py and the Quicken PDF reader
+dialog.md    every instruction and correction from the author, in order
+
 ```
 
 `generated/test_*.cpp` is overwritten on every generation and is not tracked.
