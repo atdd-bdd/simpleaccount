@@ -344,4 +344,21 @@ public:
         ADD_FAILURE() << "Not implemented: examples_businessrule_a_category_with_its_own_transactions_shows_them_on_an_other_row";
     }
 
+public:
+
+    void then_report_lines_are(const std::vector<ReportDetailLineString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_report_lines_are";
+    }
+
+    void examples_datatype_reportdetail(const std::vector<EnumerationValuesString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_datatype_reportdetail";
+    }
+
+    void examples_datatype_reportlinekind(const std::vector<EnumerationValuesString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_datatype_reportlinekind";
+    }
+
 };

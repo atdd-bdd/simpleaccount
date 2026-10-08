@@ -24,6 +24,7 @@ Description What was asked for.
 | To          | Date           | 2024-12-31 |
 | Interval    | ReportInterval | Whole      |
 | Depth       | Integer        | 0          |
+| Detail      | ReportDetail   | AllCategories |
 | Subtotals   | Boolean        | true       |
 | ZeroRows    | Boolean        | false      |
 | IncludeInvestmentActivity | Boolean | false  |
@@ -46,6 +47,25 @@ Examples: EnumerationValues
 | Quarter | One column per calendar quarter             |
 | Year    | One column per year                         |
 | FiscalYear | One column per fiscal year               |
+
+DataType ReportDetail
+Description How much of the category tree a report shows, which is the choice
+Description offered on the report itself.
+Details HighestOnly is the summary: one line for each category at the top of a
+Details section, with everything below it rolled up into its figure. It is the
+Details same report as Depth 1, under the name the window offers.
+Details
+Details AllCategories is the whole tree, each category indented one step further
+Details than its parent so that a child reads as belonging to the line above it.
+Details
+Details Transactions is the whole tree with the transactions behind each figure
+Details shown under it, which is the drill-down of every line at once rather
+Details than one line at a time. See the drill-down section below.
+Examples: EnumerationValues
+| Value         | Notes                                                 |
+| HighestOnly   | One line per category at the top of a section         |
+| AllCategories | Every category, indented under its parent             |
+| Transactions  | Every category, with the transactions behind each one |
 
 Attributes ReportRow
 Description One row of a single-column report.
@@ -266,6 +286,173 @@ Then report rows are : ReportRow
 | Expenses:Uncategorized | 1     | 10.00    | false      |
 # Expenses:Auto is a leaf at this depth, so it is not marked a subtotal even
 # though the 450.00 came from below it.
+
+# ---------------------------------------------------------------------------
+# How much of the tree the report shows
+# ---------------------------------------------------------------------------
+
+Scenario Asking for the highest categories only shows one line for each
+Description The summary: Auto reads 450.00 with nothing under it, and the figure
+Description still adds to the same total as the full tree. The section lines stay,
+Description because the totals have to be somewhere.
+Given the chart of accounts is as previous
+Given postings are as previous
+When report run : ReportSpec Vertical
+| GroupBy  | Category    |
+| From     | 2024-01-01  |
+| To       | 2024-12-31  |
+| Interval | Whole       |
+| Detail   | HighestOnly |
+Then report rows are : ReportRow
+| Account                | Level | Amount   | IsSubtotal |
+| Income                 | 0     | 42025.00 | true       |
+| Income:Interest        | 1     | 25.00    | false      |
+| Income:Salary          | 1     | 42000.00 | false      |
+| Expenses               | 0     | 960.00   | true       |
+| Expenses:Auto          | 1     | 450.00   | false      |
+| Expenses:Groceries     | 1     | 500.00   | false      |
+| Expenses:Uncategorized | 1     | 10.00    | false      |
+Then report total is : ReportTotal Vertical
+| TotalIncome   | 42025.00 |
+| TotalExpenses | 960.00   |
+| Net           | 41065.00 |
+# The same rows as the depth-limit scenario above, which is the point:
+# HighestOnly is Depth 1 under the name the report offers. Auto is a leaf here,
+# so it is not marked a subtotal even though its 450.00 came from below.
+
+Scenario Asking for all the categories shows the whole tree indented
+Description Every category, each one starting a step further over than its
+Description parent, so that Fuel reads as part of Auto without the path having to
+Description be written out on the line. The indent is Level: one step per level,
+Description and a transaction line later takes its indent the same way.
+Given the chart of accounts is as previous
+Given postings are as previous
+When report run : ReportSpec Vertical
+| GroupBy  | Category      |
+| From     | 2024-01-01    |
+| To       | 2024-12-31    |
+| Interval | Whole         |
+| Detail   | AllCategories |
+Then report rows are : ReportRow
+| Account                | Level | Amount   | IsSubtotal |
+| Income                 | 0     | 42025.00 | true       |
+| Income:Interest        | 1     | 25.00    | false      |
+| Income:Salary          | 1     | 42000.00 | false      |
+| Expenses               | 0     | 960.00   | true       |
+| Expenses:Auto          | 1     | 450.00   | true       |
+| Expenses:Auto:Fuel     | 2     | 150.00   | false      |
+| Expenses:Auto:Repairs  | 2     | 300.00   | false      |
+| Expenses:Groceries     | 1     | 500.00   | false      |
+| Expenses:Uncategorized | 1     | 10.00    | false      |
+# AllCategories is what a report with nothing asked for shows, which is why the
+# first scenario in this file reads the same without naming it.
+
+Attributes ReportDetailLine
+Description One line of a report shown with its transactions.
+Details Two amount columns, because they are two different kinds of figure and
+Details putting them in one column would invite adding a transaction to the
+Details total that already contains it. Each holds the individual amount and is
+Details filled only on a transaction line; Amount holds the figure for the
+Details category and is filled only on a category line. Each is the left of the
+Details two, so the individual amounts run down the inside of the page and the
+Details column of totals stays where it is in every other report.
+Details
+Details A column with nothing in it on this line is empty rather than zero: a
+Details category line has no individual amount to show, which is not the same as
+Details showing it as 0.00.
+Details
+Details Account on a transaction line is the category the transaction was posted
+Details to, so that a line can be read on its own, and Level is one more than
+Details that category's, which is what steps it over.
+| Attribute | Type           | Default |
+| Kind      | ReportLineKind |         |
+| Account   | AccountPath    |         |
+| Level     | Integer        | 0       |
+| Date      | Date           |         |
+| Payee     | PayeeName      |         |
+| Each      | Money          |         |
+| Amount    | Money          |         |
+
+DataType ReportLineKind
+Description What a line of a report shown with its transactions is.
+Examples: EnumerationValues
+| Value       | Notes                                                     |
+| Category    | A category or a section, carrying the figure beneath it    |
+| Other       | The Other line standing for a category's own transactions  |
+| Transaction | One transaction, under the line whose figure it is part of |
+
+Scenario Asking for transactions shows each one under its category
+Description The figures are the ones the full tree already shows; what is added is
+Description a line for each transaction behind them, in date order, one step
+Description further over than the category it belongs to.
+Given the chart of accounts is as previous
+Given postings are as previous
+When report run : ReportSpec Vertical
+| GroupBy  | Category     |
+| From     | 2024-01-01   |
+| To       | 2024-12-31   |
+| Interval | Whole        |
+| Detail   | Transactions |
+Then report lines are : ReportDetailLine
+| Kind        | Account                | Level | Date       | Payee         | Each     | Amount   |
+| Category    | Income                 | 0     |            |               |          | 42025.00 |
+| Category    | Income:Interest        | 1     |            |               |          | 25.00    |
+| Transaction | Income:Interest        | 2     | 2024-06-30 | First Bank    | 25.00    |          |
+| Category    | Income:Salary          | 1     |            |               |          | 42000.00 |
+| Transaction | Income:Salary          | 2     | 2024-02-28 | Acme Payroll  | 42000.00 |          |
+| Category    | Expenses               | 0     |            |               |          | 960.00   |
+| Category    | Expenses:Auto          | 1     |            |               |          | 450.00   |
+| Category    | Expenses:Auto:Fuel     | 2     |            |               |          | 150.00   |
+| Transaction | Expenses:Auto:Fuel     | 3     | 2024-04-10 | Shell         | 150.00   |          |
+| Category    | Expenses:Auto:Repairs  | 2     |            |               |          | 300.00   |
+| Transaction | Expenses:Auto:Repairs  | 3     | 2024-05-05 | Quick Fit     | 300.00   |          |
+| Category    | Expenses:Groceries     | 1     |            |               |          | 500.00   |
+| Transaction | Expenses:Groceries     | 2     | 2024-03-15 | Harris Teeter | 500.00   |          |
+| Category    | Expenses:Uncategorized | 1     |            |               |          | 10.00    |
+| Transaction | Expenses:Uncategorized | 2     | 2024-07-01 | Unknown       | 10.00    |          |
+Then report total is : ReportTotal Vertical
+| TotalIncome   | 42025.00 |
+| TotalExpenses | 960.00   |
+| Net           | 41065.00 |
+# A transaction line takes the display sign of its category, as every other
+# figure in a report does, so the salary reads 42000.00 and not -42000.00.
+# Transactions under one category are in date order, and two on the same date
+# keep the order the register has them in.
+#
+# Nothing is shown under a section line or a placeholder: Expenses has no
+# transactions of its own, and the lines beneath it still add to its 960.00.
+
+Scenario A category with transactions of its own shows them under its Other line
+Description The Other line is where a category's own transactions are totalled,
+Description so it is where they are listed. Without that, the forty and the ten
+Description would both hang under Auto and the page would not say which of them
+Description the Other line stood for.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Auto      | Expense | false       |
+| Expenses:Auto:Fuel | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee    | Account            | Amount |
+| T1  | 2026-03-01 | Shell    | Assets:Checking    | -40.00 |
+| T1  | 2026-03-01 | Shell    | Expenses:Auto:Fuel | 40.00  |
+| T2  | 2026-03-02 | Car Wash | Assets:Checking    | -10.00 |
+| T2  | 2026-03-02 | Car Wash | Expenses:Auto      | 10.00  |
+When report run : ReportSpec Vertical
+| GroupBy  | Category     |
+| From     | 2026-01-01   |
+| To       | 2026-12-31   |
+| Detail   | Transactions |
+Then report lines are : ReportDetailLine
+| Kind        | Account            | Level | Date       | Payee    | Each  | Amount |
+| Category    | Expenses:Auto      | 1     |            |          |       | 50.00  |
+| Category    | Expenses:Auto:Fuel | 2     |            |          |       | 40.00  |
+| Transaction | Expenses:Auto:Fuel | 3     | 2026-03-01 | Shell    | 40.00 |        |
+| Other       | Other Auto         | 2     |            |          |       | 10.00  |
+| Transaction | Expenses:Auto      | 3     | 2026-03-02 | Car Wash | 10.00 |        |
+# The transaction line names the category it was posted to -- Expenses:Auto --
+# because that is what was chosen for it. Other Auto is the report's own line
+# and nothing is posted to it, which is why it has a kind of its own here.
 
 Scenario Transfers do not appear in a category report
 Description A transfer between two real accounts touches no category, so it is
