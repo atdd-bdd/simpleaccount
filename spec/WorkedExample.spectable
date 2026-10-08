@@ -1,0 +1,257 @@
+Specification WorkedExample
+
+Description One month of downloads, read into four accounts, and then worked
+Description the way a person works it.
+Details Every other file here specifies one thing at a time. This one is an
+Details ordinary month end to end: four statements arrive as CSV, they are
+Details imported, the categories that matter are assigned, and the report is
+Details read. It is the book the window is tried against, written down, so
+Details that what was being checked by hand is checked by the suite.
+Details
+Details What makes it worth having is that nothing in it is isolated. The
+Details import, the chart of accounts, the categorisation and the report all
+Details have to agree, and a change to one of them that breaks another shows
+Details up here rather than in a month's time.
+Details
+Details Every scenario below is written against the Background alone, which is
+Details inlined into each generated test, so none of them depends on the one
+Details before it. That is why the same figures appear more than once: each
+Details scenario starts from the four statements and nothing else.
+Details
+Details Opening balances are not in it. These are four downloads covering one
+Details month, which is what keeps the book small enough to read on a page; a
+Details book that starts from a known position is the opening-balance
+Details transaction in Accounts. It is also why the loan here is a month of
+Details interest rather than a debt being paid down.
+Details
+Details The statements do not carry each other's transfers. A card statement
+Details closes on the twentieth and the payment goes out on the twenty-fifth,
+Details so the payment is in the checking file and not in the card file, and
+Details nothing is imported twice. Two downloads that do both show the same
+Details transfer is a real situation and a different problem -- the matching
+Details in ImportOfx -- and it is deliberately not what this file is about.
+
+$WIP
+Background A month of statements, one for each account
+Description Four accounts, two profiles, four files. The categories the
+Description scenarios use are in the chart from the start, so that a scenario
+Description is about assigning one and not about creating it.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type       | Placeholder |
+| Assets:Checking         | Bank       | false       |
+| Assets:Savings          | Bank       | false       |
+| Liabilities:Visa        | CreditCard | false       |
+| Liabilities:Car Loan    | Liability  | false       |
+| Expenses:Auto           | Expense    | true        |
+| Expenses:Auto:Fuel      | Expense    | false       |
+| Expenses:Groceries      | Expense    | false       |
+| Expenses:Home           | Expense    | true        |
+| Expenses:Home:Repairs   | Expense    | false       |
+| Expenses:Medical        | Expense    | true        |
+| Expenses:Medical:Dental | Expense    | false       |
+| Expenses:Shopping       | Expense    | false       |
+| Expenses:Uncategorized  | Expense    | false       |
+| Income:Uncategorized    | Income     | false       |
+Given the csv profile is : CsvProfile Vertical
+| Name         | Bank Download |
+| HasHeader    | true          |
+| DateColumn   | Date          |
+| DateOrder    | MDY           |
+| PayeeColumn  | Payee         |
+| CheckColumn  | Check         |
+| AmountStyle  | Signed        |
+| AmountColumn | Amount        |
+| OutwardSign  | Negative      |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Given the file contains
+"""
+Date,Payee,Check,Amount
+03/02/2026,Acme Payroll,,2500.00
+03/06/2026,Harris Teeter,,-84.50
+03/09/2026,Durham Plumbing,1021,-275.00
+03/12/2026,Chapel Hill Dental,1022,-140.00
+03/25/2026,Visa Payment,,-200.00
+"""
+Given rows imported
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Savings |
+Given the file contains
+"""
+Date,Payee,Check,Amount
+03/03/2026,Deposit,,1000.00
+03/31/2026,Interest Paid,,1.25
+"""
+Given rows imported
+Given import target is : ImportTarget Vertical
+| AccountPath | Liabilities:Car Loan |
+Given the file contains
+"""
+Date,Payee,Check,Amount
+03/10/2026,Interest Charged,,-18.75
+"""
+Given rows imported
+Given the csv profile is : CsvProfile Vertical
+| Name         | Card Download |
+| HasHeader    | true          |
+| DateColumn   | Posted        |
+| DateOrder    | MDY           |
+| PayeeColumn  | Description   |
+| AmountStyle  | Signed        |
+| AmountColumn | Amount        |
+| OutwardSign  | Negative      |
+Given import target is : ImportTarget Vertical
+| AccountPath | Liabilities:Visa |
+Given the file contains
+"""
+Posted,Description,Amount
+03/05/2026,SHELL OIL 3344,-52.10
+03/11/2026,AMAZON MARKETPLACE,-129.99
+03/18/2026,HARRIS TEETER #231,-63.40
+"""
+Given rows imported
+
+# ---------------------------------------------------------------------------
+# What arrived
+# ---------------------------------------------------------------------------
+
+$WIP
+Scenario The four registers balance after the imports
+Description The first thing to check, and the thing a person checks: each
+Description register agrees with the statement it was read from. A card and a
+Description loan read as what is owed.
+Then balances are : AccountBalance
+| Account              | RawBalance | DisplayBalance | Notes                      |
+| Assets:Checking      | 1800.50    | 1800.50        | 2500.00 in, 699.50 out     |
+| Assets:Savings       | 1001.25    | 1001.25        | A deposit and its interest |
+| Liabilities:Visa     | -245.49    | 245.49         | Three charges, owed        |
+| Liabilities:Car Loan | -18.75     | 18.75          | A month of interest        |
+# Nothing has been categorised yet, so the other side of every one of these is
+# Uncategorized -- chosen by the sign, so money in is Income:Uncategorized and
+# money out is Expenses:Uncategorized. That is the work the scenarios below do.
+
+$WIP
+Scenario Everything starts in Uncategorized
+Description Not one of these files carried a category, so the whole month is
+Description sitting in the two Uncategorized accounts waiting to be told what
+Description it was. This is the state a month starts in, and the reason the
+Description report is worth running at all.
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-03-01 |
+| To       | 2026-03-31 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account                | Level | Amount  | IsSubtotal |
+| Income                 | 0     | 3501.25 | true       |
+| Income:Uncategorized   | 1     | 3501.25 | false      |
+| Expenses               | 0     | 963.74  | true       |
+| Expenses:Uncategorized | 1     | 963.74  | false      |
+Then report total is : ReportTotal Vertical
+| TotalIncome   | 3501.25 |
+| TotalExpenses | 963.74  |
+| Net           | 2537.51 |
+# 2500.00 of salary, 1000.00 deposited and 1.25 of interest on one side; on the
+# other, 84.50, 275.00, 140.00 and 200.00 from the checking account, 18.75 of
+# loan interest, and 52.10, 129.99 and 63.40 on the card. The net is right and
+# says nothing at all about where the money went, which is the whole point of
+# categorising.
+
+# ---------------------------------------------------------------------------
+# Working the month
+# ---------------------------------------------------------------------------
+
+Attributes CategoryAssignment
+Description One transaction given its category. It is named by its date and
+Description its payee, which is how a person finds it on the screen, rather
+Description than by a ref: a ref is a device of these tables and is not
+Description something the program shows.
+| Attribute | Type        | Default |
+| Date      | Date        |         |
+| Payee     | PayeeName   |         |
+| Category  | AccountPath |         |
+
+$WIP
+Scenario Categorising the card charges and the two checks
+Description The three charges on the card and the two checks written during
+Description the month. The rest is left alone on purpose: the groceries bought
+Description on the checking account and the payment to the card are still
+Description Uncategorized afterwards, and the report shows them that way.
+When categories assigned : CategoryAssignment
+| Date       | Payee              | Category                |
+| 2026-03-05 | SHELL OIL 3344     | Expenses:Auto:Fuel      |
+| 2026-03-11 | AMAZON MARKETPLACE | Expenses:Shopping       |
+| 2026-03-18 | HARRIS TEETER #231 | Expenses:Groceries      |
+| 2026-03-09 | Durham Plumbing    | Expenses:Home:Repairs   |
+| 2026-03-12 | Chapel Hill Dental | Expenses:Medical:Dental |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-03-01 |
+| To       | 2026-03-31 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account                 | Level | Amount  | IsSubtotal |
+| Income                  | 0     | 3501.25 | true       |
+| Income:Uncategorized    | 1     | 3501.25 | false      |
+| Expenses                | 0     | 963.74  | true       |
+| Expenses:Auto           | 1     | 52.10   | true       |
+| Expenses:Auto:Fuel      | 2     | 52.10   | false      |
+| Expenses:Groceries      | 1     | 63.40   | false      |
+| Expenses:Home           | 1     | 275.00  | true       |
+| Expenses:Home:Repairs   | 2     | 275.00  | false      |
+| Expenses:Medical        | 1     | 140.00  | true       |
+| Expenses:Medical:Dental | 2     | 140.00  | false      |
+| Expenses:Shopping       | 1     | 129.99  | false      |
+| Expenses:Uncategorized  | 1     | 303.25  | false      |
+Then report total is : ReportTotal Vertical
+| TotalIncome   | 3501.25 |
+| TotalExpenses | 963.74  |
+| Net           | 2537.51 |
+# The expenses total has not moved and neither has the net: categorising says
+# where money went, not how much of it there was. A report whose total changed
+# when a category was assigned would mean a posting had been lost, and that is
+# worth checking on every one of these.
+#
+# What is left in Expenses:Uncategorized is 84.50 of groceries bought on the
+# checking account, the 200.00 paid to the card and 18.75 of loan interest. The
+# payment belongs in no category at all -- it is a transfer -- which is the
+# next scenario. Income:Uncategorized still holds all three deposits: the
+# salary is income and so is the interest, and the 1000.00 deposit is whatever
+# it was, which this book does not say.
+
+$WIP
+Scenario A payment to a card is a transfer, not an expense
+Description Giving the payment the card account as its category makes the
+Description transaction a transfer between two real accounts, and a transfer
+Description is in no report of what was earned or spent. This is the one kind
+Description of recategorisation that is allowed to move the total, because
+Description both postings have left the categories altogether.
+When categories assigned : CategoryAssignment
+| Date       | Payee        | Category         |
+| 2026-03-25 | Visa Payment | Liabilities:Visa |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-03-01 |
+| To       | 2026-03-31 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account                | Level | Amount  | IsSubtotal |
+| Income                 | 0     | 3501.25 | true       |
+| Income:Uncategorized   | 1     | 3501.25 | false      |
+| Expenses               | 0     | 763.74  | true       |
+| Expenses:Uncategorized | 1     | 763.74  | false      |
+Then report total is : ReportTotal Vertical
+| TotalIncome   | 3501.25 |
+| TotalExpenses | 763.74  |
+| Net           | 2737.51 |
+Then balances are : AccountBalance
+| Account          | RawBalance | DisplayBalance | Notes                      |
+| Assets:Checking  | 1800.50    | 1800.50        | A recategory moves nothing |
+| Liabilities:Visa | -45.49     | 45.49          | 245.49 charged, 200.00 paid |
+# 963.74 less the 200.00 that was never an expense. The checking balance is
+# untouched: the payment left the account either way, and all that changed is
+# what the other side of it was called.
+#
+# The card is the figure worth looking at. Three charges came to 245.49, the
+# payment was 200.00, and 45.49 is owed -- which is what the statement would
+# say, and is only believable because the register adds up to it.
