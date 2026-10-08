@@ -778,9 +778,13 @@ Given payee rules are : PayeeRules
 When rule deleted : RuleSelect Vertical
 | Pattern   | SHELL OIL |
 | MatchType | Contains  |
-# No table of the empty list here: a table with a heading and no rows is
-# dropped by the generator, so one would read as a check and be none. What the
-# delete did is shown by the import below it instead.
+Then rule list rows are : RuleListRow
+| Position | Pattern | MatchType | Payee | Category | Enabled |
+# Nothing under the heading, which is how this specification says there are
+# none. The converter does not yet generate a step for a table with no rows --
+# it should generate one and pass an empty table -- so until it does, this line
+# is documentation rather than an assertion, and what the delete did is shown by
+# the import below it. See finding 6 in alignthree-findings.md.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions

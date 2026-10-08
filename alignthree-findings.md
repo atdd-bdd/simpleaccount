@@ -273,22 +273,35 @@ because inlining there would change meaning rather than restore it.
 
 ## 6. A table with a heading and no rows is dropped without a word
 
-`Then rule list rows are : RuleListRow` followed by a heading row and nothing
-else is the natural way to say "and now there are none". The converter emits no
-call for it at all: no empty vector, no step, nothing. The scenario still passes,
-and it passes because the assertion is absent rather than because it held.
+**The converter should generate the step and pass it an empty table.** That is
+the author's ruling, and it settles what the right behaviour is: an empty table
+is a statement, not an absence.
 
-That is the dangerous shape of all of these -- the file says a thing is checked
-and nothing checks it. A reader of `Payees.spectable` would have believed the
-list was asserted empty after a delete.
+What happens instead: `Then rule list rows are : RuleListRow` followed by a
+heading row and nothing else -- the natural way to say "and now there are none"
+-- produces no call at all. No empty vector, no step, nothing. The scenario
+still passes, and it passes because the assertion is absent rather than because
+it held.
 
-Found by reading the generated test rather than by it failing, which is luck.
-Either the step should be generated with an empty vector, or the analyzer should
-say that an empty table generates nothing.
+That is the dangerous shape: the file says a thing is checked and nothing checks
+it. A reader of `Payees.spectable` would have believed the rule list was
+asserted empty after a delete, and it was not.
 
-The same shape appears in a `Given`: `Given payee rules are : PayeeRules` with a
-heading and no rows reads as "no rules", and whether it clears anything depends
-on whether the glue happens to have been called.
+Found by reading the generated test rather than by it failing, which is luck. A
+spec table that generates nothing should never be silent -- but with the fix
+above it does not need to be caught at all, because it will generate a call.
+
+The same shape appears in a `Given`, where it matters just as much:
+`Given payee rules are : PayeeRules` with a heading and no rows reads as "there
+are no rules", and should call the glue with an empty collection so that it
+clears whatever was there. Today whether anything is cleared depends on whether
+the glue happens to be called by some other step. `Payees.spectable` has had one
+of these since well before this was noticed -- the scenario "With no rule the raw
+name is kept" -- and it passes only because the rules happen to start empty.
+
+Both spec tables are written the correct way in this project and left that way,
+with a comment at the `Then`, so that fixing the converter turns them into real
+assertions rather than needing the specification edited back.
 
 ## 7. Something that works well and is worth keeping
 
