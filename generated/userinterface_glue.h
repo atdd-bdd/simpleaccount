@@ -352,4 +352,65 @@ private:
         return out;
     }
 
+public:
+
+    void when_register_lines_selected(const std::vector<RegisterSelectString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_register_lines_selected";
+    }
+
+    void then_menu_items_are(const std::vector<MenuItemString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_menu_items_are";
+    }
+
+    void when_selection_recategorised(const std::vector<CategoryChoiceString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_selection_recategorised";
+    }
+
+    void then_recategorising_reported_is(const std::vector<RecategorisedString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_recategorising_reported_is";
+    }
+
+    void when_payee_rule_asked_for() {
+        ADD_FAILURE() << "Not implemented: when_payee_rule_asked_for";
+    }
+
+    void then_rule_offered_is(const std::vector<PayeeRuleString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_rule_offered_is";
+    }
+
+    void when_report_run(const std::vector<ReportSpecString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_report_run";
+    }
+
+    void when_report_line_clicked(const std::vector<ReportLineSelectString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_report_line_clicked";
+    }
+
+    void then_the_register_line_selected_is(const std::vector<RegisterSelectString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_the_register_line_selected_is";
+    }
+
+    void then_the_transaction_id_shown_is(const std::vector<IdShownString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_the_transaction_id_shown_is";
+    }
+
+    void examples_datatype_accountsection(const std::vector<EnumerationValuesString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_datatype_accountsection";
+    }
+
+    void examples_businessrule_which_section_a_group_is_shown_under(const std::vector<SectionOfGroupString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_which_section_a_group_is_shown_under";
+    }
+
 };

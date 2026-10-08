@@ -30,6 +30,49 @@ Examples: EnumerationValues
 | Assets      | A house, a car, anything else owned        |
 | Liabilities | A mortgage or a loan                       |
 
+$WIP
+DataType AccountSection
+Description The two halves the account list is divided into, which are the two
+Description halves of a balance sheet: what is owned and what is owed.
+Details A section heading carries the total of everything under it, so the two
+Details of them are the figures net worth is the difference of. See the balance
+Details sheet in Reports.
+Examples: EnumerationValues
+| Value       | Notes                                       |
+| Assets      | What is owned                               |
+| Liabilities | What is owed                                |
+
+$WIP
+BusinessRule Which section a group is shown under
+Description A card is money owed, so it belongs with the mortgage and not with
+Description the current account. The list said otherwise until now: the five
+Description groups sat in a row with nothing above them, and a card read as
+Description though it were a kind of bank account.
+Details Banking and Investments and anything else owned are under Assets;
+Details CreditCards and anything else owed are under Liabilities.
+Details
+Details Two of the groups have no heading of their own. The Assets group is a
+Details house or a car -- anything owned that is not a bank account or a
+Details holding -- and its accounts sit directly beneath the Assets section
+Details heading, because a heading called Assets under a heading called Assets
+Details would say nothing. The Liabilities group is the same under Liabilities.
+Details That is why the indent of a house and the indent of the Banking heading
+Details are the same: both are one in from their section.
+Examples: SectionOfGroup
+| AccountGroup | AccountSection | HasHeadingOfItsOwn | Notes                     |
+| Banking      | Assets         | true               | Current and savings       |
+| Investments  | Assets         | true               | Holdings and their cash   |
+| Assets       | Assets         | false              | A house, a car            |
+| CreditCards  | Liabilities    | true               | What is owed on a card    |
+| Liabilities  | Liabilities    | false              | A mortgage or a loan      |
+
+Attributes SectionOfGroup
+| Attribute          | Type           | Default |
+| AccountGroup       | AccountGroup   | Banking |
+| AccountSection     | AccountSection | Assets  |
+| HasHeadingOfItsOwn | Boolean        | true    |
+| Notes              | String         | none    |
+
 BusinessRule Which group an account is listed under
 Description Taken from the account type, so nothing has to be filed by hand.
 Details The nominal types have no group: Income, Expense and Equity are
@@ -53,15 +96,23 @@ Attributes GroupOfType
 | Listed       | Boolean      | true    |
 
 Attributes AccountListRow
-Description One line of the account list. A group heading carries the total of
-Description the accounts under it and names no account.
-| Attribute | Type        | Default |
-| Group     | Text        | none    |
-| Account   | AccountPath | none    |
-| Name      | Text        | none    |
-| Indent    | Integer     | 0       |
-| Balance   | Money       | 0.00    |
-| IsHeading | Boolean     | false   |
+Description One line of the account list.
+Details A section heading names its section and no group and no account, and
+Details carries the total of everything under it. A group heading names both
+Details its section and its group, and carries the total of the accounts under
+Details it. An account names its section and no group.
+Details
+Details Indent is the depth on the page: a section heading is 0, a group heading
+Details and an account that sits directly under a section are 1, an account
+Details under a group heading is 2, and a child of that account is 3.
+| Attribute | Type           | Default |
+| Section   | AccountSection | Assets  |
+| Group     | Text           | none    |
+| Account   | AccountPath    | none    |
+| Name      | Text           | none    |
+| Indent    | Integer        | 0       |
+| Balance   | Money          | 0.00    |
+| IsHeading | Boolean        | false   |
 
 Background A book with a few accounts
 Given the chart of accounts is : ChartOfAccounts
@@ -83,6 +134,7 @@ Given postings are : PostingRow
 | T4  | 2026-01-25 | Transfer      | Assets:Checking    | -500.00  |
 | T4  | 2026-01-25 | Transfer      | Assets:Savings     | 500.00   |
 
+$WIP
 Scenario The account list groups the real accounts and totals each group
 Description Each balance is the display balance, so a card reads as what is
 Description owed. A group heading carries the total of what is under it.
@@ -92,13 +144,57 @@ Given the chart of accounts is as previous
 Given postings are as previous
 When account list shown
 Then account list rows are : AccountListRow
-| Group       | Account          | Name     | Indent | Balance | IsHeading |
-| Banking     | none             | none     | 0      | 2955.00 | true      |
-| none        | Assets:Checking  | Checking | 1      | 2455.00 | false     |
-| none        | Assets:Savings   | Savings  | 1      | 500.00  | false     |
-| none        | Assets:Wallet    | Wallet   | 1      | 0.00    | false     |
-| CreditCards | none             | none     | 0      | 89.99   | true      |
-| none        | Liabilities:Visa | Visa     | 1      | 89.99   | false     |
+| Section     | Group       | Account          | Name     | Indent | Balance | IsHeading |
+| Assets      | none        | none             | none     | 0      | 2955.00 | true      |
+| Assets      | Banking     | none             | none     | 1      | 2955.00 | true      |
+| Assets      | none        | Assets:Checking  | Checking | 2      | 2455.00 | false     |
+| Assets      | none        | Assets:Savings   | Savings  | 2      | 500.00  | false     |
+| Assets      | none        | Assets:Wallet    | Wallet   | 2      | 0.00    | false     |
+| Liabilities | none        | none             | none     | 0      | 89.99   | true      |
+| Liabilities | CreditCards | none             | none     | 1      | 89.99   | true      |
+| Liabilities | none        | Liabilities:Visa | Visa     | 2      | 89.99   | false     |
+
+$WIP
+Scenario The list is in two sections, what is owned and what is owed
+Description A house has no heading of its own and sits straight under Assets;
+Description a mortgage sits straight under Liabilities. The card is under
+Description Liabilities with the mortgage, which is the whole point of the two
+Description sections: a card is money owed.
+Given the chart of accounts is : ChartOfAccounts
+| Path                 | Type       | Placeholder |
+| Assets:Checking      | Bank       | false       |
+| Assets:Savings       | Bank       | false       |
+| Assets:Brokerage     | Investment | false       |
+| Assets:House         | Asset      | false       |
+| Liabilities:Visa     | CreditCard | false       |
+| Liabilities:Mortgage | Liability  | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee | Account              | Amount     |
+| T1  | 2026-01-05 | Open  | Assets:Checking      | 2455.00    |
+| T2  | 2026-01-05 | Open  | Assets:Savings       | 500.00     |
+| T3  | 2026-01-05 | Open  | Assets:Brokerage     | 9000.00    |
+| T4  | 2026-01-05 | Open  | Assets:House         | 200000.00  |
+| T5  | 2026-01-05 | Open  | Liabilities:Visa     | -89.99     |
+| T6  | 2026-01-05 | Open  | Liabilities:Mortgage | -150000.00 |
+When account list shown
+Then account list rows are : AccountListRow
+| Section     | Group       | Account              | Name      | Indent | Balance   | IsHeading |
+| Assets      | none        | none                 | none      | 0      | 211955.00 | true      |
+| Assets      | Banking     | none                 | none      | 1      | 2955.00   | true      |
+| Assets      | none        | Assets:Checking      | Checking  | 2      | 2455.00   | false     |
+| Assets      | none        | Assets:Savings       | Savings   | 2      | 500.00    | false     |
+| Assets      | Investments | none                 | none      | 1      | 9000.00   | true      |
+| Assets      | none        | Assets:Brokerage     | Brokerage | 2      | 9000.00   | false     |
+| Assets      | none        | Assets:House         | House     | 1      | 200000.00 | false     |
+| Liabilities | none        | none                 | none      | 0      | 150089.99 | true      |
+| Liabilities | CreditCards | none                 | none      | 1      | 89.99     | true      |
+| Liabilities | none        | Liabilities:Visa     | Visa      | 2      | 89.99     | false     |
+| Liabilities | none        | Liabilities:Mortgage | Mortgage  | 1      | 150000.00 | false     |
+# The groups that have a heading come first, in the order they are declared,
+# and the section's own accounts come after them. Every figure is the display
+# balance, so the card and the mortgage read as what is owed and the two
+# section totals are the two sides of a balance sheet: 211,955.00 owned,
+# 150,089.99 owed, 61,865.01 net.
 
 Scenario A group with no accounts is not shown
 Description There is nothing under Investments, Assets or Liabilities in this
@@ -115,6 +211,7 @@ Attributes GroupShown
 | Attribute | Type | Default |
 | Group     | Text |         |
 
+$WIP
 Scenario A hidden account is left out until it is asked for
 Description Hiding an account is how it is got out of the way without losing its
 Description history, so the list follows that. The total of the group follows
@@ -129,16 +226,19 @@ Given postings are : PostingRow
 | T2  | 2026-01-06 | Open  | Assets:Old      | 25.00   |
 When account list shown
 Then account list rows are : AccountListRow
-| Group   | Account         | Name     | Indent | Balance | IsHeading |
-| Banking | none            | none     | 0      | 100.00  | true      |
-| none    | Assets:Checking | Checking | 1      | 100.00  | false     |
+| Section | Group   | Account         | Name     | Indent | Balance | IsHeading |
+| Assets  | none    | none            | none     | 0      | 100.00  | true      |
+| Assets  | Banking | none            | none     | 1      | 100.00  | true      |
+| Assets  | none    | Assets:Checking | Checking | 2      | 100.00  | false     |
 When hidden accounts shown
 Then account list rows are : AccountListRow
-| Group   | Account         | Name     | Indent | Balance | IsHeading |
-| Banking | none            | none     | 0      | 125.00  | true      |
-| none    | Assets:Checking | Checking | 1      | 100.00  | false     |
-| none    | Assets:Old      | Old      | 1      | 25.00   | false     |
+| Section | Group   | Account         | Name     | Indent | Balance | IsHeading |
+| Assets  | none    | none            | none     | 0      | 125.00  | true      |
+| Assets  | Banking | none            | none     | 1      | 125.00  | true      |
+| Assets  | none    | Assets:Checking | Checking | 2      | 100.00  | false     |
+| Assets  | none    | Assets:Old      | Old      | 2      | 25.00   | false     |
 
+$WIP
 Scenario A placeholder is a line in the list with its subtree beneath it
 Description A placeholder takes no postings of its own, so its balance is the
 Description roll-up. It is shown because it is how a deep tree is navigated.
@@ -153,11 +253,12 @@ Given postings are : PostingRow
 | T2  | 2026-01-06 | Open  | Assets:Brokerage:Fund | 7500.00 |
 When account list shown
 Then account list rows are : AccountListRow
-| Group       | Account               | Name      | Indent | Balance  | IsHeading |
-| Investments | none                  | none      | 0      | 10000.00 | true      |
-| none        | Assets:Brokerage      | Brokerage | 1      | 10000.00 | false     |
-| none        | Assets:Brokerage:Cash | Cash      | 2      | 2500.00  | false     |
-| none        | Assets:Brokerage:Fund | Fund      | 2      | 7500.00  | false     |
+| Section | Group       | Account               | Name      | Indent | Balance  | IsHeading |
+| Assets  | none        | none                  | none      | 0      | 10000.00 | true      |
+| Assets  | Investments | none                  | none      | 1      | 10000.00 | true      |
+| Assets  | none        | Assets:Brokerage      | Brokerage | 2      | 10000.00 | false     |
+| Assets  | none        | Assets:Brokerage:Cash | Cash      | 3      | 2500.00  | false     |
+| Assets  | none        | Assets:Brokerage:Fund | Fund      | 3      | 7500.00  | false     |
 
 # ---------------------------------------------------------------------------
 # Selecting an account
@@ -654,3 +755,339 @@ Then accepted postings are : AcceptedPosting
 | Account            | Amount | Identifier  | Source | RawName       | Cleared   |
 | Assets:Checking    | -52.10 | 20260202001 | Ofx    | HARRIS~TEETER | Cleared   |
 | Expenses:Groceries | 52.10  | none        | Ofx    | HARRIS~TEETER | Uncleared |
+
+# ---------------------------------------------------------------------------
+# Choosing lines in a register and acting on them
+# ---------------------------------------------------------------------------
+
+Description A register is where the work gets done, so what can be done to a
+Description line is reached from the line itself.
+Details A selection is a set of lines. How it was made is the table's business
+Details and not the program's: a click takes one, shift extends the run from
+Details the line last clicked, and control adds or removes a single line -- so
+Details a run and a scattered set are the same thing once they exist, and
+Details nothing below needs to know which gesture was used.
+Details
+Details Everything on the menu acts on the whole selection. Recategorising
+Details twenty lines at once is the reason the selection is worth having: a
+Details statement arrives with twenty charges from one shop, and categorising
+Details them one at a time is the work the program is supposed to save.
+
+Attributes RegisterSelect
+Description The lines of the register that are selected, counting from one in
+Description the order the register is showing.
+| Attribute | Type    | Default |
+| Line      | Integer | 1       |
+
+Attributes MenuItem
+Description One item of the menu offered on a selection, in the order shown.
+| Attribute | Type    | Default |
+| Item      | Text    |         |
+| Enabled   | Boolean | true    |
+
+Attributes CategoryChoice
+| Attribute | Type        | Default |
+| Category  | AccountPath |         |
+
+Attributes Recategorised
+Description What came of it, counted, because a selection of twenty is too many
+Description to check by eye.
+| Attribute | Type    | Default |
+| Changed   | Integer | 0       |
+| Refused   | Integer | 0       |
+| Reason    | String  | none    |
+
+$WIP
+Scenario The menu on a selection offers what can be done to it
+Description Two items to begin with. The menu will grow, and what is already
+Description there is what a month of categorising needs.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee          | Account                | Amount |
+| T1  | 2026-02-01 | SHELL OIL 3344 | Assets:Checking        | -40.00 |
+| T1  | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | 40.00  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register lines selected : RegisterSelect
+| Line |
+| 1    |
+Then menu items are : MenuItem
+| Item              | Enabled |
+| Recategorize...   | true    |
+| Add payee rule... | true    |
+
+$WIP
+Scenario Recategorising a selection puts every line in the new category
+Description Three visits to the same filling station, selected together and
+Description given their category once.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Auto          | Expense | true        |
+| Expenses:Auto:Fuel     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee          | Account                | Amount |
+| T1  | 2026-02-01 | SHELL OIL 3344 | Assets:Checking        | -40.00 |
+| T1  | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | 40.00  |
+| T2  | 2026-02-08 | SHELL OIL 2343 | Assets:Checking        | -35.00 |
+| T2  | 2026-02-08 | SHELL OIL 2343 | Expenses:Uncategorized | 35.00  |
+| T3  | 2026-02-15 | SHELL OIL 3344 | Assets:Checking        | -30.00 |
+| T3  | 2026-02-15 | SHELL OIL 3344 | Expenses:Uncategorized | 30.00  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register lines selected : RegisterSelect
+| Line |
+| 1    |
+| 2    |
+| 3    |
+When selection recategorised : CategoryChoice Vertical
+| Category | Expenses:Auto:Fuel |
+Then recategorising reported is : Recategorised Vertical
+| Changed | 3 |
+| Refused | 0 |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Category           | Payment |
+| T1  | 2026-02-01 | Expenses:Auto:Fuel | 40.00   |
+| T2  | 2026-02-08 | Expenses:Auto:Fuel | 35.00   |
+| T3  | 2026-02-15 | Expenses:Auto:Fuel | 30.00   |
+# Nothing about the amounts moved. A category says where money went and cannot
+# change how much of it there was, which is what makes a report total that does
+# not move after a month of categorising worth checking. See transaction_edit.
+
+$WIP
+Scenario A split in the selection is left alone and said so
+Description A split has more than one category, so there is no single posting
+Description to move and choosing one would be a guess that left the book
+Description balanced and silently wrong. The rest of the selection still
+Description changes, and the count says what happened.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Auto          | Expense | true        |
+| Expenses:Auto:Fuel     | Expense | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee          | Account                | Amount |
+| T1  | 2026-02-01 | SHELL OIL 3344 | Assets:Checking        | -40.00 |
+| T1  | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | 40.00  |
+| T2  | 2026-02-08 | COSTCO         | Assets:Checking        | -90.00 |
+| T2  | 2026-02-08 | COSTCO         | Expenses:Groceries     | 60.00  |
+| T2  | 2026-02-08 | COSTCO         | Expenses:Auto:Fuel     | 30.00  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register lines selected : RegisterSelect
+| Line |
+| 1    |
+| 2    |
+When selection recategorised : CategoryChoice Vertical
+| Category | Expenses:Auto:Fuel |
+Then recategorising reported is : Recategorised Vertical
+| Changed | 1                                            |
+| Refused | 1                                            |
+| Reason  | COSTCO is a split; open it to change a line  |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Category           |
+| T1  | 2026-02-01 | Expenses:Auto:Fuel |
+| T2  | 2026-02-08 | Split              |
+
+$WIP
+Scenario Add payee rule offers the category the transaction already has
+Description The rule writes itself from a line that is already right: the name
+Description gives the pattern, the category is the one sitting on the line.
+Description This is the same rule the categorisation offers in Payees, reached
+Description from the register instead.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Groceries | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee              | Account            | Amount |
+| T1  | 2026-02-01 | HARRIS TEETER #231 | Assets:Checking    | -45.00 |
+| T1  | 2026-02-01 | HARRIS TEETER #231 | Expenses:Groceries | 45.00  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register lines selected : RegisterSelect
+| Line |
+| 1    |
+When payee rule asked for
+Then rule offered is : PayeeRule Vertical
+| Pattern   | HARRIS TEETER      |
+| MatchType | Contains           |
+| Payee     | HARRIS TEETER      |
+| Category  | Expenses:Groceries |
+| Enabled   | true               |
+# Offered in a dialog, with every field editable, because only the user knows
+# whether dropping the store number went too far. See the significant-name rule
+# in Payees, which is where the pattern comes from.
+
+$WIP
+Scenario Add payee rule on an uncategorised line has no category to offer
+Description Nothing has been chosen yet, so the rule comes up with its category
+Description empty and the dialog is where it gets asked for. The name part is
+Description still worth offering: it is the half the program can work out.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Bank    | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee          | Account                | Amount |
+| T1  | 2026-02-01 | SHELL OIL 3344 | Assets:Checking        | -40.00 |
+| T1  | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | 40.00  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register lines selected : RegisterSelect
+| Line |
+| 1    |
+When payee rule asked for
+Then rule offered is : PayeeRule Vertical
+| Pattern   | SHELL OIL |
+| MatchType | Contains  |
+| Payee     | SHELL OIL |
+| Category  | none      |
+| Enabled   | true      |
+# Uncategorized is not a category anybody chose, so it is not offered as one. A
+# rule carrying it would put every future visit back in the bucket it is the
+# program's job to empty.
+
+# ---------------------------------------------------------------------------
+# From a figure in a report to the transaction behind it
+# ---------------------------------------------------------------------------
+
+Description A report that shows its transactions should let one be opened. The
+Description figure is the question; the register is where the answer is, and
+Description where it can be corrected.
+Details The register opened is the one of the real account the transaction
+Details touches -- the bank or the card side. A category has no register to
+Details browse: categories are reached through a report, which is where the
+Details click started.
+Details
+Details The line is selected, and the window scrolls it into view. Twenty years
+Details of history is tens of thousands of lines, so a selection nobody can see
+Details is the same as no selection at all.
+
+Attributes ReportLineSelect
+Description Which line of the report was clicked, counting from one.
+| Attribute | Type    | Default |
+| Line      | Integer | 1       |
+
+Define FebruaryOnChecking
+Description The book the next three scenarios read. Two visits to a filling
+Description station and one to a supermarket, so that one category figure has
+Description more than one transaction behind it.
+| Ref | Date       | Payee         | Account            | Amount |
+| T1  | 2026-02-01 | Shell         | Assets:Checking    | -40.00 |
+| T1  | 2026-02-01 | Shell         | Expenses:Auto:Fuel | 40.00  |
+| T2  | 2026-02-05 | Harris Teeter | Assets:Checking    | -60.00 |
+| T2  | 2026-02-05 | Harris Teeter | Expenses:Groceries | 60.00  |
+| T3  | 2026-02-10 | Shell         | Assets:Checking    | -30.00 |
+| T3  | 2026-02-10 | Shell         | Expenses:Auto:Fuel | 30.00  |
+
+$WIP
+Scenario Clicking a transaction in the report opens its register at that line
+Description The fifth line of the report is the second of the two visits to the
+Description filling station. It is the third line of the checking register, and
+Description that is where the click lands.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Auto      | Expense | true        |
+| Expenses:Auto:Fuel | Expense | false       |
+| Expenses:Groceries | Expense | false       |
+Given postings are : PostingRow
+=FebruaryOnChecking
+When report run : ReportSpec Vertical
+| GroupBy  | Category     |
+| From     | 2026-02-01   |
+| To       | 2026-02-28   |
+| Interval | Whole        |
+| Detail   | Transactions |
+When report line clicked : ReportLineSelect Vertical
+| Line | 5 |
+Then panes are : PaneState
+| Pane | Showing  | Account         | Active |
+| 1    | Register | Assets:Checking | true   |
+Then the register line selected is : RegisterSelect
+| Line |
+| 3    |
+# The report reads: Expenses, Expenses:Auto, Expenses:Auto:Fuel, the 1 February
+# visit, the 10 February visit, Expenses:Groceries, the supermarket. So line
+# five is the 10 February visit, and the checking register in date order has it
+# third. Assets:Checking is the register opened because it is the real account
+# the transaction touches; Expenses:Auto:Fuel has no register to browse.
+
+$WIP
+Scenario Clicking a category line in the report opens nothing
+Description A category figure is made of several transactions, so there is no
+Description one of them to go to. The drill-down is what answers that question
+Description and it is a different gesture.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Auto      | Expense | true        |
+| Expenses:Auto:Fuel | Expense | false       |
+| Expenses:Groceries | Expense | false       |
+Given postings are : PostingRow
+=FebruaryOnChecking
+When report run : ReportSpec Vertical
+| GroupBy  | Category     |
+| From     | 2026-02-01   |
+| To       | 2026-02-28   |
+| Interval | Whole        |
+| Detail   | Transactions |
+When report line clicked : ReportLineSelect Vertical
+| Line | 3 |
+Then panes are : PaneState
+| Pane | Showing | Account | Active |
+| 1    | Empty   | none    | true   |
+# Line three is Expenses:Auto:Fuel, the category itself. Nothing was selected
+# before the click and nothing is after it.
+
+Attributes IdShown
+Description Whether the id of one transaction is shown, and whether the two
+Description places that show it agree.
+| Attribute | Type      | Default |
+| Date      | Date      |         |
+| Payee     | PayeeName |         |
+| Blank     | Boolean   | false   |
+| TheSame   | Boolean   | true    |
+
+$WIP
+Scenario The report and the register show the same transaction id
+Description Shown in both places while the click-through is being checked: it
+Description is how a line on one page is known to be the line on the other.
+Description The id is a clock reading to the millisecond, so no table can write
+Description it down -- what is checked is that it is there and that the two
+Description agree. Expected to come off both pages once the navigation is
+Description trusted; see the naming rule in Transactions for what it is.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Bank    | false       |
+| Expenses:Auto      | Expense | true        |
+| Expenses:Auto:Fuel | Expense | false       |
+| Expenses:Groceries | Expense | false       |
+Given postings are : PostingRow
+=FebruaryOnChecking
+When report run : ReportSpec Vertical
+| GroupBy  | Category     |
+| From     | 2026-02-01   |
+| To       | 2026-02-28   |
+| Interval | Whole        |
+| Detail   | Transactions |
+Then the transaction id shown is : IdShown
+| Date       | Payee         | Blank | TheSame |
+| 2026-02-01 | Shell         | false | true    |
+| 2026-02-05 | Harris Teeter | false | true    |
+| 2026-02-10 | Shell         | false | true    |
+# Three transactions, three ids, and each one the same string in the report as
+# in the register. Two transactions sharing an id would make the click-through
+# land on the wrong line and is the thing this is really watching for.
