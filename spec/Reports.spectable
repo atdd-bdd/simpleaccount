@@ -1133,6 +1133,321 @@ Attributes DrillDownRow
 | Amount    | Money          | 0.00       |
 
 # ---------------------------------------------------------------------------
+# A balance sheet
+# ---------------------------------------------------------------------------
+
+Description What is owned and what is owed, as at one date, with net worth as
+Description the bottom line.
+Details Every other report in this file totals a period. A balance sheet is a
+Details position: a balance is as at a moment, so From is not read and To is
+Details the date the sheet is drawn up as at. Interval Whole and GroupBy
+Details Account say that this is the one-column form; the same report with
+Details Interval Year is the net worth table further down, which is this
+Details bottom line as at several dates at once.
+Details
+Details The two sides are the real accounts, divided by what they are: Banking,
+Details Investments and Assets are owned, CreditCards and Liabilities are owed.
+Details The groups and their order are the ones the account list uses, so the
+Details page and the list down the side of the window agree with each other.
+Details A group with no accounts in it is left out rather than shown empty.
+Details
+Details Each figure is the display balance, so a card and a mortgage read as
+Details what is owed rather than as the negative balances they are posted as,
+Details and net worth is what is owned less what is owed.
+Details
+Details The categories are not here. Income, Expenses and Equity are nominal,
+Details and a balance sheet is the real accounts -- but the equity that started
+Details the book and everything earned and spent since are exactly what net
+Details worth is made of, which is the last scenario in this section.
+
+Attributes BalanceSheetRow
+Description One line of a balance sheet. A group heading carries the total of
+Description the accounts under it and names no account; an account names no
+Description group. Level is the indent, as in the account list: a heading is 0,
+Description an account under it 1, and a child of that account 2.
+| Attribute  | Type                | Default |
+| Section    | BalanceSheetSection | Assets  |
+| Group      | Text                | none    |
+| Account    | AccountPath         | none    |
+| Level      | Integer             | 0       |
+| Balance    | Money               | 0.00    |
+| IsHeading  | Boolean             | false   |
+| IsSubtotal | Boolean             | false   |
+
+$WIP
+DataType BalanceSheetSection
+Description The two sides of a balance sheet.
+Examples: EnumerationValues
+| Value       | Notes                                                   |
+| Assets      | What is owned: Banking, Investments and Assets          |
+| Liabilities | What is owed: CreditCards and Liabilities               |
+
+$WIP
+Scenario A balance sheet as at a date
+Description A house and a mortgage, a card and two bank accounts. The salary
+Description that arrives in March is not on a sheet drawn up in February: a
+Description balance as at a date ignores what happens after it.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type       | Placeholder |
+| Assets:Checking         | Bank       | false       |
+| Assets:Savings          | Bank       | false       |
+| Assets:House            | Asset      | false       |
+| Liabilities:Visa        | CreditCard | false       |
+| Liabilities:Mortgage    | Liability  | false       |
+| Income:Salary           | Income     | false       |
+| Expenses:Groceries      | Expense    | false       |
+| Equity:Opening Balances | Equity     | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee         | Account                 | Amount     |
+| T1  | 2026-01-01 | Opening       | Assets:Checking         | 5000.00    |
+| T1  | 2026-01-01 | Opening       | Equity:Opening Balances | -5000.00   |
+| T2  | 2026-01-01 | Opening       | Assets:House            | 200000.00  |
+| T2  | 2026-01-01 | Opening       | Liabilities:Mortgage    | -150000.00 |
+| T2  | 2026-01-01 | Opening       | Equity:Opening Balances | -50000.00  |
+| T3  | 2026-01-05 | Acme Payroll  | Assets:Checking         | 3000.00    |
+| T3  | 2026-01-05 | Acme Payroll  | Income:Salary           | -3000.00   |
+| T4  | 2026-01-15 | Harris Teeter | Assets:Checking         | -45.00     |
+| T4  | 2026-01-15 | Harris Teeter | Expenses:Groceries      | 45.00      |
+| T5  | 2026-01-20 | Amazon        | Liabilities:Visa        | -89.99     |
+| T5  | 2026-01-20 | Amazon        | Expenses:Groceries      | 89.99      |
+| T6  | 2026-01-25 | Transfer      | Assets:Checking         | -500.00    |
+| T6  | 2026-01-25 | Transfer      | Assets:Savings          | 500.00     |
+| T7  | 2026-03-10 | Acme Payroll  | Assets:Checking         | 1000.00    |
+| T7  | 2026-03-10 | Acme Payroll  | Income:Salary           | -1000.00   |
+When balance sheet run : ReportSpec Vertical
+| GroupBy  | Account    |
+| Interval | Whole      |
+| To       | 2026-02-28 |
+Then balance sheet rows are : BalanceSheetRow
+| Section     | Group       | Account              | Level | Balance   | IsHeading | IsSubtotal |
+| Assets      | Banking     | none                 | 0     | 7955.00   | true      | false      |
+| Assets      | none        | Assets:Checking      | 1     | 7455.00   | false     | false      |
+| Assets      | none        | Assets:Savings       | 1     | 500.00    | false     | false      |
+| Assets      | Assets      | none                 | 0     | 200000.00 | true      | false      |
+| Assets      | none        | Assets:House         | 1     | 200000.00 | false     | false      |
+| Liabilities | CreditCards | none                 | 0     | 89.99     | true      | false      |
+| Liabilities | none        | Liabilities:Visa     | 1     | 89.99     | false     | false      |
+| Liabilities | Liabilities | none                 | 0     | 150000.00 | true      | false      |
+| Liabilities | none        | Liabilities:Mortgage | 1     | 150000.00 | false     | false      |
+Then balance sheet total is : NetWorth Vertical
+| Assets      | 207955.00 |
+| Liabilities | 150089.99 |
+| NetWorth    | 57865.01  |
+# Checking is 5000 in, 3000 of salary, 45 of groceries and 500 moved to
+# savings: 7455.00. The March salary is not in it. There is no Investments
+# heading because there is nothing in that group, and the categories and
+# Equity:Opening Balances are absent -- a balance sheet is the real accounts.
+
+$WIP
+Scenario An account at zero is left out
+Description A wallet that has never been used and a card that has been paid off
+Description are both at zero, and neither earns a line. Twenty years of history
+Description leaves a trail of closed accounts, and a page of zeroes is a page
+Description nobody reads.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type       | Placeholder |
+| Assets:Checking         | Bank       | false       |
+| Assets:Wallet           | Cash       | false       |
+| Liabilities:Visa        | CreditCard | false       |
+| Expenses:Groceries      | Expense    | false       |
+| Equity:Opening Balances | Equity     | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee   | Account                 | Amount   |
+| T1  | 2026-01-05 | Opening | Assets:Checking         | 1000.00  |
+| T1  | 2026-01-05 | Opening | Equity:Opening Balances | -1000.00 |
+| T2  | 2026-01-10 | Amazon  | Liabilities:Visa        | -50.00   |
+| T2  | 2026-01-10 | Amazon  | Expenses:Groceries      | 50.00    |
+| T3  | 2026-01-20 | Payment | Liabilities:Visa        | 50.00    |
+| T3  | 2026-01-20 | Payment | Assets:Checking         | -50.00   |
+When balance sheet run : ReportSpec Vertical
+| GroupBy  | Account    |
+| Interval | Whole      |
+| To       | 2026-01-31 |
+Then balance sheet rows are : BalanceSheetRow
+| Section | Group   | Account         | Level | Balance | IsHeading | IsSubtotal |
+| Assets  | Banking | none            | 0     | 950.00  | true      | false      |
+| Assets  | none    | Assets:Checking | 1     | 950.00  | false     | false      |
+Then balance sheet total is : NetWorth Vertical
+| Assets      | 950.00 |
+| Liabilities | 0.00   |
+| NetWorth    | 950.00 |
+# The wallet has no postings at all and the card is back to nothing, so the
+# CreditCards heading goes with its only account. The account list down the
+# side of the window still shows all three, because that is how an account is
+# reached; this is a report, and a report is read rather than navigated.
+
+$WIP
+Scenario Asking for zero rows puts the empty accounts back
+Description The same book and date, with ZeroRows asked for, which is the same
+Description flag the category report uses. A card at zero is worth seeing when
+Description the question is whether it was paid off.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type       | Placeholder |
+| Assets:Checking         | Bank       | false       |
+| Assets:Wallet           | Cash       | false       |
+| Liabilities:Visa        | CreditCard | false       |
+| Expenses:Groceries      | Expense    | false       |
+| Equity:Opening Balances | Equity     | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee   | Account                 | Amount   |
+| T1  | 2026-01-05 | Opening | Assets:Checking         | 1000.00  |
+| T1  | 2026-01-05 | Opening | Equity:Opening Balances | -1000.00 |
+| T2  | 2026-01-10 | Amazon  | Liabilities:Visa        | -50.00   |
+| T2  | 2026-01-10 | Amazon  | Expenses:Groceries      | 50.00    |
+| T3  | 2026-01-20 | Payment | Liabilities:Visa        | 50.00    |
+| T3  | 2026-01-20 | Payment | Assets:Checking         | -50.00   |
+When balance sheet run : ReportSpec Vertical
+| GroupBy  | Account    |
+| Interval | Whole      |
+| To       | 2026-01-31 |
+| ZeroRows | true       |
+Then balance sheet rows are : BalanceSheetRow
+| Section     | Group       | Account          | Level | Balance | IsHeading | IsSubtotal |
+| Assets      | Banking     | none             | 0     | 950.00  | true      | false      |
+| Assets      | none        | Assets:Checking  | 1     | 950.00  | false     | false      |
+| Assets      | none        | Assets:Wallet    | 1     | 0.00    | false     | false      |
+| Liabilities | CreditCards | none             | 0     | 0.00    | true      | false      |
+| Liabilities | none        | Liabilities:Visa | 1     | 0.00    | false     | false      |
+Then balance sheet total is : NetWorth Vertical
+| Assets      | 950.00 |
+| Liabilities | 0.00   |
+| NetWorth    | 950.00 |
+
+$WIP
+Scenario A placeholder carries its subtree, so a brokerage shows its holdings
+Description The ordinary roll-up from Accounts, and it is the whole of what a
+Description balance sheet needs for an investment account: the value of a
+Description holding is the money balance of its account, so the market value
+Description arrives through the same addition as everything else. See the
+Description holding-value rule in Investments.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type       | Placeholder |
+| Assets:Brokerage        | Investment | true        |
+| Assets:Brokerage:Cash   | Investment | false       |
+| Assets:Brokerage:VTSAX  | Investment | false       |
+| Equity:Opening Balances | Equity     | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee   | Account                 | Amount    |
+| T1  | 2026-01-05 | Opening | Assets:Brokerage:Cash   | 13500.00  |
+| T1  | 2026-01-05 | Opening | Equity:Opening Balances | -13500.00 |
+| T2  | 2026-01-06 | Buy     | Assets:Brokerage:VTSAX  | 11000.00  |
+| T2  | 2026-01-06 | Buy     | Assets:Brokerage:Cash   | -11000.00 |
+When balance sheet run : ReportSpec Vertical
+| GroupBy  | Account    |
+| Interval | Whole      |
+| To       | 2026-01-31 |
+Then balance sheet rows are : BalanceSheetRow
+| Section | Group       | Account                | Level | Balance  | IsHeading | IsSubtotal |
+| Assets  | Investments | none                   | 0     | 13500.00 | true      | false      |
+| Assets  | none        | Assets:Brokerage       | 1     | 13500.00 | false     | true       |
+| Assets  | none        | Assets:Brokerage:Cash  | 2     | 2500.00  | false     | false      |
+| Assets  | none        | Assets:Brokerage:VTSAX | 2     | 11000.00 | false     | false      |
+Then balance sheet total is : NetWorth Vertical
+| Assets      | 13500.00 |
+| Liabilities | 0.00     |
+| NetWorth    | 13500.00 |
+# The group heading and the placeholder carry the same 13500.00 here because
+# the group holds one top-level account; the heading totals the accounts under
+# it and counts each posting once.
+#
+# A price that has not been updated makes this figure stale without anything on
+# the page saying so, which is what the staleness rule in Investments is for.
+
+$WIP
+Scenario A hidden account with a balance is still on the balance sheet
+Description A hidden account is kept out of the pickers so it stops being
+Description offered, and its money has not gone anywhere. Leaving it out would
+Description make the sheet disagree with net worth, which is the one thing a
+Description balance sheet must not do.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type   | Placeholder | Hidden |
+| Assets:Checking         | Bank   | false       | false  |
+| Assets:Old Savings      | Bank   | false       | true   |
+| Equity:Opening Balances | Equity | false       | false  |
+Given postings are : PostingRow
+| Ref | Date       | Payee   | Account                 | Amount   |
+| T1  | 2026-01-05 | Opening | Assets:Checking         | 1000.00  |
+| T1  | 2026-01-05 | Opening | Equity:Opening Balances | -1000.00 |
+| T2  | 2026-01-06 | Opening | Assets:Old Savings      | 250.00   |
+| T2  | 2026-01-06 | Opening | Equity:Opening Balances | -250.00  |
+When balance sheet run : ReportSpec Vertical
+| GroupBy  | Account    |
+| Interval | Whole      |
+| To       | 2026-01-31 |
+Then balance sheet rows are : BalanceSheetRow
+| Section | Group   | Account            | Level | Balance | IsHeading | IsSubtotal |
+| Assets  | Banking | none               | 0     | 1250.00 | true      | false      |
+| Assets  | none    | Assets:Checking    | 1     | 1000.00 | false     | false      |
+| Assets  | none    | Assets:Old Savings | 1     | 250.00  | false     | false      |
+Then balance sheet total is : NetWorth Vertical
+| Assets      | 1250.00 |
+| Liabilities | 0.00    |
+| NetWorth    | 1250.00 |
+# The account list leaves this account out until it is asked for; a report
+# cannot, because its figures have to add up. See the hidden-account scenarios
+# in UserInterface and the hidden-category one earlier in this file, which is
+# the same rule for the other side of the book.
+
+Attributes NetWorthTie
+Description Net worth taken the other way round, from the nominal accounts.
+| Attribute     | Type  | Default |
+| OpeningEquity | Money | 0.00    |
+| Earned        | Money | 0.00    |
+| Spent         | Money | 0.00    |
+| NetWorth      | Money | 0.00    |
+
+$WIP
+Scenario Net worth is the opening equity plus what has been earned less spent
+Description The same book and date as the first scenario in this section, read
+Description from the other side. Every transaction balances, so what is owned
+Description less what is owed must equal what was put into the book plus what
+Description it has earned and less what it has spent. The two figures agreeing
+Description is what says the sheet is right, and it is worth showing on the
+Description page: a difference means a posting has gone somewhere nobody
+Description intended, and that is otherwise very hard to see.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type       | Placeholder |
+| Assets:Checking         | Bank       | false       |
+| Assets:Savings          | Bank       | false       |
+| Assets:House            | Asset      | false       |
+| Liabilities:Visa        | CreditCard | false       |
+| Liabilities:Mortgage    | Liability  | false       |
+| Income:Salary           | Income     | false       |
+| Expenses:Groceries      | Expense    | false       |
+| Equity:Opening Balances | Equity     | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee         | Account                 | Amount     |
+| T1  | 2026-01-01 | Opening       | Assets:Checking         | 5000.00    |
+| T1  | 2026-01-01 | Opening       | Equity:Opening Balances | -5000.00   |
+| T2  | 2026-01-01 | Opening       | Assets:House            | 200000.00  |
+| T2  | 2026-01-01 | Opening       | Liabilities:Mortgage    | -150000.00 |
+| T2  | 2026-01-01 | Opening       | Equity:Opening Balances | -50000.00  |
+| T3  | 2026-01-05 | Acme Payroll  | Assets:Checking         | 3000.00    |
+| T3  | 2026-01-05 | Acme Payroll  | Income:Salary           | -3000.00   |
+| T4  | 2026-01-15 | Harris Teeter | Assets:Checking         | -45.00     |
+| T4  | 2026-01-15 | Harris Teeter | Expenses:Groceries      | 45.00      |
+| T5  | 2026-01-20 | Amazon        | Liabilities:Visa        | -89.99     |
+| T5  | 2026-01-20 | Amazon        | Expenses:Groceries      | 89.99      |
+| T6  | 2026-01-25 | Transfer      | Assets:Checking         | -500.00    |
+| T6  | 2026-01-25 | Transfer      | Assets:Savings          | 500.00     |
+| T7  | 2026-03-10 | Acme Payroll  | Assets:Checking         | 1000.00    |
+| T7  | 2026-03-10 | Acme Payroll  | Income:Salary           | -1000.00   |
+When balance sheet run : ReportSpec Vertical
+| GroupBy  | Account    |
+| Interval | Whole      |
+| To       | 2026-02-28 |
+Then net worth comes from : NetWorthTie Vertical
+| OpeningEquity | 55000.00 |
+| Earned        | 3000.00  |
+| Spent         | 134.99   |
+| NetWorth      | 57865.01 |
+# 55,000.00 was put in -- 5,000.00 of cash and the 50,000.00 of equity in the
+# house -- 3,000.00 of salary has been earned and 134.99 spent, and 57,865.01
+# is the net worth the first scenario reports. The transfer to savings and the
+# mortgage are in neither column: moving money between two real accounts
+# changes nothing about how much there is.
+
+# ---------------------------------------------------------------------------
 # Net worth over time
 # ---------------------------------------------------------------------------
 

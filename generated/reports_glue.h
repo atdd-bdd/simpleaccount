@@ -361,4 +361,31 @@ public:
         ADD_FAILURE() << "Not implemented: examples_datatype_reportlinekind";
     }
 
+public:
+
+    void when_balance_sheet_run(const std::vector<ReportSpecString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_balance_sheet_run";
+    }
+
+    void then_balance_sheet_rows_are(const std::vector<BalanceSheetRowString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_balance_sheet_rows_are";
+    }
+
+    void then_balance_sheet_total_is(const std::vector<NetWorthString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_balance_sheet_total_is";
+    }
+
+    void then_net_worth_comes_from(const std::vector<NetWorthTieString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_net_worth_comes_from";
+    }
+
+    void examples_datatype_balancesheetsection(const std::vector<EnumerationValuesString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_datatype_balancesheetsection";
+    }
+
 };
