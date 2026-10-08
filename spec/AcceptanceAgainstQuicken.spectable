@@ -32,6 +32,7 @@ Details reporting on the holdings, not importing what they paid.
 # What is being compared
 # ---------------------------------------------------------------------------
 
+$WIP
 DataType ComparisonRun
 Description The comparisons to be made, in the order they are worth making.
 Details Each later one depends on the one before it passing: there is no point
@@ -59,6 +60,7 @@ Description One PDF report from Quicken, and what it is a report of.
 | To         | Date           | 2026-10-03   |                                 |
 | Lines      | Integer        | 0            | How many figure lines it has     |
 
+$WIP
 DataType QuickenReportKind
 Description Which Quicken report the PDF is of. It matters: the reports differ
 Description in what they include, not only in how they look.
@@ -95,6 +97,7 @@ Attributes ComparisonSummary
 | TotalDifference | Money   | 0.00    |
 | Passes          | Boolean | false   |
 
+$WIP
 BusinessRule When a comparison passes
 Description Every line agrees to the cent, and neither report has a line the
 Description other does not.
@@ -122,6 +125,7 @@ Attributes PassCondition
 # Lining the two reports up
 # ---------------------------------------------------------------------------
 
+$WIP
 BusinessRule How a Quicken category name becomes an account path
 Description Quicken reports a category by the name the category list gives it,
 Description with no root. SimpleAccount puts Income or Expenses in front. The
@@ -144,6 +148,7 @@ Attributes ReportLineMapping
 | OurAccount  | AccountPath | none    |
 | Notes       | String      | none    |
 
+$WIP
 BusinessRule How the signs of the two reports are lined up
 Description Quicken writes an Itemized Categories report in natural signs:
 Description income positive, expenses negative, and the overall total their sum.
@@ -169,6 +174,7 @@ Attributes SignMapping
 | OurSign     | String |         |
 | Comparison  | String |         |
 
+$WIP
 Scenario The section totals of the all-dates report
 Description The three section totals and the overall total, transcribed from
 Description pughkillleen-allyears-category.pdf. This is the single comparison
@@ -190,6 +196,7 @@ Then comparison summary is : ComparisonSummary CompareOnly
 | Passes |
 | true   |
 
+$WIP
 Scenario The section totals of the 2025 report
 Description From pughkilleen-2025-transactions.pdf. There is no TRANSFERS
 Description section: every transfer in 2025 has both halves inside the period,
@@ -211,6 +218,7 @@ Then comparison summary is : ComparisonSummary CompareOnly
 | Passes |
 | true   |
 
+$WIP
 Scenario The section totals of the 2026 report before the import
 Description From pughkilleeen-2026-before update.pdf. Year to Date runs to
 Description 10/3/2026, which is today, so this is also the answer to how a
@@ -231,6 +239,7 @@ Then comparison summary is : ComparisonSummary CompareOnly
 | Passes |
 | true   |
 
+$WIP
 BusinessRule The two Uncategorized lines map one to one
 Description Corrected. Quicken does not report one Uncategorized line to be
 Description split: it reports one in each section, and the split is by the sign
@@ -254,6 +263,7 @@ Attributes UncategorizedComparison
 | OurAccount  | AccountPath |         |
 | Holds       | String      |         |
 
+$WIP
 BusinessRule How a Quicken report writes a category tree
 Description A parent is a roll-up line and its children sit under it by their
 Description last name only, not their full path. Amounts posted to the parent
@@ -279,6 +289,7 @@ Attributes ReportTreeShape
 | Means       | String      |         |
 | OurAccount  | Text        |         |
 
+$WIP
 BusinessRule What each report kind is expected to include
 Description Stated because an apparent difference is usually a difference of
 Description inclusion rather than of arithmetic, and because the equivalent
@@ -307,6 +318,7 @@ Attributes InclusionRule
 | MarketValueChange | String |         |
 | OurEquivalent     | String |         |
 
+$WIP
 Scenario Transfers are absent from both reports for the same reason
 Description Quicken excludes transfers from a category report. SimpleAccount has
 Description nothing to exclude: a transfer touches no category, so it cannot
@@ -358,6 +370,7 @@ Description One figure line transcribed from a Quicken PDF.
 | QuickenLine   | Text  |         |
 | QuickenAmount | Money | 0.00    |
 
+$WIP
 Scenario A market value change stays out of the spending report
 Description Investment reporting is out of scope this round, but keeping it out
 Description of the spending report is not: a revaluation that leaked in would
@@ -399,6 +412,7 @@ Then comparison summary is : ComparisonSummary Vertical
 | TotalDifference | 0.00 |
 | Passes          | true |
 
+$WIP
 Scenario A difference is reported with the line it is on
 Description A failing comparison has to say where, or it is no use. The line,
 Description both figures and the difference are all shown, and the difference is
@@ -437,6 +451,7 @@ Then comparison summary is : ComparisonSummary Vertical
 | TotalDifference | 170.00 |
 | Passes          | false  |
 
+$WIP
 Scenario A category Quicken reports and we do not is a failure, not a gap
 Description An empty line on our side usually means a transaction did not come
 Description over, or came over under another category. Either way the figure to
@@ -474,6 +489,7 @@ Then lines only in the quicken report are : ComparisonLine CompareOnly
 | QuickenLine | QuickenAmount | OurAmount |
 | Dues        | 75.00         | 0.00      |
 
+$WIP
 Scenario A category we report and Quicken does not is also a failure
 Description Usually the sign fallback inventing a category, or --Split-- having
 Description become an account. Both are mistakes this comparison exists to
@@ -520,6 +536,7 @@ Description The totals below were computed from the QIF export and checked
 Description against the PDFs before any of this was implemented in C++. Two of
 Description the three periods already agree to the cent.
 
+$WIP
 BusinessRule The state of the reconciliation
 Description Measured, not predicted.
 Details The two years that agree do so exactly, which is what gives any
@@ -544,6 +561,7 @@ Attributes ReconciliationStatus
 | TheirExpenses | Money   | 0.00    |
 | Agrees        | Boolean | false   |
 
+$WIP
 BusinessRule Which sections have to be included for a year to reconcile
 Description Each of these was established by leaving it out and watching a year
 Description stop agreeing.
@@ -563,6 +581,7 @@ Attributes SectionNecessity
 # The three periods
 # ---------------------------------------------------------------------------
 
+$WIP
 Scenario The whole period, which is the migration test
 Description Run first. A difference here is systematic, and the single number
 Description that says the migration worked is that this passes.
@@ -581,6 +600,7 @@ Then comparison summary is : ComparisonSummary CompareOnly
 | Passes |
 | true   |
 
+$WIP
 Scenario A full year, which tests how a report is bounded
 Description 2025 is complete, so nothing about today affects it. A difference
 Description here when the whole period agrees means a transaction is in the
@@ -599,6 +619,7 @@ Then comparison summary is : ComparisonSummary CompareOnly
 | Passes |
 | true   |
 
+$WIP
 Scenario The current year, which tests where a report stops
 Description 2026 is incomplete and the business file has transactions dated into
 Description it. Whether the report stops at today or runs to the end of the
@@ -617,6 +638,7 @@ Then comparison summary is : ComparisonSummary CompareOnly
 | Passes |
 | true   |
 
+$WIP
 Scenario A future-dated transaction is counted the same way by both
 Description Settled by the PDFs. All three populated reports carry their range
 Description in the heading, and Year to Date reads "1/1/2026 through 10/3/2026",
@@ -674,6 +696,7 @@ Attributes YearFigure
 | OurNet      | Money   | 0.00    |
 | Checked     | Boolean | false   |
 
+$WIP
 BusinessRule What SimpleAccount computes for the business book by year
 Description From pughkilleen.QIF. 2021 is the one to look at first: its income
 Description is well above the years either side of it, and the all-dates total
@@ -687,6 +710,7 @@ Examples: YearFigure
 | business | 2024 | 132502.14 | -70341.28   | 62160.86   | false   |
 | business | 2025 | 49374.18  | -198939.00  | -149564.82 | true    |
 
+$WIP
 BusinessRule What SimpleAccount computes for the personal book by year
 Description From kenpugh.QIF, which has no Quicken report of any kind yet, so
 Description every line here is unchecked. The file has no credit card section at
@@ -706,6 +730,7 @@ Examples: YearFigure
 | personal | 2024 | 63890.00  | -56121.63   | 7768.37    | false   |
 | personal | 2025 | 10000.00  | -22095.16   | -12095.16  | false   |
 
+$WIP
 BusinessRule How a report has to be exported to be comparable
 Description Stated because a report run with different settings produces
 Description different figures for the same data, and a difference of settings
@@ -727,6 +752,7 @@ Attributes ExportSetting
 | Setting   | String |         |
 | Value     | String |         |
 
+$WIP
 Scenario A per-year comparison names its book and its year
 Description There are two books and several years, so a comparison that did not
 Description say which it was would be unreadable the moment one of them failed.
@@ -755,6 +781,7 @@ Attributes ComparisonHeading
 # After importing a QFX into both
 # ---------------------------------------------------------------------------
 
+$WIP
 Scenario The section totals of the 2026 report after the import
 Description From pughkilleen-2026-after-update.pdf, the same Year to Date report
 Description re-run once the three QFX files had been read into Quicken.
@@ -774,6 +801,7 @@ Then comparison summary is : ComparisonSummary CompareOnly
 | Passes |
 | true   |
 
+$WIP
 Scenario What the import moved is the difference between the two 2026 reports
 Description The strongest test of the importer there is. The same report before
 Description and after, so the difference is exactly what reading three QFX
@@ -805,6 +833,7 @@ Attributes ImportDelta
 | ExpensesMoved  | Money | 0.00    |
 | OverallMoved   | Money | 0.00    |
 
+$WIP
 Scenario The transaction report confirms that transfers net to zero in the period
 Description A second report of the same period, and it is not on a cash basis
 Description and does not separate transfers out. Its inflows and outflows are
@@ -843,6 +872,7 @@ Attributes TransferCrossCheck
 | TransfersNetZero | Boolean | false   |
 | NetTotal         | Money   | 0.00    |
 
+$WIP
 Scenario The account balance report checks every account this round imports
 Description From pughkilleeen account balances 2025 after update.pdf. The bank,
 Description cash, asset, credit card and liability totals are exactly the
@@ -881,6 +911,7 @@ Attributes LineNotCompared
 | QuickenAmount | Money | 0.00    |
 | Reason        | Text  |         |
 
+$WIP
 Scenario The same QFX imported into both gives the same report
 Description This is the second half of the acceptance test and it checks the
 Description importer rather than the migration. The QFX goes into a Quicken
@@ -936,6 +967,7 @@ Then comparison summary is : ComparisonSummary Vertical
 # show here as 200.00 against Quicken's 100.00. That is the failure this run
 # is for.
 
+$WIP
 Scenario Investment income does reach the spending report
 Description The other half of the scope line. A dividend and a brokerage fee
 Description are an income category and an expense category, so they belong in a
@@ -975,6 +1007,7 @@ Then comparison summary is : ComparisonSummary Vertical
 | TotalDifference | 0.00 |
 | Passes          | true |
 
+$WIP
 Scenario Importing the QFX twice changes no figure in the report
 Description The idempotency rule of ImportOfx, checked where it matters: in a
 Description report rather than in a count of rows.
@@ -1002,6 +1035,7 @@ Then report rows are : ReportRow
 # Running the comparison
 # ---------------------------------------------------------------------------
 
+$WIP
 BusinessRule In what order the comparisons are run and what stopping means
 Description Each is only worth running when the one before it has passed.
 Examples: RunOrder
@@ -1018,6 +1052,7 @@ Attributes RunOrder
 | DependsOn   | Text          |             |
 | AFailureHereMeans | Text    |             |
 
+$WIP
 Scenario Each book is compared separately
 Description There are two QIF files and they become two books. Nothing is
 Description compared across them, and no report adds a business figure to a
@@ -1050,6 +1085,7 @@ Attributes ComparisonPlan
 | Book      | Text          |             |
 | Run       | ComparisonRun | WholePeriod |
 
+$WIP
 Scenario The personal book covers nine years, not twenty
 Description Worth stating because the whole-period comparison for the personal
 Description book is a report of 2017 onwards and a figure for 2010 in it would

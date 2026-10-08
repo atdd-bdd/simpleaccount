@@ -19,10 +19,19 @@ echo "== analyze (absolute path: a relative one double-indexes) =="
 echo "== generate =="
 # Only test_*.cpp is rewritten; *_glue.h is written once and then left alone, so
 # generating never destroys hand-written glue.
+#
+# NOT WIP leaves out every block marked $WIP in the spec -- the behaviour that
+# is specified and not yet built. So the suite that gets compiled is the one
+# that should be green, and a failure means a regression rather than a feature
+# nobody has written yet. Glue stubs are still written for a $WIP block's
+# steps, so implementing one is a matter of taking the tag off.
+#
+# To see the whole specification, tags and all: TAGS="" tools/rebuild.sh
+TAGS="${TAGS-NOT WIP}"
 CTX=""
 for f in "$ROOT"/spec/*.spectable; do CTX="$CTX --context $f"; done
 for f in "$ROOT"/spec/*.spectable; do
-  "$CONV" -l Cpp --no-copy-spectable $CTX "$f" "$ROOT/generated" >/dev/null || echo "FAILED to generate $f"
+  "$CONV" -l Cpp --no-copy-spectable --tag-filter "$TAGS" $CTX "$f" "$ROOT/generated" >/dev/null || echo "FAILED to generate $f"
 done
 
 echo "== build =="

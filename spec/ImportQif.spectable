@@ -17,6 +17,7 @@ Details hazard here, and the rule that collapses them is the heart of this file.
 # The shape of the file
 # ---------------------------------------------------------------------------
 
+$WIP
 DataType QifSection
 Description What an exclamation-mark header introduces.
 Details Everything after a header belongs to that section until the next one.
@@ -79,6 +80,7 @@ Attributes SectionHeader
 | Section   | QifSection | Unknown |
 | Notes     | String     | none    |
 
+$WIP
 BusinessRule What an account block means depends on AutoSwitch
 Description An !Account block is a definition while AutoSwitch is on, and a
 Description change of the current account while it is off.
@@ -141,6 +143,7 @@ Description One record of a transaction section, before it becomes postings.
 | CheckNo      | CheckNumber | none       |
 | ClearedText  | Text        | none       |
 
+$WIP
 Scenario A whole-file export switches account as it goes
 Description The account list defines three accounts; the sections that follow
 Description each name the account their transactions belong to. The second
@@ -255,6 +258,7 @@ Attributes QifAccountMapping
 | ExampleName | AccountName |         |
 | ExamplePath | AccountPath |         |
 
+$WIP
 Scenario An account name containing a colon is kept whole
 Description QIF account names are free text and a colon in one would otherwise
 Description split it into two levels of the tree. The colon is replaced on the
@@ -280,6 +284,7 @@ Attributes MigrationNote
 | Kind      | Text |         |
 | Detail    | Text |         |
 
+$WIP
 Scenario An account with a statement balance records an opening balance
 Description The QIF account block may carry the balance and the date it was
 Description taken. It is not an opening balance and is not used as one: it is
@@ -310,6 +315,7 @@ Attributes QifStatementBalance
 # The category list
 # ---------------------------------------------------------------------------
 
+$WIP
 Scenario The category list says which categories are income and which expense
 Description This list is read before any transaction, because it is the only
 Description thing in the file that says whether Bonus is income or an expense.
@@ -346,6 +352,7 @@ Then accounts created are : ChartOfAccounts
 # its own right, and transactions may be posted to it. A category that only
 # appears as a parent is made a placeholder, as in Accounts.
 
+$WIP
 BusinessRule How a category name becomes an account path
 Description Using the income or expense flag from the category list. A name not
 Description in the list falls back to the sign of the amount, and that fallback
@@ -370,6 +377,7 @@ Attributes CategoryMapping
 | Fallback     | Boolean     | false   |
 | Notes        | String      | none    |
 
+$WIP
 Scenario Every use of the sign fallback is reported
 Description A category that was not declared is the sort of thing worth looking
 Description at once, so each distinct name is listed with a count rather than
@@ -469,6 +477,7 @@ Attributes DateOrderEvidence
 | SecondPartOver12 | Integer   | 0       |
 | Proven           | DateOrder | MDY     |
 
+$WIP
 Scenario A file that contradicts the profile it was given is refused
 Description If the file proves DMY and the profile says MDY, one of them is
 Description wrong and importing either way would be a guess.
@@ -621,6 +630,7 @@ Then postings are : PostingRow
 # Splits
 # ---------------------------------------------------------------------------
 
+$WIP
 BusinessRule The split lines decide the categories, not the L field
 Description A split record carries S, E and dollar lines for its real categories,
 Description and its L field holds the literal text "--Split--". Taken as a
@@ -781,6 +791,7 @@ Description A record whose category field is an account name in square
 Description brackets. Quicken writes one in each of the two accounts, so a
 Description transfer appears in the file twice.
 
+$WIP
 BusinessRule When two transfer halves are the same transfer
 Description The accounts must cross-match and the amounts must be equal and
 Description opposite. The dates need not agree, and where several halves could
@@ -920,6 +931,7 @@ Then import summary is : ImportSummary Vertical
 | Matched   | 0 |
 | Possible  | 0 |
 
+$WIP
 Scenario A transfer half with no partner still becomes a whole transfer
 Description The bracketed account names both sides, so the transaction can be
 Description made from one half alone. It happens when only some accounts were
@@ -1044,6 +1056,7 @@ Then postings are : PostingRow
 | T1  | 2005-01-01 | Opening Balance | Assets:Checking         | 2500.00  |
 | T1  | 2005-01-01 | Opening Balance | Equity:Opening Balances | -2500.00 |
 
+$WIP
 Scenario A category name in brackets that is not an account creates the account
 Description Brackets mean an account, so a bracketed name that is not in the
 Description account list is an account that was not exported rather than a
@@ -1074,6 +1087,7 @@ Then migration notes are : MigrationNote
 # Classes
 # ---------------------------------------------------------------------------
 
+$WIP
 Scenario A class on a category is kept as a tag
 Description Reporting by class is not in this release. Discarding the class
 Description during a migration that runs once would lose it for good, so it is
@@ -1114,6 +1128,7 @@ Then migration notes are : MigrationNote
 # Investments
 # ---------------------------------------------------------------------------
 
+$WIP
 DataType InvestmentMode
 Description What to do with twenty years of trades in an investment account.
 Details Replay is the default because the income it posts belongs in a report
@@ -1125,6 +1140,7 @@ Examples: EnumerationValues
 | Replay        | Every action is imported, in order                           |
 | PositionsOnly | Only the resulting holdings, established at the last price   |
 
+$WIP
 DataType QifAction
 Description The N field of an investment record.
 Examples: EnumerationValues
@@ -1152,6 +1168,7 @@ Examples: EnumerationValues
 | XOut      | Cash out to another account                   |
 | Unsupported | Anything else; reported, not imported       |
 
+$WIP
 BusinessRule What each investment action posts
 Description In the terms of Investments: a holding is an account carrying a money
 Description balance, income goes to an Income category, and anything that is only
@@ -1187,6 +1204,7 @@ Attributes ActionPosting
 | Credited  | String |         |
 | Notes     | String | none    |
 
+$WIP
 Scenario A buy and a reinvested dividend in an investment account
 Description The security name from the Y field becomes an account under the
 Description investment account, named by its symbol when the security list
@@ -1254,6 +1272,7 @@ Then holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 102.5  | 100.0000 | 2024-06-30 |
 
+$WIP
 Scenario A security with no symbol is named by its security name
 Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type   | Placeholder |
@@ -1295,6 +1314,7 @@ Then postings are : PostingRow
 | T1  | 2005-01-02 | Assets:Brokerage:Old Employer Stock Plan | 1000.00  |
 | T1  | 2005-01-02 | Equity:Opening Balances                  | -1000.00 |
 
+$WIP
 Scenario A stock split changes the shares and the price but posts nothing
 Description The value of the holding is the same before and after, so there is
 Description nothing to post, and posting a revaluation of zero would clutter
@@ -1346,6 +1366,7 @@ Attributes SplitRatio
 | PriceAfter  | Price   | 0       |
 | Notes       | String  | none    |
 
+$WIP
 Scenario An unsupported action is reported and not imported
 Description Employee stock plan actions carry tax meaning this program does not
 Description model. Importing them as something else would be worse than
@@ -1371,6 +1392,7 @@ Then migration notes are : MigrationNote
 | Kind        | Detail                                            |
 | Unsupported | 2024-03-01 action "Vest" is not imported; 1 record |
 
+$WIP
 Scenario PositionsOnly skips the trades and establishes the holdings
 Description For an account whose twenty years of trades are not wanted. The
 Description holdings that result are posted once, at the last price in the
@@ -1427,6 +1449,7 @@ Then holdings are : Holdings
 # Prices
 # ---------------------------------------------------------------------------
 
+$WIP
 Scenario The price list sets the last price of each security
 Description The price list is a comma-separated oddity in the middle of a
 Description field-per-line format. Only the latest price per security is used:
@@ -1460,6 +1483,7 @@ Then migration notes are : MigrationNote
 | Kind          | Detail                                            |
 | PricesSkipped | 1 earlier price for VTSAX was not used            |
 
+$WIP
 BusinessRule How a price list line is read
 Description Quoted symbol, bare price, quoted date, and the date uses the same
 Description apostrophe century marker as everywhere else.
@@ -1483,6 +1507,7 @@ Attributes PriceLine
 # Memorized transactions
 # ---------------------------------------------------------------------------
 
+$WIP
 Scenario Memorized transactions become payee rules
 Description Quicken remembers a payee and the category it takes, which is what
 Description a payee rule is. Bringing them over means the categorising that was
@@ -1509,6 +1534,7 @@ Then payee rules created are : PayeeRules
 # The remembered amount is not brought over. A rule that filled in an amount
 # from 2009 would do more harm than good.
 
+$WIP
 Scenario A memorized split becomes a remembered split rule
 Description The mortgage split that Payees exists to handle, arriving ready
 Description made.
@@ -1544,6 +1570,7 @@ Then remembered split lines created are : RememberedSplitLine
 # The run as a whole
 # ---------------------------------------------------------------------------
 
+$WIP
 BusinessRule In what order a QIF file is read
 Description Four passes, because a transaction cannot be placed until the
 Description accounts and categories it names are known.
@@ -1560,6 +1587,7 @@ Attributes MigrationPass
 | Reads     | String  |         |
 | Why       | String  |         |
 
+$WIP
 Scenario Nothing is written until the whole file has been read without error
 Description A migration that half succeeded would leave a book that is neither
 Description the old data nor the new, and no way to tell which transactions had
@@ -1589,6 +1617,7 @@ Then postings are : PostingRow
 | Ref | Date | Account | Amount |
 # No rows: the good record was not written either.
 
+$WIP
 Scenario A migration report is produced whether or not anything was odd
 Description The report is the deliverable of a migration, not a by-product. It
 Description is what makes it possible to say the twenty years came over, and
@@ -1700,6 +1729,7 @@ Attributes BookCheck
 | OutOfBalance        | Integer | 0       |
 | Balanced            | Boolean | false   |
 
+$WIP
 Scenario Importing the same QIF file twice does not double the book
 Description A migration gets run again: because the first attempt was abandoned,
 Description or because a second export was taken. Every record carries a
@@ -1741,6 +1771,7 @@ Description The first round is about spending reports from banking and card
 Description accounts. This section says exactly which records that includes,
 Description because the answer is not quite "the bank and card sections".
 
+$WIP
 BusinessRule Which sections the first round imports
 Description Every section that carries dated, categorised transactions, which is
 Description more than the bank and card ones.
@@ -1777,6 +1808,7 @@ Attributes RoundOneSection
 | InRound1  | Boolean | true    |
 | Why       | String  | none    |
 
+$WIP
 BusinessRule Which investment records the first round imports
 Description Those that move cash to somewhere outside the account, and no
 Description others. The securities side is left for a later round.
@@ -1810,6 +1842,7 @@ Attributes RoundOneInvestmentAction
 | InRound1  | Boolean | true    |
 | Becomes   | String  |         |
 
+$WIP
 Scenario An investment account exists so that a transfer into it stays a transfer
 Description Nineteen banking and card records transfer to an investment account.
 Description If the account did not exist those nineteen would fall to
@@ -1864,6 +1897,7 @@ Then report rows are : ReportRow
 # six thousand is not spending. This is the figure the nineteen records would
 # otherwise have added to Uncategorized.
 
+$WIP
 Scenario A categorised investment cash movement does reach the spending report
 Description The twenty-one records that keep the investment sections in scope at
 Description all. A fee charged inside the account is an expense wherever it was
@@ -1903,6 +1937,7 @@ Then report rows are : ReportRow
 | Expenses              | 0     | 25.00  | true       |
 | Expenses:Misc Expense | 1     | 25.00  | false      |
 
+$WIP
 Scenario The securities side is skipped, counted, and the balance is flagged
 Description A reinvested dividend in a retirement account changes what the
 Description account is worth and changes no spending figure. It is not
@@ -1951,6 +1986,7 @@ Attributes IncompleteBalance
 | Reason         | Text        |         |
 | SkippedRecords | Integer     | 0       |
 
+$WIP
 Scenario An incomplete balance is not offered as a figure to rely on
 Description The account appears in the chart, its transfers are right, and its
 Description balance is marked rather than shown as though it were a valuation.
@@ -1985,6 +2021,7 @@ Details
 Details This section says what the QIF export makes possible, which is less than
 Details the rule asks for, and it says so rather than approximating quietly.
 
+$WIP
 BusinessRule How the invoice section is shaped
 Description Two kinds of record share the section, told apart by the L field.
 Details Observed in the business file: 425 records, 212 invoices and 213
@@ -2004,6 +2041,7 @@ Attributes InvoiceRecordKind
 | CarriesCategories | Boolean | false   |
 | Count             | String  |         |
 
+$WIP
 BusinessRule What the N field is, and why nothing is posted from it
 Description N on an invoice is the invoice number and N on a payment is the
 Description number of the invoice being paid, which an earlier reading of this
@@ -2079,6 +2117,7 @@ Attributes CollectedTest
 | Documents  | Integer | 0       |
 | Recognised | String  |         |
 
+$WIP
 BusinessRule What the cash basis is worth, measured against the all-dates report
 Description Quicken's all-dates report is itself on a cash basis, so the gap
 Description between it and an accrual reading is exactly what was invoiced and
@@ -2387,6 +2426,7 @@ Then postings are : PostingRow
 # Both post their expense. T1 is cleared and T2 is not, and it makes no
 # difference here: what the marker decides is whether income is recognised.
 
+$WIP
 Scenario The migration report totals what invoicing left unresolved
 Description Four numbers that say how much of the invoice history did not
 Description resolve, so that the size of it is known before the figures are
@@ -2419,6 +2459,7 @@ Attributes InvoiceReconciliation
 | EarliestUnpaid    | Date    | 2006-01-01 |
 | LatestUnpaid      | Date    | 2010-12-31 |
 
+$WIP
 Scenario Invoicing was used in two spells, and the report says so
 Description 180 of the 212 invoices fall between 2006 and 2011, none at all
 Description between 2012 and 2016, and 32 from 2017 onwards. The gap is not a
@@ -2447,6 +2488,7 @@ Attributes InvoiceYearSpan
 Description The rules in this section were written from the files rather than
 Description from the format, and each says what was observed.
 
+$WIP
 BusinessRule What encoding a QIF file is read as
 Description Tried as UTF-8 first; read as Windows-1252 if that fails.
 Details The two files differ. pughkilleen.QIF is valid UTF-8, with the
@@ -2467,6 +2509,7 @@ Attributes EncodingChoice
 | ReadAs    | String |         |
 | Notes     | String | none    |
 
+$WIP
 BusinessRule A field whose value will not parse is a continuation of the one before
 Description QIF has no way to quote a value, so a value containing a newline
 Description becomes a line that begins with whatever character follows it. A
@@ -2491,6 +2534,7 @@ Attributes ContinuationLine
 | Line      | String |         |
 | Reading   | String |         |
 
+$WIP
 BusinessRule What a field code means depends on its section
 Description The same letter is a different field in a different section, which is
 Description why the reader tracks the section and never reads a record alone.
@@ -2573,6 +2617,7 @@ Then accounts created are : ChartOfAccounts
 | Liabilities       | Liability | true        |
 | Liabilities:Bills | Liability | false       |
 
+$WIP
 Scenario No price list means the last price comes from the last transaction
 Description Neither file has a !Type:Prices section, so there is no price to
 Description revalue a holding to. The price carried is the one from the most
@@ -2629,6 +2674,7 @@ Then holdings report rows are : HoldingsReportRow CompareOnly
 # A migration of an old file leaves every holding stale, which is correct and
 # is the signal to go and enter current prices.
 
+$WIP
 Scenario No statement balance means the import cannot check itself
 Description The account blocks in these files carry a name, a type and
 Description sometimes a credit limit, and never a statement balance. So the
@@ -2653,6 +2699,7 @@ Then migration notes are : MigrationNote
 | Kind            | Detail                                                      |
 | NoStatedBalance | No account block carries a statement balance; the import was not checked against one |
 
+$WIP
 Scenario The Cash action moves cash in an investment account
 Description Forty-one records in the business file use it. It is a cash movement
 Description with a category, and nothing to do with securities.
@@ -2679,6 +2726,7 @@ Then postings are : PostingRow
 | T1  | 2024-03-01 | Assets:Portfolio:Cash    | -25.00 | Account fee |
 | T1  | 2024-03-01 | Expenses:Investment:Fees | 25.00  | Account fee |
 
+$WIP
 Scenario The one stock split in the business file
 Description Read with the ratio rule confirmed below. The holding is iShares US
 Description Transportation on 7 March 2024, which was a four-for-one split, and
@@ -2735,6 +2783,7 @@ Then migration notes are : MigrationNote
 # What needs checking against the file being migrated
 # ---------------------------------------------------------------------------
 
+$WIP
 BusinessRule What the two files settled, and what is still assumed
 Description Each point was a place where being wrong would be expensive and
 Description quiet. Most are now settled by reading the files in testdata. The
@@ -2766,6 +2815,7 @@ Attributes DialectRisk
 | Status    | String |         |
 | Evidence  | String |         |
 
+$WIP
 Scenario Transfer pairing is the one unsettled rule that matters at scale
 Description There are 8,228 bracketed category fields in the business file, so
 Description a wrong pairing rule is wrong thousands of times. The counts are

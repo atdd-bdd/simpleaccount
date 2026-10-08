@@ -110,6 +110,7 @@ Attributes HoldingValue
 | Value     | Money  | 0.00    |
 | Notes     | String | none    |
 
+$WIP
 Scenario The balance of a brokerage account is its cash and its holdings
 Description The brokerage account itself is a placeholder, so its balance is the
 Description roll-up of the cash account and the holdings beneath it, which is
@@ -149,6 +150,7 @@ Description What is typed to record a trade.
 | Fee       | Money       | 0.00       |
 | Proceeds  | Money       | 0.00       |
 
+$WIP
 Scenario Buying shares moves cash into the holding
 Description Two postings, and no gain to compute. The holding is carried at
 Description what was paid for it until a price is recorded.
@@ -174,6 +176,7 @@ Then holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-02-01 |
 
+$WIP
 Scenario A commission is an expense, not part of the holding
 Description Folding the fee into the value of the holding would make the
 Description invariant false, because the shares did not cost more than their
@@ -196,6 +199,7 @@ Then postings are : PostingRow
 | T2  | 2024-02-01 | Expenses:Investment:Fees | 6.95     |
 | T2  | 2024-02-01 | Assets:Brokerage:Cash    | -4006.95 |
 
+$WIP
 Scenario Buying more shares averages the price, because no lots are kept
 Description This is the simplification. Two purchases at different prices leave
 Description one holding at one price, and that price is the carrying value
@@ -246,6 +250,7 @@ Attributes AveragePrice
 | NewPrice     | Price  | 0       |
 | Notes        | String | none    |
 
+$WIP
 Scenario Selling shares at the carried price needs no gain
 Description The holding is carried at 106.6667 and sold at that price, so the
 Description cash in equals the value out and there is nothing left over.
@@ -273,6 +278,7 @@ Then holdings are : Holdings
 # The price is re-derived from the value that is left, 10666.66 over 100
 # shares, rather than carried forward, so the invariant stays exact.
 
+$WIP
 Scenario Selling above the carried price puts the difference to Equity
 Description The difference is a market value change, not income, so it does not
 Description appear in a report of income and expenses. It is also not a realised
@@ -300,6 +306,7 @@ Then holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 0      | 130.0000 | 2024-04-01 |
 
+$WIP
 Scenario Selling more shares than are held is refused
 Description Short positions are not modelled, so this is always either a missing
 Description purchase or a typing mistake, and both are worth stopping for.
@@ -321,6 +328,7 @@ Then rejected because : Rejection
 # Recording a price
 # ---------------------------------------------------------------------------
 
+$WIP
 Scenario Recording a new price revalues the holding
 Description This is how the balance is kept current, and it is the only thing
 Description that has to be done regularly for the figures to mean anything.
@@ -353,6 +361,7 @@ Attributes PriceEntry
 | Price     | Price  | 0          |
 | AsOf      | Date   | 2024-01-01 |
 
+$WIP
 Scenario A price that falls revalues downwards
 Given the chart of accounts is as previous
 Given holdings are as previous
@@ -366,6 +375,7 @@ Then postings are : PostingRow
 | T2  | 2024-06-28 | Assets:Brokerage:VTSAX      | -1000.00 |
 | T2  | 2024-06-28 | Equity:Market Value Changes | 1000.00  |
 
+$WIP
 Scenario Recording the price already held posts nothing
 Description A revaluation of zero is not worth a transaction, and a register
 Description full of them would hide the ones that matter.
@@ -383,6 +393,7 @@ Then holdings are : Holdings
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-06-28 |
 # The date is still brought forward: the price was confirmed on the 28th.
 
+$WIP
 Scenario A price applies to every account holding that symbol
 Description The same fund held in two accounts is priced once. The revaluation
 Description is one transaction per holding, because each holding is its own
@@ -420,6 +431,7 @@ Then postings created are : PostingRow
 # Income from investments
 # ---------------------------------------------------------------------------
 
+$WIP
 Scenario A dividend paid in cash is income
 Description Dividends and interest are income and belong in an income report,
 Description because they are taxable and because the question of how much the
@@ -450,6 +462,7 @@ Attributes IncomeEntry
 | Shares    | Shares      | 0          |
 | Price     | Price       | 0          |
 
+$WIP
 Scenario A reinvested dividend is income and a purchase at once
 Description Still income, so it still appears in an income report, and the cash
 Description never rests in the cash account. The shares go up and the carried
@@ -479,6 +492,7 @@ Then holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 102.5  | 100.0000 | 2024-06-30 |
 
+$WIP
 Scenario Investment income shows in an income report and market movement does not
 Description The two scenarios above and a revaluation, reported together. This
 Description is what the choice of Equity for revaluation buys, and it is the
@@ -512,6 +526,7 @@ Then report total is : ReportTotal Vertical
 # An account tracked by value alone
 # ---------------------------------------------------------------------------
 
+$WIP
 Scenario An account may carry a stated value with no holdings at all
 Description A pension or an employer plan reports one figure on one statement
 Description and the positions behind it are not worth entering. The account
@@ -544,6 +559,7 @@ Attributes ValueEntry
 | Value     | Money       | 0.00       |
 | AsOf      | Date        | 2024-01-01 |
 
+$WIP
 Scenario A stated value on an account that has holdings is refused
 Description The value of such an account is the total of its holdings. Setting
 Description it directly would make the invariant false and there would be no way
@@ -567,6 +583,7 @@ Then rejected because : Rejection
 # What is deliberately absent
 # ---------------------------------------------------------------------------
 
+$WIP
 Scenario No realised gain is reported, by design
 Description Asking for a gain report says what the program does instead, rather
 Description than offering a figure that would not agree with the 1099 and would
@@ -581,6 +598,7 @@ Attributes Notice
 | Attribute | Type | Default |
 | Message   | Text |         |
 
+$WIP
 Scenario A holdings report shows what is held now, and when it was priced
 Description The age of a price is shown beside it, because a balance resting on
 Description a price from two years ago is worth distrusting and there is no way

@@ -41,6 +41,7 @@ Given books are : Books
 # What belongs to a book, and what does not
 # ---------------------------------------------------------------------------
 
+$WIP
 BusinessRule Everything a book needs is in the book
 Description A book is self-contained. Anything the program needs in order to
 Description work on a book is stored in that book's own file, even where two
@@ -108,6 +109,7 @@ Then category picker offers : ChartOfAccounts CompareOnly
 # Expenses:Consulting Fees is absent: it is not in this book at all, which is
 # different from being hidden.
 
+$WIP
 Scenario A payee rule made in one book does not act in the other
 Description The rules are learned from categorising, and a category learned in
 Description the business book names a business category. Applying it in the
@@ -122,6 +124,7 @@ Then payee rules in force in Personal are : PayeeRules
 | Pattern | MatchType | Payee | Category |
 # No rows.
 
+$WIP
 Scenario A bank profile set up for one book serves the other
 Description The headings of a CSV file from a bank are the same whichever
 Description account they describe, so the profile is shared and the second book
@@ -148,6 +151,7 @@ Attributes CurrentBook
 | Attribute | Type | Default |
 | Name      | Text |         |
 
+$WIP
 Scenario An OFX account mapping is per book
 Description Two accounts at one bank, one business and one personal, have two
 Description different numbers and belong in two different books. A mapping in
@@ -203,6 +207,7 @@ Attributes PerBookCheck
 | OutOfBalance        | Integer | 0       |
 | Balanced            | Boolean | false   |
 
+$WIP
 Scenario A transfer may not name an account in another book
 Description A posting names an account, and the accounts of another book are
 Description not in scope. There is no syntax for it and no account picker that
@@ -219,6 +224,7 @@ Then rejected because : Rejection
 | Reason                                                              |
 | Expenses:Consulting Fees is not an account in this book             |
 
+$WIP
 Scenario Money moving between the two books is two transactions
 Description A draw from the business is the case that makes people want one
 Description book. It is recorded as two transactions, one in each book, each
@@ -262,6 +268,7 @@ Attributes OwnerDraw
 | FromBook  | Text  |            |
 | ToBook    | Text  |            |
 
+$WIP
 Scenario A draw is not income in the personal book
 Description It would be counted twice: once as business income when it was
 Description earned and again as household income when it was drawn. Equity is
@@ -434,6 +441,7 @@ Attributes ColumnType
 | Column        | String |         |
 | Notes         | String | none    |
 
+$WIP
 BusinessRule The QIF profiles live in one file beside the books, under a name
 Description Named, so there can be more than one: an export made years ago may
 Description have a different date order from one made today, and being able to
@@ -459,6 +467,7 @@ Attributes BesideTheBooks
 | Holds      | String |         |
 | InBookList | String |         |
 
+$WIP
 Scenario A QIF profile is remembered under a name and found again
 Description So that importing the same export twice does not ask twice, and
 Description importing from another Quicken book does not ask at all.
@@ -596,6 +605,7 @@ Attributes BookNameRow
 # Opening and working in two books
 # ---------------------------------------------------------------------------
 
+$WIP
 Scenario Two books may be open at once, in two windows
 Description A window is open on one book and every register, report and import
 Description in it belongs to that book. Having both open is useful on the day
@@ -619,6 +629,7 @@ Attributes BookWindow
 | Window    | Integer | 0       |
 | Book      | Text    |         |
 
+$WIP
 Scenario Opening the same book twice brings its window forward
 Description Two windows on one book would let the same transaction be edited
 Description in two places, and the second edit would silently win.
@@ -631,6 +642,7 @@ Then windows are : BookWindow
 | Window | Book     |
 | 1      | Business |
 
+$WIP
 Scenario A report names the book it is of
 Description Two reports of the same period from two books look alike, and the
 Description figures are not comparable. The name is on the report so that a
@@ -656,6 +668,7 @@ Attributes ReportHeading
 # Where the two books come from
 # ---------------------------------------------------------------------------
 
+$WIP
 Scenario Each QIF file migrates into its own book
 Description The two exports in testdata become the two books, and the
 Description migration is run twice. Neither run can see the other, so a
@@ -676,6 +689,7 @@ Attributes QifMigration
 | SourceFile | Text |         |
 | BookName   | Text |         |
 
+$WIP
 Scenario A bracketed account naming the other file is created in this book
 Description The business export may name an account that lives in the personal
 Description one. The migration cannot reach across, so it creates the account

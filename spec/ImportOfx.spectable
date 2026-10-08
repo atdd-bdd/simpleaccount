@@ -202,6 +202,7 @@ Then rejected because : Rejection
 | Reason                                                  |
 | No OFX header found; this looks like a CSV file         |
 
+$WIP
 Scenario A statement for an account that is not yet mapped asks which it is
 Description The first download from an institution names an account number that
 Description means nothing yet. The import stops and asks, rather than inventing
@@ -233,6 +234,7 @@ Details Recorded once, on the first import, and used silently thereafter.
 | OfxAccountId | Text        |         | As the file gives it             |
 | AccountPath  | AccountPath |         | Where its transactions are posted |
 
+$WIP
 Scenario A mapped account imports without asking
 Given account mappings are : AccountMapping
 | BankId    | OfxAccountId | AccountPath     |
@@ -321,6 +323,7 @@ Attributes DispositionRule
 | Condition   | String            |         |
 | Disposition | ImportDisposition | New     |
 
+$WIP
 Scenario Importing the same file twice imports nothing the second time
 Description The FITID is stored on the posting in the statement account, which
 Description is what makes this test possible at all.
@@ -620,6 +623,7 @@ Description does the same job for a QIF.
 | Kind      | Text |         |
 | Detail    | Text |         |
 
+$WIP
 Scenario A wider check-number window reaches a check that took a fortnight
 Description The same check sixteen days later, in a book whose window is thirty
 Description days. The number settles it, so the one entered by hand is cleared
@@ -824,6 +828,7 @@ Details So a pair is proposed and the user approves it, and an approval can be
 Details remembered so that the next month's import proposes the same thing with
 Details the reasoning already made.
 
+$WIP
 DataType TransferCandidateState
 Description How far a proposed pairing has got.
 Examples: EnumerationValues
@@ -848,6 +853,7 @@ Description One proposed pairing, with everything the user needs to judge it.
 | DaysApart   | Integer                | 0          |
 | State       | TransferCandidateState | Proposed   |
 
+$WIP
 BusinessRule When two new transactions are proposed as one transfer
 Description All of these, and then it is proposed rather than done.
 Details The window is two days, which is narrower than the five used for
@@ -985,6 +991,7 @@ Then postings are : ImportedPostingRow
 # what is already on the screen. Each posting carries the identifier from the
 # file that described it, which is why an identifier belongs to a posting.
 
+$WIP
 Scenario Two cards from one bank are told apart by the amount
 Description Both cards say CHASEBANK, so the payee narrows the search to both and
 Description the amount decides between them.
@@ -1067,6 +1074,7 @@ Attributes TransferCandidateRule
 | Test      | Integer | 0       |
 | Condition | String  |         |
 
+$WIP
 Scenario A transfer between two checking accounts is proposed and approved
 Description The pair observed in the two checking files in testdata: the same
 Description amount out of one account and into the other on the same day.
@@ -1117,6 +1125,7 @@ Description Transactions from several files at once, each naming its account.
 | Memo         | Text        | none       |
 | CheckNum     | CheckNumber | none       |
 
+$WIP
 Scenario A credit card autopay is proposed across a two-day gap
 Description The payment left the checking account on 3 August and reached the
 Description card on 1 August. It is the same transfer, and this is the pair
@@ -1160,6 +1169,7 @@ Then report rows are : ReportRow
 # report twice over: once as an uncategorised payment from the bank and again
 # as an uncategorised credit on the card.
 
+$WIP
 Scenario Three days apart is not proposed
 Description The boundary. Two days is the window, so a third day makes these
 Description two ordinary transactions. The amounts and accounts still look like
@@ -1188,6 +1198,7 @@ Then import summary is : ImportSummary Vertical
 | Matched   | 0 |
 | Possible  | 0 |
 
+$WIP
 Scenario Two days apart is proposed
 Description The other side of the boundary, and the real autopay from the files.
 Given the chart of accounts is : ChartOfAccounts
@@ -1208,6 +1219,7 @@ Then transfer candidates are : TransferCandidate
 | FromAccount           | FromDate   | ToAccount           | ToDate     | Amount | DaysApart | State    |
 | Assets:Checking Prime | 2026-08-03 | Liabilities:WF Card | 2026-08-01 | 250.00 | 2         | Proposed |
 
+$WIP
 Scenario Every proposal is confirmed in a dialog before anything is written
 Description Nothing is paired without being shown and agreed to. The dialog
 Description lists each proposal with both halves, the gap in days, and the
@@ -1250,6 +1262,7 @@ Attributes ConfirmationRow
 | DaysApart   | Integer     | 0       |
 | Choices     | Text        |         |
 
+$WIP
 Scenario Rejecting a candidate leaves two transactions
 Description The user knows these were two separate payments. Nothing is merged,
 Description and each gets the Uncategorized side it would have had anyway.
@@ -1283,6 +1296,7 @@ Then import summary is : ImportSummary Vertical
 | Matched   | 0 |
 | Possible  | 0 |
 
+$WIP
 Scenario Four transfers of the same shape are proposed as four pairs
 Description Three of 3,000.00 on three month ends and one of 30,000.00, which
 Description is what the two checking files hold. Each half pairs with exactly
@@ -1316,6 +1330,7 @@ Then transfer candidates are : TransferCandidate
 # The three 3,000.00 pairs are not interchangeable even though they look
 # alike: each is paired with the half of its own date, closest date first.
 
+$WIP
 BusinessRule Which half pairs with which when several match
 Description Closest date first, and then the order the files were read. A half
 Description that has been paired is out of the running for the rest.
@@ -1331,6 +1346,7 @@ Attributes CandidatePriority
 | Test      | Integer | 0       |
 | Condition | String  |         |
 
+$WIP
 Scenario A candidate is never proposed within one account
 Description Two transactions in one account with opposite amounts is a payment
 Description and a refund, or a mistake, and either way it is not a transfer.
@@ -1354,6 +1370,7 @@ Then transfer candidates are : TransferCandidate
 | FromAccount | FromDate | ToAccount | ToDate | Amount | DaysApart | State |
 # No rows.
 
+$WIP
 Scenario A candidate is not proposed when one half matches a transaction already there
 Description The matching rules of this file run first. A downloaded transaction
 Description that clears something already in the book is accounted for, and is
@@ -1408,6 +1425,7 @@ Collection TransferMatchRules
 | DataType          | Minimum | Maximum | Notes |
 | TransferMatchRule | 0       | 10000   |       |
 
+$WIP
 Scenario Approving a candidate offers to remember it
 Description The offer is made, not taken. Whether a recurring autopay should
 Description always be paired is a judgement about the accounts, and the user is
@@ -1431,6 +1449,7 @@ Then rule offered is : TransferMatchRule Vertical
 | ToPattern   | AUTOMATIC PAYMENT THANK YOU |
 | Enabled     | true                        |
 
+$WIP
 Scenario A remembered rule pairs the next month without asking
 Description The same two names, a different amount and a different month. The
 Description candidate is approved automatically and still appears in the import
@@ -1460,6 +1479,7 @@ Then postings are : ImportedPostingRow
 | T1  | 2026-09-01 | WF Credit Card AUTO PAY | Assets:Checking Prime | -2026.95 | Cleared | C2    |
 | T1  | 2026-09-01 | WF Credit Card AUTO PAY | Liabilities:WF Card   | 2026.95  | Cleared | V2    |
 
+$WIP
 Scenario A remembered rule still requires the amounts to be equal and opposite
 Description The rule says these two payees in these two accounts are worth
 Description pairing. It does not say any two transactions between them are one
@@ -1485,6 +1505,7 @@ Then transfer candidates are : TransferCandidate
 | FromAccount | FromDate | ToAccount | ToDate | Amount | DaysApart | State |
 # No rows, and both arrive as ordinary uncategorised transactions.
 
+$WIP
 Scenario Candidates are shown before anything is written
 Description The import is one decision. The candidates, the duplicates and the
 Description matches are all presented together, and the file is committed once
@@ -1523,6 +1544,7 @@ Attributes ImportPreview
 # Checking the result against the bank
 # ---------------------------------------------------------------------------
 
+$WIP
 Scenario The imported balance is checked against the one the bank states
 Description LEDGERBAL is the strongest check there is that the import is right.
 Description A disagreement is reported rather than silently accepted.
@@ -1561,6 +1583,7 @@ Attributes LedgerBalanceResult
 | Difference     | Money   | 0.00    |
 | Agrees         | Boolean | false   |
 
+$WIP
 Scenario A disagreement with the stated balance is reported
 Description The usual cause is a transaction entered by hand that the bank has
 Description not seen, wrongly marked cleared. The number is what makes it
@@ -1583,6 +1606,7 @@ Then balance check is : LedgerBalanceResult Vertical
 | Difference     | -100.00 |
 | Agrees         | false   |
 
+$WIP
 Scenario Only cleared postings count towards the stated balance
 Description A check written but not yet presented is in the register and not at
 Description the bank. Counting it would make every import look wrong.

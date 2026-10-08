@@ -30,6 +30,7 @@ Description What was asked for.
 | IncludeInvestmentActivity | Boolean | false  |
 | QuickenSigns | Boolean     | false      |
 
+$WIP
 DataType ReportGrouping
 Description What the rows of the report are.
 Examples: EnumerationValues
@@ -38,6 +39,7 @@ Examples: EnumerationValues
 | Payee    | One row per payee                            |
 | Account  | One row per real account, for a balance sheet |
 
+$WIP
 DataType ReportInterval
 Description What the columns of the report are.
 Examples: EnumerationValues
@@ -48,6 +50,7 @@ Examples: EnumerationValues
 | Year    | One column per year                         |
 | FiscalYear | One column per fiscal year               |
 
+$WIP
 DataType ReportDetail
 Description How much of the category tree a report shows, which is the choice
 Description offered on the report itself.
@@ -291,6 +294,7 @@ Then report rows are : ReportRow
 # How much of the tree the report shows
 # ---------------------------------------------------------------------------
 
+$WIP
 Scenario Asking for the highest categories only shows one line for each
 Description The summary: Auto reads 450.00 with nothing under it, and the figure
 Description still adds to the same total as the full tree. The section lines stay,
@@ -373,6 +377,7 @@ Details that category's, which is what steps it over.
 | Each      | Money          |         |
 | Amount    | Money          |         |
 
+$WIP
 DataType ReportLineKind
 Description What a line of a report shown with its transactions is.
 Examples: EnumerationValues
@@ -381,6 +386,7 @@ Examples: EnumerationValues
 | Other       | The Other line standing for a category's own transactions  |
 | Transaction | One transaction, under the line whose figure it is part of |
 
+$WIP
 Scenario Asking for transactions shows each one under its category
 Description The figures are the ones the full tree already shows; what is added is
 Description a line for each transaction behind them, in date order, one step
@@ -422,6 +428,7 @@ Then report total is : ReportTotal Vertical
 # Nothing is shown under a section line or a placeholder: Expenses has no
 # transactions of its own, and the lines beneath it still add to its 960.00.
 
+$WIP
 Scenario A category with transactions of its own shows them under its Other line
 Description The Other line is where a category's own transactions are totalled,
 Description so it is where they are listed. Without that, the forty and the ten
@@ -514,6 +521,7 @@ Then report rows are : ReportRow
 # A category that holds both transactions and other categories
 # ---------------------------------------------------------------------------
 
+$WIP
 BusinessRule A category with its own transactions shows them on an Other row
 Description A category that contains other categories can still be chosen for a
 Description transaction. Expenses:Auto has Fuel and Insurance under it and also
@@ -554,6 +562,7 @@ Attributes OtherRowNaming
 | ContainingCategory | AccountPath |         |
 | TheRowIsCalled     | Text        |         |
 
+$WIP
 Scenario A category with its own transactions and children shows an Other row
 Description Forty on petrol under Fuel, ten on something to do with the car
 Description posted to Auto itself. Auto totals fifty, and the two rows beneath it
@@ -583,6 +592,7 @@ Then report rows are : ReportRow
 # categories, which is where Quicken puts it -- and these reports are checked
 # against Quicken's.
 
+$WIP
 Scenario A category with its own transactions and no children shows no Other row
 Description There is nothing for the row to distinguish: the category's figure
 Description is already its own transactions and nothing else.
@@ -604,6 +614,7 @@ Then report rows are : ReportRow
 # One row, because an Other row under a category with no children would be the
 # same figure written twice.
 
+$WIP
 Scenario A category with children and no transactions of its own shows no Other row
 Description Which is the ordinary case: a category made only to hold others.
 Given the chart of accounts is : ChartOfAccounts
@@ -912,6 +923,7 @@ Then payee report rows are : PayeeReportRow
 | Payee      | Amount | Count |
 | Home Depot | 184.50 | 1     |
 
+$WIP
 Scenario A payee report for one category only
 Description What was spent at the hardware store on the garden, rather than
 Description what was spent there altogether.
@@ -946,6 +958,7 @@ Description the real report has as many columns as the range covers.
 | Y2025     | Money       | 0.00    |
 | Total     | Money       | 0.00    |
 
+$WIP
 Scenario A category report by year
 Description This is the multi-year history, and it is the reason the postings
 Description are never summarised into a stored total: a column for 2007 is the
@@ -969,6 +982,7 @@ Then year column rows are : YearColumnRow
 | Expenses:Groceries     | 1     | 400.00   | 500.00   | 0.00  | 900.00   |
 | Expenses:Uncategorized | 1     | 0.00     | 10.00    | 0.00  | 10.00    |
 
+$WIP
 Scenario A year with no postings still has a column
 Description An empty column is information: it says nothing happened that year,
 Description which is a different statement from the year being absent from the
@@ -993,6 +1007,7 @@ Attributes ReportColumn
 | To          | Date    | 2024-12-31 |
 | HasPostings | Boolean | false      |
 
+$WIP
 Scenario A range that stops inside a year gives a short last column
 Description The column is labelled with the part of the year it covers, so that
 Description a figure covering five months is not read as a whole year.
@@ -1008,6 +1023,7 @@ Then report columns are : ReportColumn
 | 2023           | 2023-01-01 | 2023-12-31 | true        |
 | 2024 to 31 May | 2024-01-01 | 2024-05-31 | true        |
 
+$WIP
 Scenario An average column over the years asked for
 Description The average is over the columns in the report, not over the years in
 Description which something happened, so a category used twice in three years
@@ -1120,6 +1136,7 @@ Attributes DrillDownRow
 # Net worth over time
 # ---------------------------------------------------------------------------
 
+$WIP
 Scenario Net worth at the end of each year
 Description The real accounts only, as in Accounts. Each column is a balance as
 Description at a date rather than a total of a period, which is why this report
@@ -1159,6 +1176,7 @@ Attributes NetWorthColumn
 # Taking a report away
 # ---------------------------------------------------------------------------
 
+$WIP
 Scenario A report is written out as CSV with its figures unrounded
 Description The file is for a spreadsheet, so the grouping separators and the
 Description parentheses of the displayed report are left out and the sign is

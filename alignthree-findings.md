@@ -330,6 +330,43 @@ sustainable.
 
 ---
 
+## 9. `$tag` filtering is excellent and is in no document
+
+`--tag-filter "NOT WIP"` with `$WIP` above a block is the single most useful
+thing added to this project's workflow. A specification that deliberately runs
+ahead of the code had 217 failing tests out of 467, all of them by design, and
+the suite could not tell anyone anything. With the filter, what gets compiled is
+what should pass, and a red test means a regression again.
+
+Three things about it:
+
+- **It is in no document.** Not in `spectable syntax v3.3a.md`, not in the User
+  Guide. It was found by running `strings` over the converter binary. The syntax
+  reference needs the `$tag` line form, and the User Guide needs the workflow:
+  tag what is not built, filter it out, take the tag off when the code lands.
+- **Stub generation ignores the filter, which is right.** A `$WIP` block's steps
+  still get their glue stubs, so implementing one is: write the code, connect the
+  glue, remove the tag. If stubs were filtered too, every tag would have to be
+  removed before the glue existed to fill in. Worth stating in the document so
+  nobody "fixes" it.
+- **A tag that attaches to nothing is silent.** Tags are cleared by a blank line,
+  which is the right rule, but `$WIP` followed by a blank line and then a
+  `Scenario` simply generates the test. Nothing warns. The failure is quiet in
+  both directions: a block you believe is skipped is tested, or -- after an edit
+  that inserts a line -- a block you believe is tested is skipped, and a skipped
+  test looks exactly like a passing one. `analyze_cli` has no opinion about tags
+  at all. **A `$tag` line not immediately followed by a taggable block should be
+  a diagnostic.** It is the same shape as finding 6: the file says one thing and
+  the generated tests do another, with nothing in between to say so.
+
+Two smaller notes: the filter accepts a `$` on the tags inside the expression
+(`"NOT $WIP"` works as well as `"NOT WIP"`) and matching is case-insensitive,
+neither of which is guessable; and a `$WIP` above the `Specification` line tags
+every block in the file, which is the right thing for a file that is entirely
+unwritten and is also undocumented.
+
+---
+
 ## What was not AlignThree's fault
 
 Recorded so the list above is not read as longer than it is.

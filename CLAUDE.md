@@ -36,8 +36,40 @@ generate. Pass every other spec file as `--context` so cross-file types resolve:
 CONV=/c/Users/user/source/repos/SpecStudio/dist/AlignThree-0.9.1-windows-x64/SpecTableConverter.exe
 SPEC=/c/Users/user/source/repos/simpleaccount/spec
 CTX=""; for f in "$SPEC"/*.spectable; do CTX="$CTX --context $f"; done
-for f in "$SPEC"/*.spectable; do "$CONV" -l Cpp $CTX "$f" ./generated; done
+for f in "$SPEC"/*.spectable; do "$CONV" -l Cpp --tag-filter "NOT WIP" $CTX "$f" ./generated; done
 ```
+
+## $WIP: the suite that is built is the suite that should pass
+
+A specification here runs ahead of the code on purpose, so most of it describes
+behaviour that is not written yet. Those blocks are marked `$WIP` on the line
+directly above them, and the converter is told `--tag-filter "NOT WIP"`, so no
+test is generated for them. **A failing test is therefore a regression, not a
+feature nobody has built.** Read it that way.
+
+```
+$WIP
+Scenario A payee report for one category only
+```
+
+- The tag goes on its own line **immediately** above the `Scenario`,
+  `BusinessRule`, `DataType` or `Calculation` it belongs to. A blank line
+  between the two clears it and the test is generated after all.
+- `$WIP` above the `Specification` line tags every block in the file.
+- Matching is case-insensitive, and the filter is a boolean expression:
+  `"NOT WIP"`, `"smoke AND NOT WIP"`.
+- Glue stubs are still written for a `$WIP` block's steps -- stub generation
+  ignores the filter -- so implementing one is: write the code, connect the
+  glue, take the tag off, rebuild.
+- The analyzer says nothing about tags either way, so a misplaced `$WIP` is
+  silent. The number of tests in the run is what shows it: a block that should
+  be live and is tagged simply never appears.
+- `TAGS="" tools/rebuild.sh` generates the whole specification, tags and all,
+  which is how to see what is still owed. Expect it to be mostly red.
+
+Do not take a tag off to make something green, and do not add one to make a
+failure go away. A `$WIP` block is a promise about what the program will do; a
+test that fails without one is a bug.
 
 The authoritative language reference is
 `../SpecStudio/spectable syntax v3.3a.md`. Worked C++ examples, including the

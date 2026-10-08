@@ -63,6 +63,7 @@ Given the chart of accounts is : ChartOfAccounts
 # Creating accounts
 # ---------------------------------------------------------------------------
 
+$WIP
 Scenario Adding an account under a parent
 Given the chart of accounts is as previous
 When account added : Account Vertical
@@ -74,6 +75,7 @@ Then account is : Account Vertical
 | Placeholder | false                   |
 | Hidden      | false                   |
 
+$WIP
 Scenario A missing parent is created as a placeholder
 Description Importing twenty years of data names deep categories that were
 Description never created by hand, so the missing levels are filled in and
@@ -89,6 +91,7 @@ Then accounts created are : ChartOfAccounts
 | Expenses:Home:Garden:Seeds | Expense | false       |
 # The first two were filled in; the third is the one that was asked for.
 
+$WIP
 Scenario A filled-in parent takes the type of its child
 Description A placeholder created on the way to an Expense is itself an Expense,
 Description so the roll-up in a report adds up.
@@ -209,6 +212,7 @@ Then accounts under Expenses:Auto are : ChartOfAccounts CompareOnly
 | Path               |
 | Expenses:Auto:Fuel |
 
+$WIP
 Scenario Hiding an account keeps its history
 Given the chart of accounts is as previous
 When account hidden : AccountSelect
@@ -230,6 +234,7 @@ Then category picker offers : ChartOfAccounts CompareOnly
 # What identifies an account
 # ---------------------------------------------------------------------------
 
+$WIP
 BusinessRule An account is identified by something that is not its path
 Description The path is a label. It is what people read, what they type and what
 Description every table in this specification names an account by, and it can
@@ -268,6 +273,7 @@ Attributes AccountRearranged
 | TheIdentity  | Text   | No      |
 | ThePostings  | Text   | Untouched |
 
+$WIP
 Scenario Moving a category under another parent leaves its postings alone
 Description The postings named the account, not the path, so moving it is a
 Description change to one account and to nothing else. The paths underneath are
@@ -304,6 +310,7 @@ Attributes AccountMove
 # Finding a category
 # ---------------------------------------------------------------------------
 
+$WIP
 BusinessRule Typing part of a category offers it and everything under it
 Description Categorising a transaction by hand starts with typing. Whatever is
 Description typed is matched against every part of every path, and a category
@@ -338,6 +345,7 @@ Attributes CategoryMatch
 | Offered   | String      |         |
 | Notes     | String      | none    |
 
+$WIP
 Scenario Typing part of a name offers the category and its children
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type    | Placeholder | Hidden |
@@ -365,6 +373,7 @@ Attributes CategoryOffered
 | Attribute | Type        | Default |
 | Path      | AccountPath |         |
 
+$WIP
 Scenario An alias stands for one category however little is typed
 Description A category used weekly should not need its name typed. The alias is
 Description the user's own, a couple of letters after an at sign, and it offers
@@ -382,6 +391,7 @@ Then categories offered are : CategoryOffered
 # Only the one. An alias is a person saying exactly which category they mean,
 # so the children are not brought along as they are for a typed parent.
 
+$WIP
 Scenario A category not used for years is left out while typing
 Description It is still in the book, still has its history, and still appears in
 Description a report that covers the years it was used. It is simply not put in
@@ -406,6 +416,7 @@ Then categories offered are : CategoryOffered
 # Carriage last saw a posting in 2009, so it is not offered. Asking to see
 # everything brings it back.
 
+$WIP
 Scenario Asking for the unused ones brings them back
 Given today is : Today Vertical
 | Date | 2026-10-05 |
