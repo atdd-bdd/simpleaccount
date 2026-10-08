@@ -1,6 +1,7 @@
 #pragma once
 #include <QFont>
 #include <QMainWindow>
+#include <QMenu>
 #include <memory>
 #include <vector>
 #include "chart.h"
@@ -86,7 +87,13 @@ private:
     bool save();
     void refresh();
     void refreshAccounts();
+    QMenu* recent_ = nullptr;
     void refreshPane(int paneOneBased);
+    // The books opened lately, by name. Kept in QSettings rather than in a
+    // book, because which books a person has been in is about this machine and
+    // not about any one of them.
+    void rebuildRecent();
+    void rememberRecent(const QString& name);
     // Reads what was typed on the blank line of that pane back out of the
     // table, and records it if an amount was entered. An amount is what makes
     // it a transaction: a payee typed and thought better of leaves nothing.

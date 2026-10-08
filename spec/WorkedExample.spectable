@@ -31,7 +31,6 @@ Details nothing is imported twice. Two downloads that do both show the same
 Details transfer is a real situation and a different problem -- the matching
 Details in ImportOfx -- and it is deliberately not what this file is about.
 
-$WIP
 Background A month of statements, one for each account
 Description Four accounts, two profiles, four files. The categories the
 Description scenarios use are in the chart from the start, so that a scenario
@@ -115,7 +114,6 @@ Given rows imported
 # What arrived
 # ---------------------------------------------------------------------------
 
-$WIP
 Scenario The four registers balance after the imports
 Description The first thing to check, and the thing a person checks: each
 Description register agrees with the statement it was read from. A card and a
@@ -130,7 +128,6 @@ Then balances are : AccountBalance
 # Uncategorized -- chosen by the sign, so money in is Income:Uncategorized and
 # money out is Expenses:Uncategorized. That is the work the scenarios below do.
 
-$WIP
 Scenario Everything starts in Uncategorized
 Description Not one of these files carried a category, so the whole month is
 Description sitting in the two Uncategorized accounts waiting to be told what
@@ -171,7 +168,6 @@ Description something the program shows.
 | Payee     | PayeeName   |         |
 | Category  | AccountPath |         |
 
-$WIP
 Scenario Categorising the card charges and the two checks
 Description The three charges on the card and the two checks written during
 Description the month. The rest is left alone on purpose: the groceries bought
@@ -219,7 +215,6 @@ Then report total is : ReportTotal Vertical
 # salary is income and so is the interest, and the 1000.00 deposit is whatever
 # it was, which this book does not say.
 
-$WIP
 Scenario A payment to a card is a transfer, not an expense
 Description Giving the payment the card account as its category makes the
 Description transaction a transfer between two real accounts, and a transfer

@@ -33,10 +33,52 @@ struct Totals {
     Money net;
 };
 
+// How much of the tree a report shows. This is the choice offered on the report
+// itself; see the detail section of Reports.spectable.
+enum class Detail {
+    HighestOnly,    // one line per category at the top of a section
+    AllCategories,  // every category, indented under its parent
+    Transactions,   // every category, with the transactions behind each one
+};
+
+inline std::string to_string(Detail detail) {
+    switch (detail) {
+        case Detail::HighestOnly:   return "HighestOnly";
+        case Detail::AllCategories: return "AllCategories";
+        case Detail::Transactions:  return "Transactions";
+    }
+    return "AllCategories";
+}
+
+inline Detail detail_from_string(const std::string& text) {
+    if (text == "HighestOnly") return Detail::HighestOnly;
+    if (text == "Transactions") return Detail::Transactions;
+    return Detail::AllCategories;
+}
+
+// What a line of a report shown with its transactions is.
+enum class LineKind {
+    Category,     // a category or a section, carrying the figure beneath it
+    Other,        // the Other line standing for a category's own transactions
+    Transaction,  // one transaction, under the line whose figure it is part of
+};
+
+inline std::string to_string(LineKind kind) {
+    switch (kind) {
+        case LineKind::Category:    return "Category";
+        case LineKind::Other:       return "Other";
+        case LineKind::Transaction: return "Transaction";
+    }
+    return "Category";
+}
+
 struct Spec {
     types::Date from{2024, 1, 1};
     types::Date to{2024, 12, 31};
     int depth = 0;          // 0 is no limit
+    // Which of the three shapes is wanted. HighestOnly is a depth limit of one
+    // under the name the report offers, and it wins over Depth.
+    Detail detail = Detail::AllCategories;
     bool zero_rows = false;
     // A spending report answers what was earned and spent. A dividend
     // reinvested inside a retirement account was neither, so by default the
@@ -96,6 +138,11 @@ inline bool inside_investment(const std::set<std::string>& refs,
 inline CategoryReport category_report(const chart::Chart& accounts,
                                       const ledger::Ledger& book,
                                       const Spec& spec) {
+    // HighestOnly is the summary, which is a depth limit of one. It wins over
+    // Depth so that choosing it is not quietly undone by a depth left over from
+    // somewhere else; the two mean the same thing and there is one of them.
+    const int depth = spec.detail == Detail::HighestOnly ? 1 : spec.depth;
+
     // What each account holds over the range, and what its subtree holds.
     std::map<std::string, Money> own;
     std::map<std::string, Money> total;
@@ -166,7 +213,7 @@ inline CategoryReport category_report(const chart::Chart& accounts,
 
         for (const std::string& path : paths) {
             const int level = detail::level_of(path);
-            if (spec.depth > 0 && level > spec.depth) continue;
+            if (depth > 0 && level > depth) continue;
             if (!spec.zero_rows && !has_activity(path)) continue;
 
             // A node is a subtotal when something below it is being shown. At a
@@ -177,7 +224,7 @@ inline CategoryReport category_report(const chart::Chart& accounts,
                 if (other == path) continue;
                 if (!chart::Chart::is_descendant_or_self(other, path)) continue;
                 const int other_level = detail::level_of(other);
-                if (spec.depth > 0 && other_level > spec.depth) continue;
+                if (depth > 0 && other_level > depth) continue;
                 if (!spec.zero_rows && !has_activity(other)) continue;
                 shows_children = true;
                 break;
@@ -250,6 +297,135 @@ inline CategoryReport category_report(const chart::Chart& accounts,
     // the sign of the expenses figure is turned round and not after.
     out.totals.net = out.totals.income - out.totals.expenses;
     if (spec.quicken_signs) out.totals.expenses = -out.totals.expenses;
+    return out;
+}
+
+// One line of a report shown with its transactions.
+//
+// Two amount columns, because they are two different kinds of figure: Each is
+// the individual amount and is filled only on a transaction line, Amount is the
+// figure for the category and is filled only on a category line. A column with
+// nothing in it on a line is empty rather than zero -- a category line has no
+// individual amount to show, which is not the same as showing it as 0.00 -- so
+// each one says whether it is there.
+struct DetailLine {
+    LineKind kind = LineKind::Category;
+    std::string account;      // on a transaction line, the category it was posted to
+    int level = 0;
+    types::Date date{2024, 1, 1};
+    std::string payee;
+    Money each;
+    Money amount;
+    bool has_each = false;
+    bool has_amount = false;
+    // Carried through from the row this line came from, so that a page showing
+    // transactions emphasises the same lines as a page without them.
+    bool is_subtotal = false;
+};
+
+namespace detail {
+
+// The Other line is written by the report and is in no chart, so it is known by
+// its name and by not being an account. Its category is the section it is under
+// plus the rest of the label, which is how the name was built.
+inline bool is_other_line(const chart::Chart& accounts, const std::string& label) {
+    return label.rfind("Other ", 0) == 0 && accounts.find(label) == nullptr;
+}
+
+inline bool touches_an_investment(const chart::Chart& accounts,
+                                  const ledger::Transaction& t) {
+    for (const ledger::Posting& p : t.postings) {
+        const chart::Account* a = accounts.find(p.account.value());
+        if (a != nullptr && a->type == types::AccountType::Investment) return true;
+    }
+    return false;
+}
+
+}  // namespace detail
+
+// The category report with the transactions behind each figure underneath it,
+// which is the drill-down of every line at once rather than one at a time.
+//
+// The figures are the ones the full tree already shows: this walks the report
+// rather than totalling anything again, so a transaction line can never
+// disagree with the category line above it. See Reports.spectable.
+inline std::vector<DetailLine> detail_report(
+        const chart::Chart& accounts, const ledger::Ledger& book,
+        const std::vector<ledger::Transaction>& transactions, const Spec& spec) {
+    // The whole tree, whatever was asked for: the transactions are the detail,
+    // so a depth limit would hide the categories they belong to.
+    Spec whole = spec;
+    whole.detail = Detail::AllCategories;
+    whole.depth = 0;
+    const CategoryReport report = category_report(accounts, book, whole);
+
+    std::vector<DetailLine> out;
+    std::string section;
+    for (const Row& row : report.rows) {
+        const bool other = detail::is_other_line(accounts, row.account);
+        // Which half of the report this line is in, taken from the root of the
+        // last real path rather than from a level 0 row: a chart that never
+        // declared Income or Expenses still reports under them, so there is not
+        // always a row to read it off.
+        if (!other) {
+            const std::size_t colon = row.account.find(':');
+            section = colon == std::string::npos ? row.account
+                                                 : row.account.substr(0, colon);
+        }
+
+        DetailLine line;
+        line.kind = other ? LineKind::Other : LineKind::Category;
+        line.account = row.account;
+        line.level = row.level;
+        line.amount = row.amount;
+        line.has_amount = true;
+        line.is_subtotal = row.is_subtotal;
+        out.push_back(line);
+
+        // A subtotal's own postings are on its Other line, so they are listed
+        // there and not twice. Everything else lists what was posted to it.
+        if (!other && row.is_subtotal) continue;
+        const std::string holds =
+            other ? section + ":" + row.account.substr(std::string("Other ").size())
+                  : row.account;
+
+        const chart::Account* a = accounts.find(holds);
+        const int sign = a != nullptr
+                             ? types::display_sign(a->type)
+                             : (section == "Income" ? -1 : 1);
+        const bool turn = spec.quicken_signs && section == "Expenses";
+
+        std::vector<DetailLine> lines;
+        for (const ledger::Transaction& t : transactions) {
+            if (t.date < spec.from || spec.to < t.date) continue;
+            if (!spec.include_investment_activity &&
+                detail::touches_an_investment(accounts, t))
+                continue;
+            // One line per posting against this category, so the lines add up
+            // to the figure above them even where a split posted to the same
+            // category twice.
+            for (const ledger::Posting& p : t.postings) {
+                if (p.account.value() != holds) continue;
+                DetailLine under;
+                under.kind = LineKind::Transaction;
+                under.account = holds;
+                under.level = row.level + 1;
+                under.date = t.date;
+                under.payee = t.payee.value();
+                under.each = sign < 0 ? -p.amount : p.amount;
+                if (turn) under.each = -under.each;
+                under.has_each = true;
+                lines.push_back(under);
+            }
+        }
+        // In date order, and two on the same date keep the order the register
+        // has them in.
+        std::stable_sort(lines.begin(), lines.end(),
+                         [](const DetailLine& l, const DetailLine& r) {
+                             return l.date < r.date;
+                         });
+        for (const DetailLine& under : lines) out.push_back(under);
+    }
     return out;
 }
 

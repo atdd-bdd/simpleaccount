@@ -256,6 +256,8 @@ void MainWindow::buildMenus() {
     QMenu* file = menuBar()->addMenu("&File");
     file->addAction("&New book...", this, &MainWindow::newBook);
     file->addAction("&Open book...", this, &MainWindow::openBook);
+    recent_ = file->addMenu("Open &recent");
+    rebuildRecent();
     file->addSeparator();
     // A QIF is a one-time migration out of Quicken, not a way to open a book.
     file->addAction("Import &history from Quicken...", this,
@@ -355,6 +357,7 @@ void MainWindow::newBook() {
     book_ = ledger::Ledger();
     transactions_.clear();
     rules_.clear();
+    rememberRecent(name);
     bookChanged(name);
 }
 
@@ -399,6 +402,7 @@ void MainWindow::openNamed(const QString& name) {
     book_ = ledger;
     transactions_ = transactions;
     rules_ = rules;
+    rememberRecent(name);
     bookChanged(name);
 }
 
@@ -412,6 +416,49 @@ bool MainWindow::save() {
         return false;
     }
     return true;
+}
+
+// The list is of names rather than paths: a book lives in the books folder and
+// is opened by name, so a path would be the same information written in a way
+// that breaks if the folder moves.
+void MainWindow::rebuildRecent() {
+    if (recent_ == nullptr) return;
+    recent_->clear();
+
+    QSettings settings("SimpleAccount", "SimpleAccount");
+    const QStringList remembered = settings.value("recentBooks").toStringList();
+
+    // Only the books that are still there. One deleted outside the program
+    // should not sit in the menu offering to fail.
+    QStringList here;
+    for (const std::string& one : store::book_names())
+        here << QString::fromStdString(one);
+
+    QStringList shown;
+    for (const QString& name : remembered)
+        if (here.contains(name) && !shown.contains(name)) shown << name;
+    // Trimmed back if the folder has lost some, so the setting does not grow a
+    // tail of names nobody can open.
+    if (shown != remembered) settings.setValue("recentBooks", shown);
+
+    if (shown.isEmpty()) {
+        QAction* none = recent_->addAction("(none yet)");
+        none->setEnabled(false);
+        return;
+    }
+    for (const QString& name : shown)
+        recent_->addAction(name, this, [this, name]() { openNamed(name); });
+}
+
+void MainWindow::rememberRecent(const QString& name) {
+    if (name.isEmpty()) return;
+    QSettings settings("SimpleAccount", "SimpleAccount");
+    QStringList names = settings.value("recentBooks").toStringList();
+    names.removeAll(name);
+    names.prepend(name);          // most recent first, which is the useful order
+    while (names.size() > 8) names.removeLast();
+    settings.setValue("recentBooks", names);
+    rebuildRecent();
 }
 
 void MainWindow::bookChanged(const QString& what) {
@@ -715,6 +762,18 @@ void MainWindow::showReport() {
         edit->setCalendarPopup(true);
         edit->setDisplayFormat("yyyy-MM-dd");
     }
+    // How much of the tree to show. The three the report offers, in the order
+    // they go from summary to everything. See the detail section of
+    // Reports.spectable.
+    auto* detail = new QComboBox;
+    detail->addItem("Categories - highest only",
+                    QString::fromStdString(reports::to_string(reports::Detail::HighestOnly)));
+    detail->addItem("Categories - all",
+                    QString::fromStdString(reports::to_string(reports::Detail::AllCategories)));
+    detail->addItem("Transactions",
+                    QString::fromStdString(reports::to_string(reports::Detail::Transactions)));
+    detail->setCurrentIndex(1);
+
     auto* quicken = new QCheckBox("Quicken signs");
     quicken->setToolTip("Expenses negative, as Quicken writes them, so a figure "
                         "can be read straight against one of its reports.");
@@ -727,17 +786,17 @@ void MainWindow::showReport() {
     chooser->addWidget(from);
     chooser->addWidget(new QLabel("to"));
     chooser->addWidget(to);
+    chooser->addSpacing(12);
+    chooser->addWidget(new QLabel("Show"));
+    chooser->addWidget(detail);
     chooser->addStretch(1);
     chooser->addWidget(quicken);
     chooser->addWidget(zero);
     layout->addLayout(chooser);
 
     auto* table = new QTableWidget;
-    table->setColumnCount(2);
-    table->setHorizontalHeaderLabels({"Category", "Amount"});
     table->verticalHeader()->setVisible(false);
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     layout->addWidget(table, 1);
 
     auto* totals = new QLabel;
@@ -758,29 +817,84 @@ void MainWindow::showReport() {
     for (const ledger::DatedPosting& one : book_.postings())
         if (one.date < earliest) earliest = one.date;
 
+    // One step of indent per level, which is what makes a child read as part of
+    // the line above it rather than as another category of its own.
+    const auto indented = [](int level, const std::string& text) {
+        return QString::fromStdString(
+            std::string(static_cast<std::size_t>(level) * 2, ' ') + text);
+    };
+
     const auto run = [&]() {
         reports::Spec spec;
         spec.from = asDate(from->date());
         spec.to = asDate(to->date());
+        spec.detail = reports::detail_from_string(
+            detail->currentData().toString().toStdString());
         spec.quicken_signs = quicken->isChecked();
         spec.zero_rows = zero->isChecked();
+
+        // Showing the transactions adds a column for the individual amounts, to
+        // the left of the column the category figures are read down. They are
+        // two different kinds of figure and one column would invite adding a
+        // transaction to the total that already contains it.
+        const bool entries = spec.detail == reports::Detail::Transactions;
+        table->setColumnCount(entries ? 3 : 2);
+        table->setHorizontalHeaderLabels(entries
+                                             ? QStringList{"Category", "Each", "Amount"}
+                                             : QStringList{"Category", "Amount"});
+        table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+
         const reports::CategoryReport report =
             reports::category_report(chart_, book_, spec);
 
-        table->setRowCount(static_cast<int>(report.rows.size()));
-        for (int r = 0; r < static_cast<int>(report.rows.size()); ++r) {
-            const reports::Row& line = report.rows[static_cast<std::size_t>(r)];
-            // Indented by its depth in the tree, so a child reads as one.
-            const std::string name =
-                std::string(static_cast<std::size_t>(line.level) * 2, ' ') +
-                types::name_of(types::AccountPath(line.account));
-            auto* item = new QTableWidgetItem(QString::fromStdString(name));
-            item->setToolTip(QString::fromStdString(line.account));
-            if (line.is_subtotal) item->setFont(bold);
-            table->setItem(r, 0, item);
-            setAmount(table, r, 1, line.amount);
-            if (line.is_subtotal && table->item(r, 1) != nullptr)
-                table->item(r, 1)->setFont(bold);
+        if (entries) {
+            const std::vector<reports::DetailLine> lines =
+                reports::detail_report(chart_, book_, transactions_, spec);
+            table->setRowCount(static_cast<int>(lines.size()));
+            for (int r = 0; r < static_cast<int>(lines.size()); ++r) {
+                const reports::DetailLine& line = lines[static_cast<std::size_t>(r)];
+                // A transaction reads as the date and who it was to; a category
+                // by its own name, and the Other line by the name the report
+                // gave it, which is not an account and has no name to take.
+                QString label;
+                switch (line.kind) {
+                    case reports::LineKind::Transaction:
+                        label = indented(line.level,
+                                         line.date.iso() + "  " + line.payee);
+                        break;
+                    case reports::LineKind::Other:
+                        label = indented(line.level, line.account);
+                        break;
+                    case reports::LineKind::Category:
+                        label = indented(line.level,
+                                         types::name_of(types::AccountPath(line.account)));
+                        break;
+                }
+                auto* item = new QTableWidgetItem(label);
+                item->setToolTip(QString::fromStdString(line.account));
+                if (line.is_subtotal) item->setFont(bold);
+                table->setItem(r, 0, item);
+                // One figure per line and the other column left empty, which is
+                // not the same as showing it as zero.
+                if (line.has_each) setAmount(table, r, 1, line.each);
+                if (line.has_amount) setAmount(table, r, 2, line.amount);
+                if (line.is_subtotal && table->item(r, 2) != nullptr)
+                    table->item(r, 2)->setFont(bold);
+            }
+        } else {
+            table->setRowCount(static_cast<int>(report.rows.size()));
+            for (int r = 0; r < static_cast<int>(report.rows.size()); ++r) {
+                const reports::Row& line = report.rows[static_cast<std::size_t>(r)];
+                auto* item = new QTableWidgetItem(
+                    indented(line.level,
+                             types::name_of(types::AccountPath(line.account))));
+                item->setToolTip(QString::fromStdString(line.account));
+                if (line.is_subtotal) item->setFont(bold);
+                table->setItem(r, 0, item);
+                setAmount(table, r, 1, line.amount);
+                if (line.is_subtotal && table->item(r, 1) != nullptr)
+                    table->item(r, 1)->setFont(bold);
+            }
         }
         totals->setText(QString("Income %1        Expenses %2        Net %3")
                             .arg(money(report.totals.income))
@@ -805,6 +919,7 @@ void MainWindow::showReport() {
     // it runs the report without moving the period back.
     QObject::connect(from, &QDateEdit::dateChanged, &box, run);
     QObject::connect(to, &QDateEdit::dateChanged, &box, run);
+    QObject::connect(detail, &QComboBox::currentIndexChanged, &box, run);
     QObject::connect(quicken, &QCheckBox::toggled, &box, run);
     QObject::connect(zero, &QCheckBox::toggled, &box, run);
     QObject::connect(close, &QPushButton::clicked, &box, &QDialog::accept);

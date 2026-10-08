@@ -200,6 +200,7 @@ private:
     std::vector<ledger::Transaction> transactions_;
     reports::Spec spec_;
     reports::CategoryReport report_;
+    std::vector<reports::DetailLine> lines_;
     std::string category_filter_;
     std::string opened_;
 
@@ -215,12 +216,17 @@ private:
     void run(const ReportSpecString& value) {
         spec_ = range_of(value.from, value.to);
         spec_.depth = value.depth.empty() ? 0 : std::stoi(value.depth);
+        spec_.detail = reports::detail_from_string(value.detail);
         spec_.zero_rows = parse_bool_cell(value.zerorows);
         spec_.include_investment_activity =
             parse_bool_cell(value.includeinvestmentactivity);
         spec_.quicken_signs = parse_bool_cell(value.quickensigns);
         category_filter_.clear();
         report_ = reports::category_report(chart_, book_, spec_);
+        // Both shapes, every time. The detailed one walks the report rather
+        // than totalling anything again, so having it here costs nothing and
+        // the two can never be out of step with each other.
+        lines_ = reports::detail_report(chart_, book_, transactions_, spec_);
     }
 public:
 
@@ -346,20 +352,88 @@ public:
 
 public:
 
+    // The two amount columns are compared as amounts rather than as text, so
+    // that 42000.00 and the grouped 42,000.00 are the same figure -- but an
+    // empty column is compared as empty, because a line with nothing in that
+    // column is not a line with zero in it.
     void then_report_lines_are(const std::vector<ReportDetailLineString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_report_lines_are";
+        ASSERT_EQ(values.size(), lines_.size())
+            << "number of report lines. Got:" << "\n" << listing(lines_);
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const ReportDetailLineString& want = values[i];
+            const reports::DetailLine& got = lines_[i];
+            const std::string where = "line " + std::to_string(i + 1) + " (" +
+                                      got.account + ")";
+            EXPECT_EQ(want.kind, reports::to_string(got.kind)) << where << " kind";
+            EXPECT_EQ(want.account, got.account) << where;
+            EXPECT_EQ(std::stoi(want.level), got.level) << where << " level";
+            // A date and a payee belong to a transaction line and to nothing
+            // else: a category carries neither.
+            const bool entry = got.kind == reports::LineKind::Transaction;
+            EXPECT_EQ(want.date, entry ? got.date.iso() : std::string())
+                << where << " date";
+            EXPECT_EQ(want.payee, entry ? got.payee : std::string())
+                << where << " payee";
+            expect_column(want.each, got.has_each, got.each, where + " each");
+            expect_column(want.amount, got.has_amount, got.amount, where + " amount");
+        }
     }
 
     void examples_datatype_reportdetail(const std::vector<EnumerationValuesString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_datatype_reportdetail";
+        for (const auto& value : values) {
+            const EnumerationValuesTyped v = EnumerationValuesTyped::from_string_struct(value);
+            bool known = false;
+            for (reports::Detail d : {reports::Detail::HighestOnly,
+                                      reports::Detail::AllCategories,
+                                      reports::Detail::Transactions})
+                if (reports::to_string(d) == v.value) known = true;
+            EXPECT_TRUE(known) << "unknown detail: " << v.value;
+            // And it reads back as itself. Anything unrecognised is read as
+            // AllCategories, so without this a spelling that differs between
+            // the specification and the code would simply show the whole tree.
+            EXPECT_EQ(v.value, reports::to_string(reports::detail_from_string(v.value)))
+                << "detail does not round trip: " << v.value;
+        }
     }
 
     void examples_datatype_reportlinekind(const std::vector<EnumerationValuesString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_datatype_reportlinekind";
+        for (const auto& value : values) {
+            const EnumerationValuesTyped v = EnumerationValuesTyped::from_string_struct(value);
+            bool known = false;
+            for (reports::LineKind k : {reports::LineKind::Category,
+                                        reports::LineKind::Other,
+                                        reports::LineKind::Transaction})
+                if (reports::to_string(k) == v.value) known = true;
+            EXPECT_TRUE(known) << "unknown line kind: " << v.value;
+        }
     }
+
+private:
+    static void expect_column(const std::string& want, bool has, const Money& got,
+                              const std::string& where) {
+        if (want.empty()) {
+            EXPECT_FALSE(has) << where << " should be empty, is " << got.in_register();
+            return;
+        }
+        EXPECT_TRUE(has) << where << " should be " << want << ", is empty";
+        if (has) EXPECT_EQ(Money(want).cents(), got.cents()) << where;
+    }
+
+    static std::string listing(const std::vector<reports::DetailLine>& lines) {
+        std::string out;
+        for (const reports::DetailLine& line : lines) {
+            out += "  " + reports::to_string(line.kind) + " " + line.account +
+                   " level " + std::to_string(line.level);
+            if (line.kind == reports::LineKind::Transaction)
+                out += " " + line.date.iso() + " " + line.payee;
+            if (line.has_each) out += " each " + line.each.in_register();
+            if (line.has_amount) out += " amount " + line.amount.in_register();
+            out += "\n";
+        }
+        return out;
+    }
+
+public:
 
 public:
 
