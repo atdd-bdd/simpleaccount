@@ -559,6 +559,92 @@ Then would change : RuleApplication Vertical
 | Skipped        | 1 |
 
 # ---------------------------------------------------------------------------
+# Running the whole rule list over the whole book
+# ---------------------------------------------------------------------------
+
+Description Accepting one new rule offers to apply it backwards; this is the
+Description same idea run on demand over every rule already saved, reached
+Description from Accounts > Assign payees according to rules. It is what turns
+Description twenty years of imported history, mostly sitting in Uncategorized,
+Description into a book that matches how it is actually read.
+
+Scenario Assigning payees according to rules sorts a whole month in one pass
+Description Three rules, four transactions: one each rule should catch, one
+Description already categorised by hand that no rule should touch, and the
+Description book comes out with every one of them accounted for.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Auto:Fuel     | Expense | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Dining        | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given payee rules are : PayeeRule
+| Pattern       | MatchType | Payee         | Category           | Enabled |
+| SHELL OIL     | Contains  | Shell Oil     | Expenses:Auto:Fuel | true    |
+| HARRIS TEETER | Contains  | Harris Teeter | Expenses:Groceries | true    |
+Given postings are : PostingRow
+| Ref | Date       | Payee              | Account                | Amount |
+| T1  | 2024-01-15 | SHELL OIL 3344     | Assets:Checking        | -40.00 |
+| T1  | 2024-01-15 | SHELL OIL 3344     | Expenses:Uncategorized | 40.00  |
+| T2  | 2024-01-16 | HARRIS TEETER #231 | Assets:Checking        | -45.00 |
+| T2  | 2024-01-16 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  |
+| T3  | 2024-01-17 | TACO PLACE         | Assets:Checking        | -12.00 |
+| T3  | 2024-01-17 | TACO PLACE         | Expenses:Dining        | 12.00  |
+| T4  | 2024-01-18 | SHELL OIL 9981     | Assets:Checking        | -30.00 |
+| T4  | 2024-01-18 | SHELL OIL 9981     | Expenses:Auto:Fuel     | 30.00  |
+When rules applied to the book
+Then applying the rules reported is : RuleApplication Vertical
+| Matched        | 2 |
+| AlreadyCorrect | 1 |
+| Skipped        | 1 |
+Then postings are : PostingRow
+| Ref | Date       | Payee          | Account            | Amount |
+| T1  | 2024-01-15 | Shell Oil      | Assets:Checking    | -40.00 |
+| T1  | 2024-01-15 | Shell Oil      | Expenses:Auto:Fuel | 40.00  |
+| T2  | 2024-01-16 | Harris Teeter  | Assets:Checking    | -45.00 |
+| T2  | 2024-01-16 | Harris Teeter  | Expenses:Groceries | 45.00  |
+| T3  | 2024-01-17 | TACO PLACE     | Assets:Checking    | -12.00 |
+| T3  | 2024-01-17 | TACO PLACE     | Expenses:Dining    | 12.00  |
+| T4  | 2024-01-18 | Shell Oil      | Assets:Checking    | -30.00 |
+| T4  | 2024-01-18 | Shell Oil      | Expenses:Auto:Fuel | 30.00  |
+# T1 and T2 were Uncategorized and a rule caught each: Matched. T4 already had
+# the fuel rule's own category -- its name is still tidied, which is why
+# AlreadyCorrect is not the same as untouched -- so it counts separately. T3
+# matches no rule at all (no pattern mentions a taco place) and is Skipped,
+# and its hand-chosen Dining category and its untidied name are both left
+# exactly as they were.
+
+Scenario Assigning payees according to rules leaves a reconciled transaction untouched
+Description A finished reconciliation agreed with a statement, name and all. A
+Description bulk pass across the whole book is not the time to find out that
+Description touching the name as well as the category would have been safe
+Description here and was not worth risking.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given payee rules are : PayeeRule
+| Pattern       | MatchType | Payee         | Category           | Enabled |
+| HARRIS TEETER | Contains  | Harris Teeter | Expenses:Groceries | true    |
+Given postings are : PostingRow
+| Ref | Date       | Payee              | Account                | Amount | Cleared    |
+| T1  | 2024-01-15 | HARRIS TEETER #231 | Assets:Checking        | -45.00 | Reconciled |
+| T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  | Reconciled |
+When rules applied to the book
+Then applying the rules reported is : RuleApplication Vertical
+| Matched        | 0 |
+| AlreadyCorrect | 0 |
+| Skipped        | 1 |
+Then postings are : PostingRow
+| Ref | Date       | Payee              | Account                | Amount | Cleared    |
+| T1  | 2024-01-15 | HARRIS TEETER #231 | Assets:Checking        | -45.00 | Reconciled |
+| T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  | Reconciled |
+# Reconciled, still -- the whole point of the scenario is that nothing about
+# this transaction moved, cleared status included.
+
+# ---------------------------------------------------------------------------
 # The payee list
 # ---------------------------------------------------------------------------
 

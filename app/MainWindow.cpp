@@ -358,6 +358,9 @@ void MainWindow::buildMenus() {
     accounts->addAction("&New account...", this, &MainWindow::newAccount);
     accounts->addSeparator();
     accounts->addAction("Payee &rules...", this, &MainWindow::editRules);
+    accounts->addSeparator();
+    accounts->addAction("&Assign payees according to rules", this,
+                        &MainWindow::assignPayeesAccordingToRules);
 
     QMenu* reports = menuBar()->addMenu("&Reports");
     reports->addAction("&Spending by category...", this, &MainWindow::showReport);
@@ -1143,6 +1146,25 @@ void MainWindow::showReport() {
 
     takePeriod();
     box.exec();
+}
+
+void MainWindow::assignPayeesAccordingToRules() {
+    if (!store_.is_open()) {
+        QMessageBox::information(this, "SimpleAccount", "Open a book first.");
+        return;
+    }
+    const payees::BookApplication done =
+        payees::apply_to_book(rules_, chart_, &transactions_);
+    book_ = ledger::Ledger();
+    for (const ledger::Transaction& t : transactions_)
+        for (const ledger::Posting& p : t.postings)
+            book_.add({t.date, p.account, p.amount, t.ref.value()});
+    save();
+    rebuildWorkspace();
+    refresh();
+    QMessageBox::information(this, "Assign payees according to rules",
+        QString("%1 matched, %2 already correct, %3 left alone")
+            .arg(done.matched).arg(done.already_correct).arg(done.skipped));
 }
 
 void MainWindow::editRules() {

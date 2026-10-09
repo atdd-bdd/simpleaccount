@@ -5,6 +5,10 @@
 #include <vector>
 #include <regex>
 #include <string>
+#include "account_type.h"
+#include "chart.h"
+#include "ledger.h"
+#include "posting.h"
 #include "text_types.h"
 
 // Turning what the bank calls a payee into what the user calls it. Nothing here
@@ -214,6 +218,92 @@ inline Applied apply(const std::vector<Rule>& rules, const std::string& raw_name
         out.renamed = true;
     }
     if (rule->category != "none") out.category = rule->category;
+    return out;
+}
+
+// What applying the rules to the whole book came to, counted, because a book
+// of twenty years is too many transactions to check by eye. See the
+// retroactive-application scenarios of Payees.spectable.
+struct BookApplication {
+    int matched = 0;          // changed by a rule
+    int already_correct = 0;  // a rule matched and there was nothing to change
+    int skipped = 0;          // locked, a split, no rule matched, or categorised by hand
+};
+
+namespace detail {
+
+inline bool is_a_category_account(const chart::Chart& accounts, const std::string& path) {
+    const chart::Account* a = accounts.find(path);
+    return a != nullptr && (a->type == types::AccountType::Income ||
+                            a->type == types::AccountType::Expense);
+}
+
+inline bool is_uncategorized(const std::string& path) {
+    return path == "Expenses:Uncategorized" || path == "Income:Uncategorized";
+}
+
+inline bool has_category(const Rule& rule) {
+    return !rule.category.empty() && rule.category != "none";
+}
+
+}  // namespace detail
+
+// Runs every enabled rule over every transaction already in the book: the
+// menu item that does in bulk what accepting one rule offers to do for the
+// history it would have caught. Two protections, both because a bulk change
+// has to earn more trust than a single one does.
+//
+// A category chosen by hand is a decision and is left alone -- only a posting
+// still in Uncategorized is moved. A reconciled transaction is left alone
+// entirely, payee included: a bulk change that altered a reconciled balance,
+// or even just the name beside it, would disturb an agreement with a
+// statement that nobody asked it to touch. A split is left alone too, because
+// there is no one category posting to move without guessing which.
+inline BookApplication apply_to_book(const std::vector<Rule>& rules,
+                                     const chart::Chart& accounts,
+                                     std::vector<ledger::Transaction>* transactions) {
+    BookApplication out;
+    if (transactions == nullptr) return out;
+
+    for (ledger::Transaction& t : *transactions) {
+        bool locked = false;
+        for (const ledger::Posting& p : t.postings)
+            if (p.cleared == types::ClearedStatus::Reconciled) locked = true;
+        if (locked) { ++out.skipped; continue; }
+
+        std::vector<std::size_t> categories;
+        for (std::size_t i = 0; i < t.postings.size(); ++i)
+            if (detail::is_a_category_account(accounts, t.postings[i].account.value()))
+                categories.push_back(i);
+        if (categories.size() != 1) { ++out.skipped; continue; }
+        ledger::Posting& on = t.postings[categories.front()];
+
+        const std::string raw = t.raw_name.empty() ? t.payee.value() : t.raw_name;
+        const Rule* rule = best_for(rules, raw);
+        if (rule == nullptr) { ++out.skipped; continue; }
+
+        bool changed = false;
+        if (!rule->payee.empty() && rule->payee != raw && t.payee.value() != rule->payee) {
+            t.payee = types::PayeeName(rule->payee);
+            t.raw_name = raw;
+            changed = true;
+        }
+
+        if (!detail::has_category(*rule)) {
+            // A pattern-only rule: the name is the whole of what it does.
+            if (changed) ++out.matched; else ++out.already_correct;
+            continue;
+        }
+        if (on.account.value() == rule->category) {
+            ++out.already_correct;
+        } else if (detail::is_uncategorized(on.account.value())) {
+            on.account = types::AccountPath(rule->category);
+            ++out.matched;
+        } else {
+            // Categorised by hand to something else, which is a decision.
+            ++out.skipped;
+        }
+    }
     return out;
 }
 

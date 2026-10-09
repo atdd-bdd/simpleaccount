@@ -283,6 +283,7 @@ public:
 private:
     chart::Chart chart_;
     std::vector<ledger::Transaction> transactions_;
+    payees::BookApplication applied_;
     std::vector<payees::Rule> rules_;
     payees::Refusal refusal_;
     std::string target_ = "Assets:Checking";
@@ -446,6 +447,21 @@ public:
                 << "listed before " << value.secondpattern << " ("
                 << value.secondtype << "): " << value.notes;
         }
+    }
+
+public:
+
+    void when_rules_applied_to_the_book() {
+        applied_ = payees::apply_to_book(rules_, chart_, &transactions_);
+    }
+
+    void then_applying_the_rules_reported_is(const std::vector<RuleApplicationString>& values) {
+        ASSERT_FALSE(values.empty());
+        const RuleApplicationString& want = values.front();
+        EXPECT_EQ(std::stoi(want.matched), applied_.matched) << "matched";
+        EXPECT_EQ(std::stoi(want.alreadycorrect), applied_.already_correct)
+            << "already correct";
+        EXPECT_EQ(std::stoi(want.skipped), applied_.skipped) << "skipped";
     }
 
 };

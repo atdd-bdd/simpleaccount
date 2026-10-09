@@ -52,6 +52,7 @@ private slots:
     void importQifForReview();
     void importTransactions();
     void editRules();
+    void assignPayeesAccordingToRules();
     void showReport();
     void toggleSplit();
     void toggleHidden();
