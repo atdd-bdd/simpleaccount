@@ -340,4 +340,25 @@ public:
         ADD_FAILURE() << "Not implemented: examples_businessrule_typing_part_of_a_category_offers_it_and_everything_under_it";
     }
 
+public:
+
+    void when_account_settings_opened(const std::vector<AccountSelectString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_account_settings_opened";
+    }
+
+    void then_account_settings_are(const std::vector<AccountSettingsString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_account_settings_are";
+    }
+
+    void when_account_settings_changed(const std::vector<AccountSettingsString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_account_settings_changed";
+    }
+
+    void when_the_book_is_reopened() {
+        ADD_FAILURE() << "Not implemented: when_the_book_is_reopened";
+    }
+
 };

@@ -80,13 +80,6 @@ public:
         for (const auto& value : values) workspace().select(value.path);
     }
 
-    void when_view_split() { workspace().split(); }
-    void when_split_closed() { workspace().close_split(); }
-
-    void when_pane_made_active(const std::vector<PaneSelectString>& values) {
-        for (const auto& value : values) workspace().make_active(std::stoi(value.pane));
-    }
-
     void when_import_reviewed(const std::vector<ImportReviewRowString>& values) {
         last_review_.clear();
         std::string into;
@@ -411,6 +404,32 @@ public:
     void examples_businessrule_which_section_a_group_is_shown_under(const std::vector<SectionOfGroupString>& values) {
         for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
         ADD_FAILURE() << "Not implemented: examples_businessrule_which_section_a_group_is_shown_under";
+    }
+
+public:
+
+    void then_open_tabs_are(const std::vector<OpenTabString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_open_tabs_are";
+    }
+
+    void when_tab_closed(const std::vector<TabSelectString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_tab_closed";
+    }
+
+    void when_import_asked_for() {
+        ADD_FAILURE() << "Not implemented: when_import_asked_for";
+    }
+
+    void then_the_import_is_refused_saying(const std::string& value) {
+        std::cout << value << "\n";
+        ADD_FAILURE() << "Not implemented: then_the_import_is_refused_saying";
+    }
+
+    void examples_datatype_tabkind(const std::vector<EnumerationValuesString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_datatype_tabkind";
     }
 
 };

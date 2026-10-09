@@ -21,6 +21,8 @@ Uses AccountPath and AccountType from CoreTypes
 | Hidden      | Boolean     | false   | Kept out of pickers, history kept   |
 | Alias       | Text        | none    | A short way to type it; see finding a category |
 | PaymentPayee | Text       | none    | What a payment to this account is called on the paying account's statement; see ImportOfx |
+| Bank        | Text        | none    | Which institution it is at; see what is kept about an account |
+| AccountNumber | Text      | none    | The number on the statement, kept as written |
 
 Collection ChartOfAccounts
 Description Every account in the book, in one tree.
@@ -305,6 +307,95 @@ Attributes AccountMove
 | Attribute | Type        | Default |
 | Path      | AccountPath |         |
 | NewParent | AccountPath |         |
+
+# ---------------------------------------------------------------------------
+# What is kept about an account
+# ---------------------------------------------------------------------------
+
+Description Each account has a dialog of its own, holding what is known about
+Description the account itself: which bank it is at, and the number on the
+Description statement.
+Details These are facts about the account and not about any transaction, so
+Details they live on the account rather than in a setting shared by the book.
+Details Two current accounts at the same bank have to be told apart, and the
+Details number is how the statement tells them apart.
+Details
+Details More will go here. The dialog is the place for anything true of one
+Details account and of nothing else -- which CSV profile its downloads are in,
+Details what its statements call a payment to it -- which is why it is a
+Details dialog per account rather than another column in the account list.
+Details
+Details An OFX download names an account in the bank's own terms, a routing
+Details number and an account number, and matching those to an account is the
+Details mapping in ImportOfx. What is kept here is what a person reads off a
+Details statement. The two are kept apart because a routing number is not a
+Details bank's name and nobody should have to type one to label an account.
+
+Attributes AccountSettings
+Description What the dialog of one account holds.
+| Attribute     | Type        | Default |
+| Path          | AccountPath |         |
+| Bank          | Text        | none    |
+| AccountNumber | Text        | none    |
+
+$WIP
+Scenario An account starts with nothing known about it but its name
+Description Nothing is required. An account with no bank and no number works
+Description exactly as it does now, and the dialog is somewhere to put the
+Description answer when there is one.
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type | Placeholder |
+| Assets:Checking | Bank | false       |
+When account settings opened : AccountSelect
+| Path            |
+| Assets:Checking |
+Then account settings are : AccountSettings Vertical
+| Path          | Assets:Checking |
+| Bank          | none            |
+| AccountNumber | none            |
+
+$WIP
+Scenario The bank and the number are kept with the book
+Description Written when they are entered, because a book is a file and not a
+Description session. See the saving rule in Books.
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type | Placeholder |
+| Assets:Checking | Bank | false       |
+When account settings changed : AccountSettings Vertical
+| Path          | Assets:Checking |
+| Bank          | First Bank      |
+| AccountNumber | 1234567890      |
+When the book is reopened
+Then account settings are : AccountSettings Vertical
+| Path          | Assets:Checking |
+| Bank          | First Bank      |
+| AccountNumber | 1234567890      |
+
+$WIP
+Scenario An account number is kept as it is written
+Description A number on a statement is a label and not an amount: it may carry
+Description dashes or spaces, it may have a leading zero that matters, and it
+Description is never added to anything. So it is kept exactly as typed, with
+Description only the blanks at either end taken off.
+Given the chart of accounts is : ChartOfAccounts
+| Path             | Type       | Placeholder |
+| Assets:Checking  | Bank       | false       |
+| Liabilities:Visa | CreditCard | false       |
+When account settings changed : AccountSettings Vertical
+| Path          | Assets:Checking |
+| Bank          | First Bank      |
+| AccountNumber | 0012-3456       |
+When account settings changed : AccountSettings Vertical
+| Path          | Liabilities:Visa    |
+| Bank          | Second Bank         |
+| AccountNumber | ~4111 1111 1111 1111 |
+Then account settings are : AccountSettings
+| Path             | Bank        | AccountNumber       |
+| Assets:Checking  | First Bank  | 0012-3456           |
+| Liabilities:Visa | Second Bank | 4111 1111 1111 1111 |
+# The tilde in the table is a space, so the second number is written with a
+# leading blank and is kept without it. The leading zeros of the first survive,
+# which they would not if a number were read as a number.
 
 # ---------------------------------------------------------------------------
 # Finding a category

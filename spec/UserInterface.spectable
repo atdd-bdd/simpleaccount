@@ -272,11 +272,13 @@ Description What one pane of the right-hand side is showing.
 | Account   | AccountPath | none     |
 | Active    | Boolean     | false    |
 
+$WIP
 DataType PaneContent
 Description What a pane can show.
 Examples: EnumerationValues
 | Value        | Notes                                                  |
 | Register     | The transactions of one account                        |
+| Report       | A report, with its own period and its own settings     |
 | ImportReview | An import waiting to be looked over and accepted       |
 | Empty        | Nothing selected yet                                   |
 
@@ -331,10 +333,306 @@ Then register lines are : RegisterLine CompareOnly
 | T4  | 2026-01-25 | Assets:Checking | 0.00    | 500.00  |
 
 # ---------------------------------------------------------------------------
-# The split pane
+# The right-hand side is tabs
 # ---------------------------------------------------------------------------
 
-Scenario The right-hand side is one pane until a split is asked for
+Description A bar of tabs, each one a register or a report, and one of them is
+Description the active tab.
+Details Several things stay open at once because the work moves between them. A
+Details card statement is reconciled against the card; the payment that
+Details settles it is in the current account; whether it has cleared is
+Details answered by looking at both. Two reports over two periods answer
+Details whether a month was unusual. Closing one to open the other and back
+Details again is the work a tab bar does away with.
+Details
+Details The active tab is where anything that needs a register goes. An import
+Details goes into the active tab, and so does a transaction typed on the blank
+Details line, so the question "into which account" is answered by what is in
+Details front of you rather than by a dialog asking it again.
+Details
+Details One tab per account. Selecting an account already open returns to its
+Details tab rather than opening a second: two tabs on one register would show
+Details the same lines and leave which to believe an open question.
+Details
+Details Reports are the other way round. Asking for a report opens another tab
+Details every time, because the reason to have two is to read two periods side
+Details by side, and a report that replaced the one already open could not do
+Details that.
+Details
+Details The import review is not a tab. It is the second pane, beside the
+Details register it is about to change, and only while the import is waiting;
+Details see the section below. A tab is something to come back to, and the
+Details second pane is a comparison that lasts as long as the comparison does.
+Details
+Details Pane 1 is the tab area and its account is the active tab's, which is
+Details why the scenarios here can speak of panes and of tabs at once without
+Details the two disagreeing.
+
+$WIP
+DataType TabKind
+Description What one tab holds.
+Examples: EnumerationValues
+| Value    | Notes                                              |
+| Register | The transactions of one account                     |
+| Report   | A report, with its own period and its own settings  |
+
+Attributes OpenTab
+Description One tab of the tab bar, in the order the tabs are shown.
+Details A register tab is named by the account's own name and not its path: a
+Details tab is narrow, and the path is on the account list where there is room
+Details for it. A report tab is named by the report; a second tab of the same
+Details report has a 2 after it, and so on, because the period is shown on the
+Details controls inside the tab where there is room to read it.
+| Attribute | Type        | Default  |
+| Position  | Integer     | 1        |
+| Kind      | TabKind     | Register |
+| Account   | AccountPath | none     |
+| Name      | Text        | none     |
+| Active    | Boolean     | false    |
+
+Attributes TabSelect
+| Attribute | Type    | Default |
+| Position  | Integer | 1       |
+
+$WIP
+Scenario Selecting an account opens its register in a tab
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+Then open tabs are : OpenTab
+| Position | Kind     | Account         | Name     | Active |
+| 1        | Register | Assets:Checking | Checking | true   |
+Then panes are : PaneState
+| Pane | Showing  | Account         | Active |
+| 1    | Register | Assets:Checking | true   |
+
+$WIP
+Scenario Selecting a second account leaves the first one open
+Description This is the whole point. The card and the current account are both
+Description open and the eye moves between them.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When account selected : AccountSelect
+| Path             |
+| Liabilities:Visa |
+Then open tabs are : OpenTab
+| Position | Kind     | Account          | Name     | Active |
+| 1        | Register | Assets:Checking  | Checking | false  |
+| 2        | Register | Liabilities:Visa | Visa     | true   |
+Then panes are : PaneState
+| Pane | Showing  | Account          | Active |
+| 1    | Register | Liabilities:Visa | true   |
+# A new tab goes at the end and becomes the active one, because selecting an
+# account is asking to read it.
+
+$WIP
+Scenario Selecting an account that is already open returns to its tab
+Description Not a second tab on the same register. Two tabs showing the same
+Description lines would leave which of them to believe an open question, and
+Description nothing would ever answer it.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When account selected : AccountSelect
+| Path             |
+| Liabilities:Visa |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+Then open tabs are : OpenTab
+| Position | Kind     | Account          | Name     | Active |
+| 1        | Register | Assets:Checking  | Checking | true   |
+| 2        | Register | Liabilities:Visa | Visa     | false  |
+# Two tabs, not three, and the first is active again. The order does not change
+# either: a tab stays where it was put, or the bar would rearrange itself under
+# the hand that is using it.
+
+$WIP
+Scenario Asking for a report opens it in a tab of its own
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-01-01 |
+| To       | 2026-12-31 |
+| Interval | Whole      |
+Then open tabs are : OpenTab
+| Position | Kind     | Account         | Name                 | Active |
+| 1        | Register | Assets:Checking | Checking             | false  |
+| 2        | Report   | none            | Spending by category | true   |
+
+$WIP
+Scenario Asking for the same report again opens a second tab
+Description Two periods side by side is the reason to have two, so a report
+Description does not replace the one already open.
+Given the chart of accounts is as previous
+Given postings are as previous
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-01-01 |
+| To       | 2026-12-31 |
+| Interval | Whole      |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2025-01-01 |
+| To       | 2025-12-31 |
+| Interval | Whole      |
+Then open tabs are : OpenTab
+| Position | Kind   | Account | Name                   | Active |
+| 1        | Report | none    | Spending by category   | false  |
+| 2        | Report | none    | Spending by category 2 | true   |
+# The second carries a 2 so the two can be told apart on a narrow tab. Which
+# period each one is over is on the controls inside it, where there is room.
+
+$WIP
+Scenario Closing the active tab moves to the one beside it
+Description The one to its right, or the one to its left when it was the last,
+Description so that closing a tab always leaves something showing.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When account selected : AccountSelect
+| Path           |
+| Assets:Savings |
+When account selected : AccountSelect
+| Path             |
+| Liabilities:Visa |
+When tab closed : TabSelect Vertical
+| Position | 3 |
+Then open tabs are : OpenTab
+| Position | Kind     | Account         | Name     | Active |
+| 1        | Register | Assets:Checking | Checking | false  |
+| 2        | Register | Assets:Savings  | Savings  | true   |
+Then panes are : PaneState
+| Pane | Showing  | Account        | Active |
+| 1    | Register | Assets:Savings | true   |
+
+$WIP
+Scenario Closing another tab leaves the active one where it was
+Description Closing something that is not being read should not change what is
+Description being read. The position shifts because a tab before it has gone;
+Description the register showing does not.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When account selected : AccountSelect
+| Path           |
+| Assets:Savings |
+When account selected : AccountSelect
+| Path             |
+| Liabilities:Visa |
+When tab closed : TabSelect Vertical
+| Position | 1 |
+Then open tabs are : OpenTab
+| Position | Kind     | Account          | Name    | Active |
+| 1        | Register | Assets:Savings   | Savings | false  |
+| 2        | Register | Liabilities:Visa | Visa    | true   |
+Then panes are : PaneState
+| Pane | Showing  | Account          | Active |
+| 1    | Register | Liabilities:Visa | true   |
+
+$WIP
+Scenario Closing the last tab leaves nothing showing
+Description Back to where the window starts: a book open and nothing chosen.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When tab closed : TabSelect Vertical
+| Position | 1 |
+Then open tabs are : OpenTab
+| Position | Kind | Account | Name | Active |
+Then panes are : PaneState
+| Pane | Showing | Account | Active |
+| 1    | Empty   | none    | true   |
+# The empty tab table says there are none. The converter does not generate a
+# step for a table with no rows yet -- finding 6 -- so for now that line is
+# documentation and the pane assertion is what carries the scenario.
+
+$WIP
+Scenario An import goes into the active tab
+Description The account is not asked for. Whichever register is in front of you
+Description is the one the statement is for, which is also how a transaction
+Description typed on the blank line knows where it belongs.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When account selected : AccountSelect
+| Path             |
+| Liabilities:Visa |
+When import reviewed : ImportReviewRow
+| Line | Date       | Payee  | Account          | Category          | Amount | Disposition |
+| 1    | 2026-02-02 | Amazon | Liabilities:Visa | Expenses:Shopping | -31.00 | New         |
+Then open tabs are : OpenTab
+| Position | Kind     | Account          | Name     | Active |
+| 1        | Register | Assets:Checking  | Checking | false  |
+| 2        | Register | Liabilities:Visa | Visa     | true   |
+Then panes are : PaneState
+| Pane | Showing      | Account          | Active |
+| 1    | Register     | Liabilities:Visa | false  |
+| 2    | ImportReview | Liabilities:Visa | true   |
+# The card was the active tab, so the card is what the statement is read into,
+# and the review sits beside the register it is about to change. No tab is
+# opened and none is switched to: the answer was already on the screen.
+
+$WIP
+Scenario An import with a report in front is refused
+Description There is no register to compare against, so there is nothing to
+Description judge a proposed row by. Said rather than guessed at: importing
+Description into whichever register happened to be open last is how a
+Description statement ends up in the wrong account.
+Given the chart of accounts is as previous
+Given postings are as previous
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-01-01 |
+| To       | 2026-12-31 |
+| Interval | Whole      |
+When import asked for
+Then the import is refused saying
+"""
+Open the register this statement is for, then import into it.
+"""
+
+# ---------------------------------------------------------------------------
+# The second pane, which belongs to an import
+# ---------------------------------------------------------------------------
+
+Description One pane, showing the register of the selected account. A second
+Description pane exists only while an import is waiting to be accepted.
+Details That is the whole rule. An import is shown beside the register it is
+Details about to change, because that is what makes a proposed row judgeable:
+Details the question is always whether this row is already in that register.
+Details When the import is accepted or cancelled there is nothing left to
+Details compare, so the second pane goes and the register it was beside is
+Details what remains.
+Details
+Details There used to be a Split view on the menu, two registers side by side
+Details for reading two accounts at once. It is gone. A window that can be left
+Details in a two-register state shows two registers on the next launch with
+Details nothing to say why, and the state it is really for -- an import under
+Details review -- is the one case that can say why for itself. Reading two
+Details accounts at once is worth having again one day as two windows, not as
+Details a mode this one can be left in.
+
+Scenario There is one pane until an import opens a second
 Given the chart of accounts is as previous
 Given postings are as previous
 When account selected : AccountSelect
@@ -351,87 +649,8 @@ Attributes SplitState
 | PaneCount  | Integer | 1       |
 | ActivePane | Integer | 1       |
 
-Scenario Splitting the view opens a second pane on the same account
-Description The second pane starts where the first one is, so that splitting
-Description shows something rather than nothing, and the new pane becomes the
-Description active one for the next selection.
-Given the chart of accounts is as previous
-Given postings are as previous
-When account selected : AccountSelect
-| Path            |
-| Assets:Checking |
-When view split
-Then split state is : SplitState Vertical
-| Open       | true |
-| PaneCount  | 2    |
-| ActivePane | 2    |
-Then panes are : PaneState
-| Pane | Showing  | Account         | Active |
-| 1    | Register | Assets:Checking | false  |
-| 2    | Register | Assets:Checking | true   |
-
-Scenario Two accounts can then be read at once
-Description Selecting an account changes the active pane and leaves the other
-Description one alone, which is the whole point of the split.
-Given the chart of accounts is as previous
-Given postings are as previous
-When account selected : AccountSelect
-| Path            |
-| Assets:Checking |
-When view split
-When account selected : AccountSelect
-| Path             |
-| Liabilities:Visa |
-Then panes are : PaneState
-| Pane | Showing  | Account          | Active |
-| 1    | Register | Assets:Checking  | false  |
-| 2    | Register | Liabilities:Visa | true   |
-
-Scenario Making a pane active sends the next selection to it
-Given the chart of accounts is as previous
-Given postings are as previous
-When account selected : AccountSelect
-| Path            |
-| Assets:Checking |
-When view split
-When pane made active : PaneSelect
-| Pane |
-| 1    |
-When account selected : AccountSelect
-| Path           |
-| Assets:Savings |
-Then panes are : PaneState
-| Pane | Showing  | Account         | Active |
-| 1    | Register | Assets:Savings  | true   |
-| 2    | Register | Assets:Checking | false  |
-
-Attributes PaneSelect
-| Attribute | Type    | Default |
-| Pane      | Integer | 1       |
-
-Scenario Closing the split leaves the active pane
-Description Whichever pane was being worked in is the one that stays, because
-Description that is the one being read.
-Given the chart of accounts is as previous
-Given postings are as previous
-When account selected : AccountSelect
-| Path            |
-| Assets:Checking |
-When view split
-When account selected : AccountSelect
-| Path             |
-| Liabilities:Visa |
-When split closed
-Then split state is : SplitState Vertical
-| Open       | false |
-| PaneCount  | 1     |
-| ActivePane | 1     |
-Then panes are : PaneState
-| Pane | Showing  | Account          | Active |
-| 1    | Register | Liabilities:Visa | true   |
-
 # ---------------------------------------------------------------------------
-# Reviewing an import in the split pane
+# Reviewing an import in the second pane
 # ---------------------------------------------------------------------------
 
 Description An import is shown in the split pane rather than in a dialog of its
@@ -466,7 +685,7 @@ Description alone, so the rows are named here and asked for by name.
 | 2    | 2026-02-03 | Unknown Shop  | Assets:Checking | Expenses:Uncategorized | -23.75  | New         |
 | 3    | 2026-01-15 | Harris Teeter | Assets:Checking | Expenses:Groceries     | -45.00  | Duplicate   |
 
-Scenario An import opens in the split pane with every row proposed
+Scenario An import opens in the second pane with every row proposed
 Description Splitting happens by itself if the view was not split: the point of
 Description showing an import here is to have the register beside it.
 Given the chart of accounts is as previous
@@ -530,6 +749,7 @@ Then register lines are : RegisterLine CompareOnly
 | T2  | 2026-01-15 | Harris Teeter | 2955.00 |
 | T4  | 2026-01-25 | Transfer      | 2455.00 |
 
+$WIP
 Scenario Accepting the import adds the ticked rows and closes the review
 Description The two new rows arrive, the duplicate does not, and the pane goes
 Description back to being a register of the same account so that the result can
@@ -555,10 +775,16 @@ Then register lines are : RegisterLine CompareOnly
 | T4  | 2026-01-25 | Transfer      | 2455.00 |
 | T5  | 2026-02-02 | Harris Teeter | 2402.90 |
 | T6  | 2026-02-03 | Unknown Shop  | 2379.15 |
+Then split state is : SplitState Vertical
+| Open       | false |
+| PaneCount  | 1     |
+| ActivePane | 1     |
 Then panes are : PaneState
 | Pane | Showing  | Account         | Active |
-| 1    | Register | Assets:Checking | false  |
-| 2    | Register | Assets:Checking | true   |
+| 1    | Register | Assets:Checking | true   |
+# One pane again, showing the register the import was beside, with the two new
+# lines in it. There is nothing left to compare the import against, so there is
+# nothing for a second pane to hold.
 
 Scenario Unticking a row leaves it out
 Given the chart of accounts is as previous
@@ -610,6 +836,7 @@ Then import review summary is : ImportReviewSummary Vertical
 | Accepted   | 3    |
 | Committed  | true |
 
+$WIP
 Scenario Cancelling the import changes nothing
 Given the chart of accounts is as previous
 Given postings are as previous
@@ -624,27 +851,14 @@ Then register lines are : RegisterLine CompareOnly
 | T1  | 2026-01-05 | Acme Payroll  | 3000.00 |
 | T2  | 2026-01-15 | Harris Teeter | 2955.00 |
 | T4  | 2026-01-25 | Transfer      | 2455.00 |
+Then split state is : SplitState Vertical
+| Open       | false |
+| PaneCount  | 1     |
+| ActivePane | 1     |
 Then panes are : PaneState
 | Pane | Showing  | Account         | Active |
-| 1    | Register | Assets:Checking | false  |
-| 2    | Register | Assets:Checking | true   |
-
-Scenario A review of an import into an account that is not selected names it
-Description The import says which account it is for, and that is what the
-Description review shows regardless of what was selected, because the import is
-Description about that account and not about where the reader happened to be.
-Given the chart of accounts is as previous
-Given postings are as previous
-When account selected : AccountSelect
-| Path           |
-| Assets:Savings |
-When import reviewed : ImportReviewRow
-| Line | Date       | Payee  | Account          | Category          | Amount | Disposition |
-| 1    | 2026-02-02 | Amazon | Liabilities:Visa | Expenses:Shopping | -31.00 | New         |
-Then panes are : PaneState
-| Pane | Showing      | Account          | Active |
-| 1    | Register     | Assets:Savings   | false  |
-| 2    | ImportReview | Liabilities:Visa | true   |
+| 1    | Register | Assets:Checking | true   |
+# The same as accepting, as far as the panes go: the import is over either way.
 
 # ---------------------------------------------------------------------------
 # What accepting an import keeps
@@ -1013,6 +1227,10 @@ When report run : ReportSpec Vertical
 | Detail   | Transactions |
 When report line clicked : ReportLineSelect Vertical
 | Line | 5 |
+Then open tabs are : OpenTab
+| Position | Kind     | Account         | Name                 | Active |
+| 1        | Report   | none            | Spending by category | false  |
+| 2        | Register | Assets:Checking | Checking             | true   |
 Then panes are : PaneState
 | Pane | Showing  | Account         | Active |
 | 1    | Register | Assets:Checking | true   |
@@ -1046,11 +1264,14 @@ When report run : ReportSpec Vertical
 | Detail   | Transactions |
 When report line clicked : ReportLineSelect Vertical
 | Line | 3 |
+Then open tabs are : OpenTab
+| Position | Kind   | Account | Name                 | Active |
+| 1        | Report | none    | Spending by category | true   |
 Then panes are : PaneState
 | Pane | Showing | Account | Active |
-| 1    | Empty   | none    | true   |
-# Line three is Expenses:Auto:Fuel, the category itself. Nothing was selected
-# before the click and nothing is after it.
+| 1    | Report  | none    | true   |
+# Line three is Expenses:Auto:Fuel, the category itself. No register tab is
+# opened and the report is still what is in front of you.
 
 Attributes IdShown
 Description Whether the id of one transaction is shown, and whether the two
