@@ -277,6 +277,7 @@ public:
     }
 
 private:
+    std::string opened_;
     ui::Recategorised recategorised_;
     payees::Rule offered_;
     chart::Chart chart_;
@@ -420,8 +421,10 @@ public:
     }
 
     void then_the_register_line_selected_is(const std::vector<RegisterSelectString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_the_register_line_selected_is";
+        const std::vector<int>& got = workspace().selected_lines();
+        ASSERT_EQ(values.size(), got.size()) << "number of lines selected";
+        for (std::size_t i = 0; i < values.size(); ++i)
+            EXPECT_EQ(std::stoi(values[i].line), got[i]) << "line " << i + 1;
     }
 
     void then_the_transaction_id_shown_is(const std::vector<IdShownString>& values) {
@@ -465,5 +468,46 @@ public:
         ADD_FAILURE() << "Not implemented: examples_datatype_tabkind";
     }
 
+
+public:
+
+    void when_report_lines_selected(const std::vector<ReportMenuSelectString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_report_lines_selected";
+    }
+
+    // A transfer has two registers and this opens neither; the Thens say which
+    // of the two outcomes was wanted.
+    void when_the_transaction_is_opened(const std::vector<TransactionSelectString>& values) {
+        ASSERT_FALSE(values.empty());
+        opened_ = values.front().ref;
+        workspace().go_to_transaction(opened_);
+    }
+
+    void when_the_transactions_are_recategorised(const std::vector<TransactionRecategoriseString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_the_transactions_are_recategorised";
+    }
+
+    void then_report_rows_are(const std::vector<ReportRowString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_report_rows_are";
+    }
+
+public:
+
+    void then_the_registers_offered_are(const std::vector<RegisterOfferString>& values) {
+        const std::vector<std::string> got = workspace().registers_offered(opened_);
+        ASSERT_EQ(values.size(), got.size()) << "number of registers offered";
+        for (std::size_t i = 0; i < values.size(); ++i)
+            EXPECT_EQ(values[i].account, got[i]) << "offer " << i + 1;
+    }
+
+    void when_the_transaction_is_opened_in(const std::vector<RegisterChoiceString>& values) {
+        ASSERT_FALSE(values.empty());
+        opened_ = values.front().ref;
+        EXPECT_TRUE(workspace().go_to_transaction_in(opened_, values.front().account))
+            << values.front().account << " does not hold " << opened_;
+    }
 
 };

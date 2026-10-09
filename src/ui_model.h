@@ -345,26 +345,37 @@ public:
     // take a posting. Inventing a category here would make a typo into a new
     // heading on every report from now on.
     Recategorised recategorise_selection(const std::string& category) {
+        const std::vector<reg::Line> lines = register_lines(active_pane());
+        std::vector<std::string> refs;
+        for (const int line : selected_) {
+            const ledger::Transaction* found = transaction_on(lines, line);
+            if (found != nullptr) refs.push_back(found->ref.value());
+        }
+        return recategorise(refs, category);
+    }
+
+    // The same by name rather than by line, which is how the report reaches it:
+    // a report line is not a register line and the two cannot share a number.
+    Recategorised recategorise(const std::vector<std::string>& refs,
+                               const std::string& category) {
         Recategorised out;
         const chart::Account* into = accounts_.find(category);
         if (into == nullptr) {
-            out.refused = static_cast<int>(selected_.size());
+            out.refused = static_cast<int>(refs.size());
             out.reason = category.empty()
                              ? std::string("no category was chosen")
                              : category + " is not an account in this book";
             return out;
         }
         if (into->placeholder) {
-            out.refused = static_cast<int>(selected_.size());
+            out.refused = static_cast<int>(refs.size());
             out.reason = category + " is a placeholder and takes no postings";
             return out;
         }
 
-        const std::vector<reg::Line> lines = register_lines(active_pane());
-        for (const int line : selected_) {
-            const ledger::Transaction* found = transaction_on(lines, line);
-            if (found == nullptr) continue;
-            ledger::Transaction* writable = by_ref(found->ref.value());
+        for (const std::string& ref : refs) {
+            ledger::Transaction* writable = by_ref(ref);
+            if (writable == nullptr) continue;
             const edit::Outcome done =
                 edit::assign_category(writable, accounts_, category);
             if (done.changed) {
@@ -378,6 +389,49 @@ public:
         }
         if (out.changed > 0) rebuild_book();
         return out;
+    }
+
+    // The registers a transaction could be read in: the real accounts it
+    // touches, in the order its postings name them. A category is not among
+    // them -- categories are reached through a report, which is where this is
+    // asked from -- so an ordinary expense offers exactly one.
+    std::vector<std::string> registers_offered(const std::string& ref) const {
+        std::vector<std::string> out;
+        const ledger::Transaction* found = by_ref_const(ref);
+        if (found == nullptr) return out;
+        for (const ledger::Posting& p : found->postings) {
+            const chart::Account* a = accounts_.find(p.account.value());
+            if (a == nullptr) continue;
+            if (types::class_of(a->type) != types::AccountClass::Real) continue;
+            out.push_back(p.account.value());
+        }
+        return out;
+    }
+
+    // Opens the one register a transaction can be read in, and selects its
+    // line. A transfer touches two and this refuses: neither is more right than
+    // the other, so the reader chooses and go_to_transaction_in opens it.
+    // Choosing for them would be wrong half the time and silent about it.
+    bool go_to_transaction(const std::string& ref) {
+        const std::vector<std::string> offered = registers_offered(ref);
+        if (offered.size() != 1) return false;
+        return go_to_transaction_in(ref, offered.front());
+    }
+
+    bool go_to_transaction_in(const std::string& ref, const std::string& account) {
+        const std::vector<std::string> offered = registers_offered(ref);
+        if (std::find(offered.begin(), offered.end(), account) == offered.end())
+            return false;
+        select(account);
+        // And the line it is, so the window has something to scroll to.
+        const std::vector<reg::Line> lines = register_lines(active_pane());
+        selected_.clear();
+        for (std::size_t i = 0; i < lines.size(); ++i)
+            if (lines[i].ref == ref) {
+                selected_.push_back(static_cast<int>(i) + 1);
+                break;
+            }
+        return !selected_.empty();
     }
 
     // The rule the first selected line suggests: the name gives the pattern and
@@ -440,6 +494,12 @@ private:
             return nullptr;
         const std::string& ref =
             lines[static_cast<std::size_t>(line_one_based - 1)].ref;
+        for (const ledger::Transaction& t : transactions_)
+            if (t.ref.value() == ref) return &t;
+        return nullptr;
+    }
+
+    const ledger::Transaction* by_ref_const(const std::string& ref) const {
         for (const ledger::Transaction& t : transactions_)
             if (t.ref.value() == ref) return &t;
         return nullptr;

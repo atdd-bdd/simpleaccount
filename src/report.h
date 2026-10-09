@@ -321,6 +321,12 @@ struct DetailLine {
     int level = 0;
     types::Date date{2024, 1, 1};
     std::string payee;
+    // On a transaction line, which transaction it is. The id is the
+    // transaction's own name and is what the register shows beside it, so a
+    // line on one page can be known to be the line on the other. The ref is
+    // how the tables of the specification name one.
+    std::string ref;
+    std::string id;
     Money each;
     Money amount;
     bool has_each = false;
@@ -419,6 +425,8 @@ inline std::vector<DetailLine> detail_report(
                 under.level = row.level + 1;
                 under.date = t.date;
                 under.payee = t.payee.value();
+                under.ref = t.ref.value();
+                under.id = t.id.value();
                 under.each = sign < 0 ? -p.amount : p.amount;
                 if (turn) under.each = -under.each;
                 under.has_each = true;

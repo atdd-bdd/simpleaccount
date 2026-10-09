@@ -1174,6 +1174,8 @@ Description more than one transaction behind it.
 | T3  | 2026-02-10 | Shell         | Assets:Checking    | -30.00 |
 | T3  | 2026-02-10 | Shell         | Expenses:Auto:Fuel | 30.00  |
 
+# Waiting on the report itself living in the workspace rather than in the
+# window, which is what a report tab needs; see the tabs section above.
 $WIP
 Scenario Clicking a transaction in the report opens its register at that line
 Description The fifth line of the report is the second of the two visits to the
@@ -1240,6 +1242,226 @@ Then panes are : PaneState
 | 1    | Report  | none    | true   |
 # Line three is Expenses:Auto:Fuel, the category itself. No register tab is
 # opened and the report is still what is in front of you.
+
+Attributes ReportMenuSelect
+Description The transaction lines of the report that are selected, counting the
+Description report's lines from one.
+| Attribute | Type    | Default |
+| Line      | Integer | 1       |
+
+$WIP
+Scenario The menu on one transaction in the report offers to go to it
+Description One line selected is one transaction, so it can be opened. The
+Description register is where a figure is checked and where it is corrected,
+Description and both are on the menu.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Checking | false      |
+| Expenses:Auto      | Expense | true        |
+| Expenses:Auto:Fuel | Expense | false       |
+| Expenses:Groceries | Expense | false       |
+Given postings are : PostingRow
+=FebruaryOnChecking
+When report run : ReportSpec Vertical
+| GroupBy  | Category     |
+| From     | 2026-02-01   |
+| To       | 2026-02-28   |
+| Interval | Whole        |
+| Detail   | Transactions |
+When report lines selected : ReportMenuSelect
+| Line |
+| 4    |
+Then menu items are : MenuItem
+| Item                     | Enabled |
+| Go to the transaction... | true    |
+| Recategorize...          | true    |
+
+$WIP
+Scenario The menu on several transactions offers only to recategorise them
+Description There is no one transaction to go to, and recategorising the lot at
+Description once is the reason to have selected them. Shift took a run of them
+Description or control picked them out; by here they are a set either way.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Checking | false      |
+| Expenses:Auto      | Expense | true        |
+| Expenses:Auto:Fuel | Expense | false       |
+| Expenses:Groceries | Expense | false       |
+Given postings are : PostingRow
+=FebruaryOnChecking
+When report run : ReportSpec Vertical
+| GroupBy  | Category     |
+| From     | 2026-02-01   |
+| To       | 2026-02-28   |
+| Interval | Whole        |
+| Detail   | Transactions |
+When report lines selected : ReportMenuSelect
+| Line |
+| 4    |
+| 5    |
+Then menu items are : MenuItem
+| Item            | Enabled |
+| Recategorize... | true    |
+
+$WIP
+Scenario A category line in the report has no menu
+Description A category figure is made of several transactions and is not one of
+Description them, so there is neither a transaction to go to nor a single
+Description category to change.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Checking | false      |
+| Expenses:Auto      | Expense | true        |
+| Expenses:Auto:Fuel | Expense | false       |
+| Expenses:Groceries | Expense | false       |
+Given postings are : PostingRow
+=FebruaryOnChecking
+When report run : ReportSpec Vertical
+| GroupBy  | Category     |
+| From     | 2026-02-01   |
+| To       | 2026-02-28   |
+| Interval | Whole        |
+| Detail   | Transactions |
+When report lines selected : ReportMenuSelect
+| Line |
+| 3    |
+Then menu items are : MenuItem
+| Item | Enabled |
+# Nothing under the heading, which is how this says there are no items. The
+# converter does not generate a step for a table with no rows yet -- finding 6
+# -- so for now this line is documentation.
+
+Scenario Going to a transaction opens its register at that line
+Description Which register: the one of the real account the transaction
+Description touches. A category has none to browse, and the bank side is where
+Description the figure can be checked against a statement and corrected.
+Details The line is selected, and the window scrolls it into view. Twenty
+Details years of history is tens of thousands of lines, so a selection nobody
+Details can see is the same as none.
+Details
+Details Named by its ref here because a table has to name it somehow. What the
+Details report hands over is the transaction's own id, which is why the id is
+Details on both pages; see the scenario below.
+Details
+Details A transfer touches two real accounts and so has two registers it could
+Details be read in. Neither is more right than the other -- a payment to a card
+Details is in the current account's register and in the card's, and which one
+Details is wanted depends on what is being checked -- so both are offered and
+Details nothing is opened until one is chosen. Choosing for the reader would be
+Details wrong half the time and silent about it.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Auto      | Expense  | true        |
+| Expenses:Auto:Fuel | Expense  | false       |
+| Expenses:Groceries | Expense  | false       |
+Given postings are : PostingRow
+=FebruaryOnChecking
+When the transaction is opened : TransactionSelect Vertical
+| Ref | T3 |
+Then panes are : PaneState
+| Pane | Showing  | Account         | Active |
+| 1    | Register | Assets:Checking | true   |
+Then the register line selected is : RegisterSelect
+| Line |
+| 3    |
+# T3 is the 10 February visit to the filling station. Assets:Checking is the
+# register opened because it is the real account the transaction touches, and
+# the checking register in date order has it third.
+
+Attributes RegisterOffer
+Description A register a transaction could be read in, in the order the
+Description transaction's postings name them.
+| Attribute | Type        | Default |
+| Account   | AccountPath |         |
+
+Attributes RegisterChoice
+| Attribute | Type           | Default |
+| Ref       | TransactionRef |         |
+| Account   | AccountPath    |         |
+
+Scenario A transfer offers both of its registers and opens neither
+Description The payment is in the current account and in the card, so there is
+Description nothing to choose between until the reader chooses. Nothing is
+Description opened in the meantime.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type       | Placeholder |
+| Assets:Checking    | Checking   | false       |
+| Liabilities:Visa   | CreditCard | false       |
+| Expenses:Groceries | Expense    | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee        | Account            | Amount  |
+| T1  | 2026-02-05 | Amazon       | Liabilities:Visa   | -60.00  |
+| T1  | 2026-02-05 | Amazon       | Expenses:Groceries | 60.00   |
+| T2  | 2026-02-25 | Visa Payment | Assets:Checking    | -200.00 |
+| T2  | 2026-02-25 | Visa Payment | Liabilities:Visa   | 200.00  |
+When the transaction is opened : TransactionSelect Vertical
+| Ref | T2 |
+Then the registers offered are : RegisterOffer
+| Account          |
+| Assets:Checking  |
+| Liabilities:Visa |
+Then panes are : PaneState
+| Pane | Showing | Account | Active |
+| 1    | Empty   | none    | true   |
+# In the order the transaction's postings name them, which is the order the
+# import or the entry put them in. The pane is still empty: offering is not
+# opening.
+
+Scenario Going to the chosen register of a transfer opens that one
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type       | Placeholder |
+| Assets:Checking    | Checking   | false       |
+| Liabilities:Visa   | CreditCard | false       |
+| Expenses:Groceries | Expense    | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee        | Account            | Amount  |
+| T1  | 2026-02-05 | Amazon       | Liabilities:Visa   | -60.00  |
+| T1  | 2026-02-05 | Amazon       | Expenses:Groceries | 60.00   |
+| T2  | 2026-02-25 | Visa Payment | Assets:Checking    | -200.00 |
+| T2  | 2026-02-25 | Visa Payment | Liabilities:Visa   | 200.00  |
+When the transaction is opened in : RegisterChoice Vertical
+| Ref     | T2               |
+| Account | Liabilities:Visa |
+Then panes are : PaneState
+| Pane | Showing  | Account          | Active |
+| 1    | Register | Liabilities:Visa | true   |
+Then the register line selected is : RegisterSelect
+| Line |
+| 2    |
+# The card's register has the charge on the fifth and the payment on the
+# twenty-fifth, so the payment is its second line.
+
+$WIP
+Scenario Recategorising from the report moves the figures with it
+Description The same operation as in the register, reached from the report. It
+Description is the one place where recategorising is expected to change what
+Description is on the page: the transaction leaves one category line and joins
+Description another, and both totals move.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Auto      | Expense  | true        |
+| Expenses:Auto:Fuel | Expense  | false       |
+| Expenses:Groceries | Expense  | false       |
+Given postings are : PostingRow
+=FebruaryOnChecking
+When the transactions are recategorised : TransactionRecategorise
+| Ref | Category           |
+| T2  | Expenses:Auto:Fuel |
+Then report rows are : ReportRow
+| Account            | Level | Amount | IsSubtotal |
+| Expenses           | 0     | 130.00 | true       |
+| Expenses:Auto      | 1     | 130.00 | true       |
+| Expenses:Auto:Fuel | 2     | 130.00 | false      |
+# The 60.00 of groceries has become fuel, so Groceries has nothing in it and
+# is gone from the page while Auto:Fuel holds the whole 130.00. The expenses
+# total has not moved, because no amount did.
+
+Attributes TransactionRecategorise
+| Attribute | Type           | Default |
+| Ref       | TransactionRef |         |
+| Category  | AccountPath    |         |
 
 Attributes IdShown
 Description Whether the id of one transaction is shown, and whether the two

@@ -34,6 +34,7 @@
 #include <QVBoxLayout>
 #include <QKeyEvent>
 #include <functional>
+#include <memory>
 #include <fstream>
 #include <sstream>
 
@@ -921,7 +922,12 @@ void MainWindow::showReport() {
             std::string(static_cast<std::size_t>(level) * 2, ' ') + text);
     };
 
-    const auto run = [&]() {
+    // The lines the table is showing, kept so that the menu can turn a selected
+    // row back into a transaction. The report itself is still built here rather
+    // than in the workspace, which is why the click-through scenarios wait.
+    auto shown = std::make_shared<std::vector<reports::DetailLine>>();
+
+    const auto run = [&, shown]() {
         reports::Spec spec;
         spec.from = asDate(from->date());
         spec.to = asDate(to->date());
@@ -947,6 +953,7 @@ void MainWindow::showReport() {
         if (entries) {
             const std::vector<reports::DetailLine> lines =
                 reports::detail_report(chart_, book_, transactions_, spec);
+            *shown = lines;
             table->setRowCount(static_cast<int>(lines.size()));
             for (int r = 0; r < static_cast<int>(lines.size()); ++r) {
                 const reports::DetailLine& line = lines[static_cast<std::size_t>(r)];
@@ -979,6 +986,7 @@ void MainWindow::showReport() {
                     table->item(r, 2)->setFont(bold);
             }
         } else {
+            shown->clear();
             table->setRowCount(static_cast<int>(report.rows.size()));
             for (int r = 0; r < static_cast<int>(report.rows.size()); ++r) {
                 const reports::Row& line = report.rows[static_cast<std::size_t>(r)];
@@ -1016,6 +1024,76 @@ void MainWindow::showReport() {
     // it runs the report without moving the period back.
     QObject::connect(from, &QDateEdit::dateChanged, &box, run);
     QObject::connect(to, &QDateEdit::dateChanged, &box, run);
+    // One transaction selected can be opened; several can only be given a
+    // category together. A category line is neither, and offers nothing.
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    table->setContextMenuPolicy(Qt::CustomContextMenu);
+    QObject::connect(table, &QTableWidget::customContextMenuRequested, &box,
+                     [&, shown](const QPoint& at) {
+        std::vector<std::string> refs;
+        for (const QModelIndex& index : table->selectionModel()->selectedRows()) {
+            const std::size_t row = static_cast<std::size_t>(index.row());
+            if (row >= shown->size()) continue;
+            const reports::DetailLine& line = (*shown)[row];
+            if (line.kind != reports::LineKind::Transaction) continue;
+            refs.push_back(line.ref);
+        }
+        if (refs.empty()) return;
+
+        QMenu menu(&box);
+        if (refs.size() == 1) {
+            // A transfer is in two registers and neither is more right than the
+            // other -- a payment to a card is in the current account's register
+            // and in the card's -- so both are offered and the reader chooses.
+            const std::vector<std::string> where =
+                workspace_->registers_offered(refs.front());
+            const auto open = [&, refs](const std::string& account) {
+                if (!workspace_->go_to_transaction_in(refs.front(), account)) return;
+                // The register is behind the report, so the report closes to
+                // show what was asked for.
+                refresh();
+                box.accept();
+            };
+            if (where.size() == 1) {
+                QAction* go = menu.addAction("Go to the transaction...");
+                const std::string only = where.front();
+                QObject::connect(go, &QAction::triggered, &box,
+                                 [open, only]() { open(only); });
+            } else if (where.size() > 1) {
+                QMenu* go = menu.addMenu("Go to the transaction in");
+                for (const std::string& account : where) {
+                    QAction* one =
+                        go->addAction(QString::fromStdString(account));
+                    QObject::connect(one, &QAction::triggered, &box,
+                                     [open, account]() { open(account); });
+                }
+            }
+        }
+        QAction* change = menu.addAction("Recategorize...");
+        QObject::connect(change, &QAction::triggered, &box, [&, refs]() {
+            CategoryPick pick(&box, chart_, std::string());
+            if (pick.exec() != QDialog::Accepted) return;
+            const std::string into = pick.chosen();
+            if (into.empty()) return;
+            const ui::Recategorised done = workspace_->recategorise(refs, into);
+            if (done.changed > 0) {
+                transactions_ = workspace_->transactions();
+                book_ = workspace_->book();
+                save();
+                rebuildWorkspace();
+                refresh();
+                // The figures have moved, which is the one case where
+                // recategorising changes what is on the page.
+                run();
+            }
+            if (done.refused > 0 && !done.reason.empty())
+                QMessageBox::information(&box, "Recategorize",
+                                         QString::fromStdString(done.reason));
+        });
+        menu.exec(table->viewport()->mapToGlobal(at));
+    });
+
     QObject::connect(detail, &QComboBox::currentIndexChanged, &box, run);
     QObject::connect(quicken, &QCheckBox::toggled, &box, run);
     QObject::connect(zero, &QCheckBox::toggled, &box, run);
