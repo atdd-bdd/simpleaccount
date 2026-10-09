@@ -1365,8 +1365,14 @@ void MainWindow::recategorise(int paneOneBased) {
     const std::vector<reg::Line> lines = workspace_->register_lines(paneOneBased);
     std::string start;
     if (chosen.front() >= 1 && chosen.front() <= static_cast<int>(lines.size())) {
-        start = lines[static_cast<std::size_t>(chosen.front() - 1)].category;
-        if (start == "--Split--") start.clear();
+        const reg::Line& line = lines[static_cast<std::size_t>(chosen.front() - 1)];
+        // category_detail is the literal account, which is what the picker
+        // needs; category is only a display string for a transfer (shown in
+        // brackets) and reads "--Split--" for a split, neither of which is a
+        // path the picker could pre-select.
+        start = line.category_detail;
+        if (start.empty() || start.find(static_cast<char>(10)) != std::string::npos)
+            start.clear();
     }
 
     CategoryPick pick(this, chart_, start);

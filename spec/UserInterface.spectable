@@ -332,8 +332,11 @@ When account selected : AccountSelect
 | Path            |
 | Assets:Savings  |
 Then register lines are : RegisterLine CompareOnly
-| Ref | Date       | Category        | Payment | Deposit |
-| T4  | 2026-01-25 | Assets:Checking | 0.00    | 500.00  |
+| Ref | Date       | Category   | Payment | Deposit |
+| T4  | 2026-01-25 | [Checking] | 0.00    | 500.00  |
+# Shown in brackets with the root segment dropped, the way Quicken shows one:
+# the group heading on the account list already says what kind of account
+# this is. See register_lines.h.
 
 # ---------------------------------------------------------------------------
 # The right-hand side is tabs

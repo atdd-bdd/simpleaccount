@@ -34,6 +34,31 @@ struct Line {
     Money balance;          // running, with the display sign of the account
 };
 
+// How an account reads when it is the other side of a line rather than the
+// account the register is open on. A real account -- the other side of a
+// transfer -- is shown in brackets with its root segment dropped, the way
+// Quicken shows one: [Checking], not Assets:Checking. The group heading on
+// the account list already says what kind of account it is; the root segment
+// is left over from before that heading existed. A category keeps its full
+// path here, unchanged -- that convention is its own separate piece of work,
+// not done in this pass.
+namespace detail {
+
+inline std::string without_legacy_root(const std::string& path) {
+    for (const char* root : {"Assets:", "Liabilities:", "Income:", "Expenses:", "Equity:"})
+        if (path.rfind(root, 0) == 0) return path.substr(std::string(root).size());
+    return path;
+}
+
+inline std::string displayed(const chart::Chart& accounts, const std::string& path) {
+    const chart::Account* a = accounts.find(path);
+    if (a != nullptr && types::class_of(a->type) == types::AccountClass::Real)
+        return "[" + without_legacy_root(path) + "]";
+    return path;
+}
+
+}  // namespace detail
+
 // Selecting a placeholder shows everything beneath it: a placeholder takes no
 // postings of its own, so a register of only its own would be empty.
 inline std::vector<Line> lines_for(
@@ -83,7 +108,7 @@ inline std::vector<Line> lines_for(
             // the rest of the split is not that category's business.
             line.category = std::string("--Split--");
             if (others.size() == 1) {
-                line.category = others.front();
+                line.category = detail::displayed(accounts, others.front());
             } else if (!others.empty()) {
                 std::vector<std::string> real;
                 for (const std::string& other : others) {
@@ -91,10 +116,14 @@ inline std::vector<Line> lines_for(
                     if (b != nullptr && types::class_of(b->type) == types::AccountClass::Real)
                         real.push_back(other);
                 }
-                if (real.size() == 1) line.category = real.front();
+                if (real.size() == 1) line.category = detail::displayed(accounts, real.front());
             }
             if (others.empty()) line.category.clear();
 
+            // The literal path, for a reader -- or the dialog that asks for a
+            // new category -- who wants the account rather than its display
+            // text. Only meaningful where there is exactly one other posting;
+            // see the comment on the split branch below.
             if (others.size() == 1) {
                 line.category_detail = others.front();
             } else {

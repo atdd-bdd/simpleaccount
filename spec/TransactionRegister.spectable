@@ -79,8 +79,8 @@ When register opened on : AccountSelect
 | Path               |
 | Expenses:Groceries |
 Then register lines are : RegisterLine
-| Ref | Date       | Payee         | Category        | Payment | Deposit | Balance |
-| T2  | 2024-01-15 | Harris Teeter | Assets:Checking | 0.00    | 45.00   | 45.00   |
+| Ref | Date       | Payee         | Category   | Payment | Deposit | Balance |
+| T2  | 2024-01-15 | Harris Teeter | [Checking] | 0.00    | 45.00   | 45.00   |
 # In an Expense register the money arriving is what was spent, so it falls in
 # the Deposit column. The column heading rule below gives it a better name.
 
@@ -154,7 +154,9 @@ Then register lines are : RegisterLine
 | Ref | Date       | Payee    | Category          | Payment | Deposit | Balance |
 | T1  | 2024-03-02 | Amazon   | Expenses:Shopping | 89.99   | 0.00    | 89.99   |
 | T2  | 2024-03-09 | The Cafe | Expenses:Dining   | 18.50   | 0.00    | 108.49  |
-| T3  | 2024-03-25 | Visa     | Assets:Checking   | 0.00    | 100.00  | 8.49    |
+| T3  | 2024-03-25 | Visa     | [Checking]        | 0.00    | 100.00  | 8.49    |
+# A category keeps its full path; a real account -- the payment to the card --
+# is shown in brackets with the root dropped.
 # Payment here is headed Charge, and Deposit is headed Payment.
 
 BusinessRule What order the register is in
@@ -333,8 +335,8 @@ When register opened on : AccountSelect
 | Path                 |
 | Expenses:Home:Garden |
 Then register lines are : RegisterLine
-| Ref | Date       | Payee      | Category        | Memo    | Payment | Deposit | Balance |
-| T1  | 2024-04-02 | Home Depot | Assets:Checking | Compost | 0.00    | 54.50   | 54.50   |
+| Ref | Date       | Payee      | Category   | Memo    | Payment | Deposit | Balance |
+| T1  | 2024-04-02 | Home Depot | [Checking] | Compost | 0.00    | 54.50   | 54.50   |
 
 # ---------------------------------------------------------------------------
 # Dates in the future, and over many years
