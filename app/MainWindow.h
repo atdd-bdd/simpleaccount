@@ -97,6 +97,7 @@ private:
     // selection itself lives in the workspace, which has no Qt in it.
     void registerMenu(int paneOneBased, const QPoint& at);
     void recategorise(int paneOneBased);
+    void deleteSelection(int paneOneBased);
     void addPayeeRuleFrom(int paneOneBased);
     void rebuildRecent();
     void rememberRecent(const QString& name);

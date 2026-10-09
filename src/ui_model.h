@@ -38,6 +38,18 @@ inline std::optional<Group> group_of(types::AccountType t) {
 inline int depth_within_group(const chart::Account& a,
                               const std::vector<chart::Account>& in_group);
 
+// The five path segments that were, before groups existed, the only heading a
+// real or nominal account had. Importers and the add() that builds missing
+// ancestors still create them as ordinary placeholder accounts, so one can sit
+// between a group heading and the account it is the heading for -- "Assets"
+// between Banking and Checking -- saying nothing a heading does not already
+// say. It is left in the chart and in every total; only its own line in the
+// list is left out. See the account-list section of UserInterface.spectable.
+inline bool is_legacy_root(const std::string& path) {
+    return path == "Assets" || path == "Liabilities" || path == "Income" ||
+           path == "Expenses" || path == "Equity";
+}
+
 struct AccountRow {
     std::string group;        // set on a heading line only
     std::string account;      // set on an account line only
@@ -110,6 +122,7 @@ inline std::vector<AccountRow> account_list(const chart::Chart& accounts,
                       return x.path.value() < y.path.value();
                   });
         for (const chart::Account& a : in_group) {
+            if (is_legacy_root(a.path.value())) continue;
             AccountRow row;
             row.account = a.path.value();
             row.name = types::name_of(a.path);
@@ -133,7 +146,9 @@ inline int depth_within_group(const chart::Account& a,
             in_group.begin(), in_group.end(),
             [&](const chart::Account& x) { return x.path.value() == parent; });
         if (!here) break;
-        ++depth;
+        // A legacy root is walked through, not counted: it has no line of its
+        // own, so nothing should be indented an extra step to sit under it.
+        if (!is_legacy_root(parent)) ++depth;
         parent = types::parent_of(types::AccountPath(parent));
     }
     return depth;
@@ -333,7 +348,28 @@ public:
         const bool anything = !selected_.empty() &&
                               panes_[active_].showing == PaneContent::Register;
         return {MenuEntry{"Recategorize...", anything},
-                MenuEntry{"Add payee rule...", anything}};
+                MenuEntry{"Add payee rule...", anything},
+                MenuEntry{"Delete...", anything}};
+    }
+
+    // Removes every transaction in the selection entirely -- both of its
+    // postings, never one side of it, because deleting one side would leave
+    // the book out of balance. Confirming is the window's business; this is
+    // what runs once that has already happened. See the deleting section of
+    // UserInterface.spectable.
+    int delete_selected() {
+        const std::vector<reg::Line> lines = register_lines(active_pane());
+        std::vector<std::string> refs;
+        for (const int line : selected_) {
+            const ledger::Transaction* found = transaction_on(lines, line);
+            if (found != nullptr) refs.push_back(found->ref.value());
+        }
+        int removed = 0;
+        for (const std::string& ref : refs)
+            if (edit::delete_transaction(&transactions_, ref).changed) ++removed;
+        if (removed > 0) rebuild_book();
+        selected_.clear();
+        return removed;
     }
 
     // Every line in the selection, given the same category. The amounts do not

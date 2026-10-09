@@ -564,13 +564,8 @@ void MainWindow::newAccount() {
     QDialog dialog(this);
     dialog.setWindowTitle("New account");
 
-    auto* path = new QLineEdit(&dialog);
-    path->setPlaceholderText("Assets:Checking");
-    // Pre-filled from whatever is selected, because a new account is usually a
-    // sibling or a child of the one being looked at.
-    const std::string chosen = selectedAccount();
-    if (!chosen.empty())
-        path->setText(QString::fromStdString(chosen) + ":");
+    auto* name = new QLineEdit(&dialog);
+    name->setPlaceholderText("Checking");
 
     // The seven groups, which is the question a person can answer while opening
     // an account. Whether it is a checking or a savings account is a detail of
@@ -586,12 +581,39 @@ void MainWindow::newAccount() {
     // The three categories, which are accounts here and have no group. They
     // stay on this list because it is the only way to add one until categories
     // have a dialog of their own.
+    const int firstCategory = groups + 1;   // +1 for the separator just added
     type->insertSeparator(groups);
     for (types::AccountType kind : {types::AccountType::Income,
                                     types::AccountType::Expense,
                                     types::AccountType::Equity})
         type->addItem(QString::fromStdString(types::to_string(kind)),
                       QString::fromStdString(types::to_string(kind)));
+
+    // Under an existing account, or at the top. A category's fixed root --
+    // Income or Expenses -- is not on this list and is not optional: picking
+    // "(top level)" for a category still nests it under its root, because
+    // nothing else in the program knows how to find a category that is not.
+    // A real account genuinely has no required parent any more, now that the
+    // group above says what kind of thing it is.
+    auto* parent = new QComboBox(&dialog);
+    parent->addItem("(top level)", QString());
+    std::vector<chart::Account> everything = chart_.picker();
+    for (const chart::Account& a : chart_.all())
+        if (a.placeholder) everything.push_back(a);
+    std::sort(everything.begin(), everything.end(),
+             [](const chart::Account& x, const chart::Account& y) {
+                 return x.path.value() < y.path.value();
+             });
+    for (const chart::Account& a : everything)
+        parent->addItem(QString::fromStdString(a.path.value()),
+                        QString::fromStdString(a.path.value()));
+    // Pre-selected from whatever is selected in the list, because a new
+    // account is usually a sibling or a child of the one being looked at.
+    const std::string chosen = selectedAccount();
+    if (!chosen.empty()) {
+        const int at = parent->findData(QString::fromStdString(chosen));
+        if (at >= 0) parent->setCurrentIndex(at);
+    }
 
     auto* opening = new QLineEdit(&dialog);
     opening->setPlaceholderText("0.00");
@@ -600,8 +622,9 @@ void MainWindow::newAccount() {
     asAt->setDisplayFormat("yyyy-MM-dd");
 
     auto* form = new QFormLayout(&dialog);
-    form->addRow("Path", path);
+    form->addRow("Name", name);
     form->addRow("Type", type);
+    form->addRow("Under", parent);
     form->addRow("Opening balance", opening);
     form->addRow("As at", asAt);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
@@ -609,14 +632,33 @@ void MainWindow::newAccount() {
     form->addRow(buttons);
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    path->setFocus();
+    name->setFocus();
 
     if (dialog.exec() != QDialog::Accepted) return;
 
-    const std::string wanted = path->text().trimmed().toStdString();
-    if (wanted.empty()) return;
+    const std::string typedName = name->text().trimmed().toStdString();
+    if (typedName.empty()) return;
     const types::AccountType kind =
         types::account_type_from_string(type->currentData().toString().toStdString());
+    const std::string parentPath = parent->currentData().toString().toStdString();
+
+    // A category always lives under its fixed root, parent or not -- the rest
+    // of the program finds Expenses:Uncategorized and the two report roots by
+    // that literal path, so a category with no root would be invisible to
+    // them in exactly the way an earlier "Misc Income" was. A real account has
+    // no such requirement: the group above already says what it is, so one
+    // picked with no parent is simply a name of its own.
+    std::string wanted;
+    if (!parentPath.empty()) {
+        wanted = parentPath + ":" + typedName;
+    } else if (type->currentIndex() >= firstCategory) {
+        const std::string root = kind == types::AccountType::Income ? "Income"
+                                 : kind == types::AccountType::Expense ? "Expenses"
+                                                                       : "Equity";
+        wanted = root + ":" + typedName;
+    } else {
+        wanted = typedName;
+    }
 
     std::vector<chart::Account> created;
     const chart::Rejection no = chart_.add(types::AccountPath(wanted), kind, &created);
@@ -1283,6 +1325,9 @@ void MainWindow::registerMenu(int paneOneBased, const QPoint& at) {
         if (entry.item.rfind("Recategorize", 0) == 0)
             connect(action, &QAction::triggered, this,
                     [this, paneOneBased]() { recategorise(paneOneBased); });
+        else if (entry.item.rfind("Delete", 0) == 0)
+            connect(action, &QAction::triggered, this,
+                    [this, paneOneBased]() { deleteSelection(paneOneBased); });
         else
             connect(action, &QAction::triggered, this,
                     [this, paneOneBased]() { addPayeeRuleFrom(paneOneBased); });
@@ -1324,6 +1369,28 @@ void MainWindow::recategorise(int paneOneBased) {
     }
     if (done.refused > 0) QMessageBox::information(this, "Recategorize", said);
     else status_->setText(said + "  --  " + QString::fromStdString(into));
+}
+
+void MainWindow::deleteSelection(int paneOneBased) {
+    (void)paneOneBased;
+    const int count = static_cast<int>(workspace_->selected_lines().size());
+    if (count == 0) return;
+    const QString question = count == 1
+        ? QString("Delete this transaction? This cannot be undone.")
+        : QString("Delete these %1 transactions? This cannot be undone.").arg(count);
+    if (QMessageBox::question(this, "Delete", question,
+                              QMessageBox::Yes | QMessageBox::No,
+                              QMessageBox::No) != QMessageBox::Yes)
+        return;
+    const int removed = workspace_->delete_selected();
+    if (removed == 0) return;
+    transactions_ = workspace_->transactions();
+    book_ = workspace_->book();
+    save();
+    rebuildWorkspace();
+    refresh();
+    status_->setText(QString("%1 transaction%2 deleted")
+                         .arg(removed).arg(removed == 1 ? "" : "s"));
 }
 
 void MainWindow::addPayeeRuleFrom(int paneOneBased) {

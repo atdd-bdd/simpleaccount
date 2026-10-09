@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -49,6 +50,20 @@ inline Outcome change_category(ledger::Transaction* t, const std::string& from,
         return {true, std::string()};
     }
     return {false, "nothing is posted to " + from};
+}
+
+// Removes a transaction from the book entirely: both of its postings, never
+// one side of it, because deleting one side would leave the book out of
+// balance. See the deleting section of Transactions.spectable.
+inline Outcome delete_transaction(std::vector<ledger::Transaction>* transactions,
+                                  const std::string& ref) {
+    if (transactions == nullptr) return {false, "no book"};
+    const auto it = std::find_if(
+        transactions->begin(), transactions->end(),
+        [&](const ledger::Transaction& t) { return t.ref.value() == ref; });
+    if (it == transactions->end()) return {false, "no transaction named " + ref};
+    transactions->erase(it);
+    return {true, std::string()};
 }
 
 // The same where the posting to move is not named: the one category posting of

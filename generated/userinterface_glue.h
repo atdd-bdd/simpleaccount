@@ -510,4 +510,15 @@ public:
             << values.front().account << " does not hold " << opened_;
     }
 
+public:
+
+    void when_selection_deleted() {
+        ADD_FAILURE() << "Not implemented: when_selection_deleted";
+    }
+
+    void then_deletion_count_is(const std::vector<DeletionCountString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_deletion_count_is";
+    }
+
 };

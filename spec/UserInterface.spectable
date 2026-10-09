@@ -235,6 +235,34 @@ Then account list rows are : AccountListRow
 | none        | Assets:Brokerage:Cash | Cash      | 2      | 2500.00  | false     |
 | none        | Assets:Brokerage:Fund | Fund      | 2      | 7500.00  | false     |
 
+Scenario A legacy root is not a line of its own
+Description Assets and Liabilities were the only heading an account had before
+Description groups existed, and adding an account still creates one as an
+Description ordinary placeholder above it. Now that the group heading says the
+Description same thing, that placeholder would say it twice -- Banking, then
+Description Assets, then Checking -- so it has no line of its own. Its balance
+Description still counts in the group heading above it, because the money is
+Description still there; only the redundant line is gone.
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type     | Placeholder |
+| Assets          | Checking | true        |
+| Assets:Checking | Checking | false       |
+| Assets:Savings  | Savings  | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee | Account         | Amount  |
+| T1  | 2026-01-05 | Open  | Assets:Checking | 2455.00 |
+| T2  | 2026-01-05 | Open  | Assets:Savings  | 500.00  |
+When account list shown
+Then account list rows are : AccountListRow
+| Group   | Account         | Name     | Indent | Balance | IsHeading |
+| Banking | none            | none     | 0      | 2955.00 | true      |
+| none    | Assets:Checking | Checking | 1      | 2455.00 | false     |
+| none    | Assets:Savings  | Savings  | 1      | 500.00  | false     |
+# Checking and Savings are one level in from the Banking heading, not two:
+# Assets is walked past rather than counted. A meaningful placeholder such as
+# Brokerage, in the scenario above, still gets its own line -- it says
+# something a heading does not.
+
 # ---------------------------------------------------------------------------
 # Selecting an account
 # ---------------------------------------------------------------------------
@@ -976,6 +1004,12 @@ Attributes CategoryChoice
 | Attribute | Type        | Default |
 | Category  | AccountPath |         |
 
+Attributes DeletionCount
+Description How many transactions a delete actually removed, because a
+Description selection of twenty is too many to count by eye.
+| Attribute | Type    | Default |
+| Removed   | Integer | 0       |
+
 Attributes Recategorised
 Description What came of it, counted, because a selection of twenty is too many
 Description to check by eye.
@@ -1005,6 +1039,7 @@ Then menu items are : MenuItem
 | Item              | Enabled |
 | Recategorize...   | true    |
 | Add payee rule... | true    |
+| Delete...         | true    |
 
 Scenario Recategorising a selection puts every line in the new category
 Description Three visits to the same filling station, selected together and
@@ -1081,6 +1116,42 @@ Then register lines are : RegisterLine CompareOnly
 | Ref | Date       | Category           |
 | T1  | 2026-02-01 | Expenses:Auto:Fuel |
 | T2  | 2026-02-08 | --Split--          |
+
+$WIP
+Scenario Deleting a selection removes every transaction in it
+Description Both postings of each, never one side, because a delete that left
+Description the other side standing would leave the book out of balance. The
+Description confirmation is the window's business and happens before this.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Groceries     | Expense | false       |
+| Expenses:Auto:Fuel     | Expense | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee         | Account            | Amount |
+| T1  | 2026-02-01 | Harris Teeter | Assets:Checking    | -45.00 |
+| T1  | 2026-02-01 | Harris Teeter | Expenses:Groceries | 45.00  |
+| T2  | 2026-02-05 | Shell         | Assets:Checking    | -40.00 |
+| T2  | 2026-02-05 | Shell         | Expenses:Auto:Fuel | 40.00  |
+| T3  | 2026-02-10 | Costco        | Assets:Checking    | -90.00 |
+| T3  | 2026-02-10 | Costco        | Expenses:Groceries | 90.00  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register lines selected : RegisterSelect
+| Line |
+| 1    |
+| 2    |
+When selection deleted
+Then deletion count is : DeletionCount Vertical
+| Removed | 2 |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Payee  |
+| T3  | 2026-02-10 | Costco |
+# T1 and T2 are gone entirely -- both of their postings -- and T3, which was
+# not selected, is untouched. The running balance on what remains is worked
+# out again rather than carried over, which is the ordinary rule for a
+# register and needs nothing special here.
 
 Scenario Add payee rule offers the category the transaction already has
 Description The rule writes itself from a line that is already right: the name
