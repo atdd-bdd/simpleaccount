@@ -21,6 +21,8 @@
 #include <QInputDialog>
 #include <QLabel>
 #include <QMenuBar>
+#include <QListWidget>
+#include <QModelIndex>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSignalBlocker>
@@ -169,6 +171,85 @@ private:
     QLineEdit* payee_ = nullptr;
     QLineEdit* category_ = nullptr;
     QCheckBox* enabled_ = nullptr;
+};
+
+// Choosing a category by typing part of it. Only an account already in the
+// book can be chosen: inventing one here would turn a typo into a heading on
+// every report from then on. The list is the accounts that can take a posting,
+// so a placeholder and a hidden account are both out of it.
+//
+// It opens on the category the line already has, because most changes are a
+// correction of something close by.
+//
+// The richer search is specified in Accounts -- an alias standing for a
+// category, and one unused for years dropping out of the list. This is the
+// plain form of it until that is built.
+class CategoryPick : public QDialog {
+public:
+    CategoryPick(QWidget* parent, const chart::Chart& accounts,
+                 const std::string& start)
+        : QDialog(parent) {
+        setWindowTitle("Choose a category");
+        resize(460, 420);
+        auto* layout = new QVBoxLayout(this);
+
+        typed_ = new QLineEdit(QString::fromStdString(start));
+        typed_->setPlaceholderText("Type part of a category");
+        typed_->selectAll();
+        layout->addWidget(typed_);
+
+        list_ = new QListWidget;
+        layout->addWidget(list_, 1);
+
+        for (const chart::Account& a : accounts.picker())
+            every_ << QString::fromStdString(a.path.value());
+        every_.sort();
+
+        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok |
+                                             QDialogButtonBox::Cancel);
+        ok_ = buttons->button(QDialogButtonBox::Ok);
+        layout->addWidget(buttons);
+        connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+
+        const auto filter = [this]() {
+            const QString part = typed_->text().trimmed();
+            list_->clear();
+            for (const QString& one : every_)
+                if (part.isEmpty() || one.contains(part, Qt::CaseInsensitive))
+                    list_->addItem(one);
+            // Whatever was typed, if it names a category exactly, is the
+            // choice; otherwise the chosen line of the list is.
+            for (int i = 0; i < list_->count(); ++i)
+                if (list_->item(i)->text().compare(part, Qt::CaseInsensitive) == 0) {
+                    list_->setCurrentRow(i);
+                    return;
+                }
+            if (list_->count() > 0) list_->setCurrentRow(0);
+        };
+        connect(typed_, &QLineEdit::textChanged, this, filter);
+        connect(list_, &QListWidget::currentRowChanged, this, [this](int) {
+            ok_->setEnabled(list_->currentItem() != nullptr);
+        });
+        // Double-clicking a line is choosing it.
+        connect(list_, &QListWidget::itemDoubleClicked, this, &QDialog::accept);
+        filter();
+        ok_->setEnabled(list_->currentItem() != nullptr);
+        typed_->setFocus();
+    }
+
+    // Empty when nothing was chosen, which the caller treats as a refusal.
+    std::string chosen() const {
+        return list_->currentItem() == nullptr
+                   ? std::string()
+                   : list_->currentItem()->text().toStdString();
+    }
+
+private:
+    QLineEdit* typed_ = nullptr;
+    QListWidget* list_ = nullptr;
+    QStringList every_;
+    QPushButton* ok_ = nullptr;
 };
 
 }  // namespace
@@ -490,10 +571,26 @@ void MainWindow::newAccount() {
     if (!chosen.empty())
         path->setText(QString::fromStdString(chosen) + ":");
 
+    // The seven groups, which is the question a person can answer while opening
+    // an account. Whether it is a checking or a savings account is a detail of
+    // the same answer and is settled afterwards; see the rule in CoreTypes.
+    // Each item carries the type the account starts as.
     auto* type = new QComboBox(&dialog);
-    for (const char* name : {"Bank", "Cash", "CreditCard", "Asset", "Liability",
-                             "Investment", "Income", "Expense", "Equity"})
-        type->addItem(name);
+    int groups = 0;
+    const types::AccountGroup* order = types::account_groups_in_order(&groups);
+    for (int at = 0; at < groups; ++at)
+        type->addItem(QString::fromStdString(types::heading_of(order[at])),
+                      QString::fromStdString(
+                          types::to_string(types::default_type_for(order[at]))));
+    // The three categories, which are accounts here and have no group. They
+    // stay on this list because it is the only way to add one until categories
+    // have a dialog of their own.
+    type->insertSeparator(groups);
+    for (types::AccountType kind : {types::AccountType::Income,
+                                    types::AccountType::Expense,
+                                    types::AccountType::Equity})
+        type->addItem(QString::fromStdString(types::to_string(kind)),
+                      QString::fromStdString(types::to_string(kind)));
 
     auto* opening = new QLineEdit(&dialog);
     opening->setPlaceholderText("0.00");
@@ -518,7 +615,7 @@ void MainWindow::newAccount() {
     const std::string wanted = path->text().trimmed().toStdString();
     if (wanted.empty()) return;
     const types::AccountType kind =
-        types::account_type_from_string(type->currentText().toStdString());
+        types::account_type_from_string(type->currentData().toString().toStdString());
 
     std::vector<chart::Account> created;
     const chart::Rejection no = chart_.add(types::AccountPath(wanted), kind, &created);
@@ -1081,6 +1178,98 @@ void MainWindow::editRules() {
     box.exec();
 }
 
+// The lines selected in a register, counting from one, in the order shown.
+void MainWindow::registerMenu(int paneOneBased, const QPoint& at) {
+    PaneWidgets& p = paneWidgets_[static_cast<std::size_t>(paneOneBased - 1)];
+    const ui::Pane& state =
+        workspace_->panes()[static_cast<std::size_t>(paneOneBased - 1)];
+    if (state.showing != ui::PaneContent::Register) return;
+
+    // The blank line at the foot is not a transaction and cannot be acted on.
+    const int lines = p.reg->rowCount() - 1;
+    std::vector<int> chosen;
+    for (const QModelIndex& index : p.reg->selectionModel()->selectedRows())
+        if (index.row() < lines) chosen.push_back(index.row() + 1);
+    std::sort(chosen.begin(), chosen.end());
+    if (chosen.empty()) return;
+
+    // The pane acted on is the one clicked in, and the selection is the
+    // workspace's rather than the table's from here on.
+    workspace_->make_active(paneOneBased);
+    workspace_->select_lines(chosen);
+
+    QMenu menu(this);
+    for (const ui::MenuEntry& entry : workspace_->menu_items()) {
+        QAction* action = menu.addAction(QString::fromStdString(entry.item));
+        action->setEnabled(entry.enabled);
+        if (entry.item.rfind("Recategorize", 0) == 0)
+            connect(action, &QAction::triggered, this,
+                    [this, paneOneBased]() { recategorise(paneOneBased); });
+        else
+            connect(action, &QAction::triggered, this,
+                    [this, paneOneBased]() { addPayeeRuleFrom(paneOneBased); });
+    }
+    menu.exec(p.reg->viewport()->mapToGlobal(at));
+}
+
+void MainWindow::recategorise(int paneOneBased) {
+    const std::vector<int>& chosen = workspace_->selected_lines();
+    if (chosen.empty()) return;
+    // Opened on the category the first selected line already has, which is
+    // what makes correcting one a matter of a few keystrokes.
+    const std::vector<reg::Line> lines = workspace_->register_lines(paneOneBased);
+    std::string start;
+    if (chosen.front() >= 1 && chosen.front() <= static_cast<int>(lines.size())) {
+        start = lines[static_cast<std::size_t>(chosen.front() - 1)].category;
+        if (start == "--Split--") start.clear();
+    }
+
+    CategoryPick pick(this, chart_, start);
+    if (pick.exec() != QDialog::Accepted) return;
+    const std::string into = pick.chosen();
+    if (into.empty()) return;
+
+    const ui::Recategorised done = workspace_->recategorise_selection(into);
+    if (done.changed > 0) {
+        transactions_ = workspace_->transactions();
+        book_ = workspace_->book();
+        save();
+        rebuildWorkspace();
+        refresh();
+    }
+    // Said out loud, because a selection of twenty is too many to check by eye.
+    QString said = QString("%1 changed").arg(done.changed);
+    if (done.refused > 0) {
+        said += QString(", %1 left alone").arg(done.refused);
+        if (!done.reason.empty())
+            said += "\n\n" + QString::fromStdString(done.reason);
+    }
+    if (done.refused > 0) QMessageBox::information(this, "Recategorize", said);
+    else status_->setText(said + "  --  " + QString::fromStdString(into));
+}
+
+void MainWindow::addPayeeRuleFrom(int paneOneBased) {
+    (void)paneOneBased;
+    if (workspace_->selected_lines().empty()) return;
+    const payees::Rule offered = workspace_->rule_offered();
+    if (offered.pattern.empty()) {
+        QMessageBox::information(this, "SimpleAccount",
+                                 "There is no name on that line to make a rule from.");
+        return;
+    }
+    RuleForm form(this, "Add payee rule", offered);
+    if (form.exec() != QDialog::Accepted) return;
+    const payees::Rule wanted = form.rule();
+    const payees::Refusal no = payees::add(&rules_, wanted);
+    if (no.refused) {
+        QMessageBox::warning(this, "SimpleAccount", QString::fromStdString(no.reason));
+        return;
+    }
+    save();
+    status_->setText(QString("Rule added for %1")
+                         .arg(QString::fromStdString(wanted.pattern)));
+}
+
 void MainWindow::toggleSplit() {
     if (workspace_->split_open()) workspace_->close_split();
     else workspace_->split();
@@ -1140,6 +1329,13 @@ MainWindow::PaneWidgets MainWindow::makePane(int paneOneBased) {
     p.reg->installEventFilter(new EnterRecords(p.reg, [this, paneOneBased]() {
         recordBlankLine(paneOneBased);
     }));
+    // Shift and control already extend and add to the selection; this is what
+    // offers to do something with it. See the register-menu section of
+    // UserInterface.spectable.
+    p.reg->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    p.reg->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(p.reg, &QTableWidget::customContextMenuRequested, this,
+            [this, paneOneBased](const QPoint& at) { registerMenu(paneOneBased, at); });
     p.reg->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
     p.reg->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
     p.stack->addWidget(p.reg);

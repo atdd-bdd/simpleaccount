@@ -2,6 +2,7 @@
 #include <QFont>
 #include <QMainWindow>
 #include <QMenu>
+#include <QPoint>
 #include <memory>
 #include <vector>
 #include "chart.h"
@@ -92,6 +93,11 @@ private:
     // The books opened lately, by name. Kept in QSettings rather than in a
     // book, because which books a person has been in is about this machine and
     // not about any one of them.
+    // The menu on a selection of register lines, and what its items do. The
+    // selection itself lives in the workspace, which has no Qt in it.
+    void registerMenu(int paneOneBased, const QPoint& at);
+    void recategorise(int paneOneBased);
+    void addPayeeRuleFrom(int paneOneBased);
     void rebuildRecent();
     void rememberRecent(const QString& name);
     // Reads what was typed on the blank line of that pane back out of the

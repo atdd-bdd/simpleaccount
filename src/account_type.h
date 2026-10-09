@@ -258,6 +258,24 @@ inline AccountGroup group_of(AccountType t) {
     throw std::invalid_argument("a category is in no account group");
 }
 
+// The type an account takes when only its group has been said, which is all a
+// New Account dialog asks for. The finer type is settled afterwards, in the
+// account's own dialog. See the rule in CoreTypes.spectable.
+inline AccountType default_type_for(AccountGroup g) {
+    switch (g) {
+        case AccountGroup::Banking:          return AccountType::Checking;
+        case AccountGroup::Credit:           return AccountType::CreditCard;
+        case AccountGroup::Investments:      return AccountType::Brokerage;
+        case AccountGroup::LoanAndDebt:      return AccountType::OtherDebt;
+        case AccountGroup::PropertyAndAsset: return AccountType::OtherAsset;
+        // Neither side of Business is the plain one, so a payable is a change
+        // away rather than a choice here.
+        case AccountGroup::Business:         return AccountType::AccountsReceivable;
+        case AccountGroup::Transfer:         return AccountType::TransferIn;
+    }
+    throw std::invalid_argument("unknown account group");
+}
+
 // The types that hold money are real and are reconciled against a statement.
 // Income, Expense and Equity are the categories; reconciling one of those would
 // mean nothing.

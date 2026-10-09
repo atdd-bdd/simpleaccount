@@ -13,6 +13,7 @@
 #include "posting.h"
 #include "register_lines.h"
 #include "text_types.h"
+#include "payee_rules.h"
 #include "ui_model.h"
 
 // Glue for UserInterface.spectable.
@@ -276,6 +277,8 @@ public:
     }
 
 private:
+    ui::Recategorised recategorised_;
+    payees::Rule offered_;
     chart::Chart chart_;
     ledger::Ledger book_;
     std::vector<ledger::Transaction> transactions_;
@@ -359,32 +362,51 @@ private:
 public:
 
     void when_register_lines_selected(const std::vector<RegisterSelectString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_register_lines_selected";
+        std::vector<int> lines;
+        for (const auto& value : values) lines.push_back(std::stoi(value.line));
+        workspace().select_lines(lines);
     }
 
     void then_menu_items_are(const std::vector<MenuItemString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_menu_items_are";
+        const std::vector<ui::MenuEntry> got = workspace().menu_items();
+        ASSERT_EQ(values.size(), got.size()) << "number of menu items";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            EXPECT_EQ(values[i].item, got[i].item) << "item " << i + 1;
+            EXPECT_EQ(parse_bool_cell(values[i].enabled), got[i].enabled)
+                << got[i].item << " enabled";
+        }
     }
 
     void when_selection_recategorised(const std::vector<CategoryChoiceString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_selection_recategorised";
+        ASSERT_FALSE(values.empty());
+        recategorised_ = workspace().recategorise_selection(values.front().category);
     }
 
     void then_recategorising_reported_is(const std::vector<RecategorisedString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_recategorising_reported_is";
+        ASSERT_FALSE(values.empty());
+        const RecategorisedString& want = values.front();
+        EXPECT_EQ(std::stoi(want.changed), recategorised_.changed) << "changed";
+        EXPECT_EQ(std::stoi(want.refused), recategorised_.refused) << "refused";
+        // The reason is only checked where the table names one: a scenario
+        // about the count should not have to write the sentence out.
+        if (want.reason != "none" && want.reason != DNCString)
+            EXPECT_EQ(want.reason, recategorised_.reason) << "reason";
     }
 
-    void when_payee_rule_asked_for() {
-        ADD_FAILURE() << "Not implemented: when_payee_rule_asked_for";
-    }
+    void when_payee_rule_asked_for() { offered_ = workspace().rule_offered(); }
 
     void then_rule_offered_is(const std::vector<PayeeRuleString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_rule_offered_is";
+        ASSERT_FALSE(values.empty());
+        const PayeeRuleString& want = values.front();
+        EXPECT_EQ(want.pattern, offered_.pattern) << "pattern";
+        EXPECT_EQ(want.matchtype, payees::to_string(offered_.match_type)) << "match type";
+        EXPECT_EQ(want.payee, offered_.payee) << "payee";
+        // An offer with no category reads as none, which is what the table says
+        // when there is nothing worth repeating in a rule.
+        EXPECT_EQ(want.category,
+                  offered_.category.empty() ? std::string("none") : offered_.category)
+            << "category";
+        EXPECT_EQ(parse_bool_cell(want.enabled), offered_.enabled) << "enabled";
     }
 
     void when_report_run(const std::vector<ReportSpecString>& values) {

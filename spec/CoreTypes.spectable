@@ -269,6 +269,36 @@ Attributes AccountClassOf
 | AccountClass | AccountClass | Real     |
 | Notes        | String       |          |
 
+BusinessRule The type an account starts as when its group is chosen
+Description Making an account is choosing one of the seven groups, not one of
+Description twenty-three types. Banking is the question a person can answer
+Description while opening an account; whether it is a checking or a savings
+Description account is a detail of the same answer, and it is settled afterwards
+Description in the account's own dialog.
+Details So each group has the type an account takes when only the group has
+Details been said. Six of the seven have an obvious one -- the plainest member,
+Details or the only one anybody opens by hand.
+Details
+Details Business is the exception and is worth knowing about: a receivable and
+Details a payable are opposite sides of the sheet and neither is the plain one,
+Details so an account made under Business starts as a receivable and a payable
+Details has to be changed afterwards.
+Examples: DefaultTypeOf
+| AccountGroup     | AccountType        | Notes                              |
+| Banking          | Checking           | Savings is chosen afterwards       |
+| Credit           | CreditCard         |                                    |
+| Investments      | Brokerage          | IRA, HSA and 401k afterwards       |
+| LoanAndDebt      | OtherDebt          | A mortgage or a car loan afterwards |
+| PropertyAndAsset | OtherAsset         | Real estate or a vehicle afterwards |
+| Business         | AccountsReceivable | A payable has to be changed to     |
+| Transfer         | TransferIn         |                                    |
+
+Attributes DefaultTypeOf
+| Attribute    | Type         | Default            |
+| AccountGroup | AccountGroup | Banking            |
+| AccountType  | AccountType  | Checking           |
+| Notes        | String       | none               |
+
 DataType BalanceSide
 Description Which column of a balance sheet an account belongs in.
 Details Asked only by the balance sheet. The account list says nothing about it

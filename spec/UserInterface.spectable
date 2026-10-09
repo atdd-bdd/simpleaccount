@@ -724,7 +724,6 @@ Then register lines are : RegisterLine CompareOnly
 | T2  | 2026-01-15 | Harris Teeter | 2955.00 |
 | T4  | 2026-01-25 | Transfer      | 2455.00 |
 
-$WIP
 Scenario Accepting the import adds the ticked rows and closes the review
 Description The two new rows arrive, the duplicate does not, and the pane goes
 Description back to being a register of the same account so that the result can
@@ -811,7 +810,6 @@ Then import review summary is : ImportReviewSummary Vertical
 | Accepted   | 3    |
 | Committed  | true |
 
-$WIP
 Scenario Cancelling the import changes nothing
 Given the chart of accounts is as previous
 Given postings are as previous
@@ -986,7 +984,6 @@ Description to check by eye.
 | Refused   | Integer | 0       |
 | Reason    | String  | none    |
 
-$WIP
 Scenario The menu on a selection offers what can be done to it
 Description Two items to begin with. The menu will grow, and what is already
 Description there is what a month of categorising needs.
@@ -1009,7 +1006,6 @@ Then menu items are : MenuItem
 | Recategorize...   | true    |
 | Add payee rule... | true    |
 
-$WIP
 Scenario Recategorising a selection puts every line in the new category
 Description Three visits to the same filling station, selected together and
 Description given their category once.
@@ -1049,7 +1045,6 @@ Then register lines are : RegisterLine CompareOnly
 # change how much of it there was, which is what makes a report total that does
 # not move after a month of categorising worth checking. See transaction_edit.
 
-$WIP
 Scenario A split in the selection is left alone and said so
 Description A split has more than one category, so there is no single posting
 Description to move and choosing one would be a guess that left the book
@@ -1085,9 +1080,8 @@ Then recategorising reported is : Recategorised Vertical
 Then register lines are : RegisterLine CompareOnly
 | Ref | Date       | Category           |
 | T1  | 2026-02-01 | Expenses:Auto:Fuel |
-| T2  | 2026-02-08 | Split              |
+| T2  | 2026-02-08 | --Split--          |
 
-$WIP
 Scenario Add payee rule offers the category the transaction already has
 Description The rule writes itself from a line that is already right: the name
 Description gives the pattern, the category is the one sitting on the line.
@@ -1118,7 +1112,6 @@ Then rule offered is : PayeeRule Vertical
 # whether dropping the store number went too far. See the significant-name rule
 # in Payees, which is where the pattern comes from.
 
-$WIP
 Scenario Add payee rule on an uncategorised line has no category to offer
 Description Nothing has been chosen yet, so the rule comes up with its category
 Description empty and the dialog is where it gets asked for. The name part is

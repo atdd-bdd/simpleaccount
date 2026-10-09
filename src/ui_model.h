@@ -12,8 +12,10 @@
 #include "money.h"
 #include "posting.h"
 #include "transaction_id.h"
+#include "payee_rules.h"
 #include "register_lines.h"
 #include "text_types.h"
+#include "transaction_edit.h"
 
 // What the windows show, and what selecting things does -- with no Qt in it, so
 // that it can be tested headlessly and the widgets stay a thin view over it.
@@ -188,6 +190,21 @@ struct Pane {
     std::string account;
 };
 
+// One item of the menu offered on a selection of register lines.
+struct MenuEntry {
+    std::string item;
+    bool enabled = true;
+};
+
+// What came of recategorising a selection, counted, because a selection of
+// twenty is too many to check by eye. See the register-menu section of
+// UserInterface.spectable.
+struct Recategorised {
+    int changed = 0;
+    int refused = 0;
+    std::string reason;
+};
+
 class Workspace {
 public:
     Workspace(const chart::Chart& accounts, const ledger::Ledger& book,
@@ -217,14 +234,20 @@ public:
         active_ = 1;
     }
 
+    // Collapses the two panes to the one being worked in, and nothing else.
+    //
+    // It used to discard the review as well, which was right while closing a
+    // split was something a person did to a review in progress. Its only
+    // callers now are accepting and cancelling an import, and accepting needs
+    // the review kept: the summary of what was just imported is still asked
+    // about afterwards. Cancelling clears it itself, because there the review
+    // really is being thrown away.
     void close_split() {
         if (panes_.size() < 2) return;
-        // Whichever pane was being worked in is the one that stays.
         const Pane keep = panes_[active_];
         panes_.clear();
         panes_.push_back(keep);
         active_ = 0;
-        review_.clear();
     }
 
     void make_active(int pane_one_based) {
@@ -282,6 +305,11 @@ public:
         }
         committed_ = true;
         panes_[active_].showing = PaneContent::Register;
+        // The second pane existed to compare the import against the register
+        // beside it. There is nothing left to compare, so it goes, and the
+        // register it was beside is what remains -- which is where the result
+        // wants reading. See the second-pane section of UserInterface.spectable.
+        close_split();
     }
 
     void cancel_import() {
@@ -289,6 +317,81 @@ public:
         accepted_.clear();
         committed_ = false;
         panes_[active_].showing = PaneContent::Register;
+        close_split();
+    }
+
+    // ------------------------------------------- lines chosen in a register
+
+    // The lines selected, counting from one in the order the register shows.
+    // How the selection was made is the table's business: a click takes one,
+    // shift extends, control adds, and all three arrive here as a set.
+    void select_lines(const std::vector<int>& lines) { selected_ = lines; }
+
+    const std::vector<int>& selected_lines() const { return selected_; }
+
+    std::vector<MenuEntry> menu_items() const {
+        const bool anything = !selected_.empty() &&
+                              panes_[active_].showing == PaneContent::Register;
+        return {MenuEntry{"Recategorize...", anything},
+                MenuEntry{"Add payee rule...", anything}};
+    }
+
+    // Every line in the selection, given the same category. The amounts do not
+    // move: a category says where money went and cannot change how much of it
+    // there was, which is why a report total that moves afterwards means a
+    // posting has been lost.
+    //
+    // Only an account already in the book may be chosen, and only one that can
+    // take a posting. Inventing a category here would make a typo into a new
+    // heading on every report from now on.
+    Recategorised recategorise_selection(const std::string& category) {
+        Recategorised out;
+        const chart::Account* into = accounts_.find(category);
+        if (into == nullptr) {
+            out.refused = static_cast<int>(selected_.size());
+            out.reason = category.empty()
+                             ? std::string("no category was chosen")
+                             : category + " is not an account in this book";
+            return out;
+        }
+        if (into->placeholder) {
+            out.refused = static_cast<int>(selected_.size());
+            out.reason = category + " is a placeholder and takes no postings";
+            return out;
+        }
+
+        const std::vector<reg::Line> lines = register_lines(active_pane());
+        for (const int line : selected_) {
+            const ledger::Transaction* found = transaction_on(lines, line);
+            if (found == nullptr) continue;
+            ledger::Transaction* writable = by_ref(found->ref.value());
+            const edit::Outcome done =
+                edit::assign_category(writable, accounts_, category);
+            if (done.changed) {
+                ++out.changed;
+                continue;
+            }
+            ++out.refused;
+            // The first refusal is the one reported: a selection of twenty with
+            // two splits in it needs a sentence, not two.
+            if (out.reason.empty()) out.reason = why(*writable, done.reason);
+        }
+        if (out.changed > 0) rebuild_book();
+        return out;
+    }
+
+    // The rule the first selected line suggests: the name gives the pattern and
+    // the line gives the category. Uncategorized is not offered as one -- a
+    // rule carrying it would put every future visit back in the bucket this
+    // program exists to empty.
+    payees::Rule rule_offered() const {
+        const std::vector<reg::Line> lines = register_lines(active_pane());
+        if (selected_.empty()) return payees::Rule{};
+        const ledger::Transaction* found = transaction_on(lines, selected_.front());
+        if (found == nullptr) return payees::Rule{};
+        const std::string raw =
+            found->raw_name.empty() ? found->payee.value() : found->raw_name;
+        return payees::suggest(raw, category_worth_offering(lines, selected_.front()));
     }
 
     // ---------------------------------------------------------------- asking
@@ -328,6 +431,63 @@ public:
     const std::vector<ledger::Transaction>& transactions() const { return transactions_; }
 
 private:
+    // What a line of the register is a transaction of. The line carries the ref,
+    // which is what names a transaction in a register.
+    const ledger::Transaction* transaction_on(const std::vector<reg::Line>& lines,
+                                              int line_one_based) const {
+        if (line_one_based < 1 ||
+            line_one_based > static_cast<int>(lines.size()))
+            return nullptr;
+        const std::string& ref =
+            lines[static_cast<std::size_t>(line_one_based - 1)].ref;
+        for (const ledger::Transaction& t : transactions_)
+            if (t.ref.value() == ref) return &t;
+        return nullptr;
+    }
+
+    ledger::Transaction* by_ref(const std::string& ref) {
+        for (ledger::Transaction& t : transactions_)
+            if (t.ref.value() == ref) return &t;
+        return nullptr;
+    }
+
+    // Said the way it would be said on screen, naming the transaction rather
+    // than the posting, because a person is looking at a line and not at a
+    // pair of postings.
+    static std::string why(const ledger::Transaction& t, const std::string& reason) {
+        if (reason.find("split") != std::string::npos)
+            return t.payee.value() + " is a split; open it to change a line";
+        return t.payee.value() + ": " + reason;
+    }
+
+    // The category of one line, where there is a single one worth repeating in
+    // a rule. A split has no one category, and Uncategorized is not a category
+    // anybody chose.
+    std::string category_worth_offering(const std::vector<reg::Line>& lines,
+                                        int line_one_based) const {
+        if (line_one_based < 1 ||
+            line_one_based > static_cast<int>(lines.size()))
+            return {};
+        const std::string& category =
+            lines[static_cast<std::size_t>(line_one_based - 1)].category;
+        if (category == "--Split--") return {};
+        if (category == "Expenses:Uncategorized" ||
+            category == "Income:Uncategorized")
+            return {};
+        return category;
+    }
+
+    // The book is a second copy of the postings, so it follows them whenever
+    // they move. A category change moves one posting to another account and
+    // every balance under both of them changes with it.
+    void rebuild_book() {
+        ledger::Ledger fresh;
+        for (const ledger::Transaction& t : transactions_)
+            for (const ledger::Posting& p : t.postings)
+                fresh.add({t.date, p.account, p.amount, t.ref.value()});
+        book_ = fresh;
+    }
+
     chart::Chart accounts_;
     ledger::Ledger book_;
     std::vector<ledger::Transaction> transactions_;
@@ -335,6 +495,7 @@ private:
     std::size_t active_ = 0;
     std::vector<ReviewRow> review_;
     std::vector<ledger::Transaction> accepted_;
+    std::vector<int> selected_;
     bool committed_ = false;
 
     void set_accepted(int line, bool accepted) {

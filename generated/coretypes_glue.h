@@ -164,4 +164,29 @@ public:
         }
     }
 
+public:
+
+    // Every group appears exactly once, so a group added later cannot be left
+    // without an answer to what an account under it starts as.
+    void examples_businessrule_the_type_an_account_starts_as_when_its_group_is_chosen(
+            const std::vector<DefaultTypeOfString>& values) {
+        int many = 0;
+        const types::AccountGroup* order = types::account_groups_in_order(&many);
+        EXPECT_EQ(static_cast<std::size_t>(many), values.size())
+            << "the table does not cover every group";
+        for (const auto& value : values) {
+            const DefaultTypeOfTyped t = DefaultTypeOfTyped::from_string_struct(value);
+            const types::AccountGroup group =
+                types::account_group_from_string(t.accountgroup);
+            EXPECT_EQ(t.accounttype,
+                      types::to_string(types::default_type_for(group)))
+                << t.accountgroup;
+            // And what it starts as is in the group it was chosen from, which
+            // is the one thing that would make the dialog lie.
+            EXPECT_EQ(t.accountgroup,
+                      types::to_string(types::group_of(types::default_type_for(group))))
+                << t.accountgroup << " starts outside its own group";
+        }
+    }
+
 };
