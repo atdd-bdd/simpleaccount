@@ -22,103 +22,86 @@ DataType AccountGroup
 Description The headings the account list is divided into. One per kind of real
 Description account, and the categories are not in the list at all: they are
 Description reached through a report, not browsed.
+Details The words Asset and Liability are not headings here. Which side of a
+Details balance sheet an account is on is a different question, asked by the
+Details balance sheet and nowhere else; see the balance-side rule in CoreTypes.
 Examples: EnumerationValues
-| Value       | Notes                                      |
-| Banking     | Bank and Cash accounts                     |
-| CreditCards | What is owed on a card                     |
-| Investments | Holdings and their cash                    |
-| Assets      | A house, a car, anything else owned        |
-| Liabilities | A mortgage or a loan                       |
+| Value            | Notes                                      |
+| Banking          | Checking, savings and cash                 |
+| Credit           | What is owed on a card or a line of credit |
+| Investments      | Holdings and their cash                    |
+| LoanAndDebt      | A mortgage or a loan                       |
+| PropertyAndAsset | A house, a car, anything else owned        |
+| Business         | What is owed to and by the business        |
+| Transfer         | Money on its way between two accounts      |
 
-$WIP
-DataType AccountSection
-Description The two halves the account list is divided into, which are the two
-Description halves of a balance sheet: what is owned and what is owed.
-Details A section heading carries the total of everything under it, so the two
-Details of them are the figures net worth is the difference of. See the balance
-Details sheet in Reports.
-Examples: EnumerationValues
-| Value       | Notes                                       |
-| Assets      | What is owned                               |
-| Liabilities | What is owed                                |
-
-$WIP
-BusinessRule Which section a group is shown under
-Description A card is money owed, so it belongs with the mortgage and not with
-Description the current account. The list said otherwise until now: the five
-Description groups sat in a row with nothing above them, and a card read as
-Description though it were a kind of bank account.
-Details Banking and Investments and anything else owned are under Assets;
-Details CreditCards and anything else owed are under Liabilities.
-Details
-Details Two of the groups have no heading of their own. The Assets group is a
-Details house or a car -- anything owned that is not a bank account or a
-Details holding -- and its accounts sit directly beneath the Assets section
-Details heading, because a heading called Assets under a heading called Assets
-Details would say nothing. The Liabilities group is the same under Liabilities.
-Details That is why the indent of a house and the indent of the Banking heading
-Details are the same: both are one in from their section.
-Examples: SectionOfGroup
-| AccountGroup | AccountSection | HasHeadingOfItsOwn | Notes                     |
-| Banking      | Assets         | true               | Current and savings       |
-| Investments  | Assets         | true               | Holdings and their cash   |
-| Assets       | Assets         | false              | A house, a car            |
-| CreditCards  | Liabilities    | true               | What is owed on a card    |
-| Liabilities  | Liabilities    | false              | A mortgage or a loan      |
-
-Attributes SectionOfGroup
-| Attribute          | Type           | Default |
-| AccountGroup       | AccountGroup   | Banking |
-| AccountSection     | AccountSection | Assets  |
-| HasHeadingOfItsOwn | Boolean        | true    |
-| Notes              | String         | none    |
-
-BusinessRule Which group an account is listed under
+BusinessRule Which group an account is listed under and how the heading reads
 Description Taken from the account type, so nothing has to be filed by hand.
 Details The nominal types have no group: Income, Expense and Equity are
-Details categories and the account list does not show them.
+Details categories and the account list does not show them. Their heading is
+Details given here as an empty cell rather than a word, because there is none.
+Details
+Details The heading on the page is given beside the name because two of them
+Details carry an ampersand and a space, and a name in this specification is an
+Details identifier.
 Examples: GroupOfType
-| AccountType | AccountGroup | Listed |
-| Bank        | Banking      | true   |
-| Cash        | Banking      | true   |
-| CreditCard  | CreditCards  | true   |
-| Investment  | Investments  | true   |
-| Asset       | Assets       | true   |
-| Liability   | Liabilities  | true   |
-| Income      | Banking      | false  |
-| Expense     | Banking      | false  |
-| Equity      | Banking      | false  |
+| AccountType        | AccountGroup     | Heading          | Listed |
+| Checking           | Banking          | Banking          | true   |
+| Savings            | Banking          | Banking          | true   |
+| Cash               | Banking          | Banking          | true   |
+| CreditCard         | Credit           | Credit           | true   |
+| LineOfCredit       | Credit           | Credit           | true   |
+| Brokerage          | Investments      | Investments      | true   |
+| IRA                | Investments      | Investments      | true   |
+| HSA                | Investments      | Investments      | true   |
+| Retirement401k     | Investments      | Investments      | true   |
+| Mortgage           | LoanAndDebt      | Loan~&~Debt      | true   |
+| AutoLoan           | LoanAndDebt      | Loan~&~Debt      | true   |
+| PersonalLoan       | LoanAndDebt      | Loan~&~Debt      | true   |
+| OtherDebt          | LoanAndDebt      | Loan~&~Debt      | true   |
+| RealEstate         | PropertyAndAsset | Property~&~Asset | true   |
+| Vehicle            | PropertyAndAsset | Property~&~Asset | true   |
+| OtherAsset         | PropertyAndAsset | Property~&~Asset | true   |
+| AccountsReceivable | Business         | Business         | true   |
+| AccountsPayable    | Business         | Business         | true   |
+| TransferIn         | Transfer         | Transfer         | true   |
+| TransferOut        | Transfer         | Transfer         | true   |
+| Income             | Banking          |                  | false  |
+| Expense            | Banking          |                  | false  |
+| Equity             | Banking          |                  | false  |
+# A tilde in a cell is a space, so the heading of the fourth group reads
+# "Loan & Debt". The AccountGroup column has to hold something for a category
+# and holds Banking, which Listed being false is what makes harmless.
 
 Attributes GroupOfType
-| Attribute    | Type         | Default |
-| AccountType  | AccountType  | Bank    |
-| AccountGroup | AccountGroup | Banking |
-| Listed       | Boolean      | true    |
+| Attribute    | Type         | Default  |
+| AccountType  | AccountType  | Checking |
+| AccountGroup | AccountGroup | Banking  |
+| Heading      | Text         | none     |
+| Listed       | Boolean      | true     |
 
 Attributes AccountListRow
 Description One line of the account list.
-Details A section heading names its section and no group and no account, and
-Details carries the total of everything under it. A group heading names both
-Details its section and its group, and carries the total of the accounts under
-Details it. An account names its section and no group.
+Details A group heading carries the total of the accounts under it and names no
+Details account; an account names no group. The groups are listed in the order
+Details they are declared, and a group with nothing in it is left out rather
+Details than shown empty.
 Details
-Details Indent is the depth on the page: a section heading is 0, a group heading
-Details and an account that sits directly under a section are 1, an account
-Details under a group heading is 2, and a child of that account is 3.
-| Attribute | Type           | Default |
-| Section   | AccountSection | Assets  |
-| Group     | Text           | none    |
-| Account   | AccountPath    | none    |
-| Name      | Text           | none    |
-| Indent    | Integer        | 0       |
-| Balance   | Money          | 0.00    |
-| IsHeading | Boolean        | false   |
+Details Indent is the depth on the page: a group heading is 0, an account under
+Details it is 1, and a child of that account is 2.
+| Attribute | Type        | Default |
+| Group     | Text        | none    |
+| Account   | AccountPath | none    |
+| Name      | Text        | none    |
+| Indent    | Integer     | 0       |
+| Balance   | Money       | 0.00    |
+| IsHeading | Boolean     | false   |
 
 Background A book with a few accounts
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
-| Assets:Checking        | Bank       | false       |
-| Assets:Savings         | Bank       | false       |
+| Assets:Checking        | Checking   | false       |
+| Assets:Savings         | Checking   | false       |
 | Assets:Wallet          | Cash       | false       |
 | Liabilities:Visa       | CreditCard | false       |
 | Expenses:Groceries     | Expense    | false       |
@@ -134,7 +117,6 @@ Given postings are : PostingRow
 | T4  | 2026-01-25 | Transfer      | Assets:Checking    | -500.00  |
 | T4  | 2026-01-25 | Transfer      | Assets:Savings     | 500.00   |
 
-$WIP
 Scenario The account list groups the real accounts and totals each group
 Description Each balance is the display balance, so a card reads as what is
 Description owed. A group heading carries the total of what is under it.
@@ -144,30 +126,28 @@ Given the chart of accounts is as previous
 Given postings are as previous
 When account list shown
 Then account list rows are : AccountListRow
-| Section     | Group       | Account          | Name     | Indent | Balance | IsHeading |
-| Assets      | none        | none             | none     | 0      | 2955.00 | true      |
-| Assets      | Banking     | none             | none     | 1      | 2955.00 | true      |
-| Assets      | none        | Assets:Checking  | Checking | 2      | 2455.00 | false     |
-| Assets      | none        | Assets:Savings   | Savings  | 2      | 500.00  | false     |
-| Assets      | none        | Assets:Wallet    | Wallet   | 2      | 0.00    | false     |
-| Liabilities | none        | none             | none     | 0      | 89.99   | true      |
-| Liabilities | CreditCards | none             | none     | 1      | 89.99   | true      |
-| Liabilities | none        | Liabilities:Visa | Visa     | 2      | 89.99   | false     |
+| Group   | Account          | Name     | Indent | Balance | IsHeading |
+| Banking | none             | none     | 0      | 2955.00 | true      |
+| none    | Assets:Checking  | Checking | 1      | 2455.00 | false     |
+| none    | Assets:Savings   | Savings  | 1      | 500.00  | false     |
+| none    | Assets:Wallet    | Wallet   | 1      | 0.00    | false     |
+| Credit  | none             | none     | 0      | 89.99   | true      |
+| none    | Liabilities:Visa | Visa     | 1      | 89.99   | false     |
 
-$WIP
-Scenario The list is in two sections, what is owned and what is owed
-Description A house has no heading of its own and sits straight under Assets;
-Description a mortgage sits straight under Liabilities. The card is under
-Description Liabilities with the mortgage, which is the whole point of the two
-Description sections: a card is money owed.
+Scenario Every group that has an account in it is a heading
+Description One heading per kind of account, in the order the groups are
+Description declared, and nothing above them. A card is under Credit and a
+Description mortgage under Loan & Debt; neither the word Asset nor the word
+Description Liability is on the page, because the list is for reaching an
+Description account and the balance sheet is where the two sides are read.
 Given the chart of accounts is : ChartOfAccounts
 | Path                 | Type       | Placeholder |
-| Assets:Checking      | Bank       | false       |
-| Assets:Savings       | Bank       | false       |
-| Assets:Brokerage     | Investment | false       |
-| Assets:House         | Asset      | false       |
+| Assets:Checking      | Checking   | false       |
+| Assets:Savings       | Savings    | false       |
+| Assets:Brokerage     | Brokerage  | false       |
+| Assets:House         | RealEstate | false       |
 | Liabilities:Visa     | CreditCard | false       |
-| Liabilities:Mortgage | Liability  | false       |
+| Liabilities:Mortgage | Mortgage   | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee | Account              | Amount     |
 | T1  | 2026-01-05 | Open  | Assets:Checking      | 2455.00    |
@@ -178,23 +158,23 @@ Given postings are : PostingRow
 | T6  | 2026-01-05 | Open  | Liabilities:Mortgage | -150000.00 |
 When account list shown
 Then account list rows are : AccountListRow
-| Section     | Group       | Account              | Name      | Indent | Balance   | IsHeading |
-| Assets      | none        | none                 | none      | 0      | 211955.00 | true      |
-| Assets      | Banking     | none                 | none      | 1      | 2955.00   | true      |
-| Assets      | none        | Assets:Checking      | Checking  | 2      | 2455.00   | false     |
-| Assets      | none        | Assets:Savings       | Savings   | 2      | 500.00    | false     |
-| Assets      | Investments | none                 | none      | 1      | 9000.00   | true      |
-| Assets      | none        | Assets:Brokerage     | Brokerage | 2      | 9000.00   | false     |
-| Assets      | none        | Assets:House         | House     | 1      | 200000.00 | false     |
-| Liabilities | none        | none                 | none      | 0      | 150089.99 | true      |
-| Liabilities | CreditCards | none                 | none      | 1      | 89.99     | true      |
-| Liabilities | none        | Liabilities:Visa     | Visa      | 2      | 89.99     | false     |
-| Liabilities | none        | Liabilities:Mortgage | Mortgage  | 1      | 150000.00 | false     |
-# The groups that have a heading come first, in the order they are declared,
-# and the section's own accounts come after them. Every figure is the display
-# balance, so the card and the mortgage read as what is owed and the two
-# section totals are the two sides of a balance sheet: 211,955.00 owned,
-# 150,089.99 owed, 61,865.01 net.
+| Group            | Account              | Name      | Indent | Balance   | IsHeading |
+| Banking          | none                 | none      | 0      | 2955.00   | true      |
+| none             | Assets:Checking      | Checking  | 1      | 2455.00   | false     |
+| none             | Assets:Savings       | Savings   | 1      | 500.00    | false     |
+| Credit           | none                 | none      | 0      | 89.99     | true      |
+| none             | Liabilities:Visa     | Visa      | 1      | 89.99     | false     |
+| Investments      | none                 | none      | 0      | 9000.00   | true      |
+| none             | Assets:Brokerage     | Brokerage | 1      | 9000.00   | false     |
+| LoanAndDebt      | none                 | none      | 0      | 150000.00 | true      |
+| none             | Liabilities:Mortgage | Mortgage  | 1      | 150000.00 | false     |
+| PropertyAndAsset | none                 | none      | 0      | 200000.00 | true      |
+| none             | Assets:House         | House     | 1      | 200000.00 | false     |
+# Every figure is the display balance, so the card and the mortgage read as
+# what is owed. Business and Transfer have nothing in them and are left out.
+# The Group cell holds the group's name; what the heading reads on the page is
+# the Heading column of the rule above, so this list shows Loan & Debt and
+# Property & Asset.
 
 Scenario A group with no accounts is not shown
 Description There is nothing under Investments, Assets or Liabilities in this
@@ -203,62 +183,57 @@ Given the chart of accounts is as previous
 Given postings are as previous
 When account list shown
 Then account list groups shown are : GroupShown
-| Group       |
-| Banking     |
-| CreditCards |
+| Group   |
+| Banking |
+| Credit  |
 
 Attributes GroupShown
 | Attribute | Type | Default |
 | Group     | Text |         |
 
-$WIP
 Scenario A hidden account is left out until it is asked for
 Description Hiding an account is how it is got out of the way without losing its
 Description history, so the list follows that. The total of the group follows
 Description the list, so hiding an account changes what the heading says.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder | Hidden |
-| Assets:Checking | Bank | false       | false  |
-| Assets:Old      | Bank | false       | true   |
+| Assets:Checking | Checking | false       | false  |
+| Assets:Old      | Checking | false       | true   |
 Given postings are : PostingRow
 | Ref | Date       | Payee | Account         | Amount  |
 | T1  | 2026-01-05 | Open  | Assets:Checking | 100.00  |
 | T2  | 2026-01-06 | Open  | Assets:Old      | 25.00   |
 When account list shown
 Then account list rows are : AccountListRow
-| Section | Group   | Account         | Name     | Indent | Balance | IsHeading |
-| Assets  | none    | none            | none     | 0      | 100.00  | true      |
-| Assets  | Banking | none            | none     | 1      | 100.00  | true      |
-| Assets  | none    | Assets:Checking | Checking | 2      | 100.00  | false     |
+| Group   | Account         | Name     | Indent | Balance | IsHeading |
+| Banking | none            | none     | 0      | 100.00  | true      |
+| none    | Assets:Checking | Checking | 1      | 100.00  | false     |
 When hidden accounts shown
 Then account list rows are : AccountListRow
-| Section | Group   | Account         | Name     | Indent | Balance | IsHeading |
-| Assets  | none    | none            | none     | 0      | 125.00  | true      |
-| Assets  | Banking | none            | none     | 1      | 125.00  | true      |
-| Assets  | none    | Assets:Checking | Checking | 2      | 100.00  | false     |
-| Assets  | none    | Assets:Old      | Old      | 2      | 25.00   | false     |
+| Group   | Account         | Name     | Indent | Balance | IsHeading |
+| Banking | none            | none     | 0      | 125.00  | true      |
+| none    | Assets:Checking | Checking | 1      | 100.00  | false     |
+| none    | Assets:Old      | Old      | 1      | 25.00   | false     |
 
-$WIP
 Scenario A placeholder is a line in the list with its subtree beneath it
 Description A placeholder takes no postings of its own, so its balance is the
 Description roll-up. It is shown because it is how a deep tree is navigated.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type | Placeholder |
-| Assets:Brokerage        | Investment | true  |
-| Assets:Brokerage:Cash   | Investment | false |
-| Assets:Brokerage:Fund   | Investment | false |
+| Assets:Brokerage        | Brokerage  | true  |
+| Assets:Brokerage:Cash   | Brokerage  | false |
+| Assets:Brokerage:Fund   | Brokerage  | false |
 Given postings are : PostingRow
 | Ref | Date       | Payee | Account               | Amount  |
 | T1  | 2026-01-05 | Open  | Assets:Brokerage:Cash | 2500.00 |
 | T2  | 2026-01-06 | Open  | Assets:Brokerage:Fund | 7500.00 |
 When account list shown
 Then account list rows are : AccountListRow
-| Section | Group       | Account               | Name      | Indent | Balance  | IsHeading |
-| Assets  | none        | none                  | none      | 0      | 10000.00 | true      |
-| Assets  | Investments | none                  | none      | 1      | 10000.00 | true      |
-| Assets  | none        | Assets:Brokerage      | Brokerage | 2      | 10000.00 | false     |
-| Assets  | none        | Assets:Brokerage:Cash | Cash      | 3      | 2500.00  | false     |
-| Assets  | none        | Assets:Brokerage:Fund | Fund      | 3      | 7500.00  | false     |
+| Group       | Account               | Name      | Indent | Balance  | IsHeading |
+| Investments | none                  | none      | 0      | 10000.00 | true      |
+| none        | Assets:Brokerage      | Brokerage | 1      | 10000.00 | false     |
+| none        | Assets:Brokerage:Cash | Cash      | 2      | 2500.00  | false     |
+| none        | Assets:Brokerage:Fund | Fund      | 2      | 7500.00  | false     |
 
 # ---------------------------------------------------------------------------
 # Selecting an account
@@ -304,9 +279,9 @@ Description reader of a brokerage account wants: the cash and the holdings
 Description together.
 Given the chart of accounts is : ChartOfAccounts
 | Path                  | Type       | Placeholder |
-| Assets:Brokerage      | Investment | true        |
-| Assets:Brokerage:Cash | Investment | false       |
-| Assets:Brokerage:Fund | Investment | false       |
+| Assets:Brokerage      | Brokerage  | true        |
+| Assets:Brokerage:Cash | Brokerage  | false       |
+| Assets:Brokerage:Fund | Brokerage  | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee | Account               | Amount  |
 | T1  | 2026-01-05 | Open  | Assets:Brokerage:Cash | 2500.00 |
@@ -1017,7 +992,7 @@ Description Two items to begin with. The menu will grow, and what is already
 Description there is what a month of categorising needs.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee          | Account                | Amount |
@@ -1040,7 +1015,7 @@ Description Three visits to the same filling station, selected together and
 Description given their category once.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Auto          | Expense | true        |
 | Expenses:Auto:Fuel     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
@@ -1082,7 +1057,7 @@ Description balanced and silently wrong. The rest of the selection still
 Description changes, and the count says what happened.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Auto          | Expense | true        |
 | Expenses:Auto:Fuel     | Expense | false       |
 | Expenses:Groceries     | Expense | false       |
@@ -1120,7 +1095,7 @@ Description This is the same rule the categorisation offers in Payees, reached
 Description from the register instead.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee              | Account            | Amount |
@@ -1150,7 +1125,7 @@ Description empty and the dialog is where it gets asked for. The name part is
 Description still worth offering: it is the half the program can work out.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee          | Account                | Amount |
@@ -1213,7 +1188,7 @@ Description filling station. It is the third line of the checking register, and
 Description that is where the click lands.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Auto      | Expense | true        |
 | Expenses:Auto:Fuel | Expense | false       |
 | Expenses:Groceries | Expense | false       |
@@ -1250,7 +1225,7 @@ Description one of them to go to. The drill-down is what answers that question
 Description and it is a different gesture.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Auto      | Expense | true        |
 | Expenses:Auto:Fuel | Expense | false       |
 | Expenses:Groceries | Expense | false       |
@@ -1292,7 +1267,7 @@ Description agree. Expected to come off both pages once the navigation is
 Description trusted; see the naming rule in Transactions for what it is.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Auto      | Expense | true        |
 | Expenses:Auto:Fuel | Expense | false       |
 | Expenses:Groceries | Expense | false       |

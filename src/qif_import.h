@@ -145,7 +145,7 @@ private:
             const std::string path = account_path_of(a.qif_type, a.name);
             account_paths_[a.name] = path;
             const auto mapping = account_mapping_of(a.qif_type);
-            add_account(path, mapping ? mapping->type : types::AccountType::Bank);
+            add_account(path, mapping ? mapping->type : types::AccountType::Checking);
             if (a.name.find(':') != std::string::npos)
                 note("NameChanged", "Account \"" + a.name + "\" became \"" +
                                     types::name_of(types::AccountPath(path)) + "\"");
@@ -498,10 +498,10 @@ private:
     // invoiced and never earned -- 37,808.16 over twenty years.
     std::string holding_account_for(const Record& raw) {
         if (raw.section == Section::BillTxns) {
-            add_account("Assets:Unrecognised Expense", types::AccountType::Asset);
+            add_account("Assets:Unrecognised Expense", types::AccountType::OtherAsset);
             return "Assets:Unrecognised Expense";
         }
-        add_account("Liabilities:Unrecognised Income", types::AccountType::Liability);
+        add_account("Liabilities:Unrecognised Income", types::AccountType::OtherDebt);
         return "Liabilities:Unrecognised Income";
     }
 
@@ -653,7 +653,7 @@ private:
     // list is an account that was not exported rather than a category.
     void add_account_if_missing_for_transfer(const std::string& path) {
         if (result_.accounts.has(path)) return;
-        add_account(path, types::AccountType::Bank);
+        add_account(path, types::AccountType::Checking);
         note("AccountGuessed", "\"[" + types::name_of(types::AccountPath(path)) +
                                "]\" was not in the account list; made " + path +
                                " of type Bank");

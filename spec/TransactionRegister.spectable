@@ -36,7 +36,7 @@ Description The Category column holds the other account of the transaction. The
 Description running balance is the balance of this account after each line.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Income:Salary      | Income  | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Auto:Fuel | Expense | false       |
@@ -63,7 +63,7 @@ Description amount is on the other side and the category column names the bank.
 Description Nothing was stored twice to make this possible.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Income:Salary      | Income  | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Auto:Fuel | Expense | false       |
@@ -93,19 +93,19 @@ Description The register is read as a statement of the account it is open on, so
 Description the headings are the words that account uses.
 Examples: ColumnHeadings
 | AccountType | OutColumn | InColumn | Notes                             |
-| Bank        | Payment   | Deposit  |                                   |
+| Checking    | Payment   | Deposit  |                                   |
 | Cash        | Spend     | Receive  |                                   |
 | CreditCard  | Charge    | Payment  | A payment reduces what is owed    |
-| Liability   | Increase  | Payment  |                                   |
-| Asset       | Decrease  | Increase |                                   |
-| Investment  | Payment   | Deposit  | Of the cash side; see Investments |
+| OtherDebt   | Increase  | Payment  |                                   |
+| OtherAsset  | Decrease  | Increase |                                   |
+| Brokerage   | Payment   | Deposit  | Of the cash side; see Investments |
 | Expense     | Refund    | Spent    | Money arriving here was spent     |
 | Income      | Earned    | Returned |                                   |
 | Equity      | Decrease  | Increase |                                   |
 
 Attributes ColumnHeadings
 | Attribute   | Type        | Default |
-| AccountType | AccountType | Bank    |
+| AccountType | AccountType | Checking |
 | OutColumn   | Text        |         |
 | InColumn    | Text        |         |
 | Notes       | String      | none    |
@@ -120,14 +120,14 @@ Description because that is what the statement shows. See the display sign rule
 Description in Accounts.
 Examples: RunningBalanceSign
 | AccountType | PostingAmount | BalanceShown | Notes                      |
-| Bank        | -45.00        | -45.00       | Money left the account     |
+| Checking    | -45.00        | -45.00       | Money left the account     |
 | CreditCard  | -45.00        | 45.00        | A charge; 45.00 is owed    |
 | CreditCard  | 300.00        | -300.00      | A payment, on its own      |
 | Income      | -3000.00      | 3000.00      | Earned                     |
 
 Attributes RunningBalanceSign
 | Attribute     | Type        | Default |
-| AccountType   | AccountType | Bank    |
+| AccountType   | AccountType | Checking |
 | PostingAmount | Money       | 0.00    |
 | BalanceShown  | Money       | 0.00    |
 | Notes         | String      | none    |
@@ -136,7 +136,7 @@ Scenario A credit card register shows a growing balance owed
 Given the chart of accounts is : ChartOfAccounts
 | Path              | Type       | Placeholder |
 | Liabilities:Visa  | CreditCard | false       |
-| Assets:Checking   | Bank       | false       |
+| Assets:Checking   | Checking   | false       |
 | Expenses:Shopping | Expense    | false       |
 | Expenses:Dining   | Expense    | false       |
 Given postings are : PostingRow
@@ -180,7 +180,7 @@ Attributes RegisterOrder
 Scenario Two transactions on one date keep the order they were entered in
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Given postings in entry order are : SequencedPostingRow
 | EntrySeq | Ref | Date       | Payee | Account            | Amount |
@@ -218,7 +218,7 @@ Description something, so it is allowed, and the balance column is emptied
 Description rather than filled with figures that do not add up.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Given postings in entry order are : SequencedPostingRow
 | EntrySeq | Ref | Date       | Payee | Account            | Amount |
@@ -265,7 +265,7 @@ Description There is no one category to show, so the column says so, and the
 Description line can be expanded to see the parts.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
-| Assets:Checking           | Bank    | false       |
+| Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
 | Expenses:Auto:Repairs     | Expense | false       |
@@ -285,7 +285,7 @@ Then register lines are : RegisterLine
 Scenario An expanded split shows its lines beneath
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
-| Assets:Checking           | Bank    | false       |
+| Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
 | Expenses:Auto:Repairs     | Expense | false       |
@@ -319,7 +319,7 @@ Description names the bank account as the category. The other legs of the split
 Description are not its business.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
-| Assets:Checking           | Bank    | false       |
+| Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
 | Expenses:Auto:Repairs     | Expense | false       |
@@ -346,7 +346,7 @@ Description and it must not be mistaken for money already gone. The balance as
 Description at today is shown on the marker line.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Given today is : Today Vertical
 | Date | 2024-05-15 |
@@ -388,7 +388,7 @@ Description Twenty years of history is tens of thousands of lines. Opening at
 Description the top would mean scrolling through 2005 to reach this month.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
-| Assets:Checking | Bank | false       |
+| Assets:Checking | Checking | false       |
 Given the register holds : RegisterExtent Vertical
 | FirstDate | 2005-01-01 |
 | LastDate  | 2026-09-30 |
@@ -420,7 +420,7 @@ Description the unfiltered register reads 2,903.00 when only January is shown,
 Description because that is what the account held on that day.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee  | Account            | Amount  |
@@ -459,7 +459,7 @@ Description One search box, because a user looking for something does not want
 Description to decide first which field it is in.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Auto:Fuel | Expense | false       |
 Given postings are : PostingRow
@@ -490,7 +490,7 @@ Examples: ValidValues
 Scenario Searching for an amount matches either column
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Auto:Fuel | Expense | false       |
 Given postings are : PostingRow
@@ -515,7 +515,7 @@ Description The register ends in an empty line dated today. Filling it in and
 Description leaving the line commits the transaction, as in Transactions.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Given today is : Today Vertical
 | Date | 2024-05-15 |
@@ -531,7 +531,7 @@ Description A payee typed and then thought better of does not become a zero
 Description transaction.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Given today is : Today Vertical
 | Date | 2024-05-15 |

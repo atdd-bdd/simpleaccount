@@ -327,8 +327,8 @@ Description a matching exclusion rule, which is worth one test of its own
 Description given there are 8,228 bracketed transfers in the business file.
 Given the chart of accounts is : ChartOfAccounts
 | Path              | Type       | Placeholder |
-| Assets:Checking   | Bank       | false       |
-| Assets:Savings    | Bank       | false       |
+| Assets:Checking   | Checking   | false       |
+| Assets:Savings    | Checking   | false       |
 | Liabilities:Visa  | CreditCard | false       |
 | Expenses          | Expense    | true        |
 | Expenses:Shopping | Expense    | false       |
@@ -380,9 +380,9 @@ Description unrealised gain and also leaves it out. They agree, and because
 Description they get there by different routes it is worth one test.
 Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type       | Placeholder |
-| Assets:Portfolio            | Investment | true        |
-| Assets:Portfolio:Cash       | Investment | false       |
-| Assets:Portfolio:A Fund     | Investment | false       |
+| Assets:Portfolio            | Brokerage  | true        |
+| Assets:Portfolio:Cash       | Brokerage  | false       |
+| Assets:Portfolio:A Fund     | Brokerage  | false       |
 | Income                      | Income     | true        |
 | Income:Dividends            | Income     | false       |
 | Equity:Market Value Changes | Equity     | false       |
@@ -419,7 +419,7 @@ Description both figures and the difference are all shown, and the difference is
 Description what points at the cause.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses           | Expense | true        |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Auto      | Expense | false       |
@@ -459,7 +459,7 @@ Description chase is the one Quicken shows, so the line is reported with its
 Description amount rather than omitted for having nothing on our side.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses           | Expense | true        |
 | Expenses:Groceries | Expense | false       |
 Given postings are : PostingRow
@@ -496,7 +496,7 @@ Description become an account. Both are mistakes this comparison exists to
 Description catch, and both would otherwise look like a tidy report.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses           | Expense | true        |
 | Expenses:Groceries | Expense | false       |
 | Expenses:--Split-- | Expense | false       |
@@ -648,7 +648,7 @@ Description register. The All Dates report ends at today as well, not at the
 Description last transaction in the file.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses           | Expense | true        |
 | Expenses:Groceries | Expense | false       |
 Given today is : Today Vertical
@@ -925,7 +925,7 @@ Details creating a transaction and clearing one that is already there. Those
 Details are the rules in ImportOfx that a small file cannot exercise.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses               | Expense | true        |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
@@ -976,7 +976,7 @@ Description compared. Skipping the 899 investment records of the business file
 Description would leave this report short.
 Given the chart of accounts is : ChartOfAccounts
 | Path                     | Type       | Placeholder |
-| Assets:Portfolio:Cash    | Investment | false       |
+| Assets:Portfolio:Cash    | Brokerage  | false       |
 | Income                   | Income     | true        |
 | Income:Dividends         | Income     | false       |
 | Expenses                 | Expense    | true        |
@@ -1013,7 +1013,7 @@ Description The idempotency rule of ImportOfx, checked where it matters: in a
 Description report rather than in a count of rows.
 Given the chart of accounts is : ChartOfAccounts
 | Path                     | Type       | Placeholder |
-| Assets:Portfolio:Cash    | Investment | false       |
+| Assets:Portfolio:Cash    | Brokerage  | false       |
 | Income                   | Income     | true        |
 | Income:Dividends         | Income     | false       |
 | Expenses                 | Expense    | true        |

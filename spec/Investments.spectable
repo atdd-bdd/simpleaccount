@@ -42,11 +42,11 @@ Details That is the whole of the design, and it is what the simplification buys.
 Background A brokerage account with two holdings
 Given the chart of accounts is : ChartOfAccounts
 | Path                           | Type       | Placeholder |
-| Assets:Brokerage               | Investment | true        |
-| Assets:Brokerage:Cash          | Investment | false       |
-| Assets:Brokerage:VTSAX         | Investment | false       |
-| Assets:Brokerage:BRK.B         | Investment | false       |
-| Assets:Checking                | Bank       | false       |
+| Assets:Brokerage               | Brokerage  | true        |
+| Assets:Brokerage:Cash          | Brokerage  | false       |
+| Assets:Brokerage:VTSAX         | Brokerage  | false       |
+| Assets:Brokerage:BRK.B         | Brokerage  | false       |
+| Assets:Checking                | Checking   | false       |
 | Income:Dividends               | Income     | false       |
 | Income:Interest                | Income     | false       |
 | Expenses:Investment:Fees       | Expense    | false       |
@@ -400,10 +400,10 @@ Description is one transaction per holding, because each holding is its own
 Description account and a posting belongs to one.
 Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type       | Placeholder |
-| Assets:Brokerage            | Investment | true        |
-| Assets:Brokerage:VTSAX      | Investment | false       |
-| Assets:IRA                  | Investment | true        |
-| Assets:IRA:VTSAX            | Investment | false       |
+| Assets:Brokerage            | Brokerage  | true        |
+| Assets:Brokerage:VTSAX      | Brokerage  | false       |
+| Assets:IRA                  | Brokerage  | true        |
+| Assets:IRA:VTSAX            | Brokerage  | false       |
 | Equity:Market Value Changes | Equity     | false       |
 | Equity:Opening Balances     | Equity     | false       |
 Given holdings are : Holdings
@@ -534,7 +534,7 @@ Description holds no holdings; its value is set directly, against the same
 Description equity account a revaluation uses.
 Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type       | Placeholder |
-| Assets:Pension              | Investment | false       |
+| Assets:Pension              | Brokerage  | false       |
 | Equity:Market Value Changes | Equity     | false       |
 | Equity:Opening Balances     | Equity     | false       |
 Given postings are : PostingRow
@@ -566,7 +566,7 @@ Description it directly would make the invariant false and there would be no way
 Description to tell which figure was wrong.
 Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type       | Placeholder |
-| Assets:Brokerage:VTSAX      | Investment | false       |
+| Assets:Brokerage:VTSAX      | Brokerage  | false       |
 | Equity:Market Value Changes | Equity     | false       |
 Given holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
@@ -605,10 +605,10 @@ Description a price from two years ago is worth distrusting and there is no way
 Description to tell from the figure alone.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
-| Assets:Brokerage       | Investment | true        |
-| Assets:Brokerage:Cash  | Investment | false       |
-| Assets:Brokerage:VTSAX | Investment | false       |
-| Assets:Brokerage:BRK.B | Investment | false       |
+| Assets:Brokerage       | Brokerage  | true        |
+| Assets:Brokerage:Cash  | Brokerage  | false       |
+| Assets:Brokerage:VTSAX | Brokerage  | false       |
+| Assets:Brokerage:BRK.B | Brokerage  | false       |
 Given today is : Today Vertical
 | Date | 2024-07-01 |
 Given holdings are : Holdings

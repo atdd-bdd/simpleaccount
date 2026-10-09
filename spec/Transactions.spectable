@@ -137,9 +137,9 @@ Description matched is sitting with its other side in Unassigned; the user picks
 Description the account in the register and the suspense balance goes to zero.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
-| Assets:Checking        | Bank       | false       |
+| Assets:Checking        | Checking   | false       |
 | Liabilities:Chase Visa | CreditCard | false       |
-| Unassigned             | Asset      | false       |
+| Unassigned             | OtherAsset | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee     | Account         | Amount   | Memo | Cleared   |
 | T1  | 2026-04-10 | CHASEBANK | Assets:Checking | -1200.00 | none | Cleared   |
@@ -215,9 +215,9 @@ Description nothing for Unassigned to be waiting for and the row is categorised
 Description like any other.
 Given the chart of accounts is : ChartOfAccounts
 | Path                 | Type   | Placeholder |
-| Assets:Checking      | Bank   | false       |
+| Assets:Checking      | Checking | false       |
 | Income:Uncategorized | Income | false       |
-| Unassigned           | Asset  | false       |
+| Unassigned           | OtherAsset | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee        | Account              | Amount   | Memo | Cleared   |
 | T1  | 2026-04-15 | ACME PAYROLL | Assets:Checking      | 3000.00  | none | Cleared   |
@@ -271,9 +271,9 @@ Description the dates were further apart than the window allows. Both sides are
 Description in the book as separate transactions. Matching them makes one.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
-| Assets:Checking        | Bank       | false       |
+| Assets:Checking        | Checking   | false       |
 | Liabilities:Chase Visa | CreditCard | false       |
-| Unassigned             | Asset      | false       |
+| Unassigned             | OtherAsset | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee            | Account                | Amount   | Memo | Cleared   |
 | T1  | 2026-04-10 | CHASEBANK        | Assets:Checking        | -1200.00 | none | Cleared   |
@@ -309,9 +309,9 @@ Description The entries offered are the ones in the account being assigned, with
 Description the closest in amount and date at the top.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
-| Assets:Checking        | Bank       | false       |
+| Assets:Checking        | Checking   | false       |
 | Liabilities:Chase Visa | CreditCard | false       |
-| Unassigned             | Asset      | false       |
+| Unassigned             | OtherAsset | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee            | Account                | Amount   | Memo | Cleared   |
 | T1  | 2026-04-10 | CHASEBANK        | Assets:Checking        | -1200.00 | none | Cleared   |
@@ -445,7 +445,7 @@ $WIP
 Scenario A transaction with one posting is refused
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 When postings committed : PostingRow
 | Ref | Date       | Account         | Amount |
@@ -458,7 +458,7 @@ $WIP
 Scenario An unbalanced transaction is refused
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 When postings committed : PostingRow
 | Ref | Date       | Account            | Amount |
@@ -510,7 +510,7 @@ $WIP
 Scenario A payment entered in a register
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 When register entry committed : RegisterEntry Vertical
 | Account  | Assets:Checking    |
@@ -527,7 +527,7 @@ $WIP
 Scenario A deposit entered in a register
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type   | Placeholder |
-| Assets:Checking | Bank   | false       |
+| Assets:Checking | Checking | false       |
 | Income:Salary   | Income | false       |
 When register entry committed : RegisterEntry Vertical
 | Account  | Assets:Checking |
@@ -544,7 +544,7 @@ $WIP
 Scenario A check records its number
 Given the chart of accounts is : ChartOfAccounts
 | Path                | Type    | Placeholder |
-| Assets:Checking     | Bank    | false       |
+| Assets:Checking     | Checking | false       |
 | Expenses:Home:Rates | Expense | false       |
 When register entry committed : RegisterEntry Vertical
 | Account  | Assets:Checking     |
@@ -575,8 +575,8 @@ Description The category column of the register holds the other account. One
 Description transaction is created, and it appears in both registers.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
-| Assets:Checking | Bank | false       |
-| Assets:Savings  | Bank | false       |
+| Assets:Checking | Checking | false       |
+| Assets:Savings  | Checking | false       |
 When register entry committed : RegisterEntry Vertical
 | Account  | Assets:Checking |
 | Date     | 2024-03-01      |
@@ -601,7 +601,7 @@ $WIP
 Scenario A payment to a category is not a transfer
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 When register entry committed : RegisterEntry Vertical
 | Account  | Assets:Checking    |
@@ -618,7 +618,7 @@ Description as an expense would count the spending twice: once when each charge
 Description was categorised, and again when the card was paid.
 Given the chart of accounts is : ChartOfAccounts
 | Path             | Type       | Placeholder |
-| Assets:Checking  | Bank       | false       |
+| Assets:Checking  | Checking   | false       |
 | Liabilities:Visa | CreditCard | false       |
 When register entry committed : RegisterEntry Vertical
 | Account  | Assets:Checking  |
@@ -641,7 +641,7 @@ Description Two postings to one account with opposite amounts would change
 Description nothing and clear nothing; it is always a mistake.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
-| Assets:Checking | Bank | false       |
+| Assets:Checking | Checking | false       |
 When postings committed : PostingRow
 | Ref | Date       | Account         | Amount  |
 | T1  | 2024-03-01 | Assets:Checking | -500.00 |
@@ -657,7 +657,7 @@ Description it makes its own balance differ from the total of its children,
 Description which is the one thing a tree of accounts must not do.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Auto      | Expense | true        |
 | Expenses:Auto:Fuel | Expense | false       |
 When register entry committed : RegisterEntry Vertical
@@ -688,7 +688,7 @@ Description One trip to the hardware store, charged three ways. The register
 Description account takes one posting for the total; each category takes its own.
 Given the chart of accounts is : ChartOfAccounts
 | Path                       | Type    | Placeholder |
-| Assets:Checking            | Bank    | false       |
+| Assets:Checking            | Checking | false       |
 | Expenses:Home:Maintenance  | Expense | false       |
 | Expenses:Home:Garden       | Expense | false       |
 | Expenses:Auto:Repairs      | Expense | false       |
@@ -715,7 +715,7 @@ Description The split window shows the shortfall as it is typed; this is what
 Description happens if the entry is committed anyway.
 Given the chart of accounts is : ChartOfAccounts
 | Path                       | Type    | Placeholder |
-| Assets:Checking            | Bank    | false       |
+| Assets:Checking            | Checking | false       |
 | Expenses:Home:Maintenance  | Expense | false       |
 | Expenses:Home:Garden       | Expense | false       |
 | Expenses:Auto:Repairs      | Expense | false       |
@@ -738,7 +738,7 @@ Description A paycheque is the usual case: gross pay in, tax and insurance out,
 Description and the net is what reaches the account.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Income:Salary          | Income  | false       |
 | Expenses:Taxes:Federal | Expense | false       |
 | Expenses:Insurance     | Expense | false       |
@@ -772,8 +772,8 @@ Description naming an account rather than a category. Nothing special is needed:
 Description a posting does not care which kind of account it names.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type   | Placeholder |
-| Assets:Checking | Bank   | false       |
-| Assets:Savings  | Bank   | false       |
+| Assets:Checking | Checking | false       |
+| Assets:Savings  | Checking | false       |
 | Income:Salary   | Income | false       |
 When split entry committed : RegisterEntry Vertical
 | Account | Assets:Checking |
@@ -803,7 +803,7 @@ Description reports stay readable and the work left to do is visible in one
 Description place. See ImportOfx.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
-| Assets:Checking | Bank | false       |
+| Assets:Checking | Checking | false       |
 When register entry committed : RegisterEntry Vertical
 | Account | Assets:Checking |
 | Date    | 2024-05-01      |
@@ -818,7 +818,7 @@ $WIP
 Scenario An uncategorised deposit posts to income
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
-| Assets:Checking | Bank | false       |
+| Assets:Checking | Checking | false       |
 When register entry committed : RegisterEntry Vertical
 | Account | Assets:Checking |
 | Date    | 2024-05-02      |
@@ -855,7 +855,7 @@ Description the amount in the register keeps the transaction balanced without
 Description asking anything.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee         | Account            | Amount |
@@ -883,7 +883,7 @@ Description With three or more postings there is no one other side, so the
 Description shortfall is reported and the split window is opened instead.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
-| Assets:Checking           | Bank    | false       |
+| Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
 Given postings are : PostingRow
@@ -903,7 +903,7 @@ $WIP
 Scenario Changing the category of one side
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Dining    | Expense | false       |
 Given postings are : PostingRow
@@ -932,7 +932,7 @@ Description is always of the whole transaction, from whichever register it is
 Description asked for.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Given postings are : PostingRow
 | Ref | Date       | Account            | Amount |
@@ -954,7 +954,7 @@ Description A finished reconciliation agreed with a statement. Changing a postin
 Description inside it breaks that agreement, so it is allowed but not quietly.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Given postings are : PostingRow
 | Ref | Date       | Account            | Amount | Cleared    |
@@ -983,8 +983,8 @@ Description another, often days apart. One posting may be cleared while the
 Description other is not, which is why the status is on the posting.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
-| Assets:Checking | Bank | false       |
-| Assets:Savings  | Bank | false       |
+| Assets:Checking | Checking | false       |
+| Assets:Savings  | Checking | false       |
 Given postings are : PostingRow
 | Ref | Date       | Account         | Amount  | Cleared   |
 | T1  | 2024-03-01 | Assets:Checking | -500.00 | Uncleared |

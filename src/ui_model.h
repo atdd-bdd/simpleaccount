@@ -20,31 +20,16 @@
 // See UserInterface.spectable.
 namespace ui {
 
-// The headings the account list is divided into. The categories are not among
-// them: Income, Expense and Equity are reached through a report, not browsed.
-enum class Group { Banking, CreditCards, Investments, Assets, Liabilities };
+// The headings the account list is divided into live with the account types,
+// because the group follows from the type rather than from how it is shown.
+// Nothing here but a name for them and the question the list asks.
+using Group = types::AccountGroup;
 
-inline std::string to_string(Group g) {
-    switch (g) {
-        case Group::Banking:     return "Banking";
-        case Group::CreditCards: return "CreditCards";
-        case Group::Investments: return "Investments";
-        case Group::Assets:      return "Assets";
-        case Group::Liabilities: return "Liabilities";
-    }
-    return "Banking";
-}
-
+// The categories are in no group: Income, Expense and Equity are reached
+// through a report rather than browsed, so there is nothing to list them under.
 inline std::optional<Group> group_of(types::AccountType t) {
-    switch (t) {
-        case types::AccountType::Bank:
-        case types::AccountType::Cash:       return Group::Banking;
-        case types::AccountType::CreditCard: return Group::CreditCards;
-        case types::AccountType::Investment: return Group::Investments;
-        case types::AccountType::Asset:      return Group::Assets;
-        case types::AccountType::Liability:  return Group::Liabilities;
-        default:                             return std::nullopt;
-    }
+    if (types::class_of(t) == types::AccountClass::Nominal) return std::nullopt;
+    return types::group_of(t);
 }
 
 // How far below a root of its own group an account sits, so a subtree indents.
@@ -84,12 +69,15 @@ inline std::vector<AccountRow> account_list(const chart::Chart& accounts,
     };
 
     std::vector<AccountRow> out;
-    const Group order[] = {Group::Banking, Group::CreditCards, Group::Investments,
-                           Group::Assets, Group::Liabilities};
-    for (Group g : order) {
+    int many = 0;
+    const Group* order = types::account_groups_in_order(&many);
+    for (int at = 0; at < many; ++at) {
+        const Group g = order[at];
         std::vector<chart::Account> in_group;
         for (const chart::Account& a : accounts.all()) {
-            const auto which = group_of(a.type);
+            // Qualified: Group is an alias for the type in types::, so an
+            // unqualified call finds types::group_of as well and is ambiguous.
+            const auto which = ui::group_of(a.type);
             if (!which || *which != g) continue;
             if (a.hidden && !show_hidden) continue;
             in_group.push_back(a);
@@ -110,7 +98,7 @@ inline std::vector<AccountRow> account_list(const chart::Chart& accounts,
         }
 
         AccountRow heading;
-        heading.group = to_string(g);
+        heading.group = types::to_string(g);
         heading.is_heading = true;
         heading.balance = group_total;
         out.push_back(heading);

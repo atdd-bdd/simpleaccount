@@ -1221,7 +1221,10 @@ void MainWindow::refreshAccounts() {
     for (const ui::AccountRow& row : workspace_->account_rows(showHidden_)) {
         auto* item = new QTreeWidgetItem;
         if (row.is_heading) {
-            item->setText(0, QString::fromStdString(row.group));
+            // The heading as it reads, which is not the group's name: two of
+            // them carry an ampersand. See the group rule in UserInterface.
+            item->setText(0, QString::fromStdString(types::heading_of(
+                types::account_group_from_string(row.group))));
             QFont bold = appFont_;
             bold.setBold(true);
             item->setFont(0, bold);
@@ -1293,7 +1296,7 @@ void MainWindow::refreshPane(int paneOneBased) {
     const chart::Account* a = state.account.empty() ? nullptr
                                                     : chart_.find(state.account);
     const reg::ColumnHeadings headings =
-        reg::headings_for(a ? a->type : types::AccountType::Bank);
+        reg::headings_for(a ? a->type : types::AccountType::Checking);
     p.reg->setHorizontalHeaderLabels({"Date", "Num", "Payee", "Category", "Memo",
                                       QString::fromStdString(headings.out_column),
                                       QString::fromStdString(headings.in_column),

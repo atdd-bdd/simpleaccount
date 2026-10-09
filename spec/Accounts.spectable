@@ -16,7 +16,7 @@ Entity Account
 Uses AccountPath and AccountType from CoreTypes
 | Attribute   | Type        | Default | Notes                               |
 | Path        | AccountPath |         | Unique; identifies the account      |
-| Type        | AccountType | Bank    | Fixed once the account has postings |
+| Type        | AccountType | Checking | Fixed once the account has postings |
 | Placeholder | Boolean     | false   | A grouping node; takes no postings  |
 | Hidden      | Boolean     | false   | Kept out of pickers, history kept   |
 | Alias       | Text        | none    | A short way to type it; see finding a category |
@@ -47,10 +47,10 @@ Attributes AccountNameDerivation
 Background A small chart of accounts
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type       | Placeholder |
-| Assets                  | Bank       | true        |
-| Assets:Checking         | Bank       | false       |
-| Assets:Savings          | Bank       | false       |
-| Liabilities             | Liability  | true        |
+| Assets                  | Checking   | true        |
+| Assets:Checking         | Checking   | false       |
+| Assets:Savings          | Checking   | false       |
+| Liabilities             | OtherDebt  | true        |
 | Liabilities:Visa        | CreditCard | false       |
 | Income                  | Income     | true        |
 | Income:Salary           | Income     | false       |
@@ -110,7 +110,7 @@ Scenario Two accounts may not share a path
 Given the chart of accounts is as previous
 When account added : Account Vertical
 | Path | Assets:Checking |
-| Type | Bank            |
+| Type | Checking        |
 Then rejected because : Rejection
 | Reason                                  |
 | An account named Assets:Checking exists |
@@ -283,7 +283,7 @@ Description worked out again, which is why Fuel reads as Vehicle:Fuel
 Description afterwards without anything having rewritten it.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Auto          | Expense | true        |
 | Expenses:Auto:Fuel     | Expense | false       |
 | Expenses:Vehicle       | Expense | true        |
@@ -345,7 +345,7 @@ Description exactly as it does now, and the dialog is somewhere to put the
 Description answer when there is one.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
-| Assets:Checking | Bank | false       |
+| Assets:Checking | Checking | false       |
 When account settings opened : AccountSelect
 | Path            |
 | Assets:Checking |
@@ -360,7 +360,7 @@ Description Written when they are entered, because a book is a file and not a
 Description session. See the saving rule in Books.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
-| Assets:Checking | Bank | false       |
+| Assets:Checking | Checking | false       |
 When account settings changed : AccountSettings Vertical
 | Path          | Assets:Checking |
 | Bank          | First Bank      |
@@ -379,7 +379,7 @@ Description is never added to anything. So it is kept exactly as typed, with
 Description only the blanks at either end taken off.
 Given the chart of accounts is : ChartOfAccounts
 | Path             | Type       | Placeholder |
-| Assets:Checking  | Bank       | false       |
+| Assets:Checking  | Checking   | false       |
 | Liabilities:Visa | CreditCard | false       |
 When account settings changed : AccountSettings Vertical
 | Path          | Assets:Checking |
@@ -548,20 +548,37 @@ Details A charge to a credit card credits that account, leaving a negative raw
 Details balance, but the cardholder thinks of it as an amount owed. Income is
 Details credited by a paycheque, and a report should show it as earned.
 Examples: DisplaySignOf
-| AccountType | DisplaySign | Notes                                       |
-| Bank        | 1           | Positive raw balance means money held       |
-| Cash        | 1           |                                             |
-| Asset       | 1           |                                             |
-| Investment  | 1           |                                             |
-| Expense     | 1           | Positive raw balance means money spent      |
-| CreditCard  | -1          | Shown as the amount owed                    |
-| Liability   | -1          | Shown as the amount owed                    |
-| Income      | -1          | Shown as the amount earned                  |
-| Equity      | -1          | Shown as the amount contributed to the book |
+| AccountType        | DisplaySign | Notes                                       |
+| Checking           | 1           | Positive raw balance means money held       |
+| Savings            | 1           |                                             |
+| Cash               | 1           |                                             |
+| Brokerage          | 1           |                                             |
+| IRA                | 1           |                                             |
+| HSA                | 1           |                                             |
+| Retirement401k     | 1           |                                             |
+| RealEstate         | 1           |                                             |
+| Vehicle            | 1           |                                             |
+| OtherAsset         | 1           |                                             |
+| AccountsReceivable | 1           | Owed to the business, so money held         |
+| TransferIn         | 1           | Off the balance sheet, and still money held |
+| Expense            | 1           | Positive raw balance means money spent      |
+| CreditCard         | -1          | Shown as the amount owed                    |
+| LineOfCredit       | -1          |                                             |
+| Mortgage           | -1          |                                             |
+| AutoLoan           | -1          |                                             |
+| PersonalLoan       | -1          |                                             |
+| OtherDebt          | -1          | Shown as the amount owed                    |
+| AccountsPayable    | -1          | Owed by the business                        |
+| TransferOut        | -1          |                                             |
+| Income             | -1          | Shown as the amount earned                  |
+| Equity             | -1          | Shown as the amount contributed to the book |
+# The sign is the balance side, for everything but the three categories: what
+# is owned reads positive and what is owed reads as the amount owed. So there
+# is one rule behind two tables, and the balance-side rule in CoreTypes is it.
 
 Attributes DisplaySignOf
 | Attribute   | Type        | Default |
-| AccountType | AccountType | Bank    |
+| AccountType | AccountType | Checking |
 | DisplaySign | Integer     | 1       |
 | Notes       | String      | none    |
 
@@ -682,7 +699,7 @@ Description years of history start from a known position.
 Given the chart of accounts is as previous
 When account added with an opening balance : AccountWithOpeningBalance Vertical
 | Path           | Assets:Brokerage Cash |
-| Type           | Bank                  |
+| Type           | Checking              |
 | OpeningBalance | 2500.00               |
 | OpeningDate    | 2005-01-01            |
 Then postings created are : DatedPostingLine
@@ -693,7 +710,7 @@ Then postings created are : DatedPostingLine
 Attributes AccountWithOpeningBalance
 | Attribute      | Type        | Default    |
 | Path           | AccountPath |            |
-| Type           | AccountType | Bank       |
+| Type           | AccountType | Checking   |
 | OpeningBalance | Money       | 0.00       |
 | OpeningDate    | Date        | 2005-01-01 |
 
@@ -718,7 +735,7 @@ Scenario An account opened with no balance posts nothing
 Given the chart of accounts is as previous
 When account added with an opening balance : AccountWithOpeningBalance Vertical
 | Path           | Assets:Money Market |
-| Type           | Bank                |
+| Type           | Checking            |
 | OpeningBalance | 0.00                |
 | OpeningDate    | 2005-01-01          |
 Then postings created are : DatedPostingLine
@@ -744,7 +761,7 @@ Then account is : Account Vertical CompareOnly
 Attributes AccountTypeChange
 | Attribute | Type        | Default |
 | Path      | AccountPath |         |
-| NewType   | AccountType | Bank    |
+| NewType   | AccountType | Checking |
 
 Scenario Changing type across the real and nominal divide is refused
 Description Changing an Expense into a Bank would change the sign that every
@@ -755,7 +772,7 @@ Given Expenses:Groceries has postings : PostingCount
 | 412   |
 When account type changed : AccountTypeChange Vertical
 | Path    | Expenses:Groceries |
-| NewType | Bank               |
+| NewType | Checking           |
 Then rejected because : Rejection
 | Reason                                                               |
 | Expenses:Groceries has postings; a category cannot become an account |

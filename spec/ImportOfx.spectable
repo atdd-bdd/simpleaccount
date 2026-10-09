@@ -329,7 +329,7 @@ Description The FITID is stored on the posting in the statement account, which
 Description is what makes this test possible at all.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given account mappings are : AccountMapping
 | BankId    | OfxAccountId | AccountPath     |
@@ -370,7 +370,7 @@ Description Two institutions may number their transactions alike. The test is
 Description scoped to the account the statement is for.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
-| Assets:Checking        | Bank       | false       |
+| Assets:Checking        | Checking   | false       |
 | Liabilities:Visa       | CreditCard | false       |
 | Expenses:Uncategorized | Expense    | false       |
 Given postings are : ImportedPostingRow
@@ -408,7 +408,7 @@ Description already there as cleared, and records the FITID on it so that a
 Description later import recognises it immediately.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Home:Rates    | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : ImportedPostingRow
@@ -435,7 +435,7 @@ Then postings are : ImportedPostingRow
 Scenario A match within five days on amount alone
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : ImportedPostingRow
@@ -459,7 +459,7 @@ Description separate visits to the same shop for the same amount, which is
 Description commoner than a bank taking a week to post.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : ImportedPostingRow
@@ -483,7 +483,7 @@ Description transactions with two FITIDs. Each is matched on its own identifier,
 Description so neither is mistaken for the other.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
@@ -503,7 +503,7 @@ Description The category is not known, so the other side is Uncategorized until
 Description a payee rule or the user says otherwise. See Payees.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
@@ -592,7 +592,7 @@ Description and a note says what was seen -- leaving a person to decide whether
 Description it is the same check or the number come round again.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Home:Rates    | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : ImportedPostingRow
@@ -633,7 +633,7 @@ Given the book setting is : BookSetting Vertical
 | CheckWindowDays | 30 |
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Home:Rates    | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : ImportedPostingRow
@@ -666,7 +666,7 @@ Description note nobody is shown is a note nobody acts on, and the whole reason
 Description for writing one is that the program could not decide.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : ImportedPostingRow
 | Ref | Date       | Payee     | Account                | Amount  | Cleared   | CheckNo | FitId |
@@ -725,7 +725,7 @@ Description stamped, so the next import of the same file knows it outright
 Description rather than asking again.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : ImportedPostingRow
@@ -760,7 +760,7 @@ Description Two genuine visits to one shop on one day for one amount. The bank
 Description is describing the second, which the book does not have.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : ImportedPostingRow
@@ -791,7 +791,7 @@ Description it. Nothing is created and nothing is stamped, so reading the file
 Description again reaches the same question.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : ImportedPostingRow
@@ -946,9 +946,9 @@ Description and it does not know which card was paid, because the card has not
 Description been read yet.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder | PaymentPayee |
-| Assets:Checking        | Bank       | false       | none         |
+| Assets:Checking        | Checking   | false       | none         |
 | Liabilities:Chase Visa | CreditCard | false       | CHASEBANK    |
-| Unassigned             | Asset      | false       | none         |
+| Unassigned             | OtherAsset | false       | none         |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -967,9 +967,9 @@ Description its other side unassigned, and completes it rather than recording th
 Description same payment again.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder | PaymentPayee |
-| Assets:Checking        | Bank       | false       | none         |
+| Assets:Checking        | Checking   | false       | none         |
 | Liabilities:Chase Visa | CreditCard | false       | CHASEBANK    |
-| Unassigned             | Asset      | false       | none         |
+| Unassigned             | OtherAsset | false       | none         |
 Given postings are : ImportedPostingRow
 | Ref | Date       | Payee     | Account         | Amount   | Cleared   | FitId  |
 | T1  | 2026-04-10 | CHASEBANK | Assets:Checking | -1200.00 | Cleared   | BNK-77 |
@@ -997,10 +997,10 @@ Description Both cards say CHASEBANK, so the payee narrows the search to both an
 Description the amount decides between them.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type       | Placeholder | PaymentPayee |
-| Assets:Checking         | Bank       | false       | none         |
+| Assets:Checking         | Checking   | false       | none         |
 | Liabilities:Chase Visa  | CreditCard | false       | CHASEBANK    |
 | Liabilities:Chase Amazon | CreditCard | false      | CHASEBANK    |
-| Unassigned              | Asset      | false       | none         |
+| Unassigned              | OtherAsset | false       | none         |
 Given postings are : ImportedPostingRow
 | Ref | Date       | Payee     | Account         | Amount   | Cleared   | FitId  |
 | T1  | 2026-04-10 | CHASEBANK | Assets:Checking | -1200.00 | Cleared   | BNK-77 |
@@ -1034,10 +1034,10 @@ Description current account goes to somebody outside the book, and a payee that
 Description matches no PaymentPayee is how that is recognised.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder | PaymentPayee |
-| Assets:Checking        | Bank       | false       | none         |
+| Assets:Checking        | Checking   | false       | none         |
 | Liabilities:Chase Visa | CreditCard | false       | CHASEBANK    |
 | Expenses:Uncategorized | Expense    | false       | none         |
-| Unassigned             | Asset      | false       | none         |
+| Unassigned             | OtherAsset | false       | none         |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -1080,8 +1080,8 @@ Description The pair observed in the two checking files in testdata: the same
 Description amount out of one account and into the other on the same day.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking Prime  | Bank    | false       |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking Prime  | Checking | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 | Income:Uncategorized   | Income  | false       |
 Given account mappings are : AccountMapping
@@ -1133,7 +1133,7 @@ Description that sets the window: anything narrower than three days would
 Description leave it as two transactions and double the spending.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
-| Assets:Checking Prime  | Bank       | false       |
+| Assets:Checking Prime  | Checking   | false       |
 | Liabilities:WF Card    | CreditCard | false       |
 | Expenses:Uncategorized | Expense    | false       |
 | Income:Uncategorized   | Income     | false       |
@@ -1177,7 +1177,7 @@ Description a transfer, which is the point: the window is what stops a pair of
 Description unrelated payments being merged on the strength of that alone.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
-| Assets:Checking Prime  | Bank       | false       |
+| Assets:Checking Prime  | Checking   | false       |
 | Liabilities:WF Card    | CreditCard | false       |
 | Expenses:Uncategorized | Expense    | false       |
 | Income:Uncategorized   | Income     | false       |
@@ -1203,7 +1203,7 @@ Scenario Two days apart is proposed
 Description The other side of the boundary, and the real autopay from the files.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
-| Assets:Checking Prime  | Bank       | false       |
+| Assets:Checking Prime  | Checking   | false       |
 | Liabilities:WF Card    | CreditCard | false       |
 | Expenses:Uncategorized | Expense    | false       |
 | Income:Uncategorized   | Income     | false       |
@@ -1229,7 +1229,7 @@ Details that is the only path that pairs anything silently. It exists because
 Details the user said so once, about those two payees in those two accounts.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
-| Assets:Checking Prime  | Bank       | false       |
+| Assets:Checking Prime  | Checking   | false       |
 | Liabilities:WF Card    | CreditCard | false       |
 | Expenses:Uncategorized | Expense    | false       |
 | Income:Uncategorized   | Income     | false       |
@@ -1268,7 +1268,7 @@ Description The user knows these were two separate payments. Nothing is merged,
 Description and each gets the Uncategorized side it would have had anyway.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
-| Assets:Checking Prime  | Bank       | false       |
+| Assets:Checking Prime  | Checking   | false       |
 | Liabilities:WF Card    | CreditCard | false       |
 | Expenses:Uncategorized | Expense    | false       |
 | Income:Uncategorized   | Income     | false       |
@@ -1303,8 +1303,8 @@ Description is what the two checking files hold. Each half pairs with exactly
 Description one other half, and a half once proposed is not offered again.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking Prime  | Bank    | false       |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking Prime  | Checking | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 | Income:Uncategorized   | Income  | false       |
 Given account mappings are : AccountMapping
@@ -1354,8 +1354,8 @@ Description The rule in Transactions refuses a transaction posting twice to one
 Description account, and this is where that is kept from arising.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking Prime  | Bank    | false       |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking Prime  | Checking | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 | Income:Uncategorized   | Income  | false       |
 Given account mappings are : AccountMapping
@@ -1377,8 +1377,8 @@ Description that clears something already in the book is accounted for, and is
 Description not then also offered as half of a transfer.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking Prime  | Bank    | false       |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking Prime  | Checking | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 | Income:Uncategorized   | Income  | false       |
 Given account mappings are : AccountMapping
@@ -1432,7 +1432,7 @@ Description always be paired is a judgement about the accounts, and the user is
 Description the one who knows.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
-| Assets:Checking Prime  | Bank       | false       |
+| Assets:Checking Prime  | Checking   | false       |
 | Liabilities:WF Card    | CreditCard | false       |
 | Expenses:Uncategorized | Expense    | false       |
 | Income:Uncategorized   | Income     | false       |
@@ -1456,7 +1456,7 @@ Description candidate is approved automatically and still appears in the import
 Description summary, so that it is visible rather than silent.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
-| Assets:Checking Prime  | Bank       | false       |
+| Assets:Checking Prime  | Checking   | false       |
 | Liabilities:WF Card    | CreditCard | false       |
 | Expenses:Uncategorized | Expense    | false       |
 | Income:Uncategorized   | Income     | false       |
@@ -1486,7 +1486,7 @@ Description pairing. It does not say any two transactions between them are one
 Description transfer, so the arithmetic is still checked.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
-| Assets:Checking Prime  | Bank       | false       |
+| Assets:Checking Prime  | Checking   | false       |
 | Liabilities:WF Card    | CreditCard | false       |
 | Expenses:Uncategorized | Expense    | false       |
 | Income:Uncategorized   | Income     | false       |
@@ -1512,7 +1512,7 @@ Description matches are all presented together, and the file is committed once
 Description the user has been through them.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
-| Assets:Checking Prime  | Bank       | false       |
+| Assets:Checking Prime  | Checking   | false       |
 | Liabilities:WF Card    | CreditCard | false       |
 | Expenses:Uncategorized | Expense    | false       |
 | Income:Uncategorized   | Income     | false       |
@@ -1550,7 +1550,7 @@ Description LEDGERBAL is the strongest check there is that the import is right.
 Description A disagreement is reported rather than silently accepted.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : ImportedPostingRow
 | Ref | Date       | Account         | Amount  | Cleared | FitId |
@@ -1590,7 +1590,7 @@ Description not seen, wrongly marked cleared. The number is what makes it
 Description findable, so it is shown rather than hidden.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : ImportedPostingRow
 | Ref | Date       | Account         | Amount  | Cleared | FitId |
@@ -1612,7 +1612,7 @@ Description A check written but not yet presented is in the register and not at
 Description the bank. Counting it would make every import look wrong.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : ImportedPostingRow
 | Ref | Date       | Account         | Amount  | Cleared   | FitId |

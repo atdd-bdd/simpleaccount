@@ -280,7 +280,7 @@ public:
             const bool card = value.ofxaccttype == "CREDITCARD";
             const std::string account = card ? "Liabilities:Card" : "Assets:Account";
             start_fresh(account, card ? types::AccountType::CreditCard
-                                      : types::AccountType::Bank);
+                                      : types::AccountType::Checking);
             ofx::Statement statement;
             statement.acct_type = ofx::acct_type_from(value.ofxaccttype);
             ofx::Transaction t;
@@ -631,9 +631,9 @@ private:
     // half-known payment to wait.
     void a_book_with_two_accounts() {
         chart_ = chart::Chart();
-        chart_.put(account_of(kBank, types::AccountType::Bank));
+        chart_.put(account_of(kBank, types::AccountType::Checking));
         chart_.put(card_of(kCard, "CHASEBANK"));
-        chart_.put(account_of(ledger::kUnassigned, types::AccountType::Asset));
+        chart_.put(account_of(ledger::kUnassigned, types::AccountType::OtherAsset));
         chart_.put(account_of("Expenses:Uncategorized", types::AccountType::Expense));
         transactions_.clear();
     }
@@ -679,7 +679,7 @@ private:
     // value so a row can be asked what it carries without reaching back into
     // the book, which is what the Csv row needs.
     ledger::Posting already_there(const std::string& carries) {
-        start_fresh("Assets:Checking", types::AccountType::Bank);
+        start_fresh("Assets:Checking", types::AccountType::Checking);
         ledger::Transaction t;
         t.ref = types::TransactionRef("T1");
         t.date = types::Date(2024, 1, 15);
@@ -729,7 +729,7 @@ private:
     // A book holding one cleared transaction of the same date, amount and payee
     // and no identifier, which is the one case the program cannot settle.
     void offer_a_possible() {
-        start_fresh("Assets:Checking", types::AccountType::Bank);
+        start_fresh("Assets:Checking", types::AccountType::Checking);
         chart_.put(account_of("Expenses:Groceries", types::AccountType::Expense));
         ledger::Transaction t;
         t.ref = types::TransactionRef("T1");
@@ -753,7 +753,7 @@ private:
     // there, so each row of the rule table is checked by the behaviour it
     // describes.
     ofx::Disposition disposition_reaching_test(const std::string& test) {
-        start_fresh("Assets:Checking", types::AccountType::Bank);
+        start_fresh("Assets:Checking", types::AccountType::Checking);
         ofx::Transaction row;
         row.date_posted = types::Date(2024, 1, 20);
         row.amount = Money("-45.00");
@@ -835,7 +835,7 @@ public:
             const std::vector<CheckNumberWindowString>& values) {
         for (const auto& value : values) {
             const int days = std::stoi(value.daysapart);
-            start_fresh("Assets:Checking", types::AccountType::Bank);
+            start_fresh("Assets:Checking", types::AccountType::Checking);
 
             ledger::Transaction t;
             t.ref = types::TransactionRef("T1");
@@ -941,8 +941,8 @@ public:
             const std::vector<PaymentPayeeNarrowingString>& values) {
         for (const auto& value : values) {
             chart_ = chart::Chart();
-            chart_.put(account_of(kBank, types::AccountType::Bank));
-            chart_.put(account_of(ledger::kUnassigned, types::AccountType::Asset));
+            chart_.put(account_of(kBank, types::AccountType::Checking));
+            chart_.put(account_of(ledger::kUnassigned, types::AccountType::OtherAsset));
             if (value.theypayeematches == "One account") {
                 chart_.put(card_of(kCard, "CHASEBANK"));
             } else if (value.theypayeematches == "Several accounts" ||

@@ -80,7 +80,7 @@ Description One row of a single-column report.
 Background Two years of transactions
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Income                 | Income  | true        |
 | Income:Salary          | Income  | false       |
 | Income:Interest        | Income  | false       |
@@ -199,7 +199,7 @@ Description month should have its rows in the same places, so that the eye can
 Description find a line without reading every one of them.
 Given the chart of accounts is : ChartOfAccounts
 | Path           | Type    | Placeholder |
-| Assets:Checking | Bank   | false       |
+| Assets:Checking | Checking | false       |
 | Expenses       | Expense | true        |
 | Expenses:Zoo   | Expense | false       |
 | Expenses:Apples | Expense | false      |
@@ -431,7 +431,7 @@ Description would both hang under Auto and the page would not say which of them
 Description the Other line stood for.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Auto      | Expense | false       |
 | Expenses:Auto:Fuel | Expense | false       |
 Given postings are : PostingRow
@@ -468,8 +468,8 @@ Description card payment in Transactions is modelled as a transfer: were it an
 Description expense, this report would count the same spending twice.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type       | Placeholder |
-| Assets:Checking    | Bank       | false       |
-| Assets:Savings     | Bank       | false       |
+| Assets:Checking    | Checking   | false       |
+| Assets:Savings     | Checking   | false       |
 | Liabilities:Visa   | CreditCard | false       |
 | Expenses           | Expense    | true        |
 | Expenses:Shopping  | Expense    | false       |
@@ -500,7 +500,7 @@ Description Hiding a category keeps it out of the picker for new transactions.
 Description Leaving it out of a report would make the total wrong.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder | Hidden |
-| Assets:Checking    | Bank    | false       | false  |
+| Assets:Checking    | Checking | false       | false  |
 | Expenses           | Expense | true        | false  |
 | Expenses:Groceries | Expense | false       | true   |
 Given postings are : PostingRow
@@ -569,7 +569,7 @@ Description posted to Auto itself. Auto totals fifty, and the two rows beneath i
 Description add to fifty.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Auto          | Expense | false       |
 | Expenses:Auto:Fuel     | Expense | false       |
 Given dated postings are : DatedPostingLine
@@ -598,7 +598,7 @@ Description There is nothing for the row to distinguish: the category's figure
 Description is already its own transactions and nothing else.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Given dated postings are : DatedPostingLine
 | Date       | Account            | Amount |
@@ -619,7 +619,7 @@ Scenario A category with children and no transactions of its own shows no Other 
 Description Which is the ordinary case: a category made only to hold others.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type    | Placeholder |
-| Assets:Checking         | Bank    | false       |
+| Assets:Checking         | Checking | false       |
 | Expenses:Auto           | Expense | true        |
 | Expenses:Auto:Fuel      | Expense | false       |
 | Expenses:Auto:Insurance | Expense | false       |
@@ -685,8 +685,8 @@ Description T2 credits Income:Invest Inc for 1200.00 and the money stayed in
 Description the IRA, so the report shows only the 40.00 that reached the bank.
 Given the chart of accounts is : ChartOfAccounts
 | Path              | Type       | Placeholder |
-| Assets:Checking   | Bank       | false       |
-| Assets:Ken IRA    | Investment | false       |
+| Assets:Checking   | Checking   | false       |
+| Assets:Ken IRA    | Brokerage  | false       |
 | Income            | Income     | true        |
 | Income:Invest Inc | Income     | false       |
 | Income:Salary     | Income     | false       |
@@ -726,8 +726,8 @@ Description The same range with the whole picture rather than the household
 Description one. Every figure above grows by what was left out.
 Given the chart of accounts is : ChartOfAccounts
 | Path              | Type       | Placeholder |
-| Assets:Checking   | Bank       | false       |
-| Assets:Ken IRA    | Investment | false       |
+| Assets:Checking   | Checking   | false       |
+| Assets:Ken IRA    | Brokerage  | false       |
 | Income            | Income     | true        |
 | Income:Invest Inc | Income     | false       |
 | Income:Salary     | Income     | false       |
@@ -771,8 +771,8 @@ Description guessing which posting the investment account is responsible for
 Description would be a worse answer than the one on the 1099.
 Given the chart of accounts is : ChartOfAccounts
 | Path              | Type       | Placeholder |
-| Assets:Checking   | Bank       | false       |
-| Assets:Ken IRA    | Investment | false       |
+| Assets:Checking   | Checking   | false       |
+| Assets:Ken IRA    | Brokerage  | false       |
 | Income            | Income     | true        |
 | Income:Invest Inc | Income     | false       |
 Given postings are : PostingRow
@@ -797,8 +797,8 @@ Description Otherwise the largest payee in the book would be the brokerage,
 Description for money that was never spent anywhere.
 Given the chart of accounts is : ChartOfAccounts
 | Path              | Type       | Placeholder |
-| Assets:Checking   | Bank       | false       |
-| Assets:Ken IRA    | Investment | false       |
+| Assets:Checking   | Checking   | false       |
+| Assets:Ken IRA    | Brokerage  | false       |
 | Income:Invest Inc | Income     | false       |
 | Income:Salary     | Income     | false       |
 Given postings are : PostingRow
@@ -843,8 +843,8 @@ Details across 3,540 postings. What is left in such a net is a real personal
 Details expense that was never reimbursed, so excluding it would be wrong.
 Given the chart of accounts is : ChartOfAccounts
 | Path                         | Type   | Placeholder |
-| Assets:Ken~Checking          | Bank   | false       |
-| Assets:Due~from~Ken~Pugh~Inc | Asset  | false       |
+| Assets:Ken~Checking          | Checking | false       |
+| Assets:Due~from~Ken~Pugh~Inc | OtherAsset | false       |
 | Income                       | Income | true        |
 | Income:Salary~Ken            | Income | false       |
 Given postings are : PostingRow
@@ -904,7 +904,7 @@ Description amount is the total of its category postings, which is the total of
 Description the transaction and not twice it.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
-| Assets:Checking           | Bank    | false       |
+| Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
 | Expenses:Auto:Repairs     | Expense | false       |
@@ -1145,11 +1145,16 @@ Details Account say that this is the one-column form; the same report with
 Details Interval Year is the net worth table further down, which is this
 Details bottom line as at several dates at once.
 Details
-Details The two sides are the real accounts, divided by what they are: Banking,
-Details Investments and Assets are owned, CreditCards and Liabilities are owed.
-Details The groups and their order are the ones the account list uses, so the
-Details page and the list down the side of the window agree with each other.
-Details A group with no accounts in it is left out rather than shown empty.
+Details The two sides are the real accounts, divided by the side each type is
+Details on: see the balance-side rule in CoreTypes, which is the only place the
+Details words Asset and Liability decide anything. The groups and their order
+Details are the ones the account list uses, so the page and the list down the
+Details side of the window agree with each other, and a group with nothing in
+Details it is left out rather than shown empty.
+Details
+Details The Transfer group is left out altogether. Those accounts hold money on
+Details its way between two accounts that are both already here, so showing
+Details them would count the same money twice.
 Details
 Details Each figure is the display balance, so a card and a mortgage read as
 Details what is owed rather than as the negative balances they are posted as,
@@ -1189,11 +1194,11 @@ Description that arrives in March is not on a sheet drawn up in February: a
 Description balance as at a date ignores what happens after it.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type       | Placeholder |
-| Assets:Checking         | Bank       | false       |
-| Assets:Savings          | Bank       | false       |
-| Assets:House            | Asset      | false       |
+| Assets:Checking         | Checking   | false       |
+| Assets:Savings          | Savings    | false       |
+| Assets:House            | RealEstate | false       |
 | Liabilities:Visa        | CreditCard | false       |
-| Liabilities:Mortgage    | Liability  | false       |
+| Liabilities:Mortgage    | Mortgage   | false       |
 | Income:Salary           | Income     | false       |
 | Expenses:Groceries      | Expense    | false       |
 | Equity:Opening Balances | Equity     | false       |
@@ -1246,7 +1251,7 @@ Description leaves a trail of closed accounts, and a page of zeroes is a page
 Description nobody reads.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type       | Placeholder |
-| Assets:Checking         | Bank       | false       |
+| Assets:Checking         | Checking   | false       |
 | Assets:Wallet           | Cash       | false       |
 | Liabilities:Visa        | CreditCard | false       |
 | Expenses:Groceries      | Expense    | false       |
@@ -1283,7 +1288,7 @@ Description flag the category report uses. A card at zero is worth seeing when
 Description the question is whether it was paid off.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type       | Placeholder |
-| Assets:Checking         | Bank       | false       |
+| Assets:Checking         | Checking   | false       |
 | Assets:Wallet           | Cash       | false       |
 | Liabilities:Visa        | CreditCard | false       |
 | Expenses:Groceries      | Expense    | false       |
@@ -1322,9 +1327,9 @@ Description arrives through the same addition as everything else. See the
 Description holding-value rule in Investments.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type       | Placeholder |
-| Assets:Brokerage        | Investment | true        |
-| Assets:Brokerage:Cash   | Investment | false       |
-| Assets:Brokerage:VTSAX  | Investment | false       |
+| Assets:Brokerage        | Brokerage  | true        |
+| Assets:Brokerage:Cash   | Brokerage  | false       |
+| Assets:Brokerage:VTSAX  | Brokerage  | false       |
 | Equity:Opening Balances | Equity     | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee   | Account                 | Amount    |
@@ -1354,6 +1359,44 @@ Then balance sheet total is : NetWorth Vertical
 # the page saying so, which is what the staleness rule in Investments is for.
 
 $WIP
+Scenario A transfer account is not on the balance sheet
+Description A transfer account holds money on its way between two accounts
+Description that are both already on the sheet, so counting it would count the
+Description same money twice. It is a real account and it is reconciled like
+Description one; it is this report that leaves it out. See the balance-side
+Description rule in CoreTypes.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type        | Placeholder |
+| Assets:Checking         | Checking    | false       |
+| Assets:In Transit       | TransferIn  | false       |
+| Liabilities:Owed Out    | TransferOut | false       |
+| Equity:Opening Balances | Equity      | false       |
+Given postings are : PostingRow
+| Ref | Date       | Payee   | Account                 | Amount   |
+| T1  | 2026-01-05 | Opening | Assets:Checking         | 1000.00  |
+| T1  | 2026-01-05 | Opening | Equity:Opening Balances | -1000.00 |
+| T2  | 2026-01-06 | Moving  | Assets:In Transit       | 250.00   |
+| T2  | 2026-01-06 | Moving  | Assets:Checking         | -250.00  |
+| T3  | 2026-01-07 | Moving  | Liabilities:Owed Out    | -75.00   |
+| T3  | 2026-01-07 | Moving  | Assets:Checking         | 75.00    |
+When balance sheet run : ReportSpec Vertical
+| GroupBy  | Account    |
+| Interval | Whole      |
+| To       | 2026-01-31 |
+Then balance sheet rows are : BalanceSheetRow
+| Section | Group   | Account         | Level | Balance | IsHeading | IsSubtotal |
+| Assets  | Banking | none            | 0     | 825.00  | true      | false      |
+| Assets  | none    | Assets:Checking | 1     | 825.00  | false     | false      |
+Then balance sheet total is : NetWorth Vertical
+| Assets      | 825.00 |
+| Liabilities | 0.00   |
+| NetWorth    | 825.00 |
+# Checking is 1000.00 less 250.00 on its way out plus 75.00 on its way in. The
+# two transfer accounts hold 250.00 and 75.00 between them and neither is on
+# the page, so net worth is the checking balance alone -- which is right: the
+# money in transit is money the book has already counted once.
+
+$WIP
 Scenario A hidden account with a balance is still on the balance sheet
 Description A hidden account is kept out of the pickers so it stops being
 Description offered, and its money has not gone anywhere. Leaving it out would
@@ -1361,8 +1404,8 @@ Description make the sheet disagree with net worth, which is the one thing a
 Description balance sheet must not do.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type   | Placeholder | Hidden |
-| Assets:Checking         | Bank   | false       | false  |
-| Assets:Old Savings      | Bank   | false       | true   |
+| Assets:Checking         | Checking | false       | false  |
+| Assets:Old Savings      | Checking | false       | true   |
 | Equity:Opening Balances | Equity | false       | false  |
 Given postings are : PostingRow
 | Ref | Date       | Payee   | Account                 | Amount   |
@@ -1407,11 +1450,11 @@ Description page: a difference means a posting has gone somewhere nobody
 Description intended, and that is otherwise very hard to see.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type       | Placeholder |
-| Assets:Checking         | Bank       | false       |
-| Assets:Savings          | Bank       | false       |
-| Assets:House            | Asset      | false       |
+| Assets:Checking         | Checking   | false       |
+| Assets:Savings          | Savings    | false       |
+| Assets:House            | RealEstate | false       |
 | Liabilities:Visa        | CreditCard | false       |
-| Liabilities:Mortgage    | Liability  | false       |
+| Liabilities:Mortgage    | Mortgage   | false       |
 | Income:Salary           | Income     | false       |
 | Expenses:Groceries      | Expense    | false       |
 | Equity:Opening Balances | Equity     | false       |
@@ -1458,7 +1501,7 @@ Description at a date rather than a total of a period, which is why this report
 Description is a different shape from the category one.
 Given the chart of accounts is : ChartOfAccounts
 | Path             | Type       | Placeholder |
-| Assets:Checking  | Bank       | false       |
+| Assets:Checking  | Checking   | false       |
 | Liabilities:Visa | CreditCard | false       |
 | Income:Salary    | Income     | false       |
 | Expenses:Shopping | Expense   | false       |

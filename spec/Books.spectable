@@ -237,11 +237,11 @@ Details certainty that no business report includes household spending.
 Given books are as previous
 Given the chart of accounts of Business is : ChartOfAccounts
 | Path                | Type   | Placeholder |
-| Assets:Checking     | Bank   | false       |
+| Assets:Checking     | Checking | false       |
 | Equity:Owner Draw   | Equity | false       |
 Given the chart of accounts of Personal is : ChartOfAccounts
 | Path                   | Type   | Placeholder |
-| Assets:Checking        | Bank   | false       |
+| Assets:Checking        | Checking | false       |
 | Equity:Owner Draw      | Equity | false       |
 When draw recorded : OwnerDraw Vertical
 | Date       | 2025-04-01 |
@@ -527,7 +527,7 @@ Description a transaction with two postings, and a cleared marker on one side.
 Given a new book named Business
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee         | Account            | Amount | Memo  | Cleared   |
@@ -536,7 +536,7 @@ Given postings are : PostingRow
 When the book is saved and opened again
 Then the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Then postings are : PostingRow
 | Ref | Date       | Payee         | Account            | Amount | Memo  | Cleared   |

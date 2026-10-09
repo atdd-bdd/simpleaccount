@@ -113,13 +113,20 @@ inline int level_of(const std::string& path) {
 //
 // A posting with no ref claims no transaction -- an opening balance -- and can
 // taint nothing, or every one of them would share the same empty name.
+// Any of the Investments group, not one type: a dividend reinvested inside an
+// IRA is as much not income as one reinvested in a brokerage account.
+inline bool is_an_investment(types::AccountType t) {
+    return types::class_of(t) == types::AccountClass::Real &&
+           types::group_of(t) == types::AccountGroup::Investments;
+}
+
 inline std::set<std::string> investment_refs(const chart::Chart& accounts,
                                              const std::vector<ledger::DatedPosting>& postings) {
     std::set<std::string> out;
     for (const ledger::DatedPosting& p : postings) {
         if (p.ref.empty()) continue;
         const chart::Account* a = accounts.find(p.account.value());
-        if (a != nullptr && a->type == types::AccountType::Investment) out.insert(p.ref);
+        if (a != nullptr && detail::is_an_investment(a->type)) out.insert(p.ref);
     }
     return out;
 }
@@ -336,7 +343,7 @@ inline bool touches_an_investment(const chart::Chart& accounts,
                                   const ledger::Transaction& t) {
     for (const ledger::Posting& p : t.postings) {
         const chart::Account* a = accounts.find(p.account.value());
-        if (a != nullptr && a->type == types::AccountType::Investment) return true;
+        if (a != nullptr && detail::is_an_investment(a->type)) return true;
     }
     return false;
 }
@@ -454,7 +461,7 @@ inline std::vector<PayeeRow> payee_report(
             bool investment = false;
             for (const ledger::Posting& p : t.postings) {
                 const chart::Account* a = accounts.find(p.account.value());
-                if (a != nullptr && a->type == types::AccountType::Investment) {
+                if (a != nullptr && detail::is_an_investment(a->type)) {
                     investment = true;
                     break;
                 }

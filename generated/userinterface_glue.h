@@ -227,16 +227,25 @@ public:
     // ------------------------------------------------------------ the rules
 
     void examples_datatype_accountgroup(const std::vector<EnumerationValuesString>& values) {
-        // Every value is one the list can show, and the five of them are the
+        // Every value is one the list can show, and the seven of them are the
         // whole set, so the rule below has to account for each.
+        int many = 0;
+        const types::AccountGroup* order = types::account_groups_in_order(&many);
+        ASSERT_EQ(static_cast<std::size_t>(many), values.size())
+            << "the table and the code do not list the same number of groups";
         for (const auto& value : values) {
             const EnumerationValuesTyped v = EnumerationValuesTyped::from_string_struct(value);
             bool known = false;
-            for (ui::Group g : {ui::Group::Banking, ui::Group::CreditCards,
-                                ui::Group::Investments, ui::Group::Assets,
-                                ui::Group::Liabilities})
-                if (ui::to_string(g) == v.value) known = true;
+            for (int at = 0; at < many; ++at)
+                if (types::to_string(order[at]) == v.value) known = true;
             EXPECT_TRUE(known) << "unknown group: " << v.value;
+        }
+        // And in the order the table declares them, which is the order the
+        // headings come out in.
+        for (int at = 0; at < many && at < static_cast<int>(values.size()); ++at) {
+            const EnumerationValuesTyped v =
+                EnumerationValuesTyped::from_string_struct(values[static_cast<std::size_t>(at)]);
+            EXPECT_EQ(v.value, types::to_string(order[at])) << "group " << at + 1;
         }
     }
 
@@ -251,16 +260,18 @@ public:
         }
     }
 
-    void examples_businessrule_which_group_an_account_is_listed_under(
+    void examples_businessrule_which_group_an_account_is_listed_under_and_how_the_heading_reads(
             const std::vector<GroupOfTypeString>& values) {
         for (const auto& value : values) {
             const GroupOfTypeTyped t = GroupOfTypeTyped::from_string_struct(value);
             const auto got = ui::group_of(types::account_type_from_string(t.accounttype));
             EXPECT_EQ(t.listed, got.has_value()) << t.accounttype << " listed";
-            // The group only means anything for a type that is listed; the table
-            // carries the default in the other rows.
-            if (t.listed && got) EXPECT_EQ(t.accountgroup, ui::to_string(*got))
-                << t.accounttype;
+            // The group and its heading only mean anything for a type that is
+            // listed; the table carries the default in the other rows, and an
+            // empty heading, which is what a category has.
+            if (!t.listed || !got) continue;
+            EXPECT_EQ(t.accountgroup, types::to_string(*got)) << t.accounttype;
+            EXPECT_EQ(t.heading, types::heading_of(*got)) << t.accounttype << " heading";
         }
     }
 
@@ -431,5 +442,6 @@ public:
         for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
         ADD_FAILURE() << "Not implemented: examples_datatype_tabkind";
     }
+
 
 };

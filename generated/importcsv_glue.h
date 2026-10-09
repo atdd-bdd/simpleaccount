@@ -797,7 +797,7 @@ private:
         chart_ = chart::Chart();
         chart::Account bank;
         bank.path = types::AccountPath(kAccount);
-        bank.type = types::AccountType::Bank;
+        bank.type = types::AccountType::Checking;
         chart_.put(bank);
         chart::Account other;
         other.path = types::AccountPath("Expenses:Uncategorized");

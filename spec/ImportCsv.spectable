@@ -531,7 +531,7 @@ Description and it is the nearest thing in CSV to the ledger balance of an OFX
 Description file. A disagreement is reported with the row that broke it.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : PostingRow
 | Ref | Date       | Account         | Amount  |
@@ -961,7 +961,7 @@ Description recategorising everything by hand. A category named in the file but
 Description not in the book is created, as in Accounts.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given the csv profile is : CsvProfile Vertical
@@ -1000,8 +1000,8 @@ Description brackets. Stripping them gives the account path, and the result is
 Description an ordinary two-posting transfer.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
-| Assets:Checking | Bank | false       |
-| Assets:Savings  | Bank | false       |
+| Assets:Checking | Checking | false       |
+| Assets:Savings  | Checking | false       |
 Given the csv profile is : CsvProfile Vertical
 | Name           | Quicken Export |
 | DateColumn     | Date           |
@@ -1100,7 +1100,7 @@ Description wrong. Two coffees at the same shop on the same day for the same
 Description amount, and the book already has one of them.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee     | Account                | Amount |
@@ -1133,7 +1133,7 @@ Description The same file into an empty account. Neither row is a duplicate of
 Description the other: the file is what the bank says happened.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given the csv profile is : CsvProfile Vertical
 | Name           | Quicken Export |
@@ -1159,7 +1159,7 @@ Description second is not reported and not touched: the file is a statement of
 Description what the bank knows, not an instruction to make the book match.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee      | Account                | Amount |
@@ -1191,7 +1191,7 @@ Description without being asked. Over twenty years both mistakes are expensive,
 Description and the second is worse.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given the csv profile is : CsvProfile Vertical
 | Name           | Quicken Export |

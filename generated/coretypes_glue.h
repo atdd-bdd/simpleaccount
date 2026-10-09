@@ -134,4 +134,34 @@ public:
                 << t.accounttype;
         }
     }
+public:
+
+    void examples_datatype_balanceside(const std::vector<EnumerationValuesString>& values) {
+        for (const auto& value : values) {
+            const EnumerationValuesTyped v = EnumerationValuesTyped::from_string_struct(value);
+            ASSERT_NO_THROW(types::balance_side_from_string(v.value)) << v.value;
+            EXPECT_EQ(v.value, types::to_string(types::balance_side_from_string(v.value)));
+        }
+    }
+
+    // Two questions, because they have two answers: a transfer account has a
+    // side -- which is what gives it a display sign -- and is still kept off
+    // the balance sheet.
+    void examples_businessrule_which_side_of_a_balance_sheet_a_type_is_on_and_whether_it_is_shown(
+            const std::vector<BalanceSideOfString>& values) {
+        for (const auto& value : values) {
+            const BalanceSideOfTyped t = BalanceSideOfTyped::from_string_struct(value);
+            const types::AccountType type = types::account_type_from_string(t.accounttype);
+            EXPECT_EQ(t.balanceside, types::to_string(types::balance_side(type)))
+                << t.accounttype << " side";
+            EXPECT_EQ(t.shownonthebalancesheet, types::on_balance_sheet(type))
+                << t.accounttype << " shown";
+            // And the sign follows the side, which is the whole reason a type
+            // that is never on the sheet still has one.
+            EXPECT_EQ(types::balance_side(type) == types::BalanceSide::Asset ? 1 : -1,
+                      types::display_sign(type))
+                << t.accounttype << " display sign";
+        }
+    }
+
 };

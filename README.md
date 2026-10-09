@@ -144,6 +144,29 @@ amount and they sum to zero. What each account type shows on screen is then a
 display sign: a credit card reads as the amount owed, income as the amount
 earned. (`Accounts.spectable`, the display sign rule)
 
+**An account type belongs to a group, and the group is not stored.** The types
+are Checking, Savings, Cash, CreditCard, LineOfCredit, Brokerage, IRA, HSA,
+Retirement401k, Mortgage, AutoLoan, PersonalLoan, OtherDebt, RealEstate,
+Vehicle, OtherAsset, AccountsReceivable, AccountsPayable, TransferIn,
+TransferOut, and the three categories. The seven groups -- Banking, Credit,
+Investments, Loan & Debt, Property & Asset, Business, Transfer -- follow from
+the type, so an account filed once cannot drift out of its heading. The account
+list is divided by group and says nothing about assets and liabilities.
+(`CoreTypes.spectable`, the group rule in `UserInterface.spectable`)
+
+**Which side of a balance sheet a type is on is asked only by the balance
+sheet.** Every real type has a side, and the side is also what gives it a
+display sign. Business proves the side has to follow the type and not the
+group: a receivable is owed to the business and a payable by it. The Transfer
+group has sides and is deliberately left off the sheet, because its accounts
+hold money on its way between two accounts that are already on it.
+(`CoreTypes.spectable`, the balance-side rule)
+
+**The old type names are read for ever and never written.** A book written
+before the types were split has `Bank`, `Asset`, `Liability` and `Investment`
+in it. Those read as Checking, OtherAsset, OtherDebt and Brokerage. A book that
+cannot be opened by the next build is a book lost.
+
 **An account has no Name and no opening balance field.** The name is the last
 segment of the path. An opening balance is a transaction against
 `Equity:Opening Balances`, so the book balances from its first day — which is

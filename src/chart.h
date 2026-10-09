@@ -13,7 +13,7 @@ namespace chart {
 
 struct Account {
     types::AccountPath path;
-    types::AccountType type = types::AccountType::Bank;
+    types::AccountType type = types::AccountType::Checking;
     bool placeholder = false;   // a grouping node; takes no postings
     bool hidden = false;        // kept out of pickers, history retained
     // A short way to type this account when categorising; see the finding rule

@@ -184,50 +184,142 @@ Examples: ValidValues
 # ---------------------------------------------------------------------------
 
 DataType AccountType
-Description What kind of account a node in the tree is.
-Details The first six hold money and are reconciled against a statement.
-Details Income and Expense are what Quicken calls categories; modelling them as
-Details accounts is what makes every transaction balance.
-Details Equity holds the opening balances that start the book.
+Description What kind of account a node in the tree is: the type a person
+Description chooses, within the group it is chosen from.
+Details The group is not stored anywhere. It follows from the type, so an
+Details account filed once cannot drift out of the heading it is listed under;
+Details see the group rule in UserInterface.
+Details
+Details Income and Expense are what Quicken calls categories, and modelling
+Details them as accounts is what makes every transaction balance. Equity holds
+Details the opening balances that start the book. None of the three is in a
+Details group, because the account list does not show them.
+Details
+Details The names Bank, Asset, Liability and Investment were the whole of this
+Details list before it was split into groups. They are still read, so that a
+Details book written by an earlier build still opens, and are never written
+Details again: Bank reads as Checking, Asset as OtherAsset, Liability as
+Details OtherDebt and Investment as Brokerage.
 Examples: EnumerationValues
-| Value      | Notes                                             |
-| Bank       | Checking and savings                              |
-| Cash       | A wallet, or petty cash                           |
-| CreditCard | A balance owed, which rises as it is spent        |
-| Asset      | A house or a car                                  |
-| Liability  | A mortgage or a loan                              |
-| Investment | Holds securities as well as cash                  |
-| Income     | A category money arrives from                     |
-| Expense    | A category money goes to                          |
-| Equity     | Opening balances, so a new book starts in balance |
+| Value              | Notes                                                   |
+| Checking           | A current account, written on and paid into             |
+| Savings            | Interest and no cheques                                 |
+| Cash               | A wallet, or petty cash                                 |
+| CreditCard         | A balance owed, which rises as it is spent              |
+| LineOfCredit       | Borrowed against as it is needed                        |
+| Brokerage          | Holds securities as well as cash                        |
+| IRA                | A retirement account                                    |
+| HSA                | A health savings account                                |
+| Retirement401k     | Written without the leading digit a name may not have   |
+| Mortgage           | Secured on a property                                   |
+| AutoLoan           | Secured on a vehicle                                    |
+| PersonalLoan       | Unsecured                                               |
+| OtherDebt          | Any other money owed                                    |
+| RealEstate         | A house, a flat, land                                   |
+| Vehicle            | A car                                                   |
+| OtherAsset         | Anything else owned                                     |
+| AccountsReceivable | Owed to the business                                    |
+| AccountsPayable    | Owed by the business                                    |
+| TransferIn         | Money on its way in, and off the balance sheet          |
+| TransferOut        | Money on its way out, and off the balance sheet         |
+| Income             | A category money arrives from                           |
+| Expense            | A category money goes to                                |
+| Equity             | Opening balances, so a new book starts in balance       |
 
 DataType AccountClass
 Description The two groups the account types fall into.
-Details Reports and the balance sheet ask this rather than listing the types.
+Details Reports ask this rather than listing the types.
 Examples: EnumerationValues
-| Value   | Notes                                                |
-| Real    | Bank, Cash, CreditCard, Asset, Liability, Investment |
-| Nominal | Income, Expense and Equity: the categories           |
+| Value   | Notes                                                  |
+| Real    | Everything that holds money, in any of the seven groups |
+| Nominal | Income, Expense and Equity: the categories             |
 
 BusinessRule Account class follows from account type
-Description Which types are real and which are nominal.
+Description Which types are real and which are nominal. Every type that is in
+Description a group is real, and the three that are in none are the categories.
 Examples: AccountClassOf
-| AccountType | AccountClass | Notes                             |
-| Bank        | Real         |                                   |
-| Cash        | Real         |                                   |
-| CreditCard  | Real         |                                   |
-| Asset       | Real         |                                   |
-| Liability   | Real         |                                   |
-| Investment  | Real         |                                   |
-| Income      | Nominal      |                                   |
-| Expense     | Nominal      |                                   |
-| Equity      | Nominal      | Reconciling it would mean nothing |
+| AccountType        | AccountClass | Notes                             |
+| Checking           | Real         |                                   |
+| Savings            | Real         |                                   |
+| Cash               | Real         |                                   |
+| CreditCard         | Real         |                                   |
+| LineOfCredit       | Real         |                                   |
+| Brokerage          | Real         |                                   |
+| IRA                | Real         |                                   |
+| HSA                | Real         |                                   |
+| Retirement401k     | Real         |                                   |
+| Mortgage           | Real         |                                   |
+| AutoLoan           | Real         |                                   |
+| PersonalLoan       | Real         |                                   |
+| OtherDebt          | Real         |                                   |
+| RealEstate         | Real         |                                   |
+| Vehicle            | Real         |                                   |
+| OtherAsset         | Real         |                                   |
+| AccountsReceivable | Real         |                                   |
+| AccountsPayable    | Real         |                                   |
+| TransferIn         | Real         | Real, and still off the balance sheet |
+| TransferOut        | Real         |                                   |
+| Income             | Nominal      |                                   |
+| Expense            | Nominal      |                                   |
+| Equity             | Nominal      | Reconciling it would mean nothing |
 
 Attributes AccountClassOf
-| Attribute    | Type         | Default |
-| AccountType  | AccountType  | Bank    |
-| AccountClass | AccountClass | Real    |
-| Notes        | String       |         |
+| Attribute    | Type         | Default  |
+| AccountType  | AccountType  | Checking |
+| AccountClass | AccountClass | Real     |
+| Notes        | String       |          |
+
+DataType BalanceSide
+Description Which column of a balance sheet an account belongs in.
+Details Asked only by the balance sheet. The account list says nothing about it
+Details -- the words Asset and Liability are not headings there, the seven
+Details groups are.
+Examples: EnumerationValues
+| Value     | Notes            |
+| Asset     | What is owned    |
+| Liability | What is owed     |
+
+BusinessRule Which side of a balance sheet a type is on, and whether it is shown
+Description Every real type has a side, because the side is also what says
+Description which way round the account reads on screen. Being shown on the
+Description balance sheet is a separate question, and the Transfer group
+Description answers it differently from every other group.
+Details A transfer account holds money on its way between two accounts that
+Details are both already on the sheet, so counting it would count the same
+Details money twice. It still has a side -- in reads as money held, out as
+Details money owed -- which is what gives it a display sign.
+Details
+Details Business is the group that proves the side has to follow the type and
+Details not the group: a receivable is owed to the business and a payable is
+Details owed by it, and they sit in one group.
+Examples: BalanceSideOf
+| AccountType        | BalanceSide | ShownOnTheBalanceSheet |
+| Checking           | Asset       | true                   |
+| Savings            | Asset       | true                   |
+| Cash               | Asset       | true                   |
+| CreditCard         | Liability   | true                   |
+| LineOfCredit       | Liability   | true                   |
+| Brokerage          | Asset       | true                   |
+| IRA                | Asset       | true                   |
+| HSA                | Asset       | true                   |
+| Retirement401k     | Asset       | true                   |
+| Mortgage           | Liability   | true                   |
+| AutoLoan           | Liability   | true                   |
+| PersonalLoan       | Liability   | true                   |
+| OtherDebt          | Liability   | true                   |
+| RealEstate         | Asset       | true                   |
+| Vehicle            | Asset       | true                   |
+| OtherAsset         | Asset       | true                   |
+| AccountsReceivable | Asset       | true                   |
+| AccountsPayable    | Liability   | true                   |
+| TransferIn         | Asset       | false                  |
+| TransferOut        | Liability   | false                  |
+
+Attributes BalanceSideOf
+| Attribute              | Type        | Default  |
+| AccountType            | AccountType | Checking |
+| BalanceSide            | BalanceSide | Asset    |
+| ShownOnTheBalanceSheet | Boolean     | true     |
 
 DataType ClearedStatus
 Description How far a posting has got through the records of the bank.

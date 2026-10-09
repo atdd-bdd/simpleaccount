@@ -37,10 +37,10 @@ Description scenarios use are in the chart from the start, so that a scenario
 Description is about assigning one and not about creating it.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type       | Placeholder |
-| Assets:Checking         | Bank       | false       |
-| Assets:Savings          | Bank       | false       |
+| Assets:Checking         | Checking   | false       |
+| Assets:Savings          | Savings    | false       |
 | Liabilities:Visa        | CreditCard | false       |
-| Liabilities:Car Loan    | Liability  | false       |
+| Liabilities:Car Loan    | AutoLoan   | false       |
 | Expenses:Auto           | Expense    | true        |
 | Expenses:Auto:Fuel      | Expense    | false       |
 | Expenses:Groceries      | Expense    | false       |

@@ -108,7 +108,7 @@ Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given the file contains
@@ -187,8 +187,8 @@ LShopping
 When qif file imported
 Then accounts created are : ChartOfAccounts
 | Path             | Type       | Placeholder |
-| Assets           | Bank       | true        |
-| Assets:Checking  | Bank       | false       |
+| Assets           | Checking   | true        |
+| Assets:Checking  | Checking   | false       |
 | Liabilities      | CreditCard | true        |
 | Liabilities:Visa | CreditCard | false       |
 # The roots come with them: adding an account fills in every level above it as a
@@ -211,21 +211,25 @@ Details user who wants other names renames them afterwards, which renames the
 Details descendants too.
 Details Every type below occurs in the two files in testdata. Invoice, Bill and
 Details Tax are Quicken Home and Business accounts: receivables, payables, and a
-Details tax holding account. They are ordinary accounts here, because a
-Details receivable is an asset and a payable is a liability, and nothing else
-Details about them needs modelling for the balances to come out right.
+Details tax holding account. The first two have types of their own now that the
+Details Business group exists, which says what they are rather than only which
+Details side of the sheet they fall on. Tax is an asset and nothing more needs
+Details modelling about it for the balances to come out right.
+Details
+Details The first column is the word in the file, which is Quicken's and not
+Details ours. QIF writes Bank where this program now says Checking.
 Examples: QifAccountMapping
-| QifType | AccountType | Root        | ExampleName | ExamplePath            |
-| Bank    | Bank        | Assets      | Checking    | Assets:Checking        |
-| Cash    | Cash        | Assets      | Wallet      | Assets:Wallet          |
-| CCard   | CreditCard  | Liabilities | Visa        | Liabilities:Visa       |
-| Oth A   | Asset       | Assets      | House       | Assets:House           |
-| Oth L   | Liability   | Liabilities | Mortgage    | Liabilities:Mortgage   |
-| Invst   | Investment  | Assets      | Brokerage   | Assets:Brokerage       |
-| Port    | Investment  | Assets      | Portfolio   | Assets:Portfolio       |
-| Invoice | Asset       | Assets      | Receivables | Assets:Receivables     |
-| Bill    | Liability   | Liabilities | Payables    | Liabilities:Payables   |
-| Tax     | Asset       | Assets      | Tax         | Assets:Tax             |
+| QifType | AccountType        | Root        | ExampleName | ExamplePath          |
+| Bank    | Checking           | Assets      | Checking    | Assets:Checking      |
+| Cash    | Cash               | Assets      | Wallet      | Assets:Wallet        |
+| CCard   | CreditCard         | Liabilities | Visa        | Liabilities:Visa     |
+| Oth A   | OtherAsset         | Assets      | House       | Assets:House         |
+| Oth L   | OtherDebt          | Liabilities | Mortgage    | Liabilities:Mortgage |
+| Invst   | Brokerage          | Assets      | Brokerage   | Assets:Brokerage     |
+| Port    | Brokerage          | Assets      | Portfolio   | Assets:Portfolio     |
+| Invoice | AccountsReceivable | Assets      | Receivables | Assets:Receivables   |
+| Bill    | AccountsPayable    | Liabilities | Payables    | Liabilities:Payables |
+| Tax     | OtherAsset         | Assets      | Tax         | Assets:Tax           |
 
 Scenario A credit limit on a card account is kept
 Description Forty-three of the card accounts in the business file carry one. It
@@ -253,7 +257,7 @@ Attributes AccountLimit
 Attributes QifAccountMapping
 | Attribute   | Type        | Default |
 | QifType     | String      |         |
-| AccountType | AccountType | Bank    |
+| AccountType | AccountType | Checking |
 | Root        | AccountName |         |
 | ExampleName | AccountName |         |
 | ExamplePath | AccountPath |         |
@@ -608,7 +612,7 @@ Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Given the file contains
 """
@@ -660,7 +664,7 @@ Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
-| Assets:Checking           | Bank    | false       |
+| Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
 Given the file contains
@@ -720,7 +724,7 @@ Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
-| Assets:Checking           | Bank    | false       |
+| Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
 | Expenses:Auto:Repairs     | Expense | false       |
@@ -759,7 +763,7 @@ Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
-| Assets:Checking           | Bank    | false       |
+| Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Uncategorized    | Expense | false       |
 Given the file contains
@@ -1096,7 +1100,7 @@ Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 Given the chart of accounts is : ChartOfAccounts
 | Path                | Type    | Placeholder |
-| Assets:Checking     | Bank    | false       |
+| Assets:Checking     | Checking | false       |
 | Expenses:Home:Rates | Expense | false       |
 Given the file contains
 """
@@ -1907,7 +1911,7 @@ Given the qif profile is : QifProfile Vertical
 | InvestmentMode | CashOnly |
 Given the chart of accounts is : ChartOfAccounts
 | Path                  | Type       | Placeholder |
-| Assets:Vanguard       | Investment | false       |
+| Assets:Vanguard       | Brokerage  | false       |
 | Expenses              | Expense    | true        |
 | Expenses:Misc Expense | Expense    | false       |
 Given import target is : ImportTarget Vertical
@@ -1948,7 +1952,7 @@ Given the qif profile is : QifProfile Vertical
 | InvestmentMode | CashOnly |
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type       | Placeholder |
-| Assets:Vanguard | Investment | false       |
+| Assets:Vanguard | Brokerage  | false       |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Vanguard |
 Given the file contains
@@ -2211,7 +2215,7 @@ Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Customer Invoices |
 Given the chart of accounts is : ChartOfAccounts
 | Path                     | Type   | Placeholder |
-| Assets:Customer Invoices | Asset  | false       |
+| Assets:Customer Invoices | OtherAsset | false       |
 | Income:Consulting        | Income | false       |
 Given the file contains
 """
@@ -2241,7 +2245,7 @@ Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Customer Invoices |
 Given the chart of accounts is : ChartOfAccounts
 | Path                     | Type   | Placeholder |
-| Assets:Customer Invoices | Asset  | false       |
+| Assets:Customer Invoices | OtherAsset | false       |
 | Income:Consulting        | Income | false       |
 | Income:Royalty           | Income | false       |
 Given the file contains
@@ -2276,8 +2280,8 @@ Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Customer Invoices |
 Given the chart of accounts is : ChartOfAccounts
 | Path                            | Type      | Placeholder |
-| Assets:Customer Invoices        | Asset     | false       |
-| Liabilities:Unrecognised Income | Liability | false       |
+| Assets:Customer Invoices        | OtherAsset | false       |
+| Liabilities:Unrecognised Income | OtherDebt | false       |
 | Income:Consulting               | Income    | false       |
 Given the file contains
 """
@@ -2320,7 +2324,7 @@ Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Customer Invoices |
 Given the chart of accounts is : ChartOfAccounts
 | Path                                            | Type    | Placeholder |
-| Assets:Customer Invoices                        | Asset   | false       |
+| Assets:Customer Invoices                        | OtherAsset | false       |
 | Expenses:Warp And Byte Expenses To be Reimbursed | Expense | false      |
 Given the file contains
 """
@@ -2360,8 +2364,8 @@ Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Customer Invoices |
 Given the chart of accounts is : ChartOfAccounts
 | Path                            | Type      | Placeholder |
-| Assets:Customer Invoices        | Asset     | false       |
-| Liabilities:Unrecognised Income | Liability | false       |
+| Assets:Customer Invoices        | OtherAsset | false       |
+| Liabilities:Unrecognised Income | OtherDebt | false       |
 | Income:Misc Income              | Income    | false       |
 Given the file contains
 """
@@ -2391,7 +2395,7 @@ Details report for that book has been exported yet, so this follows the rule
 Details measured on the invoices rather than evidence of its own.
 Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type      | Placeholder |
-| Liabilities:Business Bills  | Liability | false       |
+| Liabilities:Business Bills  | OtherDebt | false       |
 | Expenses:Office             | Expense   | false       |
 Given import target is : ImportTarget Vertical
 | AccountPath | Liabilities:Business Bills |
@@ -2435,7 +2439,7 @@ Given import target is : ImportTarget Vertical
 | AccountPath | Liabilities:Business Bills |
 Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type      | Placeholder |
-| Liabilities:Business Bills  | Liability | false       |
+| Liabilities:Business Bills  | OtherDebt | false       |
 | Expenses:Office             | Expense   | false       |
 When invoice reconciliation summarised
 Then invoice reconciliation is : InvoiceReconciliation Vertical
@@ -2565,7 +2569,7 @@ Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Receivables |
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Receivables     | Asset   | false       |
+| Assets:Receivables     | OtherAsset | false       |
 | Income:Consulting      | Income  | false       |
 Given the file contains
 """
@@ -2611,11 +2615,16 @@ TBill
 """
 When qif file imported
 Then accounts created are : ChartOfAccounts
-| Path              | Type      | Placeholder |
-| Assets            | Asset     | true        |
-| Assets:Invoices   | Asset     | false       |
-| Liabilities       | Liability | true        |
-| Liabilities:Bills | Liability | false       |
+| Path              | Type               | Placeholder |
+| Assets            | AccountsReceivable | true        |
+| Assets:Invoices   | AccountsReceivable | false       |
+| Liabilities       | AccountsPayable    | true        |
+| Liabilities:Bills | AccountsPayable    | false       |
+# A receivable and a payable have types of their own now that the Business
+# group exists, where before they were filed as a plain asset and a plain debt.
+# The root takes the type of the first account created under it, which is why
+# Assets reads as a receivable here -- a wrinkle of the importer, not of the
+# types, and the roots are renamed afterwards anyway.
 
 $WIP
 Scenario No price list means the last price comes from the last transaction
@@ -2625,8 +2634,8 @@ Description recent transaction that stated a price, and the holdings report
 Description shows how old it is.
 Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type       | Placeholder |
-| Assets:Portfolio            | Investment | true        |
-| Assets:Portfolio:Cash       | Investment | false       |
+| Assets:Portfolio            | Brokerage  | true        |
+| Assets:Portfolio:Cash       | Brokerage  | false       |
 | Equity:Market Value Changes | Equity     | false       |
 | Equity:Opening Balances     | Equity     | false       |
 | Income:Dividends            | Income     | false       |
@@ -2705,8 +2714,8 @@ Description Forty-one records in the business file use it. It is a cash movement
 Description with a category, and nothing to do with securities.
 Given the chart of accounts is : ChartOfAccounts
 | Path                     | Type       | Placeholder |
-| Assets:Portfolio         | Investment | true        |
-| Assets:Portfolio:Cash    | Investment | false       |
+| Assets:Portfolio         | Brokerage  | true        |
+| Assets:Portfolio:Cash    | Brokerage  | false       |
 | Expenses:Investment:Fees | Expense    | false       |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Portfolio |
@@ -2733,8 +2742,8 @@ Description Transportation on 7 March 2024, which was a four-for-one split, and
 Description the Q field holds 40. That is what settles the factor of ten.
 Given the chart of accounts is : ChartOfAccounts
 | Path                     | Type       | Placeholder |
-| Assets:Portfolio         | Investment | true        |
-| Assets:Portfolio:Cash    | Investment | false       |
+| Assets:Portfolio         | Brokerage  | true        |
+| Assets:Portfolio:Cash    | Brokerage  | false       |
 | Expenses:Investment:Fees | Expense    | false       |
 Given holdings are : Holdings
 | Account                                         | SecurityName                   | Shares | Price    | PriceAsOf  |

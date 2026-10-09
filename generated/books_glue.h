@@ -700,7 +700,7 @@ private:
             if (accounts.find(value.account) == nullptr) {
                 chart::Account a;
                 a.path = types::AccountPath(value.account);
-                a.type = value.account.rfind("Assets", 0) == 0 ? types::AccountType::Bank
+                a.type = value.account.rfind("Assets", 0) == 0 ? types::AccountType::Checking
                                                                : types::AccountType::Expense;
                 accounts.put(a);
             }

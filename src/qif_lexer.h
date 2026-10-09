@@ -142,22 +142,22 @@ inline Money posting_amount_of_split_line(const Money& dollar) { return -dollar;
 // and Tax are Quicken Home and Business accounts: a receivable is an asset and a
 // payable is a liability, and nothing else about them needs modelling.
 struct AccountMapping {
-    types::AccountType type = types::AccountType::Bank;
+    types::AccountType type = types::AccountType::Checking;
     std::string root;
 };
 
 inline std::optional<AccountMapping> account_mapping_of(const std::string& qif_type) {
     const std::string s = detail::lower(detail::trim(qif_type));
-    if (s == "bank")    return AccountMapping{types::AccountType::Bank,       "Assets"};
+    if (s == "bank")    return AccountMapping{types::AccountType::Checking,       "Assets"};
     if (s == "cash")    return AccountMapping{types::AccountType::Cash,       "Assets"};
     if (s == "ccard")   return AccountMapping{types::AccountType::CreditCard, "Liabilities"};
-    if (s == "oth a")   return AccountMapping{types::AccountType::Asset,      "Assets"};
-    if (s == "oth l")   return AccountMapping{types::AccountType::Liability,  "Liabilities"};
-    if (s == "invst")   return AccountMapping{types::AccountType::Investment, "Assets"};
-    if (s == "port")    return AccountMapping{types::AccountType::Investment, "Assets"};
-    if (s == "invoice") return AccountMapping{types::AccountType::Asset,      "Assets"};
-    if (s == "bill")    return AccountMapping{types::AccountType::Liability,  "Liabilities"};
-    if (s == "tax")     return AccountMapping{types::AccountType::Asset,      "Assets"};
+    if (s == "oth a")   return AccountMapping{types::AccountType::OtherAsset,      "Assets"};
+    if (s == "oth l")   return AccountMapping{types::AccountType::OtherDebt,  "Liabilities"};
+    if (s == "invst")   return AccountMapping{types::AccountType::Brokerage, "Assets"};
+    if (s == "port")    return AccountMapping{types::AccountType::Brokerage, "Assets"};
+    if (s == "invoice") return AccountMapping{types::AccountType::AccountsReceivable, "Assets"};
+    if (s == "bill")    return AccountMapping{types::AccountType::AccountsPayable,    "Liabilities"};
+    if (s == "tax")     return AccountMapping{types::AccountType::OtherAsset,      "Assets"};
     return std::nullopt;
 }
 

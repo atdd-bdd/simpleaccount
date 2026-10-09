@@ -405,7 +405,7 @@ inline std::vector<ledger::Transaction> transactions_for(
         if (!one.other_side_waits && !named.category.empty()) other = named.category;
         accounts->add(types::AccountPath(other),
                       one.other_side_waits
-                          ? types::AccountType::Asset
+                          ? types::AccountType::OtherAsset
                           : (amount.cents() < 0 ? types::AccountType::Expense
                                                 : types::AccountType::Income));
 

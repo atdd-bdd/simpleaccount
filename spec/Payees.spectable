@@ -86,7 +86,7 @@ Attributes RulePrecedence
 Scenario A rule tidies the payee and sets the category
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given payee rules are : PayeeRules
@@ -107,7 +107,7 @@ Description Some payees take a different category each time. The rule is still
 Description worth having, because it is what makes the report readable.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given payee rules are : PayeeRules
@@ -130,7 +130,7 @@ Description Nothing is invented. The raw name is what the bank said, and it is
 Description kept so that a rule written later can still match it.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given payee rules are : PayeeRules
@@ -151,7 +151,7 @@ Description this year, so the original text is stored alongside the tidied name
 Description rather than replaced by it.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given payee rules are : PayeeRules
@@ -174,7 +174,7 @@ Attributes PayeeNames
 Scenario The most specific of two matching rules is applied
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Shopping      | Expense | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
@@ -200,7 +200,7 @@ Description Rules are kept rather than deleted, because a rule that was wrong
 Description once is usually wanted again in a changed form.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Shopping      | Expense | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
@@ -253,10 +253,10 @@ Description downloaded transaction differs, so the shortfall is reported rather
 Description than silently absorbed into one line.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
-| Assets:Checking           | Bank    | false       |
+| Assets:Checking           | Checking | false       |
 | Expenses:Home:Interest    | Expense | false       |
 | Expenses:Home:Escrow      | Expense | false       |
-| Liabilities:Mortgage      | Liability | false     |
+| Liabilities:Mortgage      | OtherDebt | false     |
 | Expenses:Uncategorized    | Expense | false       |
 Given payee split rules are : PayeeSplitRule Vertical
 | Pattern   | FIRST NATIONAL MTG |
@@ -304,10 +304,10 @@ Description remembered amounts are offered unchanged and the difference is
 Description shown, for the user to put where it belongs.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
-| Assets:Checking           | Bank    | false       |
+| Assets:Checking           | Checking | false       |
 | Expenses:Home:Interest    | Expense | false       |
 | Expenses:Home:Escrow      | Expense | false       |
-| Liabilities:Mortgage      | Liability | false     |
+| Liabilities:Mortgage      | OtherDebt | false     |
 | Expenses:Uncategorized    | Expense | false       |
 Given payee split rules are : PayeeSplitRule Vertical
 | Pattern   | FIRST NATIONAL MTG |
@@ -337,7 +337,7 @@ Description add up. The rounding goes to the largest line, so that the sum is
 Description exact and the adjustment lands where it is least visible.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type    | Placeholder |
-| Assets:Checking         | Bank    | false       |
+| Assets:Checking         | Checking | false       |
 | Expenses:Office:Rent    | Expense | false       |
 | Expenses:Office:Utility | Expense | false       |
 | Expenses:Uncategorized  | Expense | false       |
@@ -396,7 +396,7 @@ Description is made, not taken, because the user is the only one who knows
 Description whether this payee always takes this category.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : PostingRow
@@ -466,7 +466,7 @@ Description only useful if it can be applied backwards, so accepting one offers
 Description to do exactly that, and says how many it would change.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : PostingRow
@@ -507,7 +507,7 @@ Description A category chosen by hand is a decision, and a rule applied in bulk
 Description does not overrule it. Only Uncategorized postings are changed.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Dining        | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
@@ -541,7 +541,7 @@ Description A bulk change that altered a reconciled balance would undo a
 Description reconciliation nobody asked it to touch.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : PostingRow
@@ -570,7 +570,7 @@ Description recently used first, which means it needs no upkeep and can never
 Description disagree with the register.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee         | Account         | Amount |
@@ -594,7 +594,7 @@ Description The last category used for a payee is the best guess there is, and
 Description it costs nothing to offer because the register already knows it.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Dining    | Expense | false       |
 Given postings are : PostingRow
@@ -622,7 +622,7 @@ Description Merging them is a rename applied to every transaction, and it is
 Description what makes a report by payee worth reading.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
-| Assets:Checking    | Bank    | false       |
+| Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee              | Account         | Amount |
@@ -750,7 +750,7 @@ Description The pattern was too narrow to catch the second filling station, so
 Description it is shortened. This is the repair the window exists for.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Auto:Fuel     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given payee rules are : PayeeRules
@@ -781,7 +781,7 @@ Description was a mistake, and it is offered because a list that only grows
 Description becomes one nobody reads.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Auto:Fuel     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given payee rules are : PayeeRules
@@ -813,7 +813,7 @@ Description continuously. Deleting one is not a way to undo the categorising it
 Description did, and must not quietly rewrite a year of history.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
-| Assets:Checking        | Bank    | false       |
+| Assets:Checking        | Checking | false       |
 | Expenses:Auto:Fuel     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given payee rules are : PayeeRules

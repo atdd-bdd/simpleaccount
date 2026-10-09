@@ -17,17 +17,25 @@ struct ColumnHeadings {
     std::string in_column;
 };
 
+// Taken from the group rather than from each type, so that adding a kind of
+// savings account does not mean deciding again what its two columns are called.
+// Cash is the one type that wants its own words.
 inline ColumnHeadings headings_for(types::AccountType t) {
     switch (t) {
-        case types::AccountType::Bank:       return {"Payment",  "Deposit"};
-        case types::AccountType::Cash:       return {"Spend",    "Receive"};
-        case types::AccountType::CreditCard: return {"Charge",   "Payment"};
-        case types::AccountType::Liability:  return {"Increase", "Payment"};
-        case types::AccountType::Asset:      return {"Decrease", "Increase"};
-        case types::AccountType::Investment: return {"Payment",  "Deposit"};
-        case types::AccountType::Expense:    return {"Refund",   "Spent"};
-        case types::AccountType::Income:     return {"Earned",   "Returned"};
-        case types::AccountType::Equity:     return {"Decrease", "Increase"};
+        case types::AccountType::Expense: return {"Refund",   "Spent"};
+        case types::AccountType::Income:  return {"Earned",   "Returned"};
+        case types::AccountType::Equity:  return {"Decrease", "Increase"};
+        case types::AccountType::Cash:    return {"Spend",    "Receive"};
+        default: break;
+    }
+    switch (types::group_of(t)) {
+        case types::AccountGroup::Banking:          return {"Payment",  "Deposit"};
+        case types::AccountGroup::Credit:           return {"Charge",   "Payment"};
+        case types::AccountGroup::Investments:      return {"Payment",  "Deposit"};
+        case types::AccountGroup::LoanAndDebt:      return {"Increase", "Payment"};
+        case types::AccountGroup::PropertyAndAsset: return {"Decrease", "Increase"};
+        case types::AccountGroup::Business:         return {"Decrease", "Increase"};
+        case types::AccountGroup::Transfer:         return {"Out",      "In"};
     }
     return {"Payment", "Deposit"};
 }
