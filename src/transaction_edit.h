@@ -52,6 +52,39 @@ inline Outcome change_category(ledger::Transaction* t, const std::string& from,
     return {false, "nothing is posted to " + from};
 }
 
+// Repoints every posting at or under this path to the corresponding path
+// under the new one -- the same substitution chart::Chart::move_subtree makes
+// to the account itself, applied to what was posted to it. A posting carries
+// the path as plain text and the chart has no other way to identify an
+// account yet (see TODO.md on account identity), so without this a rename or
+// a move would silently orphan every transaction already on the account: the
+// chart would show the new path with nothing in it, and the old one gone
+// from the chart but still named by postings nobody could find again.
+inline int move_postings(std::vector<ledger::Transaction>* transactions,
+                         const std::string& from, const std::string& to) {
+    int changed = 0;
+    for (ledger::Transaction& t : *transactions)
+        for (ledger::Posting& p : t.postings)
+            if (chart::Chart::is_descendant_or_self(p.account.value(), from)) {
+                p.account = types::AccountPath(to + p.account.value().substr(from.size()));
+                ++changed;
+            }
+    return changed;
+}
+
+// The same, for the flat ledger a lower-level test reads balances from rather
+// than the full transactions a window keeps.
+inline ledger::Ledger move_postings(const ledger::Ledger& book,
+                                    const std::string& from, const std::string& to) {
+    ledger::Ledger out;
+    for (ledger::DatedPosting p : book.postings()) {
+        if (chart::Chart::is_descendant_or_self(p.account.value(), from))
+            p.account = types::AccountPath(to + p.account.value().substr(from.size()));
+        out.add(p);
+    }
+    return out;
+}
+
 // Removes a transaction from the book entirely: both of its postings, never
 // one side of it, because deleting one side would leave the book out of
 // balance. See the deleting section of Transactions.spectable.

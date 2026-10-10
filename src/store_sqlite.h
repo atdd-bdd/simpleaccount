@@ -29,8 +29,10 @@ namespace store {
 
 // The schema is read off the specification rather than designed beside it: every
 // Entity becomes a row and the Collection it belongs to becomes the table. Bump
-// this when that shape changes.
-inline constexpr int kSchemaVersion = 1;
+// this when that shape changes, and add the upgrade it needs to open_at below --
+// a book already on disk was made by kSchema as it read on an earlier version,
+// and has to be brought forward in place rather than recreated.
+inline constexpr int kSchemaVersion = 2;
 
 struct Failure {
     bool refused = false;
@@ -123,10 +125,19 @@ CREATE TABLE book (
   check_window_days INTEGER NOT NULL DEFAULT 1);
 
 CREATE TABLE accounts (
-  path        TEXT    NOT NULL PRIMARY KEY,
-  type        TEXT    NOT NULL,
-  placeholder INTEGER NOT NULL DEFAULT 0,
-  hidden      INTEGER NOT NULL DEFAULT 0);
+  path          TEXT    NOT NULL PRIMARY KEY,
+  type          TEXT    NOT NULL,
+  placeholder   INTEGER NOT NULL DEFAULT 0,
+  hidden        INTEGER NOT NULL DEFAULT 0,
+  -- A short way to type the account when categorising, and what a payment to
+  -- it is called on the paying account's own statement. See the finding rule
+  -- in Accounts.spectable and the payment-payee rule in ImportOfx.
+  alias         TEXT    NOT NULL DEFAULT '',
+  payment_payee TEXT    NOT NULL DEFAULT '',
+  -- What is kept about the account from its own dialog: which institution,
+  -- and the number on the statement, kept exactly as written.
+  bank            TEXT  NOT NULL DEFAULT '',
+  account_number  TEXT  NOT NULL DEFAULT '');
 
 CREATE TABLE transactions (
   -- The name the transaction was given when it was created, and what it is
@@ -304,10 +315,41 @@ private:
         const long long version = read.integer(0);
         if (version > kSchemaVersion)
             return {true, label + " was written by a later version of SimpleAccount"};
+        if (version < kSchemaVersion) {
+            std::string why;
+            if (!upgrade(db.get(), static_cast<int>(version), &why))
+                return {true, label + " could not be brought up to date: " + why};
+        }
 
         into->db_ = std::move(db);
         into->path_ = path;
         return {};
+    }
+
+    // Brings a book written by an earlier version up to the current schema, in
+    // place. Each step adds to what is there; nothing already on disk is ever
+    // read differently by an older step, because new columns always default
+    // to the value an old book's absence of them already meant.
+    static bool upgrade(sqlite3* db, int from, std::string* why) {
+        if (from < 2) {
+            // alias and payment_payee existed in the program before this,
+            // but the column to hold them was never added -- so every book
+            // written before version 2 has neither, which is exactly the
+            // empty default a new column gets.
+            static const char* const columns[] = {
+                "ALTER TABLE accounts ADD COLUMN alias TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE accounts ADD COLUMN payment_payee TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE accounts ADD COLUMN bank TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE accounts ADD COLUMN account_number TEXT NOT NULL DEFAULT ''",
+            };
+            for (const char* sql : columns)
+                if (!detail::exec(db, sql, why)) return false;
+        }
+        detail::Statement set(db, "UPDATE schema SET version = ?");
+        if (!set.ok()) { if (why) *why = set.why(); return false; }
+        set.bind(1, kSchemaVersion);
+        if (!set.run()) { if (why) *why = set.why(); return false; }
+        return true;
     }
 
 public:
@@ -386,7 +428,8 @@ public:
             return fail(why);
 
         detail::Statement account(db_.get(),
-            "INSERT INTO accounts (path, type, placeholder, hidden) VALUES (?, ?, ?, ?)");
+            "INSERT INTO accounts (path, type, placeholder, hidden, alias, "
+            "payment_payee, bank, account_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
         if (!account.ok()) return fail(account.why());
         for (const chart::Account& a : accounts.all()) {
             account.reset();
@@ -394,6 +437,10 @@ public:
             account.bind(2, types::to_string(a.type));
             account.bind(3, a.placeholder ? 1 : 0);
             account.bind(4, a.hidden ? 1 : 0);
+            account.bind(5, a.alias);
+            account.bind(6, a.payment_payee);
+            account.bind(7, a.bank);
+            account.bind(8, a.account_number);
             if (!account.run()) return fail(account.why());
         }
 
@@ -481,7 +528,8 @@ public:
         transactions->clear();
 
         detail::Statement account(db_.get(),
-            "SELECT path, type, placeholder, hidden FROM accounts ORDER BY path");
+            "SELECT path, type, placeholder, hidden, alias, payment_payee, "
+            "bank, account_number FROM accounts ORDER BY path");
         if (!account.ok()) return {true, account.why()};
         while (account.step_row()) {
             chart::Account a;
@@ -489,6 +537,10 @@ public:
             a.type = types::account_type_from_string(account.text(1));
             a.placeholder = account.integer(2) != 0;
             a.hidden = account.integer(3) != 0;
+            a.alias = account.text(4);
+            a.payment_payee = account.text(5);
+            a.bank = account.text(6);
+            a.account_number = account.text(7);
             accounts->put(a);
         }
 

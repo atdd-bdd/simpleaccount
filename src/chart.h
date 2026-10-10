@@ -24,6 +24,13 @@ struct Account {
     // It is how a payment on one side finds the account on the other without
     // searching every account in the book. Several accounts may share one.
     std::string payment_payee;
+    // What is kept about the account itself, from its own dialog: which
+    // institution it is at, and the number on the statement. The number is
+    // kept exactly as written -- dashes, spaces, a leading zero -- because it
+    // is a label and not an amount. See the account-settings section of
+    // Accounts.spectable.
+    std::string bank;
+    std::string account_number;
 };
 
 // Why an operation was refused. The text is what the register shows, so it names

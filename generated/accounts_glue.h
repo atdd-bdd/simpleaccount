@@ -6,10 +6,15 @@
 #include "common/common.h"
 #include "account_type.h"
 #include "chart.h"
+#include "transaction_edit.h"
 #include "date.h"
 #include "ledger.h"
 #include "money.h"
+#include "store_sqlite.h"
 #include "text_types.h"
+#include <cctype>
+#include <filesystem>
+#include <system_error>
 
 // Glue for Accounts.spectable.
 //
@@ -267,6 +272,16 @@ private:
         return (s == "none" || s == DNCString) ? std::string() : s;
     }
 
+    static std::string trimmed(const std::string& s) {
+        std::size_t start = 0;
+        while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) ++start;
+        std::size_t end = s.size();
+        while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1]))) --end;
+        return s.substr(start, end - start);
+    }
+
+    std::string opened_;
+
     chart::Chart chart_;
     ledger::Ledger ledger_;
     chart::Rejection rejection_;
@@ -306,13 +321,21 @@ public:
 public:
 
     void when_account_moved_under(const std::vector<AccountMoveString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_account_moved_under";
+        for (const auto& value : values) {
+            const std::string to = value.newparent + ":" + types::name_of(
+                types::AccountPath(value.path));
+            // The ledger first, while "from" still names the account it is
+            // moving postings away from; chart_.move() then does the same
+            // move on the chart side. Two structures, one change.
+            ledger_ = edit::move_postings(ledger_, value.path, to);
+            const chart::Rejection no =
+                chart_.move(types::AccountPath(value.path), types::AccountPath(value.newparent));
+            EXPECT_FALSE(no.refused) << no.reason;
+        }
     }
 
     void then_the_chart_of_accounts_is(const std::vector<AccountString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_the_chart_of_accounts_is";
+        expect_present(values);
     }
 
     void when_category_typed(const std::vector<CategorySearchString>& values) {
@@ -342,23 +365,60 @@ public:
 
 public:
 
+    // Opening the dialog does not need a Qt dialog to test: the account it was
+    // opened on is all there is to remember, and the Then reads straight off
+    // chart_ either way.
     void when_account_settings_opened(const std::vector<AccountSelectString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_account_settings_opened";
+        ASSERT_FALSE(values.empty());
+        opened_ = values.front().path;
     }
 
     void then_account_settings_are(const std::vector<AccountSettingsString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_account_settings_are";
+        for (const auto& value : values) {
+            const chart::Account* a = chart_.find(value.path);
+            ASSERT_NE(nullptr, a) << "no account " << value.path;
+            EXPECT_EQ(blank(value.bank), a->bank) << value.path << " bank";
+            EXPECT_EQ(blank(value.accountnumber), a->account_number)
+                << value.path << " account number";
+        }
     }
 
+    // A number on a statement is a label, kept exactly as typed; only the
+    // blanks at either end are not part of it. See the account-number rule.
     void when_account_settings_changed(const std::vector<AccountSettingsString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_account_settings_changed";
+        for (const auto& value : values) {
+            const chart::Account* existing = chart_.find(value.path);
+            ASSERT_NE(nullptr, existing) << "no account " << value.path;
+            chart::Account a = *existing;
+            a.bank = blank(value.bank);
+            a.account_number = trimmed(blank(value.accountnumber));
+            chart_.put(a);
+        }
     }
 
+    // Writes the chart to a book of its own and reads it straight back,
+    // replacing chart_ -- the same round trip the window makes when it saves
+    // and the next launch opens the book again. A fixed name, cleared first,
+    // so the file from a previous run of this test is never what is read.
     void when_the_book_is_reopened() {
-        ADD_FAILURE() << "Not implemented: when_the_book_is_reopened";
+        static const char* const kName = "AccountSettingsRoundTrip";
+        const std::string path = store::path_for(kName);
+        std::error_code ignored;
+        std::filesystem::remove(path, ignored);
+
+        store::Book made;
+        const store::Failure no_create = store::Book::create(path, kName, &made);
+        ASSERT_FALSE(no_create.refused) << no_create.reason;
+        const store::Failure no_write = made.write(chart_, {});
+        ASSERT_FALSE(no_write.refused) << no_write.reason;
+
+        store::Book reopened;
+        const store::Failure no_open = store::Book::open_named(kName, &reopened);
+        ASSERT_FALSE(no_open.refused) << no_open.reason;
+        ledger::Ledger book;
+        std::vector<ledger::Transaction> transactions;
+        const store::Failure no_read = reopened.read(&chart_, &book, &transactions);
+        ASSERT_FALSE(no_read.refused) << no_read.reason;
     }
 
 };
