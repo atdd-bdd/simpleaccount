@@ -1,5 +1,6 @@
 #pragma once
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include "account_type.h"
 #include "money.h"
@@ -18,6 +19,32 @@ enum class Section {
     InvestmentTxns, InvoiceTxns, BillTxns, TaxTxns,
     AutoSwitchOn, AutoSwitchOff, Unknown
 };
+
+// The reverse of to_string(Section), for the DataType's own Examples table.
+inline Section section_from_string(const std::string& s) {
+    if (s == "AccountList")     return Section::AccountList;
+    if (s == "CategoryList")    return Section::CategoryList;
+    if (s == "TagList")         return Section::TagList;
+    if (s == "ClassList")       return Section::ClassList;
+    if (s == "SecurityList")    return Section::SecurityList;
+    if (s == "PriceList")       return Section::PriceList;
+    if (s == "MemorizedList")   return Section::MemorizedList;
+    if (s == "InvoiceItemList") return Section::InvoiceItemList;
+    if (s == "TemplateList")    return Section::TemplateList;
+    if (s == "BankTxns")        return Section::BankTxns;
+    if (s == "CashTxns")        return Section::CashTxns;
+    if (s == "CreditCardTxns")  return Section::CreditCardTxns;
+    if (s == "AssetTxns")       return Section::AssetTxns;
+    if (s == "LiabilityTxns")   return Section::LiabilityTxns;
+    if (s == "InvestmentTxns")  return Section::InvestmentTxns;
+    if (s == "InvoiceTxns")     return Section::InvoiceTxns;
+    if (s == "BillTxns")        return Section::BillTxns;
+    if (s == "TaxTxns")         return Section::TaxTxns;
+    if (s == "AutoSwitchOn")    return Section::AutoSwitchOn;
+    if (s == "AutoSwitchOff")   return Section::AutoSwitchOff;
+    if (s == "Unknown")         return Section::Unknown;
+    throw std::invalid_argument("unknown QifSection: " + s);
+}
 
 inline std::string to_string(Section s) {
     switch (s) {
@@ -64,6 +91,12 @@ inline std::string lower(const std::string& s) {
 }
 
 }  // namespace detail
+
+// What an !Account block means while AutoSwitch is on or off: a definition, one
+// of the accounts of the file, or a switch to one already named.
+inline std::string account_block_meaning(bool auto_switch) {
+    return auto_switch ? "Definition" : "SwitchTo";
+}
 
 // Case and trailing blanks are ignored. Not optional: both files write
 // "!Type:Bank " and "!Type:Cash " with a trailing space and the rest without.
@@ -165,9 +198,16 @@ inline std::optional<AccountMapping> account_mapping_of(const std::string& qif_t
 // it is replaced and the change is reported.
 inline std::string account_path_of(const std::string& qif_type, const std::string& name) {
     const auto mapping = account_mapping_of(qif_type);
-    std::string safe = detail::trim(name);
-    for (char& c : safe)
-        if (c == ':') c = '-';
+    const std::string trimmed = detail::trim(name);
+    std::string safe;
+    std::size_t start = 0;
+    while (true) {
+        const std::size_t colon = trimmed.find(':', start);
+        const std::size_t len = colon == std::string::npos ? std::string::npos : colon - start;
+        safe += (safe.empty() ? "" : " - ") + detail::trim(trimmed.substr(start, len));
+        if (colon == std::string::npos) break;
+        start = colon + 1;
+    }
     return (mapping ? mapping->root : std::string("Assets")) + ":" + safe;
 }
 

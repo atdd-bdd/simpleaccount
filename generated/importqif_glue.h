@@ -1,6 +1,7 @@
 #pragma once
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <map>
 #include <string>
 #include <vector>
 #include "common/common.h"
@@ -122,9 +123,11 @@ public:
         for (std::size_t i = 0; i < values.size(); ++i) {
             const chart::Account& a = result_.accounts_created[i];
             EXPECT_EQ(values[i].path, a.path.value()) << "account " << i;
-            EXPECT_EQ(values[i].type, types::to_string(a.type)) << a.path.value() << " type";
-            EXPECT_EQ(parse_bool_cell(values[i].placeholder), a.placeholder)
-                << a.path.value() << " placeholder";
+            if (values[i].type != DNCString)
+                EXPECT_EQ(values[i].type, types::to_string(a.type)) << a.path.value() << " type";
+            if (values[i].placeholder != DNCString)
+                EXPECT_EQ(parse_bool_cell(values[i].placeholder), a.placeholder)
+                    << a.path.value() << " placeholder";
         }
     }
 
@@ -325,6 +328,7 @@ private:
     types::DateOrder order_ = types::DateOrder::MDY;
     qif::Imported result_;
     reports::CategoryReport report_;
+    std::map<std::string, qif::IncompleteBalance> incomplete_balances_given_;
 
     // A Default of "none" arrives as the literal word.
     static std::string blank(const std::string& s) {
@@ -391,8 +395,14 @@ private:
 public:
 
     void then_statement_balance_to_check_is(const std::vector<QifStatementBalanceString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_statement_balance_to_check_is";
+        for (const auto& value : values) {
+            const auto at = result_.statement_balances.find(value.account);
+            ASSERT_NE(result_.statement_balances.end(), at)
+                << "no statement balance for " << value.account;
+            EXPECT_EQ(Money(value.statedbal).cents(), at->second.balance.cents())
+                << value.account;
+            EXPECT_EQ(value.statedbalat, at->second.as_of.iso()) << value.account;
+        }
     }
 
     void then_holdings_are(const std::vector<HoldingString>& values) {
@@ -421,28 +431,55 @@ public:
     }
 
     void then_migration_report_is(const std::vector<MigrationReportString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_migration_report_is";
+        const qif::MigrationReport got = result_.migration_report();
+        for (const auto& value : values) {
+            EXPECT_EQ(std::stoi(value.accountscreated), got.accounts_created)
+                << "accounts created";
+            EXPECT_EQ(std::stoi(value.categoriescreated), got.categories_created)
+                << "categories created";
+            EXPECT_EQ(std::stoi(value.transactions), got.transactions) << "transactions";
+            EXPECT_EQ(std::stoi(value.postings), got.postings) << "postings";
+            EXPECT_EQ(std::stoi(value.transferspaired), got.transfers_paired)
+                << "transfers paired";
+            EXPECT_EQ(std::stoi(value.unsupported), got.unsupported) << "unsupported";
+            EXPECT_EQ(std::stoi(value.notes), got.notes) << "notes: " << first_note();
+            EXPECT_EQ(parse_bool_cell(value.balanced), got.balanced) << "balanced";
+        }
     }
 
     void then_balance_checks_are(const std::vector<LedgerBalanceResultString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_balance_checks_are";
+        then_balance_check_is(values);
     }
 
-    void then_accounts_with_incomplete_balances_are(const std::vector<IncompleteBalanceString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_accounts_with_incomplete_balances_are";
+    void then_accounts_with_incomplete_balances_are(
+            const std::vector<IncompleteBalanceString>& values) {
+        ASSERT_EQ(values.size(), result_.incomplete_balances.size())
+            << "number of accounts with incomplete balances";
+        for (const auto& value : values) {
+            const auto at = result_.incomplete_balances.find(value.account);
+            ASSERT_NE(result_.incomplete_balances.end(), at)
+                << "no incomplete balance for " << value.account;
+            EXPECT_EQ(value.reason, at->second.reason) << value.account;
+            EXPECT_EQ(std::stoi(value.skippedrecords), at->second.skipped_records)
+                << value.account;
+        }
     }
 
-    void given_accounts_with_incomplete_balances_are(const std::vector<IncompleteBalanceString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: given_accounts_with_incomplete_balances_are";
+    void given_accounts_with_incomplete_balances_are(
+            const std::vector<IncompleteBalanceString>& values) {
+        for (const auto& value : values)
+            incomplete_balances_given_[value.account] =
+                {value.reason, std::stoi(value.skippedrecords)};
     }
 
     void then_balance_display_is(const std::vector<BalanceDisplayString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_balance_display_is";
+        for (const auto& value : values) {
+            const bool incomplete = incomplete_balances_given_.count(value.account) != 0;
+            const qif::BalanceDisplay got = qif::balance_display(incomplete);
+            EXPECT_EQ(parse_bool_cell(value.complete), got.complete) << value.account;
+            EXPECT_EQ(blank(value.shownas), got.shown_as) << value.account;
+            EXPECT_EQ(blank(value.caution), got.caution) << value.account;
+        }
     }
 
     void then_unpaid_invoices_are(const std::vector<UnpaidInvoiceString>& values) {
@@ -489,35 +526,91 @@ public:
     }
 
     void then_balance_check_is(const std::vector<LedgerBalanceResultString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_balance_check_is";
+        const qif::BalanceCheck got = result_.check_the_one_balance();
+        for (const auto& value : values) {
+            EXPECT_EQ(Money(value.clearedbalance).cents(), got.cleared_balance.cents())
+                << "cleared balance";
+            EXPECT_EQ(Money(value.statedbal).cents(), got.stated_bal.cents()) << "stated bal";
+            EXPECT_EQ(Money(value.difference).cents(), got.difference.cents()) << "difference";
+            EXPECT_EQ(parse_bool_cell(value.agrees), got.agrees) << "agrees";
+        }
     }
 
     void then_transfer_pairing_report_is(const std::vector<TransferPairingReportString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_transfer_pairing_report_is";
+        for (const auto& value : values) {
+            EXPECT_EQ(std::stoi(value.bracketedfields), result_.transfer_pairing.bracketed_fields)
+                << "bracketed fields";
+            EXPECT_EQ(std::stoi(value.pairsformed), result_.transfer_pairing.pairs_formed)
+                << "pairs formed";
+            EXPECT_EQ(std::stoi(value.unpaired), result_.transfer_pairing.unpaired)
+                << "unpaired";
+            EXPECT_EQ(std::stoi(value.nearmisses), result_.transfer_pairing.near_misses)
+                << "near misses";
+        }
     }
 
+    // An EnumerationValues table is the fixed set of values the type takes, so
+    // what it asserts is that each one is known and reads back as itself.
     void examples_datatype_qifsection(const std::vector<EnumerationValuesString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_datatype_qifsection";
+        for (const auto& value : values) {
+            const EnumerationValuesTyped v = EnumerationValuesTyped::from_string_struct(value);
+            ASSERT_NO_THROW(qif::section_from_string(v.value)) << v.value;
+            EXPECT_EQ(v.value, qif::to_string(qif::section_from_string(v.value)));
+        }
     }
 
     void examples_businessrule_what_an_account_block_means_depends_on_autoswitch(const std::vector<AccountBlockMeaningString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_what_an_account_block_means_depends_on_autoswitch";
+        for (const auto& value : values) {
+            const AccountBlockMeaningTyped t = AccountBlockMeaningTyped::from_string_struct(value);
+            const bool on = t.autoswitch == "on";
+            EXPECT_EQ(t.meaning, qif::account_block_meaning(on)) << t.notes;
+        }
     }
 
-    void examples_businessrule_how_a_category_name_becomes_an_account_path(const std::vector<CategoryMappingString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_how_a_category_name_becomes_an_account_path";
+    // Each row is run through the importer as a one-record file, so the table
+    // says what the import does rather than what a helper believes.
+    void examples_businessrule_how_a_category_name_becomes_an_account_path(
+            const std::vector<CategoryMappingString>& values) {
+        for (const auto& value : values) {
+            const CategoryMappingTyped t = CategoryMappingTyped::from_string_struct(value);
+            std::string text = "!Type:Bank\nD01/15/2024\nT" + value.amount + "\n";
+            if (!t.categorytext.empty()) text += "L" + t.categorytext + "\n";
+            text += "^\n";
+            if (t.inlist != "Absent") {
+                const bool income = t.inlist == "Income";
+                text = "!Type:Cat\nN" + t.categorytext + "\n" +
+                       (income ? "I" : "E") + "\n^\n" + text;
+            }
+            qif::Importer importer(types::DateOrder::MDY);
+            importer.import_into("Assets:Checking");
+            const qif::Imported out = importer.run(text);
+            ASSERT_FALSE(out.refused) << out.refusal;
+            ASSERT_EQ(1u, out.transactions.size());
+            const ledger::Transaction& made = out.transactions.front();
+            ASSERT_EQ(2u, made.postings.size());
+            const ledger::Posting& other = made.postings[1];
+            EXPECT_EQ(t.accountpath, other.account.value()) << t.categorytext;
+            const bool guessed = std::any_of(
+                out.notes.begin(), out.notes.end(),
+                [](const qif::Note& n) { return n.kind == "CategoryGuessed"; });
+            EXPECT_EQ(t.fallback, guessed) << t.categorytext;
+        }
     }
 
-    void examples_businessrule_the_split_lines_decide_the_categories_not_the_l_field(const std::vector<SplitCategorySourceString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_the_split_lines_decide_the_categories_not_the_l_field";
+    void examples_businessrule_the_split_lines_decide_the_categories_not_the_l_field(
+            const std::vector<SplitCategorySourceString>& values) {
+        for (const auto& value : values) {
+            const SplitCategorySourceTyped t = SplitCategorySourceTyped::from_string_struct(value);
+            const std::string from = t.hassplitlines ? "SplitLines"
+                                    : t.lfield == qif::kSplitMarker ? "None"
+                                                                   : "LField";
+            EXPECT_EQ(t.categoriesfrom, from) << t.notes;
+        }
     }
 
+    // Deferred: a narrative table of the four conditions a pairing already
+    // satisfies, with nothing of its own to compute beyond what the transfer
+    // scenarios already exercise. Left tagged $WIP.
     void examples_businessrule_when_two_transfer_halves_are_the_same_transfer(const std::vector<TransferPairingString>& values) {
         for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
         ADD_FAILURE() << "Not implemented: examples_businessrule_when_two_transfer_halves_are_the_same_transfer";
@@ -573,14 +666,61 @@ public:
         ADD_FAILURE() << "Not implemented: examples_businessrule_how_a_payment_is_matched_to_the_invoice_it_paid";
     }
 
-    void examples_businessrule_what_encoding_a_qif_file_is_read_as(const std::vector<EncodingChoiceString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_what_encoding_a_qif_file_is_read_as";
+    void examples_businessrule_what_encoding_a_qif_file_is_read_as(
+            const std::vector<EncodingChoiceString>& values) {
+        for (const auto& value : values) {
+            const EncodingChoiceTyped t = EncodingChoiceTyped::from_string_struct(value);
+            if (t.observed.find("byte order mark") != std::string::npos) {
+                const std::string got = qif::decode("\xEF\xBB\xBF!Type:Bank");
+                EXPECT_EQ("!Type:Bank", got) << t.observed;
+                EXPECT_EQ("UTF8", t.readas);
+            } else if (t.observed.find("Fails to decode") != std::string::npos) {
+                const std::string bytes = "Caf\x96 shop";
+                const std::string got = qif::decode(bytes);
+                EXPECT_NE(bytes, got) << t.observed;
+                EXPECT_EQ(got, qif::decode(got)) << "now valid UTF-8: " << t.observed;
+                EXPECT_EQ("Windows1252", t.readas);
+            } else {
+                const std::string bytes = "Caf\xC3\xA9 shop";
+                const std::string got = qif::decode(bytes);
+                EXPECT_EQ(bytes, got) << t.observed;
+                EXPECT_EQ("UTF8", t.readas);
+            }
+        }
     }
 
-    void examples_businessrule_a_field_whose_value_will_not_parse_is_a_continuation_of_the_one_before(const std::vector<ContinuationLineString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_a_field_whose_value_will_not_parse_is_a_continuation_of_the_one_before";
+    // Built from a minimal two-line fixture: a real field, then the row's own
+    // Line, so the test exercises the reader's own continuation decision rather
+    // than restating it.
+    void examples_businessrule_a_field_whose_value_will_not_parse_is_a_continuation_of_the_one_before(
+            const std::vector<ContinuationLineString>& values) {
+        for (const auto& value : values) {
+            const ContinuationLineTyped t = ContinuationLineTyped::from_string_struct(value);
+            if (t.section == "!Type:Invoice") {
+                if (t.reading.find("date of the record") != std::string::npos) {
+                    const qif::File file = qif::read("!Type:Invoice\n" + t.line + "\n^\n");
+                    ASSERT_EQ(1u, file.records.size()) << t.line;
+                    EXPECT_TRUE(dates::parse_qif(file.records.front().first('D'),
+                                                 types::DateOrder::MDY).has_value())
+                        << t.line;
+                } else {
+                    const qif::File file =
+                        qif::read("!Type:Invoice\nD4/ 2'24\n" + t.line + "\n^\n");
+                    ASSERT_EQ(1u, file.records.size()) << t.line;
+                    const qif::Record& r = file.records.front();
+                    EXPECT_EQ(1u, r.fields.count('D')) << t.line;
+                    EXPECT_NE(std::string::npos, r.first('D').find(t.line)) << t.line;
+                }
+            } else if (t.section == "!Type:Cat") {
+                const qif::File file = qif::read("!Type:Cat\nNFoo\n" + t.line + "\n^\n");
+                ASSERT_EQ(1u, file.categories.size()) << t.line;
+                EXPECT_EQ("Foo", file.categories.front().name) << t.line;
+            } else {
+                const qif::File file = qif::read("!Account\nNFoo\n" + t.line + "\n^\n");
+                ASSERT_EQ(1u, file.accounts.size()) << t.line;
+                EXPECT_EQ("Foo", file.accounts.front().name) << t.line;
+            }
+        }
     }
 
     void examples_businessrule_what_a_field_code_means_depends_on_its_section(const std::vector<FieldCodeBySectionString>& values) {

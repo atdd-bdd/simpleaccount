@@ -56,6 +56,65 @@ struct Summary {
     int possible = 0;
 };
 
+// The statement balance an !Account block carries, and the date it was taken
+// at. Not an opening balance: the figure to check the import against.
+struct StatementBalance {
+    Money balance;
+    types::Date as_of;
+};
+
+// How much of an account's balance this round did not import, because its
+// securities side was skipped.
+struct IncompleteBalance {
+    std::string reason;
+    int skipped_records = 0;
+};
+
+struct TransferPairingReport {
+    int bracketed_fields = 0;
+    int pairs_formed = 0;
+    int unpaired = 0;
+    int near_misses = 0;
+};
+
+struct MigrationReport {
+    int accounts_created = 0;
+    int categories_created = 0;
+    int transactions = 0;
+    int postings = 0;
+    int transfers_paired = 0;
+    int unsupported = 0;
+    int notes = 0;
+    bool balanced = false;
+};
+
+struct BalanceCheck {
+    Money cleared_balance;
+    Money stated_bal;
+    Money difference;
+    bool agrees = false;
+    bool has_stated = false;
+};
+
+// How an incomplete balance is offered to a reader: never as a figure that
+// looks like a valuation, because the securities side behind it was not
+// imported this round.
+struct BalanceDisplay {
+    bool complete = true;
+    std::string shown_as;
+    std::string caution;
+};
+
+inline BalanceDisplay balance_display(bool incomplete) {
+    BalanceDisplay d;
+    if (incomplete) {
+        d.complete = false;
+        d.shown_as = "Transfers only";
+        d.caution = "Securities not imported; not a market value";
+    }
+    return d;
+}
+
 struct Imported {
     chart::Chart accounts;
     ledger::Ledger book;
@@ -66,6 +125,9 @@ struct Imported {
     std::vector<UncollectedInvoice> uncollected;
     Summary summary;
     std::map<std::string, Money> credit_limits;
+    std::map<std::string, StatementBalance> statement_balances;
+    std::map<std::string, IncompleteBalance> incomplete_balances;
+    TransferPairingReport transfer_pairing;
     bool refused = false;
     std::string refusal;
 
@@ -73,6 +135,50 @@ struct Imported {
     // made. A transaction is identified by its index, written T1, T2 and so on,
     // which is how the specification's tables refer to them.
     std::vector<ledger::Transaction> transactions;
+
+    // The balance an account's statement carries, checked against what the
+    // postings add up to as at that date. Empty where there is nothing to
+    // check: a migration of a file with no account block carries no balance.
+    BalanceCheck check_balance(const std::string& account) const {
+        BalanceCheck out;
+        const auto at = statement_balances.find(account);
+        if (at == statement_balances.end()) return out;
+        out.has_stated = true;
+        out.stated_bal = at->second.balance;
+        out.cleared_balance = book.balance_as_at(account, at->second.as_of);
+        out.difference = out.cleared_balance - out.stated_bal;
+        out.agrees = out.difference.cents() == 0;
+        return out;
+    }
+
+    // Where there is exactly one statement balance to check, which is the only
+    // case these tables are written for.
+    BalanceCheck check_the_one_balance() const {
+        if (statement_balances.size() != 1) return BalanceCheck();
+        return check_balance(statement_balances.begin()->first);
+    }
+
+    MigrationReport migration_report() const {
+        MigrationReport out;
+        for (const chart::Account& a : accounts_created) {
+            const bool category = a.type == types::AccountType::Income ||
+                                  a.type == types::AccountType::Expense;
+            if (category) ++out.categories_created;
+            else if (!a.placeholder) ++out.accounts_created;
+        }
+        out.transactions = static_cast<int>(transactions.size());
+        for (const ledger::Transaction& t : transactions)
+            out.postings += static_cast<int>(t.postings.size());
+        out.transfers_paired = summary.duplicate;
+        out.notes = static_cast<int>(notes.size());
+        out.balanced = true;
+        for (const ledger::Transaction& t : transactions) {
+            std::vector<Money> amounts;
+            for (const ledger::Posting& p : t.postings) amounts.push_back(p.amount);
+            if (!ledger::balances(amounts)) { out.balanced = false; break; }
+        }
+        return out;
+    }
 };
 
 
@@ -105,9 +211,26 @@ public:
         if (result_.refused) return result_;
         build_transactions();
         report_guessed_categories();
-        if (skipped_securities_ > 0)
-            note("SecuritiesSkipped", std::to_string(skipped_securities_) +
-                 " investment records not imported this round");
+        result_.transfer_pairing.bracketed_fields = bracketed_fields_;
+        result_.transfer_pairing.pairs_formed = result_.summary.duplicate;
+        for (const Note& n : result_.notes) {
+            if (n.kind == "UnpairedTransfer") ++result_.transfer_pairing.unpaired;
+            if (n.kind == "NearTransfer") ++result_.transfer_pairing.near_misses;
+        }
+        for (const auto& entry : skipped_by_account_) {
+            result_.incomplete_balances[entry.first] =
+                {"The securities side is not imported this round", entry.second};
+            note("SecuritiesSkipped", std::to_string(entry.second) +
+                 " investment records not imported this round; " + entry.first +
+                 " holds an incomplete balance");
+        }
+        if (any_account_block_ && result_.statement_balances.empty())
+            note("NoStatedBalance", "No account block carries a statement balance; "
+                                    "the import was not checked against one");
+        if (tags_kept_ > 0)
+            note("TagsKept", std::to_string(tags_kept_) + " class" +
+                             (tags_kept_ == 1 ? "" : "es") +
+                             " kept as a tag; no report groups by tag in this release");
         if (invoice_records_with_detail_ > 0)
             note("InvoiceDetail",
                  std::to_string(invoice_records_with_detail_) + " invoice record" +
@@ -140,6 +263,7 @@ private:
     // A QIF account name becomes a path under the root its type implies. A colon
     // in the name would split it into two levels, so it is replaced and reported.
     void declare_accounts(const File& file) {
+        any_account_block_ = any_account_block_ || !file.accounts.empty();
         for (const AccountRecord& a : file.accounts) {
             if (a.name.empty()) continue;
             const std::string path = account_path_of(a.qif_type, a.name);
@@ -150,6 +274,10 @@ private:
                 note("NameChanged", "Account \"" + a.name + "\" became \"" +
                                     types::name_of(types::AccountPath(path)) + "\"");
             if (a.credit_limit) result_.credit_limits[path] = *a.credit_limit;
+            if (a.stated_balance) {
+                const auto as_of = dates::parse_qif(a.stated_balance_date_text, order_);
+                if (as_of) result_.statement_balances[path] = {*a.stated_balance, *as_of};
+            }
         }
     }
 
@@ -179,6 +307,7 @@ private:
                 const std::string l = r.first('L');
                 if (detail::trim(l).empty()) {
                     ++skipped_securities_;
+                    ++skipped_by_account_[path_for_qif_account(r.account)];
                     continue;
                 }
             }
@@ -254,8 +383,10 @@ private:
             result_.records.push_back(out);
             raw_.push_back(r);
             const std::string l = has_split_lines(r) ? std::string() : r.first('L');
-            if (is_transfer_category(l))
+            if (is_transfer_category(l)) {
                 bracketed_by_account_[out.account].push_back(result_.records.size() - 1);
+                ++bracketed_fields_;
+            }
         }
     }
 
@@ -369,7 +500,12 @@ private:
             }
 
             // Splits, or a single category, or neither.
-            std::vector<ledger::Posting> postings{posting(rec, rec.account, rec.amount)};
+            ledger::Posting own_posting;
+            own_posting.account = types::AccountPath(real_posting_account(rec.account));
+            own_posting.amount = rec.amount;
+            own_posting.memo = rec.memo;
+            own_posting.cleared = cleared_of(rec.cleared_text);
+            std::vector<ledger::Posting> postings{own_posting};
             if (has_split_lines(raw)) {
                 const std::vector<std::string>& cats = raw.all('S');
                 const std::vector<std::string>& amounts = raw.all('$');
@@ -401,9 +537,18 @@ private:
                 postings.push_back(
                     posting(rec, side_account(rec.category_text, other_side), other_side));
             }
-            commit(postings, rec);
+            commit(postings, rec, tag_of(rec.category_text));
             used[i] = true;
         }
+    }
+
+    // The /Class suffix Quicken appends to a category, kept as a tag because
+    // reporting by class is not in this release and discarding it during a
+    // migration that runs once would lose it for good.
+    static std::string tag_of(const std::string& category_text) {
+        const std::string text = detail::trim(category_text);
+        const auto slash = text.find('/');
+        return slash == std::string::npos ? std::string() : text.substr(slash + 1);
     }
 
 
@@ -585,6 +730,16 @@ private:
                                        : std::string();
     }
 
+    // A posting cannot go to a placeholder. An investment account that is a
+    // placeholder holds its cash in a Cash child created for it; a record whose
+    // target is such a placeholder posts there instead.
+    std::string real_posting_account(const std::string& path) const {
+        const chart::Account* a = result_.accounts.find(path);
+        if (!a || !a->placeholder) return path;
+        const std::string cash = path + ":Cash";
+        return result_.accounts.has(cash) ? cash : path;
+    }
+
     // The side the other posting goes to: a category where there is one, and
     // otherwise Uncategorized chosen by the sign of that posting.
     std::string side_account(const std::string& category_text, const Money& amount) {
@@ -621,11 +776,13 @@ private:
     // The root comes from the category list where the name is declared, and from
     // the sign of the amount where it is not -- and every use of that fallback is
     // reported, because an undeclared category is worth looking at once.
-    // Whether anything other than the sign of a posting places this category.
+    //
+    // Declared in the category list only: an account created by an earlier
+    // guess at this same name is not evidence that this one was not guessed
+    // too, or a second use of the fallback for one category would read as if
+    // it only happened once.
     bool category_known(const std::string& name) const {
-        return category_kind_.count(name) != 0 ||
-               result_.accounts.has("Expenses:" + name) ||
-               result_.accounts.has("Income:" + name);
+        return category_kind_.count(name) != 0;
     }
 
     std::string category_path(const std::string& name, const Money& amount) const {
@@ -671,6 +828,7 @@ private:
         ledger::Posting p;
         p.account = types::AccountPath(account);
         p.amount = amount;
+        p.memo = rec.memo;
         // The cleared marker belongs to the account whose section the record is
         // in; the other side of the transaction is left uncleared.
         p.cleared = account == rec.account ? cleared_of(rec.cleared_text)
@@ -678,7 +836,8 @@ private:
         return p;
     }
 
-    void commit(const std::vector<ledger::Posting>& postings, const ReadRecord& from) {
+    void commit(const std::vector<ledger::Posting>& postings, const ReadRecord& from,
+                const std::string& tag = {}) {
         ledger::Transaction t;
         t.id = ledger::new_id();
         t.ref = types::TransactionRef("T" + std::to_string(result_.transactions.size() + 1));
@@ -686,7 +845,9 @@ private:
         t.payee = types::PayeeName(from.payee);
         t.check_no = types::CheckNumber(from.check_no);
         t.memo = from.memo;
+        t.tag = tag;
         t.postings = postings;
+        if (!tag.empty()) ++tags_kept_;
         result_.transactions.push_back(t);
         ++result_.summary.created;
         for (const ledger::Posting& p : postings) {
@@ -722,6 +883,10 @@ private:
     int dropped_address_lines_ = 0;
 
     int skipped_securities_ = 0;
+    std::map<std::string, int> skipped_by_account_;
+    bool any_account_block_ = false;
+    int bracketed_fields_ = 0;
+    int tags_kept_ = 0;
 };
 
 }  // namespace qif

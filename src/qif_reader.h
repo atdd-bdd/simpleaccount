@@ -46,6 +46,10 @@ struct AccountRecord {
     std::string qif_type;
     std::string description;
     std::optional<Money> credit_limit;
+    // The balance the account block states, and the date it was taken at --
+    // not an opening balance, but the figure to check the import against.
+    std::optional<Money> stated_balance;
+    std::string stated_balance_date_text;
 };
 
 // A category as the category list declares it, with the flag that says which
@@ -139,6 +143,14 @@ inline File read(const std::string& text, const std::string& default_account = {
                 if (limit != fields.end() && !limit->second.empty()) {
                     const auto m = parse_amount(limit->second.front(), false);
                     if (m) a.credit_limit = *m;
+                }
+                const auto bal_date = fields.find('/');
+                const auto bal = fields.find('$');
+                if (bal_date != fields.end() && !bal_date->second.empty())
+                    a.stated_balance_date_text = bal_date->second.front();
+                if (bal != fields.end() && !bal->second.empty()) {
+                    const auto m = parse_amount(bal->second.front(), false);
+                    if (m) a.stated_balance = *m;
                 }
                 if (auto_switch) file.accounts.push_back(a);
                 // With AutoSwitch off the block is a change of account, and the
