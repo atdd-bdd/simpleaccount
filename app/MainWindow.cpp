@@ -1778,10 +1778,11 @@ void MainWindow::tabClosed(int index) {
 
 void MainWindow::tabChanged(int index) {
     if (refreshing_ || index < 0) return;
-    const std::vector<ui::TabRow> rows = workspace_->open_tabs();
-    if (static_cast<std::size_t>(index) >= rows.size()) return;
-    const ui::TabRow& row = rows[static_cast<std::size_t>(index)];
-    if (row.kind == ui::TabKind::Register) workspace_->select(row.account);
+    // A click on the tab bar names a position, not an account -- select_tab
+    // is the step that matches that, for either kind of tab. Without it,
+    // clicking back to a report that had lost focus did nothing, and the next
+    // redraw snapped the bar back to whichever register was last read.
+    workspace_->select_tab(index + 1);
     refresh();
 }
 

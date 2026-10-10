@@ -547,4 +547,10 @@ public:
         ADD_FAILURE() << "Not implemented: then_deletion_count_is";
     }
 
+public:
+
+    void when_tab_selected(const std::vector<TabSelectString>& values) {
+        for (const auto& value : values) workspace().select_tab(std::stoi(value.position));
+    }
+
 };

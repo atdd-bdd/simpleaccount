@@ -292,6 +292,17 @@ public:
         active_tab_ = tabs_.size() - 1;
     }
 
+    // Makes the tab at this position active, whatever kind it is. This is the
+    // step a click on the tab bar itself produces: it names a position, not an
+    // account, because a click on a report tab has no account to name.
+    // select() above is a different thing -- it is how a tab gets opened from
+    // the account tree in the first place, and finds its way to an existing
+    // one by what is on it rather than where it sits.
+    void select_tab(int position_one_based) {
+        const std::size_t index = static_cast<std::size_t>(position_one_based - 1);
+        if (index < tabs_.size()) active_tab_ = index;
+    }
+
     // Closes the tab at this position. The one to its right becomes active
     // if the one closed was active, or the one to its left if it was last --
     // closing a tab always leaves something showing (or nothing, if it was

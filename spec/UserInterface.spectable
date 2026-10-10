@@ -493,6 +493,35 @@ Then open tabs are : OpenTab
 # The second carries a 2 so the two can be told apart on a narrow tab. Which
 # period each one is over is on the controls inside it, where there is room.
 
+Scenario Clicking an open tab makes it active, whatever kind it is
+Description A tab bar is clicked by position, not by what is on the tab, so
+Description this is the step a click actually produces -- unlike selecting an
+Description account, which is also how a tab gets opened in the first place.
+Description Without it, clicking back to a report that lost focus has nothing
+Description to tell the workspace, and the next redraw puts the register back.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-01-01 |
+| To       | 2026-12-31 |
+| Interval | Whole      |
+When tab selected : TabSelect Vertical
+| Position | 1 |
+Then open tabs are : OpenTab
+| Position | Kind     | Account         | Name                  | Active |
+| 1        | Register | Assets:Checking | Checking              | true   |
+| 2        | Report   | none            | Spending by category  | false  |
+When tab selected : TabSelect Vertical
+| Position | 2 |
+Then open tabs are : OpenTab
+| Position | Kind     | Account         | Name                  | Active |
+| 1        | Register | Assets:Checking | Checking              | false  |
+| 2        | Report   | none            | Spending by category  | true   |
+
 Scenario Closing the active tab moves to the one beside it
 Description The one to its right, or the one to its left when it was the last,
 Description so that closing a tab always leaves something showing.
