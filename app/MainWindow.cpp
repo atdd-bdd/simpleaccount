@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 
+#include "category_search.h"
 #include "transaction_id.h"
 
 #include <QAction>
@@ -182,29 +183,32 @@ private:
 // It opens on the category the line already has, because most changes are a
 // correction of something close by.
 //
-// The richer search is specified in Accounts -- an alias standing for a
-// category, and one unused for years dropping out of the list. This is the
-// plain form of it until that is built.
+// The matching rule is chart::offered_for_typed: any segment of a path,
+// case-insensitive, bringing its children with it; an alias standing for
+// exactly one category; a category nobody has posted to in two years left
+// out unless it still matches by alias. See the finding-a-category section
+// of Accounts.spectable.
+//
+// What the list shows is not the path. A category reads as its name back to
+// its section with the section as a suffix -- Auto:Fuel (Expense), not
+// Expenses:Auto:Fuel -- and a real account as its own name in brackets. The
+// path is still what the dialog returns; chosen() reads it off the item's
+// data, never off the text on screen.
 class CategoryPick : public QDialog {
 public:
     CategoryPick(QWidget* parent, const chart::Chart& accounts,
-                 const std::string& start)
-        : QDialog(parent) {
+                 const ledger::Ledger& book, const std::string& start)
+        : QDialog(parent), accounts_(accounts), book_(book) {
         setWindowTitle("Choose a category");
         resize(460, 420);
         auto* layout = new QVBoxLayout(this);
 
-        typed_ = new QLineEdit(QString::fromStdString(start));
+        typed_ = new QLineEdit;
         typed_->setPlaceholderText("Type part of a category");
-        typed_->selectAll();
         layout->addWidget(typed_);
 
         list_ = new QListWidget;
         layout->addWidget(list_, 1);
-
-        for (const chart::Account& a : accounts.picker())
-            every_ << QString::fromStdString(a.path.value());
-        every_.sort();
 
         auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok |
                                              QDialogButtonBox::Cancel);
@@ -213,28 +217,22 @@ public:
         connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
         connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
-        const auto filter = [this]() {
-            const QString part = typed_->text().trimmed();
-            list_->clear();
-            for (const QString& one : every_)
-                if (part.isEmpty() || one.contains(part, Qt::CaseInsensitive))
-                    list_->addItem(one);
-            // Whatever was typed, if it names a category exactly, is the
-            // choice; otherwise the chosen line of the list is.
-            for (int i = 0; i < list_->count(); ++i)
-                if (list_->item(i)->text().compare(part, Qt::CaseInsensitive) == 0) {
-                    list_->setCurrentRow(i);
-                    return;
-                }
-            if (list_->count() > 0) list_->setCurrentRow(0);
-        };
-        connect(typed_, &QLineEdit::textChanged, this, filter);
+        connect(typed_, &QLineEdit::textChanged, this, [this]() { filter(); });
         connect(list_, &QListWidget::currentRowChanged, this, [this](int) {
             ok_->setEnabled(list_->currentItem() != nullptr);
         });
         // Double-clicking a line is choosing it.
         connect(list_, &QListWidget::itemDoubleClicked, this, &QDialog::accept);
+
         filter();
+        // Opened on the category the line already has, if it is still
+        // offered -- which is what makes correcting one a matter of a few
+        // keystrokes rather than retyping it.
+        for (int i = 0; i < list_->count(); ++i)
+            if (list_->item(i)->data(Qt::UserRole).toString().toStdString() == start) {
+                list_->setCurrentRow(i);
+                break;
+            }
         ok_->setEnabled(list_->currentItem() != nullptr);
         typed_->setFocus();
     }
@@ -243,13 +241,33 @@ public:
     std::string chosen() const {
         return list_->currentItem() == nullptr
                    ? std::string()
-                   : list_->currentItem()->text().toStdString();
+                   : list_->currentItem()->data(Qt::UserRole).toString().toStdString();
     }
 
 private:
+    void filter() {
+        const std::string typed = typed_->text().trimmed().toStdString();
+        const types::Date today = asDate(QDate::currentDate());
+        std::vector<chart::Account> offered =
+            chart::offered_for_typed(accounts_, book_, typed, false, today);
+        std::sort(offered.begin(), offered.end(),
+                 [](const chart::Account& a, const chart::Account& b) {
+                     return a.path.value() < b.path.value();
+                 });
+        list_->clear();
+        for (const chart::Account& a : offered) {
+            auto* item = new QListWidgetItem(
+                QString::fromStdString(accounts_.displayed(a.path.value())));
+            item->setData(Qt::UserRole, QString::fromStdString(a.path.value()));
+            list_->addItem(item);
+        }
+        if (list_->count() > 0) list_->setCurrentRow(0);
+    }
+
+    const chart::Chart& accounts_;
+    const ledger::Ledger& book_;
     QLineEdit* typed_ = nullptr;
     QListWidget* list_ = nullptr;
-    QStringList every_;
     QPushButton* ok_ = nullptr;
 };
 
@@ -1172,7 +1190,7 @@ MainWindow::TabWidgets MainWindow::makeReportTab(int tabPosition, const std::str
         }
         QAction* change = menu.addAction("Recategorize...");
         connect(change, &QAction::triggered, table, [this, refs, run]() {
-            CategoryPick pick(this, chart_, std::string());
+            CategoryPick pick(this, chart_, book_, std::string());
             if (pick.exec() != QDialog::Accepted) return;
             const std::string into = pick.chosen();
             if (into.empty()) return;
@@ -1434,7 +1452,7 @@ void MainWindow::recategorise(int paneOneBased) {
             start.clear();
     }
 
-    CategoryPick pick(this, chart_, start);
+    CategoryPick pick(this, chart_, book_, start);
     if (pick.exec() != QDialog::Accepted) return;
     const std::string into = pick.chosen();
     if (into.empty()) return;
