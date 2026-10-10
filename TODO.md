@@ -102,7 +102,28 @@ rather than adding, and `MainWindow::acceptImport` would ask `ofx::apply_matches
 It was left out rather than half-done, because a window that silently cleared
 rows nobody ticked would be worse than one that clears nothing.
 
-## 5. CLAUDE.md names a helper this project does not have
+## 5. Redoing a report or a register after one change may be re-reading more than it needs to
+
+Raised by the author, not yet investigated: editing a single transaction
+appears to cost noticeably more than editing one row should, which smells like
+the report or register rebuilding from the full on-disk set rather than from
+whatever is already in memory.
+
+To look at before changing anything: where `MainWindow` currently gets its
+transactions from on a recategorise/edit/delete (`store::Book::read()` again,
+or the in-memory `transactions_` vector it already keeps); whether
+`ui::Workspace`/the report path recomputes from that same vector or re-reads
+the book; and whether the cost is in SQLite I/O, in rebuilding `ledger::Ledger`
+balances from scratch, or in Qt table repopulation.
+
+The author's proposed direction, to weigh once the above is known: keep the
+authoritative in-memory copy (sortable/filterable) that the UI always reads
+and writes, and treat SQLite purely as what that copy is written through to on
+an add or edit, rather than a thing re-read on every change. `MainWindow`
+already holds `transactions_` and `chart_` in memory, so this may be partly in
+place already -- the open question is which paths bypass it.
+
+## 6. CLAUDE.md names a helper this project does not have
 
 CLAUDE.md says a cell holding a leading or trailing blank is wrapped in double
 quotes in the spec and unwrapped by calling `spec_cell::unquote()` in the glue.
