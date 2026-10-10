@@ -1179,7 +1179,6 @@ Description an account under it 1, and a child of that account 2.
 | IsHeading  | Boolean             | false   |
 | IsSubtotal | Boolean             | false   |
 
-$WIP
 DataType BalanceSheetSection
 Description The two sides of a balance sheet.
 Examples: EnumerationValues
@@ -1187,7 +1186,6 @@ Examples: EnumerationValues
 | Assets      | What is owned: Banking, Investments and Assets          |
 | Liabilities | What is owed: CreditCards and Liabilities               |
 
-$WIP
 Scenario A balance sheet as at a date
 Description A house and a mortgage, a card and two bank accounts. The salary
 Description that arrives in March is not on a sheet drawn up in February: a
@@ -1243,7 +1241,6 @@ Then balance sheet total is : NetWorth Vertical
 # heading because there is nothing in that group, and the categories and
 # Equity:Opening Balances are absent -- a balance sheet is the real accounts.
 
-$WIP
 Scenario An account at zero is left out
 Description A wallet that has never been used and a card that has been paid off
 Description are both at zero, and neither earns a line. Twenty years of history
@@ -1281,7 +1278,6 @@ Then balance sheet total is : NetWorth Vertical
 # side of the window still shows all three, because that is how an account is
 # reached; this is a report, and a report is read rather than navigated.
 
-$WIP
 Scenario Asking for zero rows puts the empty accounts back
 Description The same book and date, with ZeroRows asked for, which is the same
 Description flag the category report uses. A card at zero is worth seeing when
@@ -1318,7 +1314,6 @@ Then balance sheet total is : NetWorth Vertical
 | Liabilities | 0.00   |
 | NetWorth    | 950.00 |
 
-$WIP
 Scenario A placeholder carries its subtree, so a brokerage shows its holdings
 Description The ordinary roll-up from Accounts, and it is the whole of what a
 Description balance sheet needs for an investment account: the value of a
@@ -1358,7 +1353,6 @@ Then balance sheet total is : NetWorth Vertical
 # A price that has not been updated makes this figure stale without anything on
 # the page saying so, which is what the staleness rule in Investments is for.
 
-$WIP
 Scenario A transfer account is not on the balance sheet
 Description A transfer account holds money on its way between two accounts
 Description that are both already on the sheet, so counting it would count the
@@ -1396,7 +1390,6 @@ Then balance sheet total is : NetWorth Vertical
 # the page, so net worth is the checking balance alone -- which is right: the
 # money in transit is money the book has already counted once.
 
-$WIP
 Scenario A hidden account with a balance is still on the balance sheet
 Description A hidden account is kept out of the pickers so it stops being
 Description offered, and its money has not gone anywhere. Leaving it out would
@@ -1439,7 +1432,6 @@ Description Net worth taken the other way round, from the nominal accounts.
 | Spent         | Money | 0.00    |
 | NetWorth      | Money | 0.00    |
 
-$WIP
 Scenario Net worth is the opening equity plus what has been earned less spent
 Description The same book and date as the first scenario in this section, read
 Description from the other side. Every transaction balances, so what is owned

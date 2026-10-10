@@ -11,6 +11,7 @@
 #include "ledger.h"
 #include "money.h"
 #include "posting.h"
+#include "balance_sheet.h"
 #include "report.h"
 #include "report_ranges.h"
 #include "text_types.h"
@@ -438,28 +439,70 @@ public:
 public:
 
     void when_balance_sheet_run(const std::vector<ReportSpecString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_balance_sheet_run";
+        ASSERT_FALSE(values.empty());
+        const auto to = types::Date::from_iso(values.front().to);
+        ASSERT_TRUE(to.has_value()) << values.front().to;
+        balance_sheet_as_at_ = *to;
+        balance_sheet_ = reports::balance_sheet(chart_, book_, *to,
+                                                parse_bool_cell(values.front().zerorows));
     }
 
     void then_balance_sheet_rows_are(const std::vector<BalanceSheetRowString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_balance_sheet_rows_are";
+        ASSERT_EQ(values.size(), balance_sheet_.rows.size())
+            << "number of balance sheet rows";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const reports::BalanceSheetRow& got = balance_sheet_.rows[i];
+            const std::string where = "row " + std::to_string(i);
+            EXPECT_EQ(values[i].section, reports::to_string(got.section)) << where << " section";
+            EXPECT_EQ(blank(values[i].group), got.group) << where << " group";
+            EXPECT_EQ(blank(values[i].account), got.account) << where << " account";
+            EXPECT_EQ(std::stoi(values[i].level), got.level) << where << " level";
+            EXPECT_EQ(Money(values[i].balance).cents(), got.balance.cents()) << where << " balance";
+            EXPECT_EQ(parse_bool_cell(values[i].isheading), got.is_heading) << where << " heading";
+            EXPECT_EQ(parse_bool_cell(values[i].issubtotal), got.is_subtotal)
+                << where << " subtotal";
+        }
     }
 
     void then_balance_sheet_total_is(const std::vector<NetWorthString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_balance_sheet_total_is";
+        for (const auto& value : values) {
+            EXPECT_EQ(Money(value.assets).cents(), balance_sheet_.totals.assets.cents())
+                << "assets";
+            EXPECT_EQ(Money(value.liabilities).cents(),
+                      balance_sheet_.totals.liabilities.cents()) << "liabilities";
+            EXPECT_EQ(Money(value.networth).cents(), balance_sheet_.totals.net.cents())
+                << "net worth";
+        }
     }
 
     void then_net_worth_comes_from(const std::vector<NetWorthTieString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_net_worth_comes_from";
+        const reports::NetWorthTie got =
+            reports::net_worth_tie(chart_, book_, balance_sheet_as_at_);
+        for (const auto& value : values) {
+            EXPECT_EQ(Money(value.openingequity).cents(), got.opening_equity.cents())
+                << "opening equity";
+            EXPECT_EQ(Money(value.earned).cents(), got.earned.cents()) << "earned";
+            EXPECT_EQ(Money(value.spent).cents(), got.spent.cents()) << "spent";
+            EXPECT_EQ(Money(value.networth).cents(), got.net_worth.cents()) << "net worth";
+        }
     }
 
     void examples_datatype_balancesheetsection(const std::vector<EnumerationValuesString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_datatype_balancesheetsection";
+        for (const auto& value : values) {
+            const EnumerationValuesTyped v = EnumerationValuesTyped::from_string_struct(value);
+            bool known = false;
+            for (reports::BalanceSheetSection s : {reports::BalanceSheetSection::Assets,
+                                                   reports::BalanceSheetSection::Liabilities})
+                if (reports::to_string(s) == v.value) known = true;
+            EXPECT_TRUE(known) << "unknown balance sheet section: " << v.value;
+        }
     }
 
+private:
+    static std::string blank(const std::string& s) {
+        return (s == "none" || s == DNCString) ? std::string() : s;
+    }
+
+    types::Date balance_sheet_as_at_{2024, 1, 1};
+    reports::BalanceSheet balance_sheet_;
 };
