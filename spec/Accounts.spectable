@@ -235,7 +235,6 @@ Then category picker offers : ChartOfAccounts CompareOnly
 # What identifies an account
 # ---------------------------------------------------------------------------
 
-$WIP
 BusinessRule An account is identified by something that is not its path
 Description The path is a label. It is what people read, what they type and what
 Description every table in this specification names an account by, and it can
@@ -396,7 +395,6 @@ Then account settings are : AccountSettings
 # Finding a category
 # ---------------------------------------------------------------------------
 
-$WIP
 BusinessRule Typing part of a category offers it and everything under it
 Description Categorising a transaction by hand starts with typing. Whatever is
 Description typed is matched against every part of every path, and a category
@@ -431,7 +429,6 @@ Attributes CategoryMatch
 | Offered   | String      |         |
 | Notes     | String      | none    |
 
-$WIP
 Scenario Typing part of a name offers the category and its children
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type    | Placeholder | Hidden |
@@ -459,7 +456,6 @@ Attributes CategoryOffered
 | Attribute | Type        | Default |
 | Path      | AccountPath |         |
 
-$WIP
 Scenario An alias stands for one category however little is typed
 Description A category used weekly should not need its name typed. The alias is
 Description the user's own, a couple of letters after an at sign, and it offers
@@ -477,7 +473,6 @@ Then categories offered are : CategoryOffered
 # Only the one. An alias is a person saying exactly which category they mean,
 # so the children are not brought along as they are for a typed parent.
 
-$WIP
 Scenario A category not used for years is left out while typing
 Description It is still in the book, still has its history, and still appears in
 Description a report that covers the years it was used. It is simply not put in
@@ -502,7 +497,6 @@ Then categories offered are : CategoryOffered
 # Carriage last saw a posting in 2009, so it is not offered. Asking to see
 # everything brings it back.
 
-$WIP
 Scenario Asking for the unused ones brings them back
 Given today is : Today Vertical
 | Date | 2026-10-05 |

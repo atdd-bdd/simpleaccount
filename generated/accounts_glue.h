@@ -7,6 +7,7 @@
 #include "account_type.h"
 #include "chart.h"
 #include "transaction_edit.h"
+#include "category_search.h"
 #include "date.h"
 #include "ledger.h"
 #include "money.h"
@@ -283,6 +284,11 @@ private:
     }
 
     std::string opened_;
+    // Arbitrary until a scenario says otherwise: nothing is offered-while-
+    // typing unless a posting is also given, and that never happens without
+    // "Given today is" alongside it.
+    types::Date today_{2024, 1, 1};
+    std::vector<chart::Account> offered_;
 
     chart::Chart chart_;
     ledger::Ledger ledger_;
@@ -344,29 +350,116 @@ public:
         expect_present(values);
     }
 
+    void given_today_is(const std::vector<TodayString>& values) {
+        ASSERT_FALSE(values.empty());
+        const auto d = types::Date::from_iso(values.front().date);
+        ASSERT_TRUE(d.has_value()) << values.front().date;
+        today_ = *d;
+    }
+
     void when_category_typed(const std::vector<CategorySearchString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_category_typed";
+        ASSERT_FALSE(values.empty());
+        offered_ = chart::offered_for_typed(chart_, ledger_, values.front().typed,
+                                            parse_bool_cell(values.front().includeunused),
+                                            today_);
     }
 
     void then_categories_offered_are(const std::vector<CategoryOfferedString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_categories_offered_are";
+        std::vector<std::string> got;
+        for (const chart::Account& a : offered_) got.push_back(a.path.value());
+        std::sort(got.begin(), got.end());
+        std::vector<std::string> want;
+        for (const auto& value : values) want.push_back(value.path);
+        std::sort(want.begin(), want.end());
+        EXPECT_EQ(want, got);
     }
 
-    void given_today_is(const std::vector<TodayString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: given_today_is";
+    // The identity a path is not is deliberately absent from production code
+    // too (see the Details on this rule), so there is nothing to read it back
+    // from. What is checked instead is the one thing every row promises:
+    // whichever operation ran, the postings already on the account are found
+    // under it afterwards exactly as they were before -- never rewritten,
+    // never lost, whether or not the path itself moved.
+    void examples_businessrule_an_account_is_identified_by_something_that_is_not_its_path(
+            const std::vector<AccountRearrangedString>& values) {
+        for (const auto& value : values) {
+            chart::Chart fixture;
+            fixture.add(types::AccountPath("Expenses"), types::AccountType::Expense);
+            fixture.add(types::AccountPath("Expenses:Auto"), types::AccountType::Expense);
+            fixture.add(types::AccountPath("Expenses:Auto:Fuel"), types::AccountType::Expense);
+            ledger::Ledger before;
+            before.add({types::Date(2024, 1, 1), types::AccountPath("Expenses:Auto:Fuel"),
+                       Money("40.00")});
+            const Money original = before.raw_balance("Expenses:Auto:Fuel");
+
+            std::string moved_to = "Expenses:Auto:Fuel";
+            chart::Rejection no;
+            if (value.whatchanges == "Renaming a category") {
+                no = fixture.rename(types::AccountPath("Expenses:Auto:Fuel"),
+                                    types::AccountName("Petrol"));
+                moved_to = "Expenses:Auto:Petrol";
+            } else if (value.whatchanges == "Moving it under another") {
+                no = fixture.move(types::AccountPath("Expenses:Auto:Fuel"),
+                                  types::AccountPath("Expenses"));
+                moved_to = "Expenses:Fuel";
+            } else if (value.whatchanges == "Hiding it") {
+                no = fixture.hide(types::AccountPath("Expenses:Auto:Fuel"));
+            } else if (value.whatchanges == "Changing its type") {
+                no = fixture.change_type(types::AccountPath("Expenses:Auto:Fuel"),
+                                         types::AccountType::Expense);
+            } else {
+                FAIL() << "unknown change: " << value.whatchanges;
+                continue;
+            }
+            ASSERT_FALSE(no.refused) << value.whatchanges << ": " << no.reason;
+
+            const ledger::Ledger after =
+                edit::move_postings(before, "Expenses:Auto:Fuel", moved_to);
+            EXPECT_EQ(parse_bool_cell(value.thepath), moved_to != "Expenses:Auto:Fuel")
+                << value.whatchanges << " path";
+            EXPECT_EQ(original.cents(), after.raw_balance(moved_to).cents())
+                << value.whatchanges << " postings";
+        }
     }
 
-    void examples_businessrule_an_account_is_identified_by_something_that_is_not_its_path(const std::vector<AccountRearrangedString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_an_account_is_identified_by_something_that_is_not_its_path";
-    }
+    void examples_businessrule_typing_part_of_a_category_offers_it_and_everything_under_it(
+            const std::vector<CategoryMatchString>& values) {
+        chart::Chart fixture;
+        fixture.add(types::AccountPath("Expenses"), types::AccountType::Expense);
+        fixture.add(types::AccountPath("Expenses:Auto"), types::AccountType::Expense);
+        fixture.add(types::AccountPath("Expenses:Auto:Insurance"), types::AccountType::Expense);
+        chart::Account fuel;
+        fuel.path = types::AccountPath("Expenses:Auto:Fuel");
+        fuel.type = types::AccountType::Expense;
+        fuel.alias = "@FU";
+        fixture.put(fuel);
+        const ledger::Ledger empty;
+        static const std::string suffix = ", and every category under it";
 
-    void examples_businessrule_typing_part_of_a_category_offers_it_and_everything_under_it(const std::vector<CategoryMatchString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_typing_part_of_a_category_offers_it_and_everything_under_it";
+        for (const auto& value : values) {
+            const std::vector<chart::Account> got = chart::offered_for_typed(
+                fixture, empty, value.typed, false, types::Date(2026, 10, 5));
+            std::vector<std::string> paths;
+            for (const chart::Account& a : got) paths.push_back(a.path.value());
+            std::sort(paths.begin(), paths.end());
+
+            std::vector<std::string> want;
+            if (value.offered != "Nothing") {
+                if (value.offered.size() > suffix.size() &&
+                    value.offered.compare(value.offered.size() - suffix.size(), suffix.size(),
+                                          suffix) == 0) {
+                    const std::string base =
+                        value.offered.substr(0, value.offered.size() - suffix.size());
+                    for (const chart::Account& a : fixture.all())
+                        if (chart::Chart::is_descendant_or_self(a.path.value(), base))
+                            want.push_back(a.path.value());
+                } else {
+                    want.push_back(value.offered);
+                }
+            }
+            std::sort(want.begin(), want.end());
+            EXPECT_EQ(want, paths) << value.typed << " -- " << value.notes;
+        }
     }
 
 public:
