@@ -79,6 +79,22 @@ inline std::string month_name(int m) {
     return (m >= 1 && m <= 12) ? names[m - 1] : "";
 }
 
+inline std::string month_abbrev(int m) {
+    static const char* const names[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+    return (m >= 1 && m <= 12) ? names[m - 1] : "";
+}
+
+// "1 Jan to 31 Dec 2025", the heading a report carries so that a printed one
+// can be told from another book's. See the book-naming rule in
+// Books.spectable. Both ends are assumed to fall in the one year a single
+// report is almost always run over.
+inline std::string period_label(const Range& r) {
+    return std::to_string(r.from.day()) + " " + month_abbrev(r.from.month()) +
+           " to " + std::to_string(r.to.day()) + " " + month_abbrev(r.to.month()) +
+           " " + std::to_string(r.to.year());
+}
+
 // Splits a range into one column per calendar year it touches, the last one
 // short if the range ends before that year is out. See the year-column
 // section of Reports.spectable.

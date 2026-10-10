@@ -14,7 +14,11 @@
 #include "date.h"
 #include "ledger.h"
 #include "money.h"
+#include "owner_draw.h"
+#include "payee_rules.h"
 #include "posting.h"
+#include "report.h"
+#include "report_ranges.h"
 #include "store_sqlite.h"
 #include "transaction_id.h"
 #include "text_types.h"
@@ -76,18 +80,28 @@ public:
     }
 
     void given_payee_rules_of_business_are(const std::vector<PayeeRuleString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: given_payee_rules_of_business_are";
+        write_rules("Business", values);
     }
 
     void given_payee_rules_of_personal_are(const std::vector<PayeeRuleString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: given_payee_rules_of_personal_are";
+        write_rules("Personal", values);
     }
 
+    // Read back from Personal's own file: a rule learned in Business and
+    // written into its own payee_rules table is not a row this query can even
+    // reach, which is what "in force" has to mean for a book that is a
+    // separate file rather than a branch of a shared one.
     void then_payee_rules_in_force_in_personal_are(const std::vector<PayeeRuleString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_payee_rules_in_force_in_personal_are";
+        std::vector<payees::Rule> rules;
+        ASSERT_TRUE(read_book_with_rules("Personal", nullptr, nullptr, &rules));
+        ASSERT_EQ(values.size(), rules.size()) << "payee rules in force in Personal";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            EXPECT_EQ(values[i].pattern, rules[i].pattern) << "rule " << i << " pattern";
+            EXPECT_EQ(values[i].matchtype, payees::to_string(rules[i].match_type))
+                << "rule " << i << " match type";
+            EXPECT_EQ(values[i].payee, rules[i].payee) << "rule " << i << " payee";
+            EXPECT_EQ(blank(values[i].category), rules[i].category) << "rule " << i << " category";
+        }
     }
 
     void given_saved_profiles_are(const std::vector<SavedProfileString>& values) {
@@ -96,8 +110,8 @@ public:
     }
 
     void given_the_current_book_is(const std::vector<CurrentBookString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: given_the_current_book_is";
+        ASSERT_FALSE(values.empty());
+        current_book_ = values.front().name;
     }
 
     void given_the_file_contains(const std::string& value) {
@@ -189,39 +203,102 @@ public:
         ADD_FAILURE() << "Not implemented: then_rejected_because";
     }
 
+    // Each book is read, has its own half of the draw appended, and is written
+    // back on its own -- there is no shared transaction and no join between
+    // the two files, only two calls that happen to be made together.
     void when_draw_recorded(const std::vector<OwnerDrawString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_draw_recorded";
+        for (const auto& value : values) {
+            const auto date = types::Date::from_iso(value.date);
+            ASSERT_TRUE(date.has_value()) << value.date;
+            const Money amount{value.amount};
+
+            make_if_needed(value.frombook);
+            make_if_needed(value.tobook);
+
+            chart::Chart from_accounts;
+            chart::Chart to_accounts;
+            std::vector<ledger::Transaction> from_txns;
+            std::vector<ledger::Transaction> to_txns;
+            ASSERT_TRUE(read_book(value.frombook, &from_accounts, &from_txns));
+            ASSERT_TRUE(read_book(value.tobook, &to_accounts, &to_txns));
+
+            const std::string from_ref =
+                std::string(1, value.frombook.front()) + std::to_string(from_txns.size() + 1);
+            const std::string to_ref =
+                std::string(1, value.tobook.front()) + std::to_string(to_txns.size() + 1);
+
+            from_txns.push_back(books::draw_transaction(*date, -amount, from_ref));
+            to_txns.push_back(books::draw_transaction(*date, amount, to_ref));
+
+            write_back(value.frombook, from_accounts, from_txns);
+            write_back(value.tobook, to_accounts, to_txns);
+        }
     }
 
     void then_postings_of_business_are(const std::vector<PostingRowString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_postings_of_business_are";
+        check_postings_of("Business", values);
     }
 
     void then_postings_of_personal_are(const std::vector<PostingRowString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_postings_of_personal_are";
+        check_postings_of("Personal", values);
     }
 
+    // Read back from the current book -- set explicitly by a Given, or, where
+    // a scenario never names one, whichever book the last Given actually
+    // touched. A report is always of one book; there is no reading across.
     void when_report_run(const std::vector<ReportSpecString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_report_run";
+        ASSERT_FALSE(current_book_.empty()) << "no current book to report on";
+        make_if_needed(current_book_);
+        chart_ = chart::Chart();
+        transactions_.clear();
+        ASSERT_TRUE(read_book(current_book_, &chart_, &transactions_));
+        ledger_ = ledger::Ledger();
+        for (const ledger::Transaction& t : transactions_)
+            for (const ledger::Posting& p : t.postings)
+                ledger_.add({t.date, p.account, p.amount, t.ref.value()});
+
+        for (const auto& value : values) {
+            reports::Spec spec;
+            const auto from = types::Date::from_iso(value.from);
+            const auto to = types::Date::from_iso(value.to);
+            if (from) spec.from = *from;
+            if (to) spec.to = *to;
+            report_range_ = reports::Range{spec.from, spec.to};
+            report_ = reports::category_report(chart_, ledger_, spec);
+        }
     }
 
     void then_report_rows_are(const std::vector<ReportRowString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_report_rows_are";
+        ASSERT_EQ(values.size(), report_.rows.size()) << "number of report rows";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const reports::Row& got = report_.rows[i];
+            EXPECT_EQ(values[i].account, got.account) << "row " << i;
+            EXPECT_EQ(std::stoi(values[i].level), got.level) << got.account << " level";
+            EXPECT_EQ(Money(values[i].amount).cents(), got.amount.cents())
+                << got.account << " amount";
+            EXPECT_EQ(parse_bool_cell(values[i].issubtotal), got.is_subtotal)
+                << got.account << " subtotal";
+        }
     }
 
     void then_report_total_is(const std::vector<ReportTotalString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_report_total_is";
+        for (const auto& value : values) {
+            EXPECT_EQ(Money(value.totalincome).cents(), report_.totals.income.cents())
+                << "total income";
+            EXPECT_EQ(Money(value.totalexpenses).cents(), report_.totals.expenses.cents())
+                << "total expenses";
+            EXPECT_EQ(Money(value.net).cents(), report_.totals.net.cents()) << "net";
+        }
     }
 
     void then_net_worth_is(const std::vector<NetWorthString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_net_worth_is";
+        const ledger::Ledger::NetWorth got = ledger_.net_worth(chart_);
+        for (const auto& value : values) {
+            EXPECT_EQ(Money(value.assets).cents(), got.assets.cents()) << "assets";
+            EXPECT_EQ(Money(value.liabilities).cents(), got.liabilities.cents())
+                << "liabilities";
+            EXPECT_EQ(Money(value.networth).cents(), got.net.cents()) << "net worth";
+        }
     }
 
     void when_book_opened(const std::vector<BookOpenString>& values) {
@@ -235,8 +312,10 @@ public:
     }
 
     void then_report_heading_is(const std::vector<ReportHeadingString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_report_heading_is";
+        for (const auto& value : values) {
+            EXPECT_EQ(value.book, current_book_) << "report heading book";
+            EXPECT_EQ(value.period, reports::period_label(report_range_)) << "report heading period";
+        }
     }
 
     void given_no_books_exist() {
@@ -487,9 +566,34 @@ public:
         listed_ = store::book_names();
     }
 
+    // For every Thing the rule says is PerBook, there is a table of its own in
+    // a book the program just made. Payees and Reconciliations are PerBook but
+    // derived or not yet built, so they name no table of their own and are
+    // skipped rather than asserted against one; Machine and Settings things
+    // are not a book's business at all.
     void examples_businessrule_everything_a_book_needs_is_in_the_book(const std::vector<BookScopeString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_everything_a_book_needs_is_in_the_book";
+        store::Book made;
+        const store::Failure no = store::Book::create(store::path_for("Scope"), "Scope", &made);
+        ASSERT_FALSE(no.refused) << no.reason;
+        const std::vector<std::string> tables = tables_of(store::path_for("Scope"));
+
+        for (const auto& value : values) {
+            if (value.scope != "PerBook") continue;
+            std::vector<std::string> wanted;
+            if (value.thing == "Accounts" || value.thing == "Categories") wanted = {"accounts"};
+            else if (value.thing == "Transactions and postings") wanted = {"transactions", "postings"};
+            else if (value.thing == "Payee rules") wanted = {"payee_rules"};
+            else if (value.thing == "Remembered splits") wanted = {"payee_split_rules"};
+            else if (value.thing == "Account mappings for OFX") wanted = {"ofx_account_mappings"};
+            else if (value.thing == "Fiscal year start") wanted = {"book"};
+            else if (value.thing == "CSV bank profiles") wanted = {"csv_profiles"};
+            else if (value.thing == "CSV header aliases") wanted = {"csv_header_matches"};
+            else continue;
+            for (const std::string& table : wanted)
+                EXPECT_TRUE(std::find(tables.begin(), tables.end(), table) != tables.end())
+                    << value.thing << " is said to be kept per book but there is no " << table
+                    << " table -- " << value.why;
+        }
     }
 
     void examples_businessrule_a_book_is_one_sqlite_database_in_one_known_folder(
@@ -612,6 +716,14 @@ private:
     std::vector<std::string> offered_;
     std::vector<PerBookCheckString> checks_;
 
+    // Which book a report, or anything else that works on just one, is of. Set
+    // explicitly by a Given, or left to whichever book the last Given actually
+    // wrote to -- see write_chart and write_postings below.
+    std::string current_book_;
+    ledger::Ledger ledger_;
+    reports::CategoryReport report_;
+    reports::Range report_range_{types::Date(2024, 1, 1), types::Date(2024, 12, 31)};
+
     // --- two books at once -------------------------------------------------
     //
     // Each is made on demand, written to, and closed again. Nothing stays open
@@ -626,16 +738,24 @@ private:
 
     bool read_book(const std::string& name, chart::Chart* accounts,
                    std::vector<ledger::Transaction>* transactions) {
+        return read_book_with_rules(name, accounts, transactions, nullptr);
+    }
+
+    bool read_book_with_rules(const std::string& name, chart::Chart* accounts,
+                              std::vector<ledger::Transaction>* transactions,
+                              std::vector<payees::Rule>* rules) {
         store::Book opened;
         store::Failure no = store::Book::open_named(name, &opened);
         if (no.refused) { ADD_FAILURE() << no.reason; return false; }
         chart::Chart mine;
         ledger::Ledger unused;
         std::vector<ledger::Transaction> theirs;
-        no = opened.read(&mine, &unused, &theirs);
+        std::vector<payees::Rule> their_rules;
+        no = opened.read(&mine, &unused, &theirs, &their_rules);
         if (no.refused) { ADD_FAILURE() << no.reason; return false; }
         if (accounts != nullptr) *accounts = mine;
         if (transactions != nullptr) *transactions = theirs;
+        if (rules != nullptr) *rules = their_rules;
         return true;
     }
 
@@ -650,6 +770,7 @@ private:
 
     void write_chart(const std::string& name, const std::vector<AccountString>& values) {
         make_if_needed(name);
+        current_book_ = name;
         chart::Chart accounts;
         std::vector<ledger::Transaction> transactions;
         ASSERT_TRUE(read_book(name, &accounts, &transactions));
@@ -668,6 +789,7 @@ private:
 
     void write_postings(const std::string& name, const std::vector<PostingRowString>& values) {
         make_if_needed(name);
+        current_book_ = name;
         chart::Chart accounts;
         std::vector<ledger::Transaction> transactions;
         ASSERT_TRUE(read_book(name, &accounts, &transactions));
@@ -700,12 +822,74 @@ private:
             if (accounts.find(value.account) == nullptr) {
                 chart::Account a;
                 a.path = types::AccountPath(value.account);
-                a.type = value.account.rfind("Assets", 0) == 0 ? types::AccountType::Checking
-                                                               : types::AccountType::Expense;
+                a.type = account_type_guessed_from_path(value.account);
                 accounts.put(a);
             }
         }
         write_back(name, accounts, transactions);
+    }
+
+    // A guess good enough for a fixture whose point is book separation rather
+    // than the chart: the real program never invents a type this way, and
+    // every scenario that cares about a type gives one through
+    // given_the_chart_of_accounts_of_*_is instead.
+    static types::AccountType account_type_guessed_from_path(const std::string& path) {
+        if (path.rfind("Assets", 0) == 0) return types::AccountType::Checking;
+        if (path.rfind("Liabilities", 0) == 0) return types::AccountType::CreditCard;
+        if (path.rfind("Equity", 0) == 0) return types::AccountType::Equity;
+        if (path.rfind("Income", 0) == 0) return types::AccountType::Income;
+        return types::AccountType::Expense;
+    }
+
+    void write_rules(const std::string& name, const std::vector<PayeeRuleString>& values) {
+        make_if_needed(name);
+        chart::Chart accounts;
+        std::vector<ledger::Transaction> transactions;
+        std::vector<payees::Rule> rules;
+        ASSERT_TRUE(read_book_with_rules(name, &accounts, &transactions, &rules));
+        rules.clear();
+        for (const auto& value : values) {
+            payees::Rule r;
+            r.pattern = value.pattern;
+            r.match_type = payees::match_type_from_string(value.matchtype);
+            r.payee = value.payee;
+            r.category = blank(value.category);
+            r.enabled = parse_bool_cell(value.enabled);
+            rules.push_back(r);
+        }
+        store::Book opened;
+        const store::Failure where = store::Book::open_named(name, &opened);
+        ASSERT_FALSE(where.refused) << where.reason;
+        const store::Failure no = opened.write(accounts, transactions, rules);
+        ASSERT_FALSE(no.refused) << no.reason;
+    }
+
+    void check_postings_of(const std::string& name, const std::vector<PostingRowString>& values) {
+        chart::Chart accounts;
+        std::vector<ledger::Transaction> transactions;
+        ASSERT_TRUE(read_book(name, &accounts, &transactions));
+        std::vector<PostingRowString> got;
+        for (const ledger::Transaction& t : transactions) {
+            for (const ledger::Posting& posting : t.postings) {
+                PostingRowString row;
+                row.ref = t.ref.value();
+                row.date = t.date.iso();
+                row.payee = t.payee.value().empty() ? "none" : t.payee.value();
+                row.account = posting.account.value();
+                row.amount = posting.amount.in_register();
+                row.memo = posting.memo.empty() ? "none" : posting.memo;
+                row.cleared = types::to_string(posting.cleared);
+                got.push_back(row);
+            }
+        }
+        ASSERT_EQ(values.size(), got.size()) << name << " postings that came back";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            EXPECT_EQ(values[i].ref, got[i].ref) << name << " posting " << i << " ref";
+            EXPECT_EQ(values[i].date, got[i].date) << name << " posting " << i << " date";
+            EXPECT_EQ(values[i].account, got[i].account) << name << " posting " << i << " account";
+            EXPECT_EQ(Money(values[i].amount).cents(), Money(got[i].amount).cents())
+                << name << " posting " << i << " amount";
+        }
     }
 
     // A Default of "none" arrives as the literal word.

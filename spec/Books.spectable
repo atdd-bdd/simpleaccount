@@ -41,7 +41,6 @@ Given books are : Books
 # What belongs to a book, and what does not
 # ---------------------------------------------------------------------------
 
-$WIP
 BusinessRule Everything a book needs is in the book
 Description A book is self-contained. Anything the program needs in order to
 Description work on a book is stored in that book's own file, even where two
@@ -109,7 +108,6 @@ Then category picker offers : ChartOfAccounts CompareOnly
 # Expenses:Consulting Fees is absent: it is not in this book at all, which is
 # different from being hidden.
 
-$WIP
 Scenario A payee rule made in one book does not act in the other
 Description The rules are learned from categorising, and a category learned in
 Description the business book names a business category. Applying it in the
@@ -224,7 +222,6 @@ Then rejected because : Rejection
 | Reason                                                              |
 | Expenses:Consulting Fees is not an account in this book             |
 
-$WIP
 Scenario Money moving between the two books is two transactions
 Description A draw from the business is the case that makes people want one
 Description book. It is recorded as two transactions, one in each book, each
@@ -256,6 +253,7 @@ Then postings of Personal are : PostingRow
 | Ref | Date       | Account           | Amount   |
 | P1  | 2025-04-01 | Assets:Checking   | 4000.00  |
 | P1  | 2025-04-01 | Equity:Owner Draw | -4000.00 |
+When each book checked
 Then book checks are : PerBookCheck
 | Book     | TransactionsChecked | OutOfBalance | Balanced |
 | Business | 1                   | 0            | true     |
@@ -268,7 +266,6 @@ Attributes OwnerDraw
 | FromBook  | Text  |            |
 | ToBook    | Text  |            |
 
-$WIP
 Scenario A draw is not income in the personal book
 Description It would be counted twice: once as business income when it was
 Description earned and again as household income when it was drawn. Equity is
@@ -642,7 +639,6 @@ Then windows are : BookWindow
 | Window | Book     |
 | 1      | Business |
 
-$WIP
 Scenario A report names the book it is of
 Description Two reports of the same period from two books look alike, and the
 Description figures are not comparable. The name is on the report so that a
