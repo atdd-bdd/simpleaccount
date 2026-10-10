@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <algorithm>
+#include <map>
 #include <set>
 #include <vector>
 #include <regex>
@@ -411,6 +412,82 @@ inline bool set_enabled(std::vector<Rule>* rules, const std::string& pattern,
     if (at == nullptr) return false;
     at->enabled = enabled;
     return true;
+}
+
+// There is no table of payees to keep in step with the register: the list
+// offered for autocompletion is just the distinct payees the transactions
+// already use, most recently used first, which is why it can never disagree
+// with them. See the payee-list section of Payees.spectable.
+struct PayeeListEntry {
+    std::string payee;
+    types::Date last_used;
+    int count = 0;
+};
+
+inline std::vector<PayeeListEntry> payee_list(
+        const std::vector<ledger::Transaction>& transactions) {
+    std::map<std::string, PayeeListEntry> by_payee;
+    for (const ledger::Transaction& t : transactions) {
+        if (t.payee.value().empty()) continue;
+        PayeeListEntry& e = by_payee[t.payee.value()];
+        if (e.count == 0 || t.date > e.last_used) e.last_used = t.date;
+        e.payee = t.payee.value();
+        ++e.count;
+    }
+    std::vector<PayeeListEntry> out;
+    for (auto& entry : by_payee) out.push_back(entry.second);
+    std::sort(out.begin(), out.end(), [](const PayeeListEntry& a, const PayeeListEntry& b) {
+        if (a.last_used != b.last_used) return b.last_used < a.last_used;
+        return a.payee < b.payee;
+    });
+    return out;
+}
+
+// The best guess for a payee's category is the one it took last time -- the
+// register already knows it, so offering it costs nothing. See the
+// category-suggestion scenario of Payees.spectable.
+struct PayeeSuggestion {
+    bool found = false;
+    std::string category;
+    types::Date based_on;
+};
+
+inline PayeeSuggestion category_last_used_for(
+        const std::vector<ledger::Transaction>& transactions, const chart::Chart& accounts,
+        const std::string& payee) {
+    PayeeSuggestion out;
+    for (const ledger::Transaction& t : transactions) {
+        if (t.payee.value() != payee) continue;
+        for (const ledger::Posting& p : t.postings) {
+            if (!detail::is_a_category_account(accounts, p.account.value())) continue;
+            if (!out.found || t.date > out.based_on) {
+                out.found = true;
+                out.category = p.account.value();
+                out.based_on = t.date;
+            }
+        }
+    }
+    return out;
+}
+
+// Merging is a rename applied to every transaction whose payee is the same
+// shop under another spelling -- recognised the same way a rule's own
+// pattern is, by the significant part of the name, case-insensitively, so
+// "HARRIS TEETER #231" and "harris teeter 418" both become whatever name was
+// chosen. See the merge scenario of Payees.spectable.
+inline int merge_payees(std::vector<ledger::Transaction>* transactions,
+                        const std::string& new_name) {
+    const std::string target = detail::upper(pattern_for(new_name));
+    int changed = 0;
+    for (ledger::Transaction& t : *transactions) {
+        if (t.payee.value().empty()) continue;
+        if (detail::upper(pattern_for(t.payee.value())) != target) continue;
+        if (t.payee.value() != new_name) {
+            t.payee = types::PayeeName(new_name);
+            ++changed;
+        }
+    }
+    return changed;
 }
 
 }  // namespace payees

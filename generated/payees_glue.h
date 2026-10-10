@@ -13,6 +13,7 @@
 #include "payee_rules.h"
 #include "posting.h"
 #include "text_types.h"
+#include "transaction_edit.h"
 #include "transaction_id.h"
 #include "payee_rules.h"
 
@@ -183,43 +184,73 @@ public:
     }
 
     void when_category_changed(const std::vector<CategoryChangeString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: learning a rule from a categorisation";
+        ASSERT_FALSE(values.empty());
+        const auto& value = values.front();
+        ledger::Transaction* t = find_by_ref(value.ref);
+        ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
+        const std::string raw = t->raw_name.empty() ? t->payee.value() : t->raw_name;
+        offered_rule_ = payees::suggest(raw, value.toaccount);
+        edit::change_category(t, value.fromaccount, value.toaccount);
     }
 
     void then_rule_offered_is(const std::vector<PayeeRuleString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: learning a rule from a categorisation";
+        ASSERT_FALSE(values.empty());
+        const PayeeRuleString& want = values.front();
+        EXPECT_EQ(want.pattern, offered_rule_.pattern) << "pattern";
+        EXPECT_EQ(want.matchtype, payees::to_string(offered_rule_.match_type)) << "match type";
+        EXPECT_EQ(want.payee, offered_rule_.payee) << "payee";
+        EXPECT_EQ(blank(want.category), offered_rule_.category) << "category";
+        EXPECT_EQ(parse_bool_cell(want.enabled), offered_rule_.enabled) << "enabled";
     }
 
     void when_rule_applied_to_existing(const std::vector<PayeeRuleString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: applying a rule to transactions already there";
+        ASSERT_FALSE(values.empty());
+        const auto& value = values.front();
+        payees::Rule rule;
+        rule.pattern = value.pattern;
+        rule.match_type = payees::match_type_from_string(value.matchtype);
+        rule.payee = blank(value.payee);
+        rule.category = blank(value.category);
+        if (value.enabled != DNCString && !value.enabled.empty())
+            rule.enabled = parse_bool_cell(value.enabled);
+        rule_application_ = payees::apply_to_book({rule}, chart_, &transactions_);
     }
 
     void then_would_change(const std::vector<RuleApplicationString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: applying a rule to transactions already there";
+        for (const auto& value : values) {
+            EXPECT_EQ(std::stoi(value.matched), rule_application_.matched) << "matched";
+            EXPECT_EQ(std::stoi(value.alreadycorrect), rule_application_.already_correct)
+                << "already correct";
+            EXPECT_EQ(std::stoi(value.skipped), rule_application_.skipped) << "skipped";
+        }
     }
 
     void then_payee_list_is(const std::vector<PayeeListEntryString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: the payee list";
+        const std::vector<payees::PayeeListEntry> got = payees::payee_list(transactions_);
+        ASSERT_EQ(values.size(), got.size()) << "number of payees";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            EXPECT_EQ(values[i].payee, got[i].payee) << "payee " << i;
+            EXPECT_EQ(values[i].lastused, got[i].last_used.iso()) << got[i].payee << " last used";
+            EXPECT_EQ(std::stoi(values[i].count), got[i].count) << got[i].payee << " count";
+        }
     }
 
     void when_payee_typed(const std::vector<PayeeSelectString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: the payee list";
+        ASSERT_FALSE(values.empty());
+        suggested_ = payees::category_last_used_for(transactions_, chart_, values.front().payee);
     }
 
     void then_category_suggested_is(const std::vector<CategorySuggestionString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: the payee list";
+        ASSERT_FALSE(values.empty());
+        const auto& want = values.front();
+        ASSERT_TRUE(suggested_.found) << "nothing was suggested";
+        EXPECT_EQ(blank(want.category), suggested_.category) << "category";
+        EXPECT_EQ(want.basedon, suggested_.based_on.iso()) << "based on";
     }
 
     void when_payees_merged(const std::vector<PayeeMergeString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: merging two payees";
+        ASSERT_FALSE(values.empty());
+        payees::merge_payees(&transactions_, values.front().newname);
     }
 
     void examples_datatype_matchtype(const std::vector<EnumerationValuesString>& values) {
@@ -287,6 +318,15 @@ private:
     std::vector<payees::Rule> rules_;
     payees::Refusal refusal_;
     std::string target_ = "Assets:Checking";
+    payees::Rule offered_rule_;
+    payees::BookApplication rule_application_;
+    payees::PayeeSuggestion suggested_;
+
+    ledger::Transaction* find_by_ref(const std::string& ref) {
+        for (ledger::Transaction& t : transactions_)
+            if (t.ref.value() == ref) return &t;
+        return nullptr;
+    }
 
     // A table cell cannot hold a leading or trailing blank, so a value that is
     // one is written in double quotes in the spec and the quotes come off here.

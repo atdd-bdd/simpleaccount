@@ -389,7 +389,6 @@ Attributes PercentageSplit
 # Learning a rule
 # ---------------------------------------------------------------------------
 
-$WIP
 Scenario Categorising an uncategorised transaction offers to remember it
 Description This is how the rules get written: by doing the work once. The offer
 Description is made, not taken, because the user is the only one who knows
@@ -459,7 +458,6 @@ Attributes SignificantName
 | Pattern   | Text   |         |
 | Notes     | String | none    |
 
-$WIP
 Scenario Accepting a learned rule categorises the transactions already there
 Description Twenty years of imported history is mostly uncategorised. A rule is
 Description only useful if it can be applied backwards, so accepting one offers
@@ -470,13 +468,13 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : PostingRow
-| Ref | Date       | Payee                    | Account                | Amount |
-| T1  | 2024-01-15 | HARRIS TEETER #231       | Assets:Checking        | -45.00 |
-| T1  | 2024-01-15 | HARRIS TEETER #231       | Expenses:Uncategorized | 45.00  |
-| T2  | 2024-02-20 | HARRIS TEETER #418 CARY  | Assets:Checking        | -62.10 |
-| T2  | 2024-02-20 | HARRIS TEETER #418 CARY  | Expenses:Uncategorized | 62.10  |
-| T3  | 2024-03-02 | SHELL OIL 4471           | Assets:Checking        | -52.00 |
-| T3  | 2024-03-02 | SHELL OIL 4471           | Expenses:Uncategorized | 52.00  |
+| Ref | Date       | Payee                    | Account                | Amount | Cleared   |
+| T1  | 2024-01-15 | HARRIS TEETER #231       | Assets:Checking        | -45.00 | Cleared   |
+| T1  | 2024-01-15 | HARRIS TEETER #231       | Expenses:Uncategorized | 45.00  | Uncleared |
+| T2  | 2024-02-20 | HARRIS TEETER #418 CARY  | Assets:Checking        | -62.10 | Cleared   |
+| T2  | 2024-02-20 | HARRIS TEETER #418 CARY  | Expenses:Uncategorized | 62.10  | Uncleared |
+| T3  | 2024-03-02 | SHELL OIL 4471           | Assets:Checking        | -52.00 | Cleared   |
+| T3  | 2024-03-02 | SHELL OIL 4471           | Expenses:Uncategorized | 52.00  | Uncleared |
 When rule applied to existing : PayeeRule Vertical
 | Pattern   | HARRIS TEETER      |
 | MatchType | Contains           |
@@ -501,7 +499,6 @@ Attributes RuleApplication
 | AlreadyCorrect | Integer | 0       |
 | Skipped        | Integer | 0       |
 
-$WIP
 Scenario Applying a rule backwards does not touch a transaction already categorised
 Description A category chosen by hand is a decision, and a rule applied in bulk
 Description does not overrule it. Only Uncategorized postings are changed.
@@ -512,11 +509,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Dining        | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given postings are : PostingRow
-| Ref | Date       | Payee              | Account                | Amount |
-| T1  | 2024-01-15 | HARRIS TEETER #231 | Assets:Checking        | -45.00 |
-| T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  |
-| T2  | 2024-02-20 | HARRIS TEETER #418 | Assets:Checking        | -8.50  |
-| T2  | 2024-02-20 | HARRIS TEETER #418 | Expenses:Dining        | 8.50   |
+| Ref | Date       | Payee              | Account                | Amount | Cleared   |
+| T1  | 2024-01-15 | HARRIS TEETER #231 | Assets:Checking        | -45.00 | Cleared   |
+| T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  | Uncleared |
+| T2  | 2024-02-20 | HARRIS TEETER #418 | Assets:Checking        | -8.50  | Cleared   |
+| T2  | 2024-02-20 | HARRIS TEETER #418 | Expenses:Dining        | 8.50   | Uncleared |
 When rule applied to existing : PayeeRule Vertical
 | Pattern   | HARRIS TEETER      |
 | MatchType | Contains           |
@@ -535,7 +532,6 @@ Then postings are : PostingRow
 # The payee of T2 is tidied, because that is not a judgement. Its category is
 # left, because it is.
 
-$WIP
 Scenario A rule does not change a reconciled posting
 Description A bulk change that altered a reconciled balance would undo a
 Description reconciliation nobody asked it to touch.
@@ -648,7 +644,6 @@ Then postings are : PostingRow
 # The payee list
 # ---------------------------------------------------------------------------
 
-$WIP
 Scenario The payee list is what the transactions use, not a separate table
 Description There is no list of payees to maintain. The list offered for
 Description autocompletion is the distinct payees of the transactions, most
@@ -674,7 +669,6 @@ Attributes PayeeListEntry
 | LastUsed  | Date      | 2024-01-01 |
 | Count     | Integer   | 0          |
 
-$WIP
 Scenario Choosing a payee offers the category it took last time
 Description The last category used for a payee is the best guess there is, and
 Description it costs nothing to offer because the register already knows it.
@@ -701,7 +695,6 @@ Attributes CategorySuggestion
 | Category  | AccountPath | none       |
 | BasedOn   | Date        | 2024-01-01 |
 
-$WIP
 Scenario A payee renamed everywhere keeps its history together
 Description Twenty years of imports leave the same shop under several spellings.
 Description Merging them is a rename applied to every transaction, and it is
