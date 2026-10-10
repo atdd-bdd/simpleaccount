@@ -41,6 +41,17 @@ public:
     // A report writes it in parentheses, which is the convention there.
     std::string in_report() const { return grouped(cents_ < 0, "(", ")"); }
 
+    // Unrounded and ungrouped: no thousand separator and no currency symbol, for
+    // a file meant to be read by a spreadsheet rather than a person. See the
+    // CSV-export scenario in Reports.spectable.
+    std::string in_csv() const {
+        const long long abs_cents = cents_ < 0 ? -cents_ : cents_;
+        std::string out = std::to_string(abs_cents / 100) + ".";
+        out += static_cast<char>('0' + (abs_cents % 100) / 10);
+        out += static_cast<char>('0' + abs_cents % 10);
+        return cents_ < 0 ? "-" + out : out;
+    }
+
     Money operator-() const { return from_cents(-cents_); }
     Money operator+(const Money& o) const { return from_cents(cents_ + o.cents_); }
     Money operator-(const Money& o) const { return from_cents(cents_ - o.cents_); }

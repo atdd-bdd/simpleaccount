@@ -231,39 +231,129 @@ private:
     }
 public:
 
+    // The row set and levels are read straight off report_, which when_report_run
+    // already built over the whole range -- a category active in any one column
+    // is active over the whole of it, so the two trees are the same tree.
     void then_year_column_rows_are(const std::vector<YearColumnRowString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_year_column_rows_are";
+        const std::vector<reports::NamedColumn> cols = reports::year_columns(spec_.from, spec_.to);
+        ASSERT_EQ(3u, cols.size()) << "this step only reads three year columns";
+        ASSERT_EQ(values.size(), report_.rows.size()) << "number of rows";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const reports::Row& row = report_.rows[i];
+            EXPECT_EQ(values[i].account, row.account) << "row " << i;
+            EXPECT_EQ(std::stoi(values[i].level), row.level) << row.account << " level";
+
+            Money years[3];
+            Money total;
+            for (std::size_t y = 0; y < 3; ++y) {
+                reports::Spec slice = spec_;
+                slice.from = cols[y].range.from;
+                slice.to = cols[y].range.to;
+                slice.zero_rows = true;
+                const reports::CategoryReport sliced = reports::category_report(chart_, book_, slice);
+                for (const reports::Row& one : sliced.rows)
+                    if (one.account == row.account) { years[y] = one.amount; break; }
+                total += years[y];
+            }
+            const std::string cells[3] = {values[i].y2023, values[i].y2024, values[i].y2025};
+            for (std::size_t y = 0; y < 3; ++y)
+                EXPECT_EQ(Money(cells[y]).cents(), years[y].cents())
+                    << row.account << " year " << y;
+            EXPECT_EQ(Money(values[i].total).cents(), total.cents()) << row.account << " total";
+        }
     }
 
     void then_report_columns_are(const std::vector<ReportColumnString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_report_columns_are";
+        const std::vector<reports::NamedColumn> cols = reports::year_columns(spec_.from, spec_.to);
+        ASSERT_EQ(values.size(), cols.size()) << "number of columns";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            EXPECT_EQ(values[i].heading, cols[i].label) << "column " << i;
+            EXPECT_EQ(values[i].from, cols[i].range.from.iso()) << "column " << i << " from";
+            EXPECT_EQ(values[i].to, cols[i].range.to.iso()) << "column " << i << " to";
+            bool has = false;
+            for (const ledger::DatedPosting& p : book_.postings())
+                if (!(p.date < cols[i].range.from) && !(cols[i].range.to < p.date)) {
+                    has = true;
+                    break;
+                }
+            EXPECT_EQ(parse_bool_cell(values[i].haspostings), has)
+                << "column " << i << " has postings";
+        }
     }
 
+    // The two accounts named here illustrate the rule -- divide by the number
+    // of columns, not by how many of them had activity -- rather than being the
+    // whole of the report, so this checks only the rows the table names.
     void then_average_column_is(const std::vector<AverageRowString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_average_column_is";
+        const int columns =
+            static_cast<int>(reports::year_columns(spec_.from, spec_.to).size());
+        for (const auto& value : values) {
+            const reports::Row* row = nullptr;
+            for (const reports::Row& one : report_.rows)
+                if (one.account == value.account) { row = &one; break; }
+            ASSERT_NE(nullptr, row) << "no row for " << value.account;
+            EXPECT_EQ(Money(value.total).cents(), row->amount.cents())
+                << value.account << " total";
+            EXPECT_EQ(std::stoi(value.columns), columns) << value.account << " columns";
+            const Money average = Money::from_cents(row->amount.cents() / columns);
+            EXPECT_EQ(Money(value.average).cents(), average.cents())
+                << value.account << " average";
+        }
     }
 
+    // Net worth as at the end of each year the range covers, which is why this
+    // reads the balance sheet rather than the category report: a balance sheet
+    // is already a figure as at a date, and a point in a range of them is what
+    // this report's columns are.
     void then_net_worth_columns_are(const std::vector<NetWorthColumnString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_net_worth_columns_are";
+        const std::vector<reports::NamedColumn> cols = reports::year_columns(spec_.from, spec_.to);
+        ASSERT_EQ(values.size(), cols.size()) << "number of columns";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const reports::BalanceSheet bs =
+                reports::balance_sheet(chart_, book_, cols[i].range.to, false);
+            EXPECT_EQ(values[i].asat, cols[i].range.to.iso()) << "column " << i << " as at";
+            EXPECT_EQ(Money(values[i].assets).cents(), bs.totals.assets.cents())
+                << "column " << i << " assets";
+            EXPECT_EQ(Money(values[i].liabilities).cents(), bs.totals.liabilities.cents())
+                << "column " << i << " liabilities";
+            EXPECT_EQ(Money(values[i].networth).cents(), bs.totals.net.cents())
+                << "column " << i << " net worth";
+        }
     }
 
     void then_csv_written_is(const std::string& value) {
-        std::cout << value << "\n";
-        ADD_FAILURE() << "Not implemented: then_csv_written_is";
+        std::vector<std::string> lines;
+        lines.push_back("Account,Level,Amount");
+        for (const reports::Row& row : report_.rows)
+            lines.push_back(row.account + "," + std::to_string(row.level) + "," +
+                            row.amount.in_csv());
+        std::string joined;
+        for (std::size_t i = 0; i < lines.size(); ++i) {
+            if (i != 0) joined += "\n";
+            joined += lines[i];
+        }
+        EXPECT_EQ(value, joined);
     }
 
+    // Neither of these is its own C++ enum: GroupBy picks which When step runs
+    // (category, payee, or balance sheet), and Interval beyond Whole and Year
+    // is read nowhere yet. What is checked is that the declared set of values
+    // is the one the rest of this file's scenarios actually use.
     void examples_datatype_reportgrouping(const std::vector<EnumerationValuesString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_datatype_reportgrouping";
+        for (const auto& value : values) {
+            const EnumerationValuesTyped v = EnumerationValuesTyped::from_string_struct(value);
+            EXPECT_TRUE(v.value == "Category" || v.value == "Payee" || v.value == "Account")
+                << "unknown report grouping: " << v.value;
+        }
     }
 
     void examples_datatype_reportinterval(const std::vector<EnumerationValuesString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_datatype_reportinterval";
+        for (const auto& value : values) {
+            const EnumerationValuesTyped v = EnumerationValuesTyped::from_string_struct(value);
+            EXPECT_TRUE(v.value == "Whole" || v.value == "Month" || v.value == "Quarter" ||
+                       v.value == "Year" || v.value == "FiscalYear")
+                << "unknown report interval: " << v.value;
+        }
     }
 
 public:
@@ -342,13 +432,21 @@ public:
 public:
 
     void given_dated_postings_are(const std::vector<DatedPostingLineString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: given_dated_postings_are";
+        book_ = ledger::Ledger();
+        transactions_.clear();
+        for (const auto& value : values) {
+            const auto date = types::Date::from_iso(value.date);
+            ASSERT_TRUE(date.has_value()) << value.date;
+            book_.add({*date, types::AccountPath(value.account), Money(value.amount),
+                      std::string()});
+        }
     }
 
-    void examples_businessrule_a_category_with_its_own_transactions_shows_them_on_an_other_row(const std::vector<OtherRowNamingString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_a_category_with_its_own_transactions_shows_them_on_an_other_row";
+    void examples_businessrule_a_category_with_its_own_transactions_shows_them_on_an_other_row(
+            const std::vector<OtherRowNamingString>& values) {
+        for (const auto& value : values)
+            EXPECT_EQ(value.therowiscalled, reports::other_row_name(value.containingcategory))
+                << value.containingcategory;
     }
 
 public:

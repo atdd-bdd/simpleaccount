@@ -138,6 +138,21 @@ inline bool inside_investment(const std::set<std::string>& refs,
 
 }  // namespace detail
 
+// The name of the row standing for a category's own transactions, where that
+// category also has children. Named as Quicken names it -- the word Other,
+// then the category's path with its section taken off -- because these
+// reports are checked against Quicken's. See the Other-row business rule in
+// Reports.spectable.
+inline std::string other_row_name(const std::string& containing_category) {
+    const std::size_t colon = containing_category.find(':');
+    const std::string root = colon == std::string::npos ? containing_category
+                                                         : containing_category.substr(0, colon);
+    const std::string under = root + ":";
+    return "Other " + (containing_category.rfind(under, 0) == 0
+                           ? containing_category.substr(under.size())
+                           : containing_category);
+}
+
 // Income first, then expenses, each tree depth first with siblings in
 // alphabetical order. Not by amount: a report compared with the same report from
 // last month should have its rows in the same places, so that the eye can find a
@@ -264,11 +279,7 @@ inline CategoryReport category_report(const chart::Chart& accounts,
             const auto mine = own.find(path);
             if (mine == own.end() || mine->second.cents() == 0) continue;
             Row other;
-            // Named as Quicken names it -- the word, then the path without the
-            // section -- because these reports are checked against Quicken's.
-            const std::string under = std::string(root) + ":";
-            other.account = "Other " + (path.rfind(under, 0) == 0
-                                            ? path.substr(under.size()) : path);
+            other.account = other_row_name(path);
             other.level = level + 1;
             other.amount = sign < 0 ? -mine->second : mine->second;
             if (spec.quicken_signs && std::string(root) == "Expenses")

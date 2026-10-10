@@ -1,6 +1,7 @@
 #pragma once
 #include <optional>
 #include <string>
+#include <vector>
 #include "date.h"
 
 // The date ranges a report can be asked for. See Reports.spectable.
@@ -63,6 +64,42 @@ inline Range fiscal_year(int start_month, int fiscal_year_label) {
     const types::Date from(fiscal_year_label - 1, start_month, 1);
     const types::Date to = types::Date(fiscal_year_label, start_month - 1, 1).end_of_month();
     return Range{from, to};
+}
+
+// One column of a multi-year report.
+struct NamedColumn {
+    std::string label;   // "2023", or "2024 to 31 May" when it is cut short
+    Range range;
+};
+
+inline std::string month_name(int m) {
+    static const char* const names[] = {"January", "February", "March",     "April",
+                                        "May",      "June",     "July",      "August",
+                                        "September","October", "November",  "December"};
+    return (m >= 1 && m <= 12) ? names[m - 1] : "";
+}
+
+// Splits a range into one column per calendar year it touches, the last one
+// short if the range ends before that year is out. See the year-column
+// section of Reports.spectable.
+inline std::vector<NamedColumn> year_columns(const types::Date& from, const types::Date& to) {
+    std::vector<NamedColumn> out;
+    int year = from.year();
+    types::Date start = from;
+    while (!(to < start)) {
+        const types::Date full_year_end(year, 12, 31);
+        const types::Date end = to < full_year_end ? to : full_year_end;
+        NamedColumn c;
+        c.range = Range{start, end};
+        c.label = end == full_year_end
+                      ? std::to_string(year)
+                      : std::to_string(year) + " to " + std::to_string(end.day()) + " " +
+                            month_name(end.month());
+        out.push_back(c);
+        ++year;
+        start = types::Date(year, 1, 1);
+    }
+    return out;
 }
 
 }  // namespace reports

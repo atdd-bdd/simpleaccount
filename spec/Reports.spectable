@@ -30,7 +30,6 @@ Description What was asked for.
 | IncludeInvestmentActivity | Boolean | false  |
 | QuickenSigns | Boolean     | false      |
 
-$WIP
 DataType ReportGrouping
 Description What the rows of the report are.
 Examples: EnumerationValues
@@ -39,7 +38,6 @@ Examples: EnumerationValues
 | Payee    | One row per payee                            |
 | Account  | One row per real account, for a balance sheet |
 
-$WIP
 DataType ReportInterval
 Description What the columns of the report are.
 Examples: EnumerationValues
@@ -521,7 +519,6 @@ Then report rows are : ReportRow
 # A category that holds both transactions and other categories
 # ---------------------------------------------------------------------------
 
-$WIP
 BusinessRule A category with its own transactions shows them on an Other row
 Description A category that contains other categories can still be chosen for a
 Description transaction. Expenses:Auto has Fuel and Insurance under it and also
@@ -562,7 +559,6 @@ Attributes OtherRowNaming
 | ContainingCategory | AccountPath |         |
 | TheRowIsCalled     | Text        |         |
 
-$WIP
 Scenario A category with its own transactions and children shows an Other row
 Description Forty on petrol under Fuel, ten on something to do with the car
 Description posted to Auto itself. Auto totals fifty, and the two rows beneath it
@@ -584,6 +580,7 @@ When report run : ReportSpec Vertical
 | To   | 2026-12-31 |
 Then report rows are : ReportRow
 | Account            | Amount | Level | IsSubtotal |
+| Expenses           | 50.00  | 0     | true       |
 | Expenses:Auto      | 50.00  | 1     | true       |
 | Expenses:Auto:Fuel | 40.00  | 2     | false      |
 | Other Auto         | 10.00  | 2     | false      |
@@ -592,7 +589,6 @@ Then report rows are : ReportRow
 # categories, which is where Quicken puts it -- and these reports are checked
 # against Quicken's.
 
-$WIP
 Scenario A category with its own transactions and no children shows no Other row
 Description There is nothing for the row to distinguish: the category's figure
 Description is already its own transactions and nothing else.
@@ -610,11 +606,11 @@ When report run : ReportSpec Vertical
 | To   | 2026-12-31 |
 Then report rows are : ReportRow
 | Account            | Amount | Level | IsSubtotal |
+| Expenses           | 25.00  | 0     | true       |
 | Expenses:Groceries | 25.00  | 1     | false      |
 # One row, because an Other row under a category with no children would be the
 # same figure written twice.
 
-$WIP
 Scenario A category with children and no transactions of its own shows no Other row
 Description Which is the ordinary case: a category made only to hold others.
 Given the chart of accounts is : ChartOfAccounts
@@ -635,6 +631,7 @@ When report run : ReportSpec Vertical
 | To   | 2026-12-31 |
 Then report rows are : ReportRow
 | Account                 | Amount | Level | IsSubtotal |
+| Expenses                | 55.00  | 0     | true       |
 | Expenses:Auto           | 55.00  | 1     | true       |
 | Expenses:Auto:Fuel      | 40.00  | 2     | false      |
 | Expenses:Auto:Insurance | 15.00  | 2     | false      |
@@ -958,7 +955,6 @@ Description the real report has as many columns as the range covers.
 | Y2025     | Money       | 0.00    |
 | Total     | Money       | 0.00    |
 
-$WIP
 Scenario A category report by year
 Description This is the multi-year history, and it is the reason the postings
 Description are never summarised into a stored total: a column for 2007 is the
@@ -982,7 +978,6 @@ Then year column rows are : YearColumnRow
 | Expenses:Groceries     | 1     | 400.00   | 500.00   | 0.00  | 900.00   |
 | Expenses:Uncategorized | 1     | 0.00     | 10.00    | 0.00  | 10.00    |
 
-$WIP
 Scenario A year with no postings still has a column
 Description An empty column is information: it says nothing happened that year,
 Description which is a different statement from the year being absent from the
@@ -1007,7 +1002,6 @@ Attributes ReportColumn
 | To          | Date    | 2024-12-31 |
 | HasPostings | Boolean | false      |
 
-$WIP
 Scenario A range that stops inside a year gives a short last column
 Description The column is labelled with the part of the year it covers, so that
 Description a figure covering five months is not read as a whole year.
@@ -1023,7 +1017,6 @@ Then report columns are : ReportColumn
 | 2023           | 2023-01-01 | 2023-12-31 | true        |
 | 2024 to 31 May | 2024-01-01 | 2024-05-31 | true        |
 
-$WIP
 Scenario An average column over the years asked for
 Description The average is over the columns in the report, not over the years in
 Description which something happened, so a category used twice in three years
@@ -1486,7 +1479,6 @@ Then net worth comes from : NetWorthTie Vertical
 # Net worth over time
 # ---------------------------------------------------------------------------
 
-$WIP
 Scenario Net worth at the end of each year
 Description The real accounts only, as in Accounts. Each column is a balance as
 Description at a date rather than a total of a period, which is why this report
@@ -1526,7 +1518,6 @@ Attributes NetWorthColumn
 # Taking a report away
 # ---------------------------------------------------------------------------
 
-$WIP
 Scenario A report is written out as CSV with its figures unrounded
 Description The file is for a spreadsheet, so the grouping separators and the
 Description parentheses of the displayed report are left out and the sign is
