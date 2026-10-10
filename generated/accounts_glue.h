@@ -299,6 +299,9 @@ private:
 
     static AccountString as_string(const chart::Account& a) {
         AccountString s;
+        // Deliberately never read back as anything but "none": see the
+        // identity rule's own Details on why no table ever states one.
+        s.id = "none";
         s.path = a.path.value();
         s.type = types::to_string(a.type);
         s.placeholder = a.placeholder ? "true" : "false";
@@ -518,6 +521,48 @@ public:
         std::vector<ledger::Transaction> transactions;
         const store::Failure no_read = reopened.read(&chart_, &book, &transactions);
         ASSERT_FALSE(no_read.refused) << no_read.reason;
+    }
+
+public:
+
+    void when_the_display_names_are_rebuilt() { chart_.rebuild_display_names(); }
+
+    void then_accounts_show_as(const std::vector<AccountDisplayString>& values) {
+        for (const auto& value : values)
+            EXPECT_EQ(value.shownas, chart_.displayed(value.path)) << value.path;
+    }
+
+    void examples_datatype_accountid(const std::vector<ValidValuesString>& values) {
+        for (const auto& value : values) {
+            const ValidValuesTyped v = ValidValuesTyped::from_string_struct(value);
+            bool accepted = true;
+            try {
+                if (v.value.empty()) throw std::invalid_argument("empty");
+                std::size_t pos = 0;
+                const long long n = std::stoll(v.value, &pos);
+                if (pos != v.value.size()) throw std::invalid_argument("not a number");
+                const chart::AccountId parsed(n);
+                (void)parsed;
+            } catch (const std::exception&) {
+                accepted = false;
+            }
+            EXPECT_EQ(v.isvalid, accepted)
+                << "AccountId given [" << v.value << "]"
+                << (v.notes.empty() ? "" : " -- " + v.notes);
+        }
+    }
+
+    // Each row is its own little chart of one account, because the rule is
+    // about one node's own conversion and not about anything a shared fixture
+    // would add.
+    void examples_businessrule_converting_an_account_to_the_one_line_it_is_shown_as(
+            const std::vector<AccountDisplayString>& values) {
+        for (const auto& value : values) {
+            chart::Chart fixture;
+            fixture.add(types::AccountPath(value.path),
+                       types::account_type_from_string(value.type));
+            EXPECT_EQ(value.shownas, fixture.display_of(value.path)) << value.path;
+        }
     }
 
 };

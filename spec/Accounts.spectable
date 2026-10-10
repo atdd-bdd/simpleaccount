@@ -13,9 +13,16 @@ Details path, and is derived by the rule below rather than stored twice.
 # ---------------------------------------------------------------------------
 
 Entity Account
+Description One node of the tree, category or real account alike. Which it is
+Description follows from Type: Income, Expense and Equity are categories, and
+Description everything else is a real account. One entity rather than two,
+Description because almost everything about a node -- its name, where it sits,
+Description whether it is hidden -- means the same thing either way; only Bank
+Description and AccountNumber mean nothing on a category.
 Uses AccountPath and AccountType from CoreTypes
 | Attribute   | Type        | Default | Notes                               |
-| Path        | AccountPath |         | Unique; identifies the account      |
+| Id          | AccountId   | none    | Identity; given once, never changes. See the identity rule below |
+| Path        | AccountPath |         | Unique; what a person types and what every table here names an account by |
 | Type        | AccountType | Checking | Fixed once the account has postings |
 | Placeholder | Boolean     | false   | A grouping node; takes no postings  |
 | Hidden      | Boolean     | false   | Kept out of pickers, history kept   |
@@ -241,10 +248,11 @@ Description every table in this specification names an account by, and it can
 Description change: a category can be renamed, and it can be moved under a
 Description different parent. What identifies the account does not change when
 Description either of those happens.
-Details The identifier is the one the transactions use, from the same generator:
-Details the moment the account was created, to the millisecond. One scheme for
-Details both is easier to reason about than two, and accounts are made rarely
-Details enough that waiting a millisecond for one costs nothing.
+Details The identifier is a plain, incrementing number, given once when the
+Details account is created. Not the millisecond-clock scheme a transaction's
+Details Id uses: an account is created rarely enough, and always by a person
+Details rather than an import running flat out, that nothing cleverer than a
+Details counter is needed to keep two of them from colliding.
 Details
 Details It is deliberately absent from every table in this specification. Nobody
 Details types it, nobody reads it, and a scenario that stated one would be
@@ -304,6 +312,76 @@ Attributes AccountMove
 | Attribute | Type        | Default |
 | Path      | AccountPath |         |
 | NewParent | AccountPath |         |
+
+DataType AccountId
+Description The identity an account is given once, when it is created, and
+Description never afterwards. See the identity rule above.
+Uses Integer
+Examples: ValidValues
+| Value | IsValid | Notes                           |
+| 1     | true    | The first account ever created  |
+| 412   | true    | The program assigns the number  |
+|       | false   | An account always has one       |
+
+# ---------------------------------------------------------------------------
+# Showing an account or a category as one line of text
+# ---------------------------------------------------------------------------
+
+BusinessRule Converting an account to the one line it is shown as
+Description Everywhere a payee rule, a register's category column, or a
+Description category picker needs one piece of text for an account or a
+Description category, it is built the same way and it is never stored: it is
+Description worked out from the tree, the moment it is needed, the same as a
+Description path is.
+Details A category shows as its name, and the name of everything between it
+Details and its section, joined with colons -- Auto:Fuel, not
+Details Expenses:Auto:Fuel. The section itself is never part of the text: it is
+Details shown afterwards, in parentheses, which is the Quicken convention these
+Details reports are checked against. Two categories that read the same but sit
+Details in different sections -- an Auto under Income and one under Expenses,
+Details unlikely as that is -- are told apart by it.
+Details
+Details A real account shows as its own name in square brackets, with nothing
+Details of its ancestors in it: a card under no particular group reads
+Details [Visa], not [Liabilities:Visa]. This is the bracket convention the
+Details register already uses for the other side of a transfer; converting an
+Details account is how every other place that needs the same text gets it.
+Details
+Details Placeholder is not part of this: a placeholder is converted exactly
+Details the same way as any other node, because something still has to be
+Details shown for it on a picker that lets a parent be chosen too.
+Examples: AccountDisplay
+| Path                  | Type     | ShownAs           |
+| Expenses:Auto:Fuel     | Expense  | Auto:Fuel (Expense) |
+| Income:Salary          | Income   | Salary (Income)     |
+| Expenses:Auto          | Expense  | Auto (Expense)       |
+| Assets:Checking        | Checking | [Checking]           |
+| Liabilities:Visa       | CreditCard | [Visa]             |
+
+Attributes AccountDisplay
+| Attribute | Type        | Default |
+| Path      | AccountPath |         |
+| Type      | AccountType |         |
+| ShownAs   | Text        |         |
+
+Scenario Converting every account at once is cheap enough to repeat on every change
+Description A few hundred accounts and categories at most, so converting the
+Description whole chart over again -- rather than patching the one that moved --
+Description is simpler and still instant. This is what runs after any add,
+Description rename, move, or hide.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Auto          | Expense | true        |
+| Expenses:Auto:Fuel     | Expense | false       |
+When the display names are rebuilt
+Then accounts show as : AccountDisplay CompareOnly
+| Path               | ShownAs              |
+| Expenses:Auto:Fuel | Auto:Fuel (Expense)  |
+| Assets:Checking    | [Checking]           |
+# Renaming Fuel to Petrol and rebuilding again would change only the first of
+# these two answers -- to Auto:Petrol (Expense) -- and nothing else, because
+# nothing else is downstream of the one node that changed.
 
 # ---------------------------------------------------------------------------
 # What is kept about an account

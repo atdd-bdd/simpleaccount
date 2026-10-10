@@ -11,7 +11,26 @@
 // transaction balance with no special case for a category. See Accounts.spectable.
 namespace chart {
 
+// The identity an account is given once, when it is created, and never
+// afterwards -- a plain incrementing number, unlike a transaction's
+// millisecond-clock Id, because accounts are made rarely enough that nothing
+// cleverer than a counter is needed. See the identity rule in
+// Accounts.spectable. Zero is "none": no account is ever given that number.
+class AccountId {
+public:
+    AccountId() = default;
+    explicit AccountId(long long value) : value_(value) {}
+    long long value() const { return value_; }
+    bool is_none() const { return value_ == 0; }
+    bool operator==(const AccountId& o) const { return value_ == o.value_; }
+    bool operator!=(const AccountId& o) const { return value_ != o.value_; }
+
+private:
+    long long value_ = 0;
+};
+
 struct Account {
+    AccountId id;
     types::AccountPath path;
     types::AccountType type = types::AccountType::Checking;
     bool placeholder = false;   // a grouping node; takes no postings
@@ -68,8 +87,14 @@ public:
     }
 
     // Used to establish a chart in a Given, where nothing is being tested about
-    // how it was built.
-    void put(const Account& a) { accounts_[a.path.value()] = a; }
+    // how it was built, and to bring one in from storage. Either way the
+    // counter catches up to the highest id it has seen, so an id handed in
+    // from outside -- a book read back from disk -- is never handed out again
+    // to the next account created by hand.
+    void put(const Account& a) {
+        accounts_[a.path.value()] = a;
+        if (a.id.value() > next_id_) next_id_ = a.id.value();
+    }
 
     // Adding an account creates any missing level above it as a placeholder,
     // because importing twenty years of data names deep categories that were
@@ -86,6 +111,7 @@ public:
             so_far += (i == 0 ? "" : ":") + segments[i];
             if (has(so_far)) continue;
             Account a;
+            a.id = AccountId(++next_id_);
             a.path = types::AccountPath(so_far);
             a.type = type;
             a.placeholder = (i + 1 < segments.size());
@@ -181,9 +207,47 @@ public:
                candidate[ancestor.size()] == ':';
     }
 
+    // The one line of text an account or a category is shown as, worked out
+    // from the tree rather than stored: a category reads as its name and
+    // everything between it and its section, joined with colons, with the
+    // section itself following in parentheses; a real account reads as its
+    // own name in square brackets, with nothing of its ancestors in it. See
+    // the display-conversion rule in Accounts.spectable.
+    std::string display_of(const std::string& path) const {
+        const auto at = accounts_.find(path);
+        const types::AccountType type =
+            at == accounts_.end() ? types::AccountType::Checking : at->second.type;
+        if (types::class_of(type) == types::AccountClass::Nominal) {
+            const std::size_t colon = path.find(':');
+            const std::string without_section =
+                colon == std::string::npos ? path : path.substr(colon + 1);
+            return without_section + " (" + types::to_string(type) + ")";
+        }
+        return "[" + types::name_of(types::AccountPath(path)) + "]";
+    }
+
+    // Converts every account at once -- a few hundred at most, so repeating
+    // the whole of it on every add, rename, move or hide is simpler than
+    // patching only the one that changed, and still instant. See the
+    // rebuilding scenario in Accounts.spectable.
+    void rebuild_display_names() {
+        display_.clear();
+        for (const auto& entry : accounts_) display_[entry.first] = display_of(entry.first);
+    }
+
+    // The cached conversion, or a freshly worked-out one if the cache has not
+    // been built yet -- so a caller is never wrong, only possibly a rebuild
+    // behind.
+    std::string displayed(const std::string& path) const {
+        const auto at = display_.find(path);
+        return at == display_.end() ? display_of(path) : at->second;
+    }
+
 private:
     std::map<std::string, Account> accounts_;
+    std::map<std::string, std::string> display_;
     PostingCounts counts_;
+    long long next_id_ = 0;
 
     Rejection move_subtree(const std::string& from, const std::string& to) {
         std::vector<Account> moved;
