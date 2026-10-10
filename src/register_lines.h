@@ -18,6 +18,10 @@ namespace reg {
 
 struct Line {
     std::string ref;
+    // The transaction's own identity, the same string a report's detail line
+    // carries for the same transaction -- what lets a click on one page find
+    // the right line on the other. See the naming rule in Transactions.
+    std::string id;
     types::Date date;
     std::string check_no;
     std::string payee;
@@ -87,6 +91,7 @@ inline std::vector<Line> lines_for(
             if (!chart::Chart::is_descendant_or_self(p.account.value(), account)) continue;
             Line line;
             line.ref = t.ref.value();
+            line.id = t.id.value();
             line.date = t.date;
             line.check_no = t.check_no.value();
             line.payee = t.payee.value();

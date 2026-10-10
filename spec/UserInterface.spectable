@@ -1152,7 +1152,6 @@ Then register lines are : RegisterLine CompareOnly
 | T1  | 2026-02-01 | Expenses:Auto:Fuel |
 | T2  | 2026-02-08 | --Split--          |
 
-$WIP
 Scenario Deleting a selection removes every transaction in it
 Description Both postings of each, never one side, because a delete that left
 Description the other side standing would leave the book out of balance. The
@@ -1282,7 +1281,6 @@ Description more than one transaction behind it.
 
 # Waiting on the report itself living in the workspace rather than in the
 # window, which is what a report tab needs; see the tabs section above.
-$WIP
 Scenario Clicking a transaction in the report opens its register at that line
 Description The fifth line of the report is the second of the two visits to the
 Description filling station. It is the third line of the checking register, and
@@ -1319,7 +1317,6 @@ Then the register line selected is : RegisterSelect
 # third. Assets:Checking is the register opened because it is the real account
 # the transaction touches; Expenses:Auto:Fuel has no register to browse.
 
-$WIP
 Scenario Clicking a category line in the report opens nothing
 Description A category figure is made of several transactions, so there is no
 Description one of them to go to. The drill-down is what answers that question
@@ -1355,7 +1352,6 @@ Description report's lines from one.
 | Attribute | Type    | Default |
 | Line      | Integer | 1       |
 
-$WIP
 Scenario The menu on one transaction in the report offers to go to it
 Description One line selected is one transaction, so it can be opened. The
 Description register is where a figure is checked and where it is corrected,
@@ -1382,7 +1378,6 @@ Then menu items are : MenuItem
 | Go to the transaction... | true    |
 | Recategorize...          | true    |
 
-$WIP
 Scenario The menu on several transactions offers only to recategorise them
 Description There is no one transaction to go to, and recategorising the lot at
 Description once is the reason to have selected them. Shift took a run of them
@@ -1409,7 +1404,6 @@ Then menu items are : MenuItem
 | Item            | Enabled |
 | Recategorize... | true    |
 
-$WIP
 Scenario A category line in the report has no menu
 Description A category figure is made of several transactions and is not one of
 Description them, so there is neither a transaction to go to nor a single
@@ -1538,7 +1532,6 @@ Then the register line selected is : RegisterSelect
 # The card's register has the charge on the fifth and the payment on the
 # twenty-fifth, so the payment is its second line.
 
-$WIP
 Scenario Recategorising from the report moves the figures with it
 Description The same operation as in the register, reached from the report. It
 Description is the one place where recategorising is expected to change what
@@ -1578,7 +1571,6 @@ Description places that show it agree.
 | Blank     | Boolean   | false   |
 | TheSame   | Boolean   | true    |
 
-$WIP
 Scenario The report and the register show the same transaction id
 Description Shown in both places while the click-through is being checked: it
 Description is how a line on one page is known to be the line on the other.

@@ -12,8 +12,10 @@
 #include "money.h"
 #include "posting.h"
 #include "register_lines.h"
+#include "report.h"
 #include "text_types.h"
 #include "payee_rules.h"
+#include "transaction_edit.h"
 #include "ui_model.h"
 
 // Glue for UserInterface.spectable.
@@ -50,6 +52,7 @@ public:
             auto at = by_ref.find(value.ref);
             if (at == by_ref.end()) {
                 ledger::Transaction t;
+                t.id = ledger::new_id();
                 t.ref = types::TransactionRef(value.ref);
                 t.date = *date;
                 t.payee = types::PayeeName(value.payee);
@@ -291,6 +294,39 @@ private:
     std::vector<ui::ReviewRow> last_review_;
     std::string last_into_;
 
+    // The report side of things -- clicking a line, selecting several,
+    // recategorising from one -- is glue-level and reads chart_/book_/
+    // transactions_ directly rather than through the workspace, which only
+    // tracks which tab a report opened in. last_report_spec_ defaults wide
+    // open rather than to Spec's own 2024 default, so a scenario that never
+    // runs an explicit report (recategorising straight from a book that is
+    // already open) still sees every posting in it.
+    reports::Spec last_report_spec_ = wide_open_spec();
+    std::vector<std::string> report_selected_refs_;
+    bool report_selection_all_transactions_ = true;
+    bool report_mode_ = false;
+    int deletion_count_ = 0;
+
+    static reports::Spec wide_open_spec() {
+        reports::Spec s;
+        s.from = types::Date(1900, 1, 1);
+        s.to = types::Date(2999, 12, 31);
+        return s;
+    }
+
+    ledger::Transaction* find_by_ref(const std::string& ref) {
+        for (ledger::Transaction& t : transactions_)
+            if (t.ref.value() == ref) return &t;
+        return nullptr;
+    }
+
+    void rebuild_book() {
+        book_ = ledger::Ledger();
+        for (const ledger::Transaction& t : transactions_)
+            for (const ledger::Posting& p : t.postings)
+                book_.add({t.date, p.account, p.amount, t.ref.value()});
+    }
+
     ui::Workspace& workspace() {
         if (!workspace_)
             workspace_ = std::make_unique<ui::Workspace>(chart_, book_, transactions_);
@@ -366,13 +402,29 @@ private:
 public:
 
     void when_register_lines_selected(const std::vector<RegisterSelectString>& values) {
+        report_mode_ = false;
         std::vector<int> lines;
         for (const auto& value : values) lines.push_back(std::stoi(value.line));
         workspace().select_lines(lines);
     }
 
+    // One transaction selected offers to go to it as well as to recategorise
+    // it; several offer only to recategorise, because there is no longer one
+    // transaction to go to. A selection with a category line in it, or none
+    // at all, offers nothing -- the empty-table case the converter does not
+    // generate a step for, so nothing here is reached for it in a test, but
+    // the behaviour is still right if it ever is.
+    std::vector<ui::MenuEntry> report_menu_items() const {
+        std::vector<ui::MenuEntry> out;
+        if (!report_selection_all_transactions_ || report_selected_refs_.empty()) return out;
+        if (report_selected_refs_.size() == 1) out.push_back({"Go to the transaction...", true});
+        out.push_back({"Recategorize...", true});
+        return out;
+    }
+
     void then_menu_items_are(const std::vector<MenuItemString>& values) {
-        const std::vector<ui::MenuEntry> got = workspace().menu_items();
+        const std::vector<ui::MenuEntry> got =
+            report_mode_ ? report_menu_items() : workspace().menu_items();
         ASSERT_EQ(values.size(), got.size()) << "number of menu items";
         for (std::size_t i = 0; i < values.size(); ++i) {
             EXPECT_EQ(values[i].item, got[i].item) << "item " << i + 1;
@@ -415,20 +467,37 @@ public:
 
     // The report runs in the window, not in the workspace -- see the Reports
     // suite for the figures themselves. What the workspace tracks is only
-    // which tab it opened in and under what title; that is all a tab scenario
-    // here needs to check.
+    // which tab it opened in and under what title. The spec and detail are
+    // kept here too, though: a click on a report line needs to know what the
+    // report was actually showing to work out which transaction a line
+    // number landed on.
     void when_report_run(const std::vector<ReportSpecString>& values) {
         for (const auto& value : values) {
             const std::string title = value.groupby == "Account"
                                           ? "Balance sheet"
                                           : "Spending by category";
             workspace().open_report(title);
+            reports::Spec s;
+            if (const auto f = types::Date::from_iso(value.from)) s.from = *f;
+            if (const auto t = types::Date::from_iso(value.to)) s.to = *t;
+            if (!value.detail.empty() && value.detail != DNCString)
+                s.detail = reports::detail_from_string(value.detail);
+            last_report_spec_ = s;
         }
     }
 
+    // A transaction line opens its one register, the way the menu's
+    // "Go to the transaction..." does; a category line -- a subtotal or an
+    // Other row, neither of which is one transaction -- opens nothing.
     void when_report_line_clicked(const std::vector<ReportLineSelectString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_report_line_clicked";
+        ASSERT_FALSE(values.empty());
+        const int line = std::stoi(values.front().line);
+        const std::vector<reports::DetailLine> lines =
+            reports::detail_report(chart_, book_, transactions_, last_report_spec_);
+        if (line < 1 || line > static_cast<int>(lines.size())) return;
+        const reports::DetailLine& chosen = lines[static_cast<std::size_t>(line - 1)];
+        if (chosen.kind != reports::LineKind::Transaction) return;
+        workspace().go_to_transaction(chosen.ref);
     }
 
     void then_the_register_line_selected_is(const std::vector<RegisterSelectString>& values) {
@@ -438,19 +507,33 @@ public:
             EXPECT_EQ(std::stoi(values[i].line), got[i]) << "line " << i + 1;
     }
 
+    // The id is never written in a table -- it is a clock reading -- so what
+    // is checked is that the transaction has one and that the report's line
+    // for it carries the same one the register would.
     void then_the_transaction_id_shown_is(const std::vector<IdShownString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_the_transaction_id_shown_is";
-    }
-
-    void examples_datatype_accountsection(const std::vector<EnumerationValuesString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_datatype_accountsection";
-    }
-
-    void examples_businessrule_which_section_a_group_is_shown_under(const std::vector<SectionOfGroupString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_which_section_a_group_is_shown_under";
+        const std::vector<reports::DetailLine> lines =
+            reports::detail_report(chart_, book_, transactions_, last_report_spec_);
+        for (const auto& value : values) {
+            const ledger::Transaction* t = nullptr;
+            for (const ledger::Transaction& one : transactions_)
+                if (one.date.iso() == value.date && one.payee.value() == value.payee) {
+                    t = &one;
+                    break;
+                }
+            ASSERT_NE(nullptr, t) << value.date << " " << value.payee;
+            const reports::DetailLine* on_report = nullptr;
+            for (const reports::DetailLine& l : lines)
+                if (l.kind == reports::LineKind::Transaction && l.date.iso() == value.date &&
+                    l.payee == value.payee) {
+                    on_report = &l;
+                    break;
+                }
+            ASSERT_NE(nullptr, on_report) << value.date << " " << value.payee;
+            EXPECT_EQ(parse_bool_cell(value.blank), t->id.value().empty())
+                << value.date << " " << value.payee;
+            EXPECT_EQ(parse_bool_cell(value.thesame), t->id.value() == on_report->id)
+                << value.date << " " << value.payee;
+        }
     }
 
 public:
@@ -497,9 +580,25 @@ public:
 
 public:
 
+    // A category line -- a subtotal or an Other row -- selected alongside or
+    // instead of a transaction line means there is no single transaction and
+    // no single category either, so the whole selection is marked unusable
+    // rather than quietly dropping the line that did not fit.
     void when_report_lines_selected(const std::vector<ReportMenuSelectString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_report_lines_selected";
+        report_mode_ = true;
+        report_selected_refs_.clear();
+        report_selection_all_transactions_ = true;
+        const std::vector<reports::DetailLine> lines =
+            reports::detail_report(chart_, book_, transactions_, last_report_spec_);
+        for (const auto& value : values) {
+            const int line = std::stoi(value.line);
+            if (line < 1 || line > static_cast<int>(lines.size()) ||
+                lines[static_cast<std::size_t>(line - 1)].kind != reports::LineKind::Transaction) {
+                report_selection_all_transactions_ = false;
+                continue;
+            }
+            report_selected_refs_.push_back(lines[static_cast<std::size_t>(line - 1)].ref);
+        }
     }
 
     // A transfer has two registers and this opens neither; the Thens say which
@@ -510,14 +609,30 @@ public:
         workspace().go_to_transaction(opened_);
     }
 
-    void when_the_transactions_are_recategorised(const std::vector<TransactionRecategoriseString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_the_transactions_are_recategorised";
+    void when_the_transactions_are_recategorised(
+            const std::vector<TransactionRecategoriseString>& values) {
+        for (const auto& value : values) {
+            ledger::Transaction* t = find_by_ref(value.ref);
+            ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
+            edit::assign_category(t, chart_, value.category);
+        }
+        rebuild_book();
+        workspace_.reset();   // the workspace's own copies are now stale
     }
 
     void then_report_rows_are(const std::vector<ReportRowString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_report_rows_are";
+        const reports::CategoryReport report =
+            reports::category_report(chart_, book_, last_report_spec_);
+        ASSERT_EQ(values.size(), report.rows.size()) << "number of report rows";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const reports::Row& got = report.rows[i];
+            EXPECT_EQ(values[i].account, got.account) << "row " << i;
+            EXPECT_EQ(std::stoi(values[i].level), got.level) << got.account << " level";
+            EXPECT_EQ(Money(values[i].amount).cents(), got.amount.cents())
+                << got.account << " amount";
+            EXPECT_EQ(parse_bool_cell(values[i].issubtotal), got.is_subtotal)
+                << got.account << " subtotal";
+        }
     }
 
 public:
@@ -538,13 +653,11 @@ public:
 
 public:
 
-    void when_selection_deleted() {
-        ADD_FAILURE() << "Not implemented: when_selection_deleted";
-    }
+    void when_selection_deleted() { deletion_count_ = workspace().delete_selected(); }
 
     void then_deletion_count_is(const std::vector<DeletionCountString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_deletion_count_is";
+        for (const auto& value : values)
+            EXPECT_EQ(std::stoi(value.removed), deletion_count_) << "transactions removed";
     }
 
 public:

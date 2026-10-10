@@ -1750,9 +1750,28 @@ void MainWindow::refreshPane(int tabPosition) {
             p.reg->item(at, c)->setBackground(QColor(248, 248, 230));
     }
 
-    // Opening on the most recent transactions: twenty years is tens of thousands
-    // of lines, and starting at the top would mean scrolling through 2005.
-    if (!lines.empty()) p.reg->scrollToBottom();
+    // The workspace's selected lines belong to pane 1 -- the active
+    // register -- so only that tab's table reflects them; a click in the
+    // register sets them the same way "Go to the transaction..." from a
+    // report does, so both land here.
+    const bool isActiveRegister =
+        static_cast<std::size_t>(tabPosition - 1) < rows.size() &&
+        rows[static_cast<std::size_t>(tabPosition - 1)].active;
+    const std::vector<int> chosen =
+        isActiveRegister ? workspace_->selected_lines() : std::vector<int>();
+    if (!chosen.empty()) {
+        p.reg->clearSelection();
+        for (int line : chosen)
+            if (line >= 1 && line <= static_cast<int>(lines.size()))
+                p.reg->selectRow(line - 1);
+        if (chosen.front() >= 1 && chosen.front() <= static_cast<int>(lines.size()))
+            p.reg->scrollToItem(p.reg->item(chosen.front() - 1, 0));
+    } else if (!lines.empty()) {
+        // Opening on the most recent transactions: twenty years is tens of
+        // thousands of lines, and starting at the top would mean scrolling
+        // through 2005.
+        p.reg->scrollToBottom();
+    }
     refreshing_ = was;
 }
 
