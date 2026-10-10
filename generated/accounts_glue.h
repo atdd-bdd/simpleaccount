@@ -193,12 +193,14 @@ public:
         for (const auto& value : values) {
             const chart::Account* a = chart_.find(value.account);
             ASSERT_NE(nullptr, a) << "no account " << value.account;
-            EXPECT_EQ(Money(value.rawbalance).cents(),
-                      ledger_.raw_balance(value.account).cents())
-                << value.account << " raw -- " << value.notes;
-            EXPECT_EQ(Money(value.displaybalance).cents(),
-                      ledger_.display_balance(value.account, a->type).cents())
-                << value.account << " display -- " << value.notes;
+            if (value.rawbalance != DNCString)
+                EXPECT_EQ(Money(value.rawbalance).cents(),
+                          ledger_.raw_balance(value.account).cents())
+                    << value.account << " raw -- " << value.notes;
+            if (value.displaybalance != DNCString)
+                EXPECT_EQ(Money(value.displaybalance).cents(),
+                          ledger_.display_balance(value.account, a->type).cents())
+                    << value.account << " display -- " << value.notes;
         }
     }
 
@@ -295,6 +297,10 @@ private:
         s.type = types::to_string(a.type);
         s.placeholder = a.placeholder ? "true" : "false";
         s.hidden = a.hidden ? "true" : "false";
+        s.alias = a.alias.empty() ? "none" : a.alias;
+        s.paymentpayee = a.payment_payee.empty() ? "none" : a.payment_payee;
+        s.bank = a.bank.empty() ? "none" : a.bank;
+        s.accountnumber = a.account_number.empty() ? "none" : a.account_number;
         return s;
     }
 

@@ -214,7 +214,6 @@ Then accounts under Expenses:Auto are : ChartOfAccounts CompareOnly
 | Path               |
 | Expenses:Auto:Fuel |
 
-$WIP
 Scenario Hiding an account keeps its history
 Given the chart of accounts is as previous
 When account hidden : AccountSelect
