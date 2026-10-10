@@ -82,8 +82,11 @@ public:
     }
 
     void when_import_reviewed(const std::vector<ImportReviewRowString>& values) {
+        // The account is not asked for: whichever register is in front of you
+        // is the one the statement is for. See the active-tab rule.
+        const ui::Workspace::ActiveRegister active = workspace().active_register();
+        ASSERT_FALSE(active.refused) << active.reason;
         last_review_.clear();
-        std::string into;
         for (const auto& value : values) {
             ui::ReviewRow row;
             row.line = std::stoi(value.line);
@@ -104,10 +107,9 @@ public:
             row.check_no = blank(value.checkno);
             row.cleared = types::cleared_status_from_string(value.cleared);
             last_review_.push_back(row);
-            if (into.empty()) into = value.account;
         }
-        last_into_ = into;
-        workspace().review_import(last_review_, into);
+        last_into_ = active.account;
+        workspace().review_import(last_review_, last_into_);
     }
 
     void when_import_reviewed_as_previous() {
@@ -254,8 +256,8 @@ public:
         for (const auto& value : values) {
             const EnumerationValuesTyped v = EnumerationValuesTyped::from_string_struct(value);
             bool known = false;
-            for (ui::PaneContent c : {ui::PaneContent::Register, ui::PaneContent::ImportReview,
-                                      ui::PaneContent::Empty})
+            for (ui::PaneContent c : {ui::PaneContent::Register, ui::PaneContent::Report,
+                                      ui::PaneContent::ImportReview, ui::PaneContent::Empty})
                 if (ui::to_string(c) == v.value) known = true;
             EXPECT_TRUE(known) << "unknown pane content: " << v.value;
         }
@@ -278,6 +280,7 @@ public:
 
 private:
     std::string opened_;
+    ui::Workspace::ActiveRegister import_refusal_;
     ui::Recategorised recategorised_;
     payees::Rule offered_;
     chart::Chart chart_;
@@ -410,9 +413,17 @@ public:
         EXPECT_EQ(parse_bool_cell(want.enabled), offered_.enabled) << "enabled";
     }
 
+    // The report runs in the window, not in the workspace -- see the Reports
+    // suite for the figures themselves. What the workspace tracks is only
+    // which tab it opened in and under what title; that is all a tab scenario
+    // here needs to check.
     void when_report_run(const std::vector<ReportSpecString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_report_run";
+        for (const auto& value : values) {
+            const std::string title = value.groupby == "Account"
+                                          ? "Balance sheet"
+                                          : "Spending by category";
+            workspace().open_report(title);
+        }
     }
 
     void when_report_line_clicked(const std::vector<ReportLineSelectString>& values) {
@@ -445,27 +456,42 @@ public:
 public:
 
     void then_open_tabs_are(const std::vector<OpenTabString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_open_tabs_are";
+        const std::vector<ui::TabRow> got = workspace().open_tabs();
+        ASSERT_EQ(values.size(), got.size()) << "number of open tabs";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            EXPECT_EQ(std::stoi(values[i].position), got[i].position)
+                << "tab " << i + 1 << " position";
+            EXPECT_EQ(values[i].kind, ui::to_string(got[i].kind))
+                << "tab " << i + 1 << " kind";
+            EXPECT_EQ(blank(values[i].account), got[i].account)
+                << "tab " << i + 1 << " account";
+            EXPECT_EQ(values[i].name, got[i].name) << "tab " << i + 1 << " name";
+            EXPECT_EQ(parse_bool_cell(values[i].active), got[i].active)
+                << "tab " << i + 1 << " active";
+        }
     }
 
     void when_tab_closed(const std::vector<TabSelectString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_tab_closed";
+        for (const auto& value : values) workspace().close_tab(std::stoi(value.position));
     }
 
     void when_import_asked_for() {
-        ADD_FAILURE() << "Not implemented: when_import_asked_for";
+        import_refusal_ = workspace().active_register();
     }
 
     void then_the_import_is_refused_saying(const std::string& value) {
-        std::cout << value << "\n";
-        ADD_FAILURE() << "Not implemented: then_the_import_is_refused_saying";
+        EXPECT_TRUE(import_refusal_.refused) << "it was not refused";
+        EXPECT_EQ(value, import_refusal_.reason);
     }
 
     void examples_datatype_tabkind(const std::vector<EnumerationValuesString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_datatype_tabkind";
+        for (const auto& value : values) {
+            const EnumerationValuesTyped v = EnumerationValuesTyped::from_string_struct(value);
+            bool known = false;
+            for (ui::TabKind k : {ui::TabKind::Register, ui::TabKind::Report})
+                if (ui::to_string(k) == v.value) known = true;
+            EXPECT_TRUE(known) << "unknown tab kind: " << v.value;
+        }
     }
 
 

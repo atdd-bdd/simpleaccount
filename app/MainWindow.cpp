@@ -27,9 +27,9 @@
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QSplitter>
-#include <QStackedWidget>
 #include <QStatusBar>
 #include <QTableWidget>
+#include <QTabWidget>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QKeyEvent>
@@ -268,10 +268,55 @@ MainWindow::MainWindow() {
     accounts_->setMinimumWidth(260);
     connect(accounts_, &QTreeWidget::itemSelectionChanged, this, &MainWindow::accountClicked);
 
-    panes_ = new QSplitter(Qt::Vertical);
+    tabs_ = new QTabWidget;
+    tabs_->setTabsClosable(true);
+    connect(tabs_, &QTabWidget::tabCloseRequested, this, &MainWindow::tabClosed);
+    connect(tabs_, &QTabWidget::currentChanged, this, &MainWindow::tabChanged);
+
+    // The review panel, beside the active tab only while an import is
+    // waiting -- one of these, not one per tab. See the second-pane section
+    // of UserInterface.spectable.
+    reviewPanel_ = new QWidget;
+    auto* reviewLayout = new QVBoxLayout(reviewPanel_);
+    reviewHeading_ = new QLabel;
+    reviewLayout->addWidget(reviewHeading_);
+    reviewTable_ = new QTableWidget;
+    reviewTable_->setColumnCount(7);
+    reviewTable_->setHorizontalHeaderLabels(
+        {"", "Date", "Payee", "Account", "Category", "Amount", "Import says"});
+    reviewTable_->verticalHeader()->setVisible(false);
+    reviewTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    reviewTable_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    reviewTable_->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
+    reviewLayout->addWidget(reviewTable_);
+    auto* reviewButtons = new QHBoxLayout;
+    reviewButtons->addStretch();
+    auto* acceptButton = new QPushButton("Accept ticked rows");
+    auto* cancelButton = new QPushButton("Cancel");
+    connect(acceptButton, &QPushButton::clicked, this, &MainWindow::acceptImport);
+    connect(cancelButton, &QPushButton::clicked, this, &MainWindow::cancelImport);
+    reviewButtons->addWidget(cancelButton);
+    reviewButtons->addWidget(acceptButton);
+    reviewLayout->addLayout(reviewButtons);
+    connect(reviewTable_, &QTableWidget::itemChanged, this,
+            [this](QTableWidgetItem* item) {
+                if (item->column() != 0 || refreshing_) return;
+                const int line = item->data(Qt::UserRole).toInt();
+                if (item->checkState() == Qt::Checked) workspace_->tick(line);
+                else workspace_->untick(line);
+                refreshReviewPanel();
+            });
+    reviewPanel_->setVisible(false);
+
+    rightSplit_ = new QSplitter(Qt::Horizontal);
+    rightSplit_->addWidget(tabs_);
+    rightSplit_->addWidget(reviewPanel_);
+    rightSplit_->setStretchFactor(0, 1);
+    rightSplit_->setStretchFactor(1, 1);
+
     outer_ = new QSplitter(Qt::Horizontal);
     outer_->addWidget(accounts_);
-    outer_->addWidget(panes_);
+    outer_->addWidget(rightSplit_);
     outer_->setStretchFactor(0, 0);
     outer_->setStretchFactor(1, 1);
     setCentralWidget(outer_);
@@ -310,13 +355,19 @@ void MainWindow::applyFont(const QFont& font) {
     const int row = metrics.height() + 8;
     QFont bold = appFont_;
     bold.setBold(true);
-    for (PaneWidgets& p : paneWidgets_) {
-        p.reg->setFont(appFont_);
-        p.reg->verticalHeader()->setDefaultSectionSize(row);
-        p.reviewTable->setFont(appFont_);
-        p.reviewTable->verticalHeader()->setDefaultSectionSize(row);
-        p.heading->setFont(bold);
+    for (TabWidgets& t : tabWidgets_) {
+        if (t.reg != nullptr) {
+            t.reg->setFont(appFont_);
+            t.reg->verticalHeader()->setDefaultSectionSize(row);
+        }
+        if (t.reportTable != nullptr) {
+            t.reportTable->setFont(appFont_);
+            t.reportTable->verticalHeader()->setDefaultSectionSize(row);
+        }
     }
+    reviewTable_->setFont(appFont_);
+    reviewTable_->verticalHeader()->setDefaultSectionSize(row);
+    reviewHeading_->setFont(bold);
     accounts_->setFont(appFont_);
     if (status_) status_->setFont(appFont_);
     menuBar()->setFont(appFont_);
@@ -366,10 +417,6 @@ void MainWindow::buildMenus() {
     reports->addAction("&Spending by category...", this, &MainWindow::showReport);
 
     QMenu* view = menuBar()->addMenu("&View");
-    auto* split = view->addAction("&Split view");
-    split->setShortcut(QKeySequence("Ctrl+Shift+S"));
-    connect(split, &QAction::triggered, this, &MainWindow::toggleSplit);
-    view->addSeparator();
     auto* font = view->addAction("&Font...");
     connect(font, &QAction::triggered, this, &MainWindow::chooseFont);
     view->addSeparator();
@@ -379,31 +426,32 @@ void MainWindow::buildMenus() {
 }
 
 void MainWindow::rebuildWorkspace() {
-    // Which account each pane was showing, so that it still is afterwards.
-    // Rebuilding is how the workspace is handed the book again after it changes;
-    // it is not a request to forget what was being read. Without this, recording
-    // a transaction emptied the register it was recorded in.
-    std::vector<std::string> showing;
-    bool wasSplit = false;
-    int active = 1;
+    // Which register tabs were open, in order, and which was active, so they
+    // still are afterwards. Rebuilding is how the workspace is handed the
+    // book again after it changes; it is not a request to forget what was
+    // being read. Without this, recording a transaction emptied the register
+    // it was recorded in.
+    //
+    // Report tabs do not survive a rebuild: a report is not modeled in the
+    // workspace at all, and the Qt tab for one is untouched by this (see
+    // syncTabs, which only ever adds and removes, never rebuilds, a report's
+    // own widget).
+    std::vector<std::string> accounts;
+    std::string activeAccount;   // empty if a report tab was the active one
     if (workspace_) {
-        for (const ui::Pane& pane : workspace_->panes())
-            showing.push_back(pane.account);
-        wasSplit = workspace_->split_open();
-        active = workspace_->active_pane();
+        for (const ui::TabRow& row : workspace_->open_tabs()) {
+            if (row.kind != ui::TabKind::Register) continue;
+            accounts.push_back(row.account);
+            if (row.active) activeAccount = row.account;
+        }
     }
 
     workspace_ = std::make_unique<ui::Workspace>(chart_, book_, transactions_);
-
-    if (showing.empty()) return;
-    workspace_->select(showing.front());
-    if (wasSplit) {
-        // Splitting makes the new pane the active one, which is where the
-        // second account goes.
-        workspace_->split();
-        if (showing.size() > 1) workspace_->select(showing[1]);
-    }
-    workspace_->make_active(active);
+    for (const std::string& account : accounts) workspace_->select(account);
+    // select() activates whatever it opens or returns to, so selecting them
+    // back in order leaves the last one active; asking for the one that
+    // really was active undoes that.
+    if (!activeAccount.empty()) workspace_->select(activeAccount);
 }
 
 std::string MainWindow::selectedAccount() const {
@@ -555,9 +603,12 @@ void MainWindow::bookChanged(const QString& what) {
                          .arg(chart_.all().size()));
 }
 
-// The path carries the tree, so a new account says where it belongs rather than
-// being filed afterwards: Assets:Checking, not Checking. Every level above it
-// that is missing is filled in as a placeholder; see the chart rules in Accounts.
+// A real account picked with no parent is flat -- Checking, not
+// Assets:Checking -- since the group above already says what kind of thing
+// it is. A category still nests under its fixed root either way, parent or
+// not, because the rest of the program finds it by that literal path. Every
+// level between a chosen parent and the new account that is missing is
+// filled in as a placeholder; see the chart rules in Accounts.
 void MainWindow::newAccount() {
     if (!store_.is_open()) {
         QMessageBox::information(this, "SimpleAccount",
@@ -816,26 +867,26 @@ void MainWindow::importTransactions() {
                                  "Open a book before importing into it.");
         return;
     }
-    // A download is for one account, and which account is not in the file in any
-    // form this program can trust: a QFX names the bank's own number for it and a
-    // CSV usually names nothing. So the account is the one being read.
-    const std::string account = selectedAccount();
-    if (account.empty()) {
-        QMessageBox::information(
-            this, "SimpleAccount",
-            "Select the account this download is for, then import into it.");
+    // The account is not asked for: whichever register is the active tab is
+    // the one the statement is for. See the active-tab rule in
+    // UserInterface.spectable.
+    const ui::Workspace::ActiveRegister active = workspace_->active_register();
+    if (active.refused) {
+        QMessageBox::information(this, "SimpleAccount",
+                                 QString::fromStdString(active.reason));
         return;
     }
     const QString path = QFileDialog::getOpenFileName(
-        this, QString("Import into %1").arg(QString::fromStdString(account)), {},
+        this, QString("Import into %1").arg(QString::fromStdString(active.account)), {},
         "Downloaded transactions (*.qfx *.QFX *.ofx *.OFX *.csv *.CSV);;All files (*)");
     if (path.isEmpty()) return;
     importTransactionsFrom(path);
 }
 
 void MainWindow::importTransactionsFrom(const QString& path) {
-    const std::string account = selectedAccount();
-    if (account.empty()) return;
+    const ui::Workspace::ActiveRegister active = workspace_->active_register();
+    if (active.refused) return;
+    const std::string account = active.account;
     std::ifstream in(path.toStdString(), std::ios::binary);
     if (!in) {
         QMessageBox::warning(this, "SimpleAccount",
@@ -881,98 +932,95 @@ void MainWindow::importTransactionsFrom(const QString& path) {
     }
 }
 
-void MainWindow::showReport() {
-    if (!store_.is_open()) {
-        QMessageBox::information(this, "SimpleAccount",
-                                 "Open a book before reporting on it.");
-        return;
-    }
-
-    QDialog box(this);
-    box.setWindowTitle("Spending by category");
-    box.resize(820, 640);
-    auto* layout = new QVBoxLayout(&box);
+// Builds the content of one report tab. Everything that used to live on the
+// stack of a modal dialog now lives as long as the tab does, so every lambda
+// below captures what it needs explicitly rather than by reference -- a "[&]"
+// here would dangle the moment this function returned.
+MainWindow::TabWidgets MainWindow::makeReportTab(int tabPosition, const std::string& title) {
+    (void)tabPosition;
+    TabWidgets t;
+    t.isReport = true;
+    auto* container = new QWidget;
+    t.widget = container;
+    auto* layout = new QVBoxLayout(container);
 
     // The periods Quicken offers, by the names it uses, because the figures are
     // read against its reports. All Dates runs from the first posting to today.
-    auto* period = new QComboBox;
-    period->addItems({"YearToDate", "ThisYear", "LastYear", "ThisQuarter",
-                      "ThisMonth", "MonthToDate", "LastMonth", "Last12Months",
-                      "All"});
-    auto* from = new QDateEdit;
-    auto* to = new QDateEdit;
-    for (QDateEdit* edit : {from, to}) {
+    t.period = new QComboBox;
+    t.period->addItems({"YearToDate", "ThisYear", "LastYear", "ThisQuarter",
+                        "ThisMonth", "MonthToDate", "LastMonth", "Last12Months",
+                        "All"});
+    t.from = new QDateEdit;
+    t.to = new QDateEdit;
+    for (QDateEdit* edit : {t.from, t.to}) {
         edit->setCalendarPopup(true);
         edit->setDisplayFormat("yyyy-MM-dd");
     }
     // How much of the tree to show. The three the report offers, in the order
     // they go from summary to everything. See the detail section of
     // Reports.spectable.
-    auto* detail = new QComboBox;
-    detail->addItem("Categories - highest only",
-                    QString::fromStdString(reports::to_string(reports::Detail::HighestOnly)));
-    detail->addItem("Categories - all",
-                    QString::fromStdString(reports::to_string(reports::Detail::AllCategories)));
-    detail->addItem("Transactions",
-                    QString::fromStdString(reports::to_string(reports::Detail::Transactions)));
-    detail->setCurrentIndex(1);
+    t.detail = new QComboBox;
+    t.detail->addItem("Categories - highest only",
+                      QString::fromStdString(reports::to_string(reports::Detail::HighestOnly)));
+    t.detail->addItem("Categories - all",
+                      QString::fromStdString(reports::to_string(reports::Detail::AllCategories)));
+    t.detail->addItem("Transactions",
+                      QString::fromStdString(reports::to_string(reports::Detail::Transactions)));
+    t.detail->setCurrentIndex(1);
 
-    auto* quicken = new QCheckBox("Quicken signs");
-    quicken->setToolTip("Expenses negative, as Quicken writes them, so a figure "
-                        "can be read straight against one of its reports.");
-    auto* zero = new QCheckBox("Show empty categories");
+    t.quicken = new QCheckBox("Quicken signs");
+    t.quicken->setToolTip("Expenses negative, as Quicken writes them, so a figure "
+                          "can be read straight against one of its reports.");
+    t.zero = new QCheckBox("Show empty categories");
 
     auto* chooser = new QHBoxLayout;
     chooser->addWidget(new QLabel("Period"));
-    chooser->addWidget(period);
+    chooser->addWidget(t.period);
     chooser->addWidget(new QLabel("from"));
-    chooser->addWidget(from);
+    chooser->addWidget(t.from);
     chooser->addWidget(new QLabel("to"));
-    chooser->addWidget(to);
+    chooser->addWidget(t.to);
     chooser->addSpacing(12);
     chooser->addWidget(new QLabel("Show"));
-    chooser->addWidget(detail);
+    chooser->addWidget(t.detail);
     chooser->addStretch(1);
-    chooser->addWidget(quicken);
-    chooser->addWidget(zero);
+    chooser->addWidget(t.quicken);
+    chooser->addWidget(t.zero);
     layout->addLayout(chooser);
 
-    auto* table = new QTableWidget;
-    table->verticalHeader()->setVisible(false);
-    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    layout->addWidget(table, 1);
+    t.reportTable = new QTableWidget;
+    t.reportTable->verticalHeader()->setVisible(false);
+    t.reportTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    layout->addWidget(t.reportTable, 1);
 
-    auto* totals = new QLabel;
+    t.totals = new QLabel;
     QFont bold = appFont_;
     bold.setBold(true);
-    totals->setFont(bold);
-    layout->addWidget(totals);
+    t.totals->setFont(bold);
+    layout->addWidget(t.totals);
 
-    auto* close = new QPushButton("&Close");
-    close->setDefault(true);
-    auto* row = new QHBoxLayout;
-    row->addStretch(1);
-    row->addWidget(close);
-    layout->addLayout(row);
+    // The lines the table is showing, kept so the menu can turn a selected row
+    // back into a transaction.
+    t.shown = std::make_shared<std::vector<reports::DetailLine>>();
 
-    // The earliest posting in the book, which is where All Dates starts.
-    types::Date earliest = asDate(QDate::currentDate());
-    for (const ledger::DatedPosting& one : book_.postings())
-        if (one.date < earliest) earliest = one.date;
-
-    // One step of indent per level, which is what makes a child read as part of
-    // the line above it rather than as another category of its own.
+    // One step of indent per level, which is what makes a child read as part
+    // of the line above it rather than as another category of its own.
     const auto indented = [](int level, const std::string& text) {
         return QString::fromStdString(
             std::string(static_cast<std::size_t>(level) * 2, ' ') + text);
     };
 
-    // The lines the table is showing, kept so that the menu can turn a selected
-    // row back into a transaction. The report itself is still built here rather
-    // than in the workspace, which is why the click-through scenarios wait.
-    auto shown = std::make_shared<std::vector<reports::DetailLine>>();
+    QComboBox* period = t.period;
+    QDateEdit* from = t.from;
+    QDateEdit* to = t.to;
+    QComboBox* detail = t.detail;
+    QCheckBox* quicken = t.quicken;
+    QCheckBox* zero = t.zero;
+    QTableWidget* table = t.reportTable;
+    QLabel* totals = t.totals;
+    std::shared_ptr<std::vector<reports::DetailLine>> shown = t.shown;
 
-    const auto run = [&, shown]() {
+    t.run = [this, from, to, detail, quicken, zero, table, totals, shown, indented, bold]() {
         reports::Spec spec;
         spec.from = asDate(from->date());
         spec.to = asDate(to->date());
@@ -1051,8 +1099,14 @@ void MainWindow::showReport() {
                             .arg(money(report.totals.expenses))
                             .arg(money(report.totals.net)));
     };
+    std::function<void()> run = t.run;
 
-    const auto takePeriod = [&]() {
+    // The earliest posting in the book, which is where All Dates starts.
+    types::Date earliest = asDate(QDate::currentDate());
+    for (const ledger::DatedPosting& one : book_.postings())
+        if (one.date < earliest) earliest = one.date;
+
+    const auto takePeriod = [this, period, from, to, run, earliest]() {
         const auto range = reports::named_range(
             period->currentText().toStdString(), asDate(QDate::currentDate()),
             earliest);
@@ -1064,18 +1118,22 @@ void MainWindow::showReport() {
         run();
     };
 
-    QObject::connect(period, &QComboBox::currentTextChanged, &box, takePeriod);
-    // Typing a date of your own is not the same as asking for a named period, so
-    // it runs the report without moving the period back.
-    QObject::connect(from, &QDateEdit::dateChanged, &box, run);
-    QObject::connect(to, &QDateEdit::dateChanged, &box, run);
+    connect(period, &QComboBox::currentTextChanged, container, takePeriod);
+    // Typing a date of your own is not the same as asking for a named period,
+    // so it runs the report without moving the period back.
+    connect(from, &QDateEdit::dateChanged, container, run);
+    connect(to, &QDateEdit::dateChanged, container, run);
+    connect(detail, &QComboBox::currentIndexChanged, container, run);
+    connect(quicken, &QCheckBox::toggled, container, run);
+    connect(zero, &QCheckBox::toggled, container, run);
+
     // One transaction selected can be opened; several can only be given a
     // category together. A category line is neither, and offers nothing.
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setSelectionMode(QAbstractItemView::ExtendedSelection);
     table->setContextMenuPolicy(Qt::CustomContextMenu);
-    QObject::connect(table, &QTableWidget::customContextMenuRequested, &box,
-                     [&, shown](const QPoint& at) {
+    connect(table, &QTableWidget::customContextMenuRequested, container,
+            [this, table, shown, run](const QPoint& at) {
         std::vector<std::string> refs;
         for (const QModelIndex& index : table->selectionModel()->selectedRows()) {
             const std::size_t row = static_cast<std::size_t>(index.row());
@@ -1086,38 +1144,35 @@ void MainWindow::showReport() {
         }
         if (refs.empty()) return;
 
-        QMenu menu(&box);
+        QMenu menu(table);
         if (refs.size() == 1) {
             // A transfer is in two registers and neither is more right than the
             // other -- a payment to a card is in the current account's register
             // and in the card's -- so both are offered and the reader chooses.
             const std::vector<std::string> where =
                 workspace_->registers_offered(refs.front());
-            const auto open = [&, refs](const std::string& account) {
+            const auto open = [this, refs](const std::string& account) {
                 if (!workspace_->go_to_transaction_in(refs.front(), account)) return;
-                // The register is behind the report, so the report closes to
-                // show what was asked for.
+                // The newly active tab is a register; syncTabs brings the Qt
+                // tab bar into step with it.
                 refresh();
-                box.accept();
             };
             if (where.size() == 1) {
                 QAction* go = menu.addAction("Go to the transaction...");
                 const std::string only = where.front();
-                QObject::connect(go, &QAction::triggered, &box,
-                                 [open, only]() { open(only); });
+                connect(go, &QAction::triggered, table, [open, only]() { open(only); });
             } else if (where.size() > 1) {
                 QMenu* go = menu.addMenu("Go to the transaction in");
                 for (const std::string& account : where) {
-                    QAction* one =
-                        go->addAction(QString::fromStdString(account));
-                    QObject::connect(one, &QAction::triggered, &box,
-                                     [open, account]() { open(account); });
+                    QAction* one = go->addAction(QString::fromStdString(account));
+                    connect(one, &QAction::triggered, table,
+                            [open, account]() { open(account); });
                 }
             }
         }
         QAction* change = menu.addAction("Recategorize...");
-        QObject::connect(change, &QAction::triggered, &box, [&, refs]() {
-            CategoryPick pick(&box, chart_, std::string());
+        connect(change, &QAction::triggered, table, [this, refs, run]() {
+            CategoryPick pick(this, chart_, std::string());
             if (pick.exec() != QDialog::Accepted) return;
             const std::string into = pick.chosen();
             if (into.empty()) return;
@@ -1133,19 +1188,25 @@ void MainWindow::showReport() {
                 run();
             }
             if (done.refused > 0 && !done.reason.empty())
-                QMessageBox::information(&box, "Recategorize",
+                QMessageBox::information(this, "Recategorize",
                                          QString::fromStdString(done.reason));
         });
         menu.exec(table->viewport()->mapToGlobal(at));
     });
 
-    QObject::connect(detail, &QComboBox::currentIndexChanged, &box, run);
-    QObject::connect(quicken, &QCheckBox::toggled, &box, run);
-    QObject::connect(zero, &QCheckBox::toggled, &box, run);
-    QObject::connect(close, &QPushButton::clicked, &box, &QDialog::accept);
-
     takePeriod();
-    box.exec();
+    (void)title;
+    return t;
+}
+
+void MainWindow::showReport() {
+    if (!store_.is_open()) {
+        QMessageBox::information(this, "SimpleAccount",
+                                 "Open a book before reporting on it.");
+        return;
+    }
+    workspace_->open_report("Spending by category");
+    refresh();
 }
 
 void MainWindow::assignPayeesAccordingToRules() {
@@ -1321,11 +1382,9 @@ void MainWindow::editRules() {
 }
 
 // The lines selected in a register, counting from one, in the order shown.
-void MainWindow::registerMenu(int paneOneBased, const QPoint& at) {
-    PaneWidgets& p = paneWidgets_[static_cast<std::size_t>(paneOneBased - 1)];
-    const ui::Pane& state =
-        workspace_->panes()[static_cast<std::size_t>(paneOneBased - 1)];
-    if (state.showing != ui::PaneContent::Register) return;
+void MainWindow::registerMenu(int tabPosition, const QPoint& at) {
+    TabWidgets& p = tabWidgets_[static_cast<std::size_t>(tabPosition - 1)];
+    if (p.isReport || p.reg == nullptr) return;
 
     // The blank line at the foot is not a transaction and cannot be acted on.
     const int lines = p.reg->rowCount() - 1;
@@ -1335,9 +1394,8 @@ void MainWindow::registerMenu(int paneOneBased, const QPoint& at) {
     std::sort(chosen.begin(), chosen.end());
     if (chosen.empty()) return;
 
-    // The pane acted on is the one clicked in, and the selection is the
-    // workspace's rather than the table's from here on.
-    workspace_->make_active(paneOneBased);
+    // Only the active tab's register can have received this click, so the
+    // selection is always of pane 1 -- the tab area -- from here on.
     workspace_->select_lines(chosen);
 
     QMenu menu(this);
@@ -1346,13 +1404,13 @@ void MainWindow::registerMenu(int paneOneBased, const QPoint& at) {
         action->setEnabled(entry.enabled);
         if (entry.item.rfind("Recategorize", 0) == 0)
             connect(action, &QAction::triggered, this,
-                    [this, paneOneBased]() { recategorise(paneOneBased); });
+                    [this]() { recategorise(1); });
         else if (entry.item.rfind("Delete", 0) == 0)
             connect(action, &QAction::triggered, this,
-                    [this, paneOneBased]() { deleteSelection(paneOneBased); });
+                    [this]() { deleteSelection(1); });
         else
             connect(action, &QAction::triggered, this,
-                    [this, paneOneBased]() { addPayeeRuleFrom(paneOneBased); });
+                    [this]() { addPayeeRuleFrom(1); });
     }
     menu.exec(p.reg->viewport()->mapToGlobal(at));
 }
@@ -1362,7 +1420,8 @@ void MainWindow::recategorise(int paneOneBased) {
     if (chosen.empty()) return;
     // Opened on the category the first selected line already has, which is
     // what makes correcting one a matter of a few keystrokes.
-    const std::vector<reg::Line> lines = workspace_->register_lines(paneOneBased);
+    const std::vector<reg::Line> lines = workspace_->register_lines(1);
+    (void)paneOneBased;
     std::string start;
     if (chosen.front() >= 1 && chosen.front() <= static_cast<int>(lines.size())) {
         const reg::Line& line = lines[static_cast<std::size_t>(chosen.front() - 1)];
@@ -1443,12 +1502,6 @@ void MainWindow::addPayeeRuleFrom(int paneOneBased) {
                          .arg(QString::fromStdString(wanted.pattern)));
 }
 
-void MainWindow::toggleSplit() {
-    if (workspace_->split_open()) workspace_->close_split();
-    else workspace_->split();
-    refresh();
-}
-
 void MainWindow::toggleHidden() {
     showHidden_ = !showHidden_;
     refreshAccounts();
@@ -1482,102 +1535,93 @@ void MainWindow::cancelImport() {
     refresh();
 }
 
-MainWindow::PaneWidgets MainWindow::makePane(int paneOneBased) {
-    PaneWidgets p;
-    p.stack = new QStackedWidget;
-    p.blank = reg::blank_line_on(asDate(QDate::currentDate()));
+// A tab's position can shift as other tabs close; nothing here is handed one
+// to remember, so every handler looks it up fresh from the widget Qt just
+// told it about.
+MainWindow::TabWidgets MainWindow::makeRegisterTab(int tabPosition) {
+    (void)tabPosition;
+    TabWidgets t;
+    t.blank = reg::blank_line_on(asDate(QDate::currentDate()));
 
-    p.reg = new QTableWidget;
-    p.reg->setColumnCount(8);
-    p.reg->setHorizontalHeaderLabels(
+    t.reg = new QTableWidget;
+    t.widget = t.reg;
+    t.reg->setColumnCount(8);
+    t.reg->setHorizontalHeaderLabels(
         {"Date", "Num", "Payee", "Category", "Memo", "Payment", "Deposit", "Balance"});
-    p.reg->verticalHeader()->setVisible(false);
-    p.reg->setSelectionBehavior(QAbstractItemView::SelectRows);
+    t.reg->verticalHeader()->setVisible(false);
+    t.reg->setSelectionBehavior(QAbstractItemView::SelectRows);
     // Typing is allowed, and only the blank line's cells carry the editable
     // flag, so the rest of a register stays read-only: a stray keypress must
     // not change a transaction from 2009.
-    p.reg->setEditTriggers(QAbstractItemView::DoubleClicked |
+    t.reg->setEditTriggers(QAbstractItemView::DoubleClicked |
                            QAbstractItemView::EditKeyPressed |
                            QAbstractItemView::AnyKeyPressed);
-    p.reg->installEventFilter(new EnterRecords(p.reg, [this, paneOneBased]() {
-        recordBlankLine(paneOneBased);
+    QTableWidget* reg = t.reg;
+    t.reg->installEventFilter(new EnterRecords(t.reg, [this, reg]() {
+        recordBlankLine(tabs_->indexOf(reg) + 1);
     }));
     // Shift and control already extend and add to the selection; this is what
     // offers to do something with it. See the register-menu section of
     // UserInterface.spectable.
-    p.reg->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    p.reg->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(p.reg, &QTableWidget::customContextMenuRequested, this,
-            [this, paneOneBased](const QPoint& at) { registerMenu(paneOneBased, at); });
-    p.reg->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
-    p.reg->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
-    p.stack->addWidget(p.reg);
+    t.reg->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    t.reg->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(t.reg, &QTableWidget::customContextMenuRequested, this,
+            [this, reg](const QPoint& at) { registerMenu(tabs_->indexOf(reg) + 1, at); });
+    t.reg->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    t.reg->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
 
-    p.review = new QWidget;
-    auto* layout = new QVBoxLayout(p.review);
-    p.heading = new QLabel;
-    layout->addWidget(p.heading);
-
-    p.reviewTable = new QTableWidget;
-    p.reviewTable->setColumnCount(7);
-    p.reviewTable->setHorizontalHeaderLabels(
-        {"", "Date", "Payee", "Account", "Category", "Amount", "Import says"});
-    p.reviewTable->verticalHeader()->setVisible(false);
-    p.reviewTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-    p.reviewTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
-    p.reviewTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
-    layout->addWidget(p.reviewTable);
-
-    auto* buttons = new QHBoxLayout;
-    buttons->addStretch();
-    auto* accept = new QPushButton("Accept ticked rows");
-    auto* cancel = new QPushButton("Cancel");
-    connect(accept, &QPushButton::clicked, this, &MainWindow::acceptImport);
-    connect(cancel, &QPushButton::clicked, this, &MainWindow::cancelImport);
-    buttons->addWidget(cancel);
-    buttons->addWidget(accept);
-    layout->addLayout(buttons);
-    p.stack->addWidget(p.review);
-
-    // A pane made after the font was chosen has to be brought into step with it:
-    // the app font reaches the tables, but not the bold heading or the row
-    // heights, which are worked out from the font in force.
+    // A tab made after the font was chosen has to be brought into step with
+    // it: the app font reaches the table, but not the row heights, which are
+    // worked out from the font in force.
     const QFontMetrics metrics(appFont_);
-    const int rowHeight = metrics.height() + 8;
-    p.reg->verticalHeader()->setDefaultSectionSize(rowHeight);
-    p.reviewTable->verticalHeader()->setDefaultSectionSize(rowHeight);
-    QFont headingFont = appFont_;
-    headingFont.setBold(true);
-    p.heading->setFont(headingFont);
-
-    // A tick is the only thing editable in the review, and changing it tells the
-    // workspace rather than keeping a second copy of the answer here.
-    connect(p.reviewTable, &QTableWidget::itemChanged, this,
-            [this, paneOneBased](QTableWidgetItem* item) {
-                if (item->column() != 0 || refreshing_) return;
-                const int line = item->data(Qt::UserRole).toInt();
-                if (item->checkState() == Qt::Checked) workspace_->tick(line);
-                else workspace_->untick(line);
-                refreshPane(paneOneBased);
-            });
-    return p;
+    t.reg->verticalHeader()->setDefaultSectionSize(metrics.height() + 8);
+    return t;
 }
 
 void MainWindow::refresh() {
     const bool was = refreshing_;
     refreshing_ = true;
-    // One widget per pane the workspace says there is.
-    while (static_cast<int>(paneWidgets_.size()) < workspace_->pane_count()) {
-        PaneWidgets p = makePane(static_cast<int>(paneWidgets_.size()) + 1);
-        panes_->addWidget(p.stack);
-        paneWidgets_.push_back(p);
-    }
-    for (std::size_t i = 0; i < paneWidgets_.size(); ++i)
-        paneWidgets_[i].stack->setVisible(static_cast<int>(i) < workspace_->pane_count());
-
+    syncTabs();
     refreshAccounts();
-    for (int pane = 1; pane <= workspace_->pane_count(); ++pane) refreshPane(pane);
+    for (int position = 1; position <= tabs_->count(); ++position)
+        refreshPane(position);
+    refreshReviewPanel();
     refreshing_ = was;
+}
+
+// Makes the tab bar match workspace_->open_tabs(): a tab that just opened
+// gets a widget, one that closed loses it, and every tab's title and active
+// state are brought into step. Tabs are never reordered or rebuilt in place --
+// only added at the end and removed -- which is enough because the workspace
+// itself only ever appends a tab or removes one by position, never reorders.
+void MainWindow::syncTabs() {
+    if (!workspace_) return;
+    const std::vector<ui::TabRow> rows = workspace_->open_tabs();
+
+    while (static_cast<int>(tabWidgets_.size()) > static_cast<int>(rows.size())) {
+        const int last = static_cast<int>(tabWidgets_.size()) - 1;
+        tabs_->removeTab(last);
+        tabWidgets_[static_cast<std::size_t>(last)].widget->deleteLater();
+        tabWidgets_.pop_back();
+    }
+    for (std::size_t i = tabWidgets_.size(); i < rows.size(); ++i) {
+        const ui::TabRow& row = rows[i];
+        TabWidgets t = row.kind == ui::TabKind::Report
+                          ? makeReportTab(static_cast<int>(i) + 1, row.name)
+                          : makeRegisterTab(static_cast<int>(i) + 1);
+        tabs_->addTab(t.widget, QString::fromStdString(row.name));
+        tabWidgets_.push_back(t);
+    }
+    for (std::size_t i = 0; i < rows.size(); ++i)
+        tabs_->setTabText(static_cast<int>(i), QString::fromStdString(rows[i].name));
+
+    for (std::size_t i = 0; i < rows.size(); ++i)
+        if (rows[i].active) {
+            const QSignalBlocker quiet(tabs_);
+            tabs_->setCurrentIndex(static_cast<int>(i));
+        }
+
+    reviewPanel_->setVisible(workspace_->split_open());
 }
 
 void MainWindow::refreshAccounts() {
@@ -1617,53 +1661,29 @@ void MainWindow::refreshAccounts() {
     refreshing_ = was;
 }
 
-void MainWindow::refreshPane(int paneOneBased) {
+void MainWindow::refreshPane(int tabPosition) {
     const bool was = refreshing_;
     refreshing_ = true;
-    PaneWidgets& p = paneWidgets_[static_cast<std::size_t>(paneOneBased - 1)];
-    const ui::Pane& state = workspace_->panes()[static_cast<std::size_t>(paneOneBased - 1)];
+    TabWidgets& p = tabWidgets_[static_cast<std::size_t>(tabPosition - 1)];
 
-    // The active pane is the one the next selection goes to, so it is worth
-    // seeing which it is.
-    const bool active = workspace_->active_pane() == paneOneBased;
-    p.stack->setStyleSheet(active && workspace_->split_open()
-                               ? "QStackedWidget { border: 2px solid #4a76c8; }"
-                               : "QStackedWidget { border: 2px solid transparent; }");
-
-    if (state.showing == ui::PaneContent::ImportReview) {
-        p.stack->setCurrentWidget(p.review);
-        const std::vector<ui::ReviewRow>& rows = workspace_->review();
-        p.heading->setText(QString("Import into %1  --  %2 rows, %3 ticked")
-                               .arg(QString::fromStdString(state.account))
-                               .arg(rows.size())
-                               .arg(workspace_->accepted_count()));
-        p.reviewTable->setRowCount(static_cast<int>(rows.size()));
-        for (int r = 0; r < static_cast<int>(rows.size()); ++r) {
-            const ui::ReviewRow& row = rows[static_cast<std::size_t>(r)];
-            auto* tick = new QTableWidgetItem;
-            tick->setFlags(Qt::ItemIsUserCheckable | Qt::ItemIsEnabled);
-            tick->setCheckState(row.accepted ? Qt::Checked : Qt::Unchecked);
-            tick->setData(Qt::UserRole, row.line);
-            p.reviewTable->setItem(r, 0, tick);
-            p.reviewTable->setItem(r, 1, text(row.date.iso()));
-            p.reviewTable->setItem(r, 2, text(row.payee, row.payee));
-            p.reviewTable->setItem(r, 3, text(row.account, row.account));
-            p.reviewTable->setItem(r, 4, text(row.category, row.category));
-            setAmount(p.reviewTable, r, 5, row.amount);
-            p.reviewTable->setItem(r, 6, text(row.disposition));
-        }
-        p.reviewTable->resizeColumnsToContents();
-        p.reviewTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    if (p.isReport) {
+        // A report redraws itself from its own controls; what changed is the
+        // book behind it, not anything on this tab's own form.
+        if (p.run) p.run();
         refreshing_ = was;
         return;
     }
 
-    p.stack->setCurrentWidget(p.reg);
-    const std::vector<reg::Line> lines = workspace_->register_lines(paneOneBased);
+    const std::vector<ui::TabRow> rows = workspace_->open_tabs();
+    const std::string account =
+        static_cast<std::size_t>(tabPosition - 1) < rows.size()
+            ? rows[static_cast<std::size_t>(tabPosition - 1)].account
+            : std::string();
+    const std::vector<reg::Line> lines =
+        reg::lines_for(chart_, transactions_, account);
     // The two amount columns are headed with the words the account uses: a
     // credit card is charged and paid, not paid and deposited into.
-    const chart::Account* a = state.account.empty() ? nullptr
-                                                    : chart_.find(state.account);
+    const chart::Account* a = account.empty() ? nullptr : chart_.find(account);
     const reg::ColumnHeadings headings =
         reg::headings_for(a ? a->type : types::AccountType::Checking);
     p.reg->setHorizontalHeaderLabels({"Date", "Num", "Payee", "Category", "Memo",
@@ -1685,7 +1705,7 @@ void MainWindow::refreshPane(int paneOneBased) {
     // The blank line: one more row at the end, which is where a transaction is
     // entered. It is not in the book and nothing is written until an amount is
     // typed -- see the entry section of TransactionRegister.spectable.
-    const bool canEnter = !state.account.empty() && a != nullptr &&
+    const bool canEnter = !account.empty() && a != nullptr &&
                           types::class_of(a->type) == types::AccountClass::Real;
     p.reg->setRowCount(static_cast<int>(lines.size()) + (canEnter ? 1 : 0));
     if (canEnter) {
@@ -1718,10 +1738,58 @@ void MainWindow::refreshPane(int paneOneBased) {
     refreshing_ = was;
 }
 
+// The import review, beside the active tab only while one is waiting. There
+// is one of these, not one per tab.
+void MainWindow::refreshReviewPanel() {
+    const std::vector<ui::Pane> rows = workspace_->panes();
+    if (rows.size() < 2) return;
+    const ui::Pane& state = rows[1];
+    const bool was = refreshing_;
+    refreshing_ = true;
+    const std::vector<ui::ReviewRow>& reviewRows = workspace_->review();
+    reviewHeading_->setText(QString("Import into %1  --  %2 rows, %3 ticked")
+                                .arg(QString::fromStdString(state.account))
+                                .arg(reviewRows.size())
+                                .arg(workspace_->accepted_count()));
+    reviewTable_->setRowCount(static_cast<int>(reviewRows.size()));
+    for (int r = 0; r < static_cast<int>(reviewRows.size()); ++r) {
+        const ui::ReviewRow& row = reviewRows[static_cast<std::size_t>(r)];
+        auto* tick = new QTableWidgetItem;
+        tick->setFlags(Qt::ItemIsUserCheckable | Qt::ItemIsEnabled);
+        tick->setCheckState(row.accepted ? Qt::Checked : Qt::Unchecked);
+        tick->setData(Qt::UserRole, row.line);
+        reviewTable_->setItem(r, 0, tick);
+        reviewTable_->setItem(r, 1, text(row.date.iso()));
+        reviewTable_->setItem(r, 2, text(row.payee, row.payee));
+        reviewTable_->setItem(r, 3, text(row.account, row.account));
+        reviewTable_->setItem(r, 4, text(row.category, row.category));
+        setAmount(reviewTable_, r, 5, row.amount);
+        reviewTable_->setItem(r, 6, text(row.disposition));
+    }
+    reviewTable_->resizeColumnsToContents();
+    reviewTable_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    refreshing_ = was;
+}
+
+void MainWindow::tabClosed(int index) {
+    workspace_->close_tab(index + 1);
+    refresh();
+}
+
+void MainWindow::tabChanged(int index) {
+    if (refreshing_ || index < 0) return;
+    const std::vector<ui::TabRow> rows = workspace_->open_tabs();
+    if (static_cast<std::size_t>(index) >= rows.size()) return;
+    const ui::TabRow& row = rows[static_cast<std::size_t>(index)];
+    if (row.kind == ui::TabKind::Register) workspace_->select(row.account);
+    refresh();
+}
+
 // What is on the blank line now, read back out of the table. Called before
 // anything is done with it, so that a cell still being typed in is included.
-void MainWindow::readBlankLine(int paneOneBased) {
-    PaneWidgets& p = paneWidgets_[static_cast<std::size_t>(paneOneBased - 1)];
+void MainWindow::readBlankLine(int tabPosition) {
+    TabWidgets& p = tabWidgets_[static_cast<std::size_t>(tabPosition - 1)];
+    if (p.isReport || p.reg == nullptr) return;
     const int at = p.reg->rowCount() - 1;
     if (at < 0) return;
     const auto cell = [&](int column) {
@@ -1738,15 +1806,16 @@ void MainWindow::readBlankLine(int paneOneBased) {
     p.blank.deposit = moneyTyped(cell(6));
 }
 
-void MainWindow::recordBlankLine(int paneOneBased) {
+void MainWindow::recordBlankLine(int tabPosition) {
     if (refreshing_) return;
-    const ui::Pane& state =
-        workspace_->panes()[static_cast<std::size_t>(paneOneBased - 1)];
-    if (state.showing != ui::PaneContent::Register || state.account.empty()) return;
-    readBlankLine(paneOneBased);
-    PaneWidgets& p = paneWidgets_[static_cast<std::size_t>(paneOneBased - 1)];
+    const std::vector<ui::TabRow> rows = workspace_->open_tabs();
+    if (static_cast<std::size_t>(tabPosition - 1) >= rows.size()) return;
+    const ui::TabRow& row = rows[static_cast<std::size_t>(tabPosition - 1)];
+    if (row.kind != ui::TabKind::Register || row.account.empty()) return;
+    readBlankLine(tabPosition);
+    TabWidgets& p = tabWidgets_[static_cast<std::size_t>(tabPosition - 1)];
 
-    const reg::Committed done = reg::commit(p.blank, state.account,
+    const reg::Committed done = reg::commit(p.blank, row.account,
                                             transactions_.size(), &chart_);
     if (!done.committed) {
         // A line with no amount is a line nobody meant, and is not an error.

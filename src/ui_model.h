@@ -158,16 +158,44 @@ inline int depth_within_group(const chart::Account& a,
 // Panes
 // ---------------------------------------------------------------------------
 
-enum class PaneContent { Register, ImportReview, Empty };
+enum class PaneContent { Register, Report, ImportReview, Empty };
 
 inline std::string to_string(PaneContent c) {
     switch (c) {
         case PaneContent::Register:     return "Register";
+        case PaneContent::Report:       return "Report";
         case PaneContent::ImportReview: return "ImportReview";
         case PaneContent::Empty:        return "Empty";
     }
     return "Empty";
 }
+
+// What one tab holds. See the tabs section of UserInterface.spectable.
+enum class TabKind { Register, Report };
+
+inline std::string to_string(TabKind k) {
+    return k == TabKind::Register ? "Register" : "Report";
+}
+
+// One tab of the bar on the right, in the order the tabs are shown. A
+// register tab is named by the account's own name; a report tab's Name is
+// its title with a number after it for a second one of the same report --
+// Base is the title alone, kept so a third can be numbered correctly too.
+struct Tab {
+    TabKind kind = TabKind::Register;
+    std::string account;
+    std::string base;
+    std::string name;
+};
+
+// One row of the open-tabs listing.
+struct TabRow {
+    int position = 1;
+    TabKind kind = TabKind::Register;
+    std::string account;
+    std::string name;
+    bool active = false;
+};
 
 // What a disposition says about a downloaded or read row, as the import worked
 // it out. A row the import believes it has seen before starts unticked, so that
@@ -224,65 +252,110 @@ class Workspace {
 public:
     Workspace(const chart::Chart& accounts, const ledger::Ledger& book,
               const std::vector<ledger::Transaction>& transactions)
-        : accounts_(accounts), book_(book), transactions_(transactions) {
-        panes_.push_back(Pane{});
-    }
+        : accounts_(accounts), book_(book), transactions_(transactions) {}
 
-    // ------------------------------------------------------------ selection
+    // --------------------------------------------------------------- tabs
 
+    // Opens the register of this account in a tab, or returns to it if one is
+    // already open -- two tabs on the same register would show the same
+    // lines and leave which of them to believe an open question. A new tab
+    // goes at the end and becomes active, because selecting an account is
+    // asking to read it.
     void select(const std::string& account) {
-        Pane& pane = panes_[active_];
-        pane.account = account;
-        // Selecting an account turns an import review back into a register: the
-        // reader has asked for the account, not for the import.
-        if (pane.showing != PaneContent::ImportReview) pane.showing = PaneContent::Register;
-        else pane.showing = PaneContent::Register;
+        for (std::size_t i = 0; i < tabs_.size(); ++i)
+            if (tabs_[i].kind == TabKind::Register && tabs_[i].account == account) {
+                active_tab_ = i;
+                return;
+            }
+        Tab t;
+        t.kind = TabKind::Register;
+        t.account = account;
+        t.name = types::name_of(types::AccountPath(account));
+        tabs_.push_back(t);
+        active_tab_ = tabs_.size() - 1;
     }
 
-    void split() {
-        if (panes_.size() > 1) return;
-        // The new pane starts where the first one is, so splitting shows
-        // something rather than nothing, and becomes the active one.
-        panes_.push_back(panes_.front());
-        if (panes_.back().showing == PaneContent::Empty)
-            panes_.back().showing = PaneContent::Empty;
-        active_ = 1;
+    // A report opens another tab every time: reading two periods side by
+    // side is the reason to have two, and a report that replaced the one
+    // already open could not do that. A second tab of the same report gets
+    // a 2 after it, because the tab is narrow and cannot say which period it
+    // is itself; that is on the controls inside it.
+    void open_report(const std::string& title) {
+        int count = 0;
+        for (const Tab& t : tabs_)
+            if (t.kind == TabKind::Report && t.base == title) ++count;
+        Tab t;
+        t.kind = TabKind::Report;
+        t.base = title;
+        t.name = count == 0 ? title : title + " " + std::to_string(count + 1);
+        tabs_.push_back(t);
+        active_tab_ = tabs_.size() - 1;
     }
 
-    // Collapses the two panes to the one being worked in, and nothing else.
-    //
-    // It used to discard the review as well, which was right while closing a
-    // split was something a person did to a review in progress. Its only
-    // callers now are accepting and cancelling an import, and accepting needs
-    // the review kept: the summary of what was just imported is still asked
-    // about afterwards. Cancelling clears it itself, because there the review
-    // really is being thrown away.
-    void close_split() {
-        if (panes_.size() < 2) return;
-        const Pane keep = panes_[active_];
-        panes_.clear();
-        panes_.push_back(keep);
-        active_ = 0;
+    // Closes the tab at this position. The one to its right becomes active
+    // if the one closed was active, or the one to its left if it was last --
+    // closing a tab always leaves something showing (or nothing, if it was
+    // the only one). Closing a tab that was not active changes nothing about
+    // what is being read.
+    void close_tab(int position_one_based) {
+        const std::size_t index = static_cast<std::size_t>(position_one_based - 1);
+        if (index >= tabs_.size()) return;
+        // A review belongs to the tab it sits beside; closing that tab leaves
+        // nothing for it to sit beside.
+        if (review_open_ && tabs_[index].kind == TabKind::Register &&
+            tabs_[index].account == review_account_)
+            close_review();
+        const bool was_active = (index == active_tab_);
+        tabs_.erase(tabs_.begin() + static_cast<long>(index));
+        selected_.clear();
+        if (tabs_.empty()) { active_tab_ = 0; return; }
+        if (was_active) active_tab_ = index < tabs_.size() ? index : tabs_.size() - 1;
+        else if (index < active_tab_) --active_tab_;
     }
 
-    void make_active(int pane_one_based) {
-        const std::size_t index = static_cast<std::size_t>(pane_one_based - 1);
-        if (index < panes_.size()) active_ = index;
+    std::vector<TabRow> open_tabs() const {
+        std::vector<TabRow> out;
+        for (std::size_t i = 0; i < tabs_.size(); ++i) {
+            TabRow row;
+            row.position = static_cast<int>(i) + 1;
+            row.kind = tabs_[i].kind;
+            row.account = tabs_[i].account;
+            row.name = tabs_[i].name;
+            row.active = (i == active_tab_);
+            out.push_back(row);
+        }
+        return out;
     }
 
     // --------------------------------------------------------- import review
 
-    // An import is shown beside the register it is about to change, so the view
-    // splits by itself if it was not split already.
+    // Whether there is a register to import into -- the active tab, if it is
+    // one -- and which account it is. Refused when the active tab is a
+    // report: there is then no register to judge a proposed row against, and
+    // importing into whichever one happened to be open last is how a
+    // statement ends up in the wrong account.
+    struct ActiveRegister {
+        bool refused = false;
+        std::string reason;
+        std::string account;
+    };
+
+    ActiveRegister active_register() const {
+        if (tabs_.empty() || tabs_[active_tab_].kind != TabKind::Register)
+            return {true, "Open the register this statement is for, then import into it.",
+                    std::string()};
+        return {false, std::string(), tabs_[active_tab_].account};
+    }
+
+    // An import goes into the active tab: the account is not asked for.
     void review_import(const std::vector<ReviewRow>& rows, const std::string& into) {
         review_ = rows;
         for (ReviewRow& r : review_)
             if (r.disposition != "New") r.accepted = false;
         committed_ = false;
-        if (panes_.size() < 2) split();
-        active_ = panes_.size() - 1;
-        panes_[active_].showing = PaneContent::ImportReview;
-        panes_[active_].account = into;
+        review_open_ = true;
+        review_account_ = into;
+        select(into);
     }
 
     void tick(int line) { set_accepted(line, true); }
@@ -319,20 +392,18 @@ public:
             book_.add({r.date, other.account, other.amount});
         }
         committed_ = true;
-        panes_[active_].showing = PaneContent::Register;
         // The second pane existed to compare the import against the register
         // beside it. There is nothing left to compare, so it goes, and the
         // register it was beside is what remains -- which is where the result
         // wants reading. See the second-pane section of UserInterface.spectable.
-        close_split();
+        close_review();
     }
 
     void cancel_import() {
         review_.clear();
         accepted_.clear();
         committed_ = false;
-        panes_[active_].showing = PaneContent::Register;
-        close_split();
+        close_review();
     }
 
     // ------------------------------------------- lines chosen in a register
@@ -345,8 +416,8 @@ public:
     const std::vector<int>& selected_lines() const { return selected_; }
 
     std::vector<MenuEntry> menu_items() const {
-        const bool anything = !selected_.empty() &&
-                              panes_[active_].showing == PaneContent::Register;
+        const bool anything = !selected_.empty() && !tabs_.empty() &&
+                              tabs_[active_tab_].kind == TabKind::Register;
         return {MenuEntry{"Recategorize...", anything},
                 MenuEntry{"Add payee rule...", anything},
                 MenuEntry{"Delete...", anything}};
@@ -486,10 +557,40 @@ public:
 
     // ---------------------------------------------------------------- asking
 
-    bool split_open() const { return panes_.size() > 1; }
-    int pane_count() const { return static_cast<int>(panes_.size()); }
-    int active_pane() const { return static_cast<int>(active_) + 1; }
-    const std::vector<Pane>& panes() const { return panes_; }
+    // Pane 1 is the tab area, and its account is the active tab's; pane 2,
+    // when it exists, is the import review sitting beside it -- and is the
+    // active pane whenever it is there, because reviewing it is the reason it
+    // opened. There is no "make a pane active" any more: a register's own
+    // selection (for the menu, for recategorising) always targets pane 1,
+    // because the review has its own tick/untick and is never where that
+    // happens.
+    bool split_open() const { return panes().size() > 1; }
+    int pane_count() const { return static_cast<int>(panes().size()); }
+    int active_pane() const { return pane_count() == 2 ? 2 : 1; }
+
+    std::vector<Pane> panes() const {
+        std::vector<Pane> out;
+        Pane first;
+        if (tabs_.empty()) {
+            first.showing = PaneContent::Empty;
+        } else if (tabs_[active_tab_].kind == TabKind::Register) {
+            first.showing = PaneContent::Register;
+            first.account = tabs_[active_tab_].account;
+        } else {
+            first.showing = PaneContent::Report;
+        }
+        out.push_back(first);
+        if (review_open_ && !tabs_.empty() &&
+            tabs_[active_tab_].kind == TabKind::Register &&
+            tabs_[active_tab_].account == review_account_) {
+            Pane second;
+            second.showing = PaneContent::ImportReview;
+            second.account = review_account_;
+            out.push_back(second);
+        }
+        return out;
+    }
+
     const std::vector<ReviewRow>& review() const { return review_; }
     bool committed() const { return committed_; }
     // The transactions the last accept added, in the order it added them. Only
@@ -508,9 +609,10 @@ public:
     }
 
     std::vector<reg::Line> register_lines(int pane_one_based) const {
+        const std::vector<Pane> rows = panes();
         const std::size_t index = static_cast<std::size_t>(pane_one_based - 1);
-        if (index >= panes_.size() || panes_[index].account.empty()) return {};
-        return reg::lines_for(accounts_, transactions_, panes_[index].account);
+        if (index >= rows.size() || rows[index].account.empty()) return {};
+        return reg::lines_for(accounts_, transactions_, rows[index].account);
     }
 
     std::vector<AccountRow> account_rows(bool show_hidden) const {
@@ -521,6 +623,11 @@ public:
     const std::vector<ledger::Transaction>& transactions() const { return transactions_; }
 
 private:
+    void close_review() {
+        review_open_ = false;
+        review_account_.clear();
+    }
+
     // What a line of the register is a transaction of. The line carries the ref,
     // which is what names a transaction in a register.
     const ledger::Transaction* transaction_on(const std::vector<reg::Line>& lines,
@@ -587,8 +694,10 @@ private:
     chart::Chart accounts_;
     ledger::Ledger book_;
     std::vector<ledger::Transaction> transactions_;
-    std::vector<Pane> panes_;
-    std::size_t active_ = 0;
+    std::vector<Tab> tabs_;
+    std::size_t active_tab_ = 0;
+    bool review_open_ = false;
+    std::string review_account_;
     std::vector<ReviewRow> review_;
     std::vector<ledger::Transaction> accepted_;
     std::vector<int> selected_;

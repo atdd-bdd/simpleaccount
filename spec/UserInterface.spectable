@@ -275,7 +275,6 @@ Description What one pane of the right-hand side is showing.
 | Account   | AccountPath | none     |
 | Active    | Boolean     | false    |
 
-$WIP
 DataType PaneContent
 Description What a pane can show.
 Examples: EnumerationValues
@@ -374,7 +373,6 @@ Details Pane 1 is the tab area and its account is the active tab's, which is
 Details why the scenarios here can speak of panes and of tabs at once without
 Details the two disagreeing.
 
-$WIP
 DataType TabKind
 Description What one tab holds.
 Examples: EnumerationValues
@@ -400,7 +398,6 @@ Attributes TabSelect
 | Attribute | Type    | Default |
 | Position  | Integer | 1       |
 
-$WIP
 Scenario Selecting an account opens its register in a tab
 Given the chart of accounts is as previous
 Given postings are as previous
@@ -414,7 +411,6 @@ Then panes are : PaneState
 | Pane | Showing  | Account         | Active |
 | 1    | Register | Assets:Checking | true   |
 
-$WIP
 Scenario Selecting a second account leaves the first one open
 Description This is the whole point. The card and the current account are both
 Description open and the eye moves between them.
@@ -436,7 +432,6 @@ Then panes are : PaneState
 # A new tab goes at the end and becomes the active one, because selecting an
 # account is asking to read it.
 
-$WIP
 Scenario Selecting an account that is already open returns to its tab
 Description Not a second tab on the same register. Two tabs showing the same
 Description lines would leave which of them to believe an open question, and
@@ -460,7 +455,6 @@ Then open tabs are : OpenTab
 # either: a tab stays where it was put, or the bar would rearrange itself under
 # the hand that is using it.
 
-$WIP
 Scenario Asking for a report opens it in a tab of its own
 Given the chart of accounts is as previous
 Given postings are as previous
@@ -477,7 +471,6 @@ Then open tabs are : OpenTab
 | 1        | Register | Assets:Checking | Checking             | false  |
 | 2        | Report   | none            | Spending by category | true   |
 
-$WIP
 Scenario Asking for the same report again opens a second tab
 Description Two periods side by side is the reason to have two, so a report
 Description does not replace the one already open.
@@ -500,7 +493,6 @@ Then open tabs are : OpenTab
 # The second carries a 2 so the two can be told apart on a narrow tab. Which
 # period each one is over is on the controls inside it, where there is room.
 
-$WIP
 Scenario Closing the active tab moves to the one beside it
 Description The one to its right, or the one to its left when it was the last,
 Description so that closing a tab always leaves something showing.
@@ -525,7 +517,6 @@ Then panes are : PaneState
 | Pane | Showing  | Account        | Active |
 | 1    | Register | Assets:Savings | true   |
 
-$WIP
 Scenario Closing another tab leaves the active one where it was
 Description Closing something that is not being read should not change what is
 Description being read. The position shifts because a tab before it has gone;
@@ -551,7 +542,6 @@ Then panes are : PaneState
 | Pane | Showing  | Account          | Active |
 | 1    | Register | Liabilities:Visa | true   |
 
-$WIP
 Scenario Closing the last tab leaves nothing showing
 Description Back to where the window starts: a book open and nothing chosen.
 Given the chart of accounts is as previous
@@ -570,7 +560,6 @@ Then panes are : PaneState
 # step for a table with no rows yet -- finding 6 -- so for now that line is
 # documentation and the pane assertion is what carries the scenario.
 
-$WIP
 Scenario An import goes into the active tab
 Description The account is not asked for. Whichever register is in front of you
 Description is the one the statement is for, which is also how a transaction
@@ -598,7 +587,6 @@ Then panes are : PaneState
 # and the review sits beside the register it is about to change. No tab is
 # opened and none is switched to: the answer was already on the screen.
 
-$WIP
 Scenario An import with a report in front is refused
 Description There is no register to compare against, so there is nothing to
 Description judge a proposed row by. Said rather than guessed at: importing
@@ -731,6 +719,9 @@ Description and it starts unticked so that accepting everything does not bring
 Description it in.
 Given the chart of accounts is as previous
 Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
 When import reviewed : ImportReviewRow
 =AnImportOfThree
 Then import review rows are : ImportReviewRow
@@ -915,6 +906,9 @@ Description The identifier belongs to the side the statement is for. The bank
 Description has never heard of the category, so that side carries none.
 Given the chart of accounts is as previous
 Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
 When import reviewed : ImportReviewRow
 | Line | Date       | Payee         | Account         | Category           | Amount | Disposition | Identifier  | Source | RawName                      | Memo          | CheckNo |
 | 1    | 2026-02-02 | Harris Teeter | Assets:Checking | Expenses:Groceries | -52.10 | New         | 20260202001 | Ofx    | HARRIS~TEETER~#231~DURHAM~NC | Weekly~shop   | none    |
@@ -931,6 +925,9 @@ Description under Csv does not make a later QFX of the same account do nothing,
 Description and that is deliberate -- see the identifier scope rule.
 Given the chart of accounts is as previous
 Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
 When import reviewed : ImportReviewRow
 | Line | Date       | Payee  | Account         | Category          | Amount | Disposition | Identifier | Source | RawName       |
 | 1    | 2026-02-04 | Amazon | Assets:Checking | Expenses:Shopping | -31.00 | New         | REF-99812  | Csv    | AMAZON~MKTPLACE |
@@ -947,6 +944,9 @@ Description check number -- that keep a second reading of the same QIF from
 Description duplicating it.
 Given the chart of accounts is as previous
 Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
 When import reviewed : ImportReviewRow
 | Line | Date       | Payee        | Account         | Category           | Amount | Disposition | Identifier | Source | RawName |
 | 1    | 2026-02-05 | Corner Store | Assets:Checking | Expenses:Groceries | -12.00 | New         | none       | Qif    | none    |
@@ -961,6 +961,9 @@ Description The identifier of a row that was not accepted must not be stored
 Description either, or the row could never be imported again.
 Given the chart of accounts is as previous
 Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
 When import reviewed : ImportReviewRow
 | Line | Date       | Payee         | Account         | Category           | Amount | Disposition | Identifier  | Source | RawName        |
 | 1    | 2026-02-02 | Harris Teeter | Assets:Checking | Expenses:Groceries | -52.10 | New         | 20260202001 | Ofx    | HARRIS~TEETER  |
