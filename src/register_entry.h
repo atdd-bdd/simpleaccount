@@ -1,4 +1,6 @@
 #pragma once
+#include <algorithm>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -7,6 +9,7 @@
 #include "ledger.h"
 #include "money.h"
 #include "posting.h"
+#include "register_lines.h"
 #include "transaction_id.h"
 
 // Entering a transaction on the blank line at the end of a register. See the
@@ -104,6 +107,13 @@ inline Committed commit(const BlankLine& line, const std::string& account,
         accounts->add(types::AccountPath(other),
                       amount.cents() < 0 ? types::AccountType::Expense
                                          : types::AccountType::Income);
+    } else if (accounts->find(other)->placeholder) {
+        // The register's own account is already checked above; this is the
+        // same rule for the category typed into it, which a placeholder fails
+        // for the same reason -- it groups its children and holds nothing
+        // itself.
+        out.reason = other + " is a placeholder; choose one below it";
+        return out;
     }
 
     ledger::Transaction t;
@@ -123,6 +133,78 @@ inline Committed commit(const BlankLine& line, const std::string& account,
     there.account = types::AccountPath(other);
     there.amount = -amount;
     t.postings = {here, there};
+
+    out.transaction = t;
+    out.committed = true;
+    return out;
+}
+
+// SplitLine itself -- category, amount, memo -- is register_lines.h's: one
+// category line of a split, the same shape whether it is being typed into the
+// split window or expanded back out of one already in the book.
+inline Money abs_of(const Money& m) { return m.cents() < 0 ? -m : m; }
+
+// Committing the split window: as commit() above, except the other side is
+// however many category lines were typed rather than the one Uncategorized
+// guess. They are taken exactly as entered -- signed, so an income line and
+// an expense line can sit in the same split -- and the whole of what makes it
+// a split rather than a guess is that they are never adjusted to fit. If they
+// do not sum to the opposite of what the register line says left or arrived,
+// nothing is committed: the shortfall is reported and the split window is
+// where it gets fixed, not here.
+inline Committed commit_split(const BlankLine& line, const std::string& account,
+                              const std::vector<SplitLine>& lines,
+                              std::size_t already_in_book, chart::Chart* accounts) {
+    Committed out;
+    if (!line.has_an_amount()) {
+        out.reason = "nothing was entered";
+        return out;
+    }
+    const chart::Account* into = accounts->find(account);
+    if (into == nullptr) {
+        out.reason = "there is no account " + account;
+        return out;
+    }
+    if (into->placeholder) {
+        out.reason = account + " is a heading, not an account";
+        return out;
+    }
+
+    const Money amount = amount_of(line);
+    const Money needed = -amount;
+    Money allocated;
+    for (const SplitLine& l : lines) allocated += l.amount;
+    if (allocated.cents() != needed.cents()) {
+        const Money shortfall = abs_of(needed - allocated);
+        out.reason = "The split is " + shortfall.in_register() + " short of " +
+                     abs_of(needed).in_register();
+        return out;
+    }
+
+    ledger::Transaction t;
+    t.id = ledger::new_id();
+    t.ref = types::TransactionRef("T" + std::to_string(already_in_book + 1));
+    t.date = line.date;
+    t.payee = types::PayeeName(line.payee);
+    t.check_no = types::CheckNumber(line.check_no);
+    t.memo = line.memo;
+
+    ledger::Posting here;
+    here.account = types::AccountPath(account);
+    here.amount = amount;
+    here.cleared = line.cleared;
+    t.postings.push_back(here);
+    for (const SplitLine& l : lines) {
+        if (accounts->find(l.category) == nullptr)
+            accounts->add(types::AccountPath(l.category),
+                          l.amount.cents() < 0 ? types::AccountType::Expense
+                                               : types::AccountType::Income);
+        ledger::Posting p;
+        p.account = types::AccountPath(l.category);
+        p.amount = l.amount;
+        p.memo = l.memo;
+        t.postings.push_back(p);
+    }
 
     out.transaction = t;
     out.committed = true;
@@ -179,6 +261,45 @@ inline bool join_as_transfer(std::vector<ledger::Transaction>* transactions,
             if (p.account.value() == takes) p.cleared = cleared;
     }
     return ledger::erase_transaction(transactions, other_id);
+}
+
+// One row offered while picking the entry an Unassigned side should join.
+struct OfferedEntry {
+    std::string ref;
+    types::Date date;
+    std::string payee;
+    Money amount;   // this candidate's own posting in the target account
+};
+
+// What the register offers to match an Unassigned side against: every other
+// transaction with a posting in the target account, nearest first to the
+// amount that would actually balance -- equal and opposite to the known real
+// side of the transaction being assigned, because that is the one meant nine
+// times in ten. See the matching section of Transactions.spectable.
+inline std::vector<OfferedEntry> entries_offered_for(
+        const std::vector<ledger::Transaction>& transactions, const std::string& ref,
+        const std::string& account) {
+    Money target;
+    for (const ledger::Transaction& t : transactions) {
+        if (t.ref.value() != ref) continue;
+        for (const ledger::Posting& p : t.postings)
+            if (!ledger::is_unassigned(p.account)) target = -p.amount;
+        break;
+    }
+
+    std::vector<OfferedEntry> out;
+    for (const ledger::Transaction& t : transactions) {
+        if (t.ref.value() == ref) continue;
+        for (const ledger::Posting& p : t.postings) {
+            if (p.account.value() != account) continue;
+            out.push_back({t.ref.value(), t.date, t.payee.value(), p.amount});
+            break;
+        }
+    }
+    std::sort(out.begin(), out.end(), [&](const OfferedEntry& a, const OfferedEntry& b) {
+        return std::abs((a.amount - target).cents()) < std::abs((b.amount - target).cents());
+    });
+    return out;
 }
 
 }  // namespace reg

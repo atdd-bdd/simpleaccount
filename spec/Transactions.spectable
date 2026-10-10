@@ -12,7 +12,6 @@ Details shown anywhere in the program and it is not what a transaction is stored
 Details under. That is its Id, given once when the transaction is created and
 Details never changed afterwards. See the rule on naming a transaction.
 
-$WIP
 DataType TransactionRef
 Description How a table in this specification says which postings belong to one
 Description transaction. Not the stored identity, which is the Id.
@@ -42,7 +41,6 @@ Description The sides of one transaction.
 | DataType | Minimum | Maximum | Notes                       |
 | Posting  | 2       | 200     | The amounts must sum to zero |
 
-$WIP
 DataType ImportSource
 Description Where an identifier came from. Two files describing one transaction
 Description do not agree on what to call it, so the name of the source travels
@@ -95,7 +93,6 @@ Description A posting with its transaction, which is how these tables are writte
 # The two kinds of unknown
 # ---------------------------------------------------------------------------
 
-$WIP
 BusinessRule An unknown category and an unknown account are different unknowns
 Description A charge whose category nobody has chosen is Uncategorized. A payment
 Description whose other account nobody has worked out is Unassigned. They are
@@ -130,7 +127,6 @@ Attributes TwoUnknowns
 | WhereItLives | Text  |         |
 | ClearedBy   | String |         |
 
-$WIP
 Scenario Assigning the other account in the register empties Unassigned
 Description The last resort, and the one that always works. A payment nothing
 Description matched is sitting with its other side in Unassigned; the user picks
@@ -208,7 +204,6 @@ Attributes WhereTheOtherSideLives
 | TheOtherSide | String |         |
 | Because      | String |         |
 
-$WIP
 Scenario A deposit from outside the book is a category, not an unassigned transfer
 Description A paycheck. Nothing in the book is the other side of it, so there is
 Description nothing for Unassigned to be waiting for and the row is categorised
@@ -264,7 +259,6 @@ Attributes AssignmentOutcome
 | TheOtherAccount | String |         |
 | WhatHappens     | String |         |
 
-$WIP
 Scenario Matching an entry in the other register joins two transactions into one
 Description The card was imported weeks ago and the payment never paired, because
 Description the dates were further apart than the window allows. Both sides are
@@ -302,7 +296,6 @@ Description another account's register.
 | Ref       | TransactionRef |         |
 | OtherRef  | TransactionRef |         |
 
-$WIP
 Scenario The entries offered to match are the other account's, nearest first
 Description Scrolling someone through four hundred rows is not offering a choice.
 Description The entries offered are the ones in the account being assigned, with
@@ -383,7 +376,6 @@ Attributes TransactionNaming
 | TheNameComesFrom | String |         |
 | Notes            | String | none    |
 
-$WIP
 Scenario Two transactions created in the same millisecond cannot happen
 Description The generator waits for the clock rather than giving out a name it
 Description has given before. So transactions created as fast as the program can
@@ -399,7 +391,6 @@ Attributes TransactionsCreated
 | Attribute | Type    | Default |
 | HowMany   | Integer | 2       |
 
-$WIP
 DataType TransactionId
 Description The name a transaction is stored under: the date and the time it was
 Description created, to the millisecond. Sorts into creation order as text.
@@ -441,7 +432,6 @@ Attributes BalanceCheck
 | Balanced  | Boolean | true    |
 | Notes     | String  | none    |
 
-$WIP
 Scenario A transaction with one posting is refused
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
@@ -454,7 +444,6 @@ Then rejected because : Rejection
 | Reason                                        |
 | A transaction needs at least two postings     |
 
-$WIP
 Scenario An unbalanced transaction is refused
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
@@ -506,7 +495,6 @@ Attributes RegisterEntryToPostings
 | CategoryAmount | Money  | 0.00    |
 | Notes          | String | none    |
 
-$WIP
 Scenario A payment entered in a register
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
@@ -523,7 +511,6 @@ Then postings are : PostingRow
 | T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 | Uncleared |
 | T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00  | Uncleared |
 
-$WIP
 Scenario A deposit entered in a register
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type   | Placeholder |
@@ -540,7 +527,6 @@ Then postings are : PostingRow
 | T1  | 2024-01-31 | Acme Payroll | Assets:Checking | 3000.00  | Uncleared |
 | T1  | 2024-01-31 | Acme Payroll | Income:Salary   | -3000.00 | Uncleared |
 
-$WIP
 Scenario A check records its number
 Given the chart of accounts is : ChartOfAccounts
 | Path                | Type    | Placeholder |
@@ -569,7 +555,6 @@ Description A transaction both of whose postings are to real accounts. It is
 Description not a separate kind of record: it is recognised by its shape, and
 Description that is why it needs no special handling anywhere else.
 
-$WIP
 Scenario A transfer between two accounts
 Description The category column of the register holds the other account. One
 Description transaction is created, and it appears in both registers.
@@ -597,7 +582,6 @@ Attributes TransferCheck
 | FromAccount | AccountPath | none    |
 | ToAccount   | AccountPath | none    |
 
-$WIP
 Scenario A payment to a category is not a transfer
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
@@ -611,7 +595,6 @@ When register entry committed : RegisterEntry Vertical
 Then transaction is a transfer : TransferCheck Vertical
 | IsTransfer | false |
 
-$WIP
 Scenario A credit card payment is a transfer, not an expense
 Description Paying the card moves money between two real accounts. Recording it
 Description as an expense would count the spending twice: once when each charge
@@ -635,7 +618,6 @@ Then balances are : AccountBalance
 | Assets:Checking  | -300.00    | -300.00        | Paid out             |
 | Liabilities:Visa | 300.00     | -300.00        | Owed by 300.00 less  |
 
-$WIP
 Scenario A transaction may not post to the same account twice
 Description Two postings to one account with opposite amounts would change
 Description nothing and clear nothing; it is always a mistake.
@@ -650,7 +632,6 @@ Then rejected because : Rejection
 | Reason                                                  |
 | A transfer must name two different accounts             |
 
-$WIP
 Scenario A posting to a placeholder account is refused
 Description A placeholder exists to group its children in a report. Posting to
 Description it makes its own balance differ from the total of its children,
@@ -682,7 +663,6 @@ Details leaving the account being reconciled.
 | Amount    | Money       | 0.00    |
 | Memo      | Text        | none    |
 
-$WIP
 Scenario A split across three categories
 Description One trip to the hardware store, charged three ways. The register
 Description account takes one posting for the total; each category takes its own.
@@ -709,7 +689,6 @@ Then postings are : PostingRow
 | T1  | 2024-04-02 | Home Depot | Expenses:Home:Garden      | 54.50   | Compost      |
 | T1  | 2024-04-02 | Home Depot | Expenses:Auto:Repairs     | 30.00   | Wiper blades |
 
-$WIP
 Scenario Split lines that do not add up to the total are refused
 Description The split window shows the shortfall as it is typed; this is what
 Description happens if the entry is committed anyway.
@@ -732,7 +711,6 @@ Then rejected because : Rejection
 | Reason                                     |
 | The split is 30.00 short of 184.50         |
 
-$WIP
 Scenario A split with an income line and an expense line
 Description A paycheque is the usual case: gross pay in, tax and insurance out,
 Description and the net is what reaches the account.
@@ -765,7 +743,6 @@ Then balances are : AccountBalance
 | Expenses:Taxes:Federal | 1200.00    | 1200.00        |                  |
 | Expenses:Insurance     | 250.00     | 250.00         |                  |
 
-$WIP
 Scenario A split line may transfer to a real account
 Description Part of the paycheque going straight to savings is a split line
 Description naming an account rather than a category. Nothing special is needed:
@@ -794,7 +771,6 @@ Then postings are : PostingRow
 # When the other side is not known
 # ---------------------------------------------------------------------------
 
-$WIP
 Scenario A transaction with no category posts to Uncategorized
 Description An import knows one side of a transaction and often not the other.
 Description Rather than refuse it, or leave the book out of balance, the other
@@ -814,7 +790,6 @@ Then postings are : PostingRow
 | T1  | 2024-05-01 | Unknown Shop | Assets:Checking          | -23.75 |
 | T1  | 2024-05-01 | Unknown Shop | Expenses:Uncategorized   | 23.75  |
 
-$WIP
 Scenario An uncategorised deposit posts to income
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
@@ -848,7 +823,6 @@ Attributes UncategorizedChoice
 # Changing and removing
 # ---------------------------------------------------------------------------
 
-$WIP
 Scenario Changing the amount of a two-posting transaction moves both sides
 Description With exactly two postings the other side is unambiguous, so editing
 Description the amount in the register keeps the transaction balanced without
@@ -877,7 +851,6 @@ Attributes AmountChange
 | Payment   | Money          | 0.00    |
 | Deposit   | Money          | 0.00    |
 
-$WIP
 Scenario Changing the amount of a split does not guess which line to adjust
 Description With three or more postings there is no one other side, so the
 Description shortfall is reported and the split window is opened instead.
@@ -899,7 +872,6 @@ Then rejected because : Rejection
 | Reason                                                  |
 | T1 is a split; the split is 45.50 short of 200.00       |
 
-$WIP
 Scenario Changing the category of one side
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
@@ -925,7 +897,6 @@ Attributes CategoryChange
 | FromAccount | AccountPath    |         |
 | ToAccount   | AccountPath    |         |
 
-$WIP
 Scenario Deleting a transaction removes every posting of it
 Description Removing one side would leave the book out of balance, so a delete
 Description is always of the whole transaction, from whichever register it is
@@ -948,7 +919,6 @@ Then postings are : PostingRow
 | T2  | 2024-01-16 | Assets:Checking    | -12.00 |
 | T2  | 2024-01-16 | Expenses:Groceries | 12.00  |
 
-$WIP
 Scenario A reconciled posting warns before it is changed
 Description A finished reconciliation agreed with a statement. Changing a posting
 Description inside it breaks that agreement, so it is allowed but not quietly.
@@ -976,7 +946,6 @@ Attributes Warning
 # Clearing
 # ---------------------------------------------------------------------------
 
-$WIP
 Scenario The two sides of a transfer clear separately
 Description Money leaves checking on one statement and arrives in savings on
 Description another, often days apart. One posting may be cleared while the

@@ -85,6 +85,64 @@ inline ledger::Ledger move_postings(const ledger::Ledger& book,
     return out;
 }
 
+struct AmountOutcome {
+    bool changed = false;
+    std::string reason;    // refusal; changed is false
+    std::string warning;   // non-blocking; changed is still true
+};
+
+inline Money abs_of(const Money& m) { return m.cents() < 0 ? -m : m; }
+
+// Changing the amount typed against one posting of a transaction already in
+// the book. With exactly two postings the other side is unambiguous and is
+// moved to match, so the transaction balances without asking anything. With
+// three or more there is no one other side to adjust, so this never guesses:
+// either what is left over already sums to the new amount and nothing but the
+// named posting changes, or it does not and the change is refused with the
+// shortfall, same as a split entry that does not add up. See the changing
+// section of Transactions.spectable.
+inline AmountOutcome change_amount(std::vector<ledger::Transaction>* transactions,
+                                   const std::string& ref, const std::string& account,
+                                   const Money& new_signed_amount) {
+    AmountOutcome out;
+    ledger::Transaction* t = nullptr;
+    for (ledger::Transaction& one : *transactions)
+        if (one.ref.value() == ref) { t = &one; break; }
+    if (t == nullptr) { out.reason = "no transaction named " + ref; return out; }
+
+    ledger::Posting* named = nullptr;
+    for (ledger::Posting& p : t->postings)
+        if (p.account.value() == account) { named = &p; break; }
+    if (named == nullptr) { out.reason = "nothing is posted to " + account; return out; }
+
+    Money other_sum;
+    bool any_reconciled = named->cleared == types::ClearedStatus::Reconciled;
+    for (ledger::Posting& p : t->postings) {
+        if (&p == named) continue;
+        other_sum += p.amount;
+        if (p.cleared == types::ClearedStatus::Reconciled) any_reconciled = true;
+    }
+    const Money needed = -new_signed_amount;
+
+    if (t->postings.size() > 2 && other_sum.cents() != needed.cents()) {
+        const Money shortfall = abs_of(needed - other_sum);
+        out.reason = ref + " is a split; the split is " + shortfall.in_register() +
+                     " short of " + abs_of(new_signed_amount).in_register();
+        return out;
+    }
+    if (any_reconciled)
+        out.warning = "This posting is reconciled; changing it will alter a "
+                      "reconciled balance";
+
+    named->amount = new_signed_amount;
+    if (t->postings.size() == 2) {
+        for (ledger::Posting& p : t->postings)
+            if (&p != named) p.amount = needed;
+    }
+    out.changed = true;
+    return out;
+}
+
 // Removes a transaction from the book entirely: both of its postings, never
 // one side of it, because deleting one side would leave the book out of
 // balance. See the deleting section of Transactions.spectable.

@@ -1,8 +1,10 @@
 #pragma once
 #include <algorithm>
+#include <set>
 #include <string>
 #include <vector>
 #include "account_type.h"
+#include "chart.h"
 #include "date.h"
 #include "money.h"
 #include "text_types.h"
@@ -185,6 +187,32 @@ inline bool erase_transaction(std::vector<Transaction>* transactions,
     if (at == transactions->end()) return false;
     transactions->erase(at);
     return true;
+}
+
+// Checked on every path that builds a transaction directly from its postings
+// rather than through the register or the split window, which each enforce
+// their own shape as they go: at least two postings, no two to the same
+// account, and the whole balancing to zero. See the shape-of-a-transaction
+// section of Transactions.spectable.
+inline chart::Rejection validate(const chart::Chart& accounts, const Transaction& t) {
+    if (t.postings.size() < 2)
+        return {true, "A transaction needs at least two postings"};
+    std::vector<Money> amounts;
+    std::set<std::string> seen;
+    for (const Posting& p : t.postings) {
+        amounts.push_back(p.amount);
+        if (!seen.insert(p.account.value()).second)
+            return {true, "A transfer must name two different accounts"};
+        const chart::Account* a = accounts.find(p.account.value());
+        if (a != nullptr && a->placeholder)
+            return {true, p.account.value() + " is a placeholder; choose one below it"};
+    }
+    if (!balances(amounts)) {
+        const Money off = imbalance_of(amounts);
+        const Money magnitude = off.cents() < 0 ? -off : off;
+        return {true, t.ref.value() + " is out of balance by " + magnitude.in_register()};
+    }
+    return {};
 }
 
 // A transfer is recognised by its shape rather than recorded as its own kind:
