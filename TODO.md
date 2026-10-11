@@ -133,3 +133,35 @@ in the AlignThree example tests.
 `generated/payees_glue.h` now defines a local `unquoted()` for the two refusal
 scenarios that need an empty pattern and an empty payee. If AlignThree does
 provide one, the glue should use that instead and the local copy should go.
+
+## 7. A future, optional split window at the bottom of the register, shared by imports and a not-yet-specified Find
+
+Raised by the author for later, not yet specified or started.
+
+An optional panel at the bottom of the register, shown for two different
+purposes depending on what is open above it:
+
+- **For an import**, it shows the imported transactions -- the same thing the
+  import review already shows today.
+- **For a Find** (a feature that does not exist yet), it shows the
+  transactions the find matched.
+
+**Find** would be a modeless dialog, so it can stay open while the register is
+used, with:
+
+- A text string, matched against the payee or the memo.
+- A range of dates.
+- A range of amounts.
+- A source or destination account/category.
+- A choice of "search current register" or "search all registers".
+
+Nothing here has a spec table yet -- per CLAUDE.md, that comes first, and
+specifically the Find feature itself has not been designed, only sketched.
+
+## 8. Reports, and every other window, should have a scroll bar on the right
+
+Raised by the author for later, not yet specified or started.
+
+A report with more rows than fit on screen, and any other window in the same
+position, should show a scroll bar on its right-hand side rather than clip or
+require resizing the window.
