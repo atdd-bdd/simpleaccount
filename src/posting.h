@@ -95,6 +95,9 @@ struct Transaction {
     types::AccountPath source_account;
     types::AccountPath destination;
     Money amount;
+    // Per entry, not per posting: under this shape the transaction itself is
+    // already one side, the same thing Cleared on a Posting always meant.
+    types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
 };
 
 // One category line of a split recorded the new way: kept apart from the

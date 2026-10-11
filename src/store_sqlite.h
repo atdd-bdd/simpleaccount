@@ -32,7 +32,7 @@ namespace store {
 // this when that shape changes, and add the upgrade it needs to open_at below --
 // a book already on disk was made by kSchema as it read on an earlier version,
 // and has to be brought forward in place rather than recreated.
-inline constexpr int kSchemaVersion = 4;
+inline constexpr int kSchemaVersion = 5;
 
 struct Failure {
     bool refused = false;
@@ -180,7 +180,10 @@ CREATE TABLE transactions (
   -- transaction recorded the old way, through postings instead.
   source_account TEXT    NOT NULL DEFAULT '',
   destination    TEXT    NOT NULL DEFAULT '',
-  amount_cents   INTEGER NOT NULL DEFAULT 0);
+  amount_cents   INTEGER NOT NULL DEFAULT 0,
+  -- Per entry under this shape: see the Cleared attribute on Transaction in
+  -- Transactions.spectable.
+  cleared        TEXT    NOT NULL DEFAULT 'Uncleared');
 
 CREATE TABLE transaction_splits (
   -- A split's parts under the new shape, kept apart from postings rather
@@ -412,6 +415,15 @@ private:
                 "  PRIMARY KEY (transaction_id, line))";
             if (!detail::exec(db, splits, why)) return false;
         }
+        if (from < 5) {
+            // Cleared did not exist on a transaction before this -- it lived
+            // only on a posting -- so a book written before version 5 has
+            // every transaction reading as Uncleared under this shape, which
+            // is exactly the new column's default.
+            static const char* const sql =
+                "ALTER TABLE transactions ADD COLUMN cleared TEXT NOT NULL DEFAULT 'Uncleared'";
+            if (!detail::exec(db, sql, why)) return false;
+        }
         detail::Statement set(db, "UPDATE schema SET version = ?");
         if (!set.ok()) { if (why) *why = set.why(); return false; }
         set.bind(1, kSchemaVersion);
@@ -531,8 +543,8 @@ public:
         detail::Statement header(db_.get(),
             "INSERT INTO transactions "
             "(id, ref, date, payee, raw_name, check_no, memo, tag, "
-            "source_account, destination, amount_cents) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            "source_account, destination, amount_cents, cleared) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         if (!header.ok()) return fail(header.why());
         detail::Statement line(db_.get(),
             "INSERT INTO postings "
@@ -568,6 +580,7 @@ public:
             header.bind(9, t.source_account.value());
             header.bind(10, t.destination.value());
             header.bind(11, static_cast<long long>(t.amount.cents()));
+            header.bind(12, types::to_string(t.cleared));
             if (!header.run()) return fail(header.why());
 
             int split_line = 0;
@@ -665,7 +678,7 @@ public:
 
         detail::Statement header(db_.get(),
             "SELECT id, ref, date, payee, raw_name, check_no, memo, tag, "
-            "source_account, destination, amount_cents "
+            "source_account, destination, amount_cents, cleared "
             "FROM transactions "
             "ORDER BY date, rowid");
         if (!header.ok()) return {true, header.why()};
@@ -684,6 +697,7 @@ public:
             t.source_account = detail::path_or_empty(header.text(8));
             t.destination = detail::path_or_empty(header.text(9));
             t.amount = Money::from_cents(header.integer(10));
+            t.cleared = types::cleared_status_from_string(header.text(11));
             transactions->push_back(t);
         }
 

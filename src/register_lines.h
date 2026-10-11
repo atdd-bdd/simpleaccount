@@ -86,6 +86,38 @@ inline std::vector<Line> lines_for(
     Money running;
     for (std::size_t index : order) {
         const ledger::Transaction& t = transactions[index];
+
+        // A transaction recorded the new way has no postings to walk: it
+        // already names its one line directly. See the section on naming
+        // both accounts directly in Transactions.spectable.
+        if (t.postings.empty() && !t.source_account.value().empty()) {
+            if (!chart::Chart::is_descendant_or_self(t.source_account.value(), account))
+                continue;
+            Line line;
+            line.ref = t.ref.value();
+            line.id = t.id.value();
+            line.date = t.date;
+            line.check_no = t.check_no.value();
+            line.payee = t.payee.value();
+            line.memo = t.memo;
+            line.cleared = t.cleared;
+            if (t.amount.cents() < 0) line.payment = -t.amount;
+            else line.deposit = t.amount;
+
+            const std::string other = t.destination.value();
+            if (other == "Split") {
+                line.category = "--Split--";
+            } else {
+                line.category = other.empty() ? std::string() : detail::displayed(accounts, other);
+                line.category_detail = other;
+            }
+
+            running += t.amount;
+            line.balance = sign < 0 ? -running : running;
+            out.push_back(line);
+            continue;
+        }
+
         // Every posting of this transaction that lands in the register.
         for (const ledger::Posting& p : t.postings) {
             if (!chart::Chart::is_descendant_or_self(p.account.value(), account)) continue;

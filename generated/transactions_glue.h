@@ -515,6 +515,8 @@ private:
         t.source_account = path_or_empty(value.sourceaccount);
         t.destination = path_or_empty(value.destination);
         t.amount = Money(value.amount);
+        if (value.cleared != DNCString && !value.cleared.empty())
+            t.cleared = types::cleared_status_from_string(value.cleared);
         return t;
     }
 
@@ -533,6 +535,7 @@ private:
         s.sourceaccount = t.source_account.value().empty() ? "none" : t.source_account.value();
         s.destination = t.destination.value().empty() ? "none" : t.destination.value();
         s.amount = t.amount.in_register();
+        s.cleared = types::to_string(t.cleared);
         return s;
     }
 

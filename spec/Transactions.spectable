@@ -83,6 +83,7 @@ Details section on naming both accounts directly, further down this file.
 | SourceAccount | AccountPath    | none       | The account this entry lives in: downloaded into, or typed in its register. An id underneath, the same as every account reference; see the identity rule in Accounts |
 | Destination   | AccountPath    | none       | The other side: a category, a real account, or the literal Split when the parts are in TransactionSplit below |
 | Amount        | Money          | 0.00       | Signed against SourceAccount; Destination carries the opposite effect by construction, so nothing here needs to sum to zero the way Postings does |
+| Cleared       | ClearedStatus  | Uncleared  | Per entry: under this shape the transaction itself is already one side, the same thing Cleared on a Posting always meant |
 
 Attributes PostingRow
 Description A posting with its transaction, which is how these tables are written.

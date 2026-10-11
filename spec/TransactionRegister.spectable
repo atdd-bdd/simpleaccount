@@ -543,3 +543,42 @@ When blank line left
 Then register lines are : RegisterLine CompareOnly
 | Ref |
 # No rows: nothing was committed.
+
+# ---------------------------------------------------------------------------
+# A register line can read directly off the new shape
+# ---------------------------------------------------------------------------
+
+Description A transaction recorded through SourceAccount/Destination/Amount
+Description needs no join against Postings for its line: it already names its
+Description one line directly. See the section on naming both accounts
+Description directly in Transactions.spectable.
+
+Scenario A register line reads directly off a transaction recorded the new way
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register lines are : RegisterLine
+| Ref | Date       | Payee         | Category           | Payment | Deposit | Balance |
+| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00   | 0.00    | -45.00  |
+
+Scenario A split recorded the new way shows as Split in the category column
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type    | Placeholder |
+| Assets:Checking           | Checking | false       |
+| Expenses:Home:Maintenance | Expense | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
+| T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register lines are : RegisterLine
+| Ref | Date       | Payee      | Category  | Payment | Deposit | Balance |
+| T1  | 2024-04-02 | Home Depot | --Split-- | 184.50  | 0.00    | -184.50 |

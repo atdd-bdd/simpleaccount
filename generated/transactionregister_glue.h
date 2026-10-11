@@ -411,6 +411,13 @@ private:
         return (s == "none" || s == DNCString) ? std::string() : s;
     }
 
+    // AccountPath rejects empty text -- a path is required -- so "none" (no
+    // other side) has to stay the default-constructed, unchecked empty path.
+    static types::AccountPath path_or_empty(const std::string& text) {
+        const std::string b = blank(text);
+        return b.empty() ? types::AccountPath() : types::AccountPath(b);
+    }
+
     void add_posting(const std::string& ref, const std::string& date,
                      const std::string& payee, const std::string& account,
                      const std::string& amount, const std::string& memo,
@@ -475,4 +482,27 @@ private:
         account_ = "Assets:Checking";
         lines_ = reg::lines_for(chart_, transactions_, account_);
     }
+public:
+
+    void given_transactions_are(const std::vector<TransactionString>& values) {
+        transactions_.clear();
+        for (const auto& value : values) {
+            ledger::Transaction t;
+            t.id = ledger::new_id();
+            t.ref = types::TransactionRef(value.ref);
+            const auto on = types::Date::from_iso(value.date);
+            if (on) t.date = *on;
+            t.payee = types::PayeeName(blank(value.payee));
+            t.check_no = types::CheckNumber(blank(value.checkno));
+            t.memo = blank(value.memo);
+            t.tag = blank(value.tag);
+            t.source_account = path_or_empty(value.sourceaccount);
+            t.destination = path_or_empty(value.destination);
+            t.amount = Money(value.amount);
+            if (value.cleared != DNCString && !value.cleared.empty())
+                t.cleared = types::cleared_status_from_string(value.cleared);
+            transactions_.push_back(t);
+        }
+    }
+
 };
