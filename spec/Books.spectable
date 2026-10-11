@@ -542,6 +542,26 @@ Then postings are : PostingRow
 # Every field survives, including the per-posting memo and the cleared marker
 # that is on one side and not the other.
 
+Scenario A transaction recorded the new way survives being saved and opened again
+Description SourceAccount, Destination, Amount and Cleared round-trip through the
+Description same write and read as a posting does. See the section on naming
+Description both accounts directly in Transactions.spectable.
+Given a new book named Business
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared |
+| T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Cleared |
+When the book is saved and opened again
+Then transaction is : Transaction Vertical CompareOnly
+| Ref           | T1                 |
+| SourceAccount | Assets:Checking    |
+| Destination   | Expenses:Groceries |
+| Amount        | -45.00             |
+| Cleared       | Cleared            |
+
 Scenario Opening a book that is not there is refused
 Description And says so, rather than making one. A mistyped name is the likely
 Description cause, and an empty book would look like a catastrophe.

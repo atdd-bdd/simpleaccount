@@ -995,4 +995,52 @@ public:
         ADD_FAILURE() << "Not implemented: examples_businessrule_the_qif_profiles_live_in_one_file_beside_the_books_under_a_name";
     }
 
+public:
+
+    void given_transactions_are(const std::vector<TransactionString>& values) {
+        transactions_.clear();
+        for (const auto& value : values) {
+            ledger::Transaction t;
+            t.id = ledger::new_id();
+            t.ref = types::TransactionRef(value.ref);
+            const auto on = types::Date::from_iso(value.date);
+            if (on) t.date = *on;
+            t.payee = types::PayeeName(blank(value.payee));
+            t.memo = blank(value.memo);
+            t.source_account = path_or_empty(value.sourceaccount);
+            t.destination = path_or_empty(value.destination);
+            t.amount = Money(value.amount);
+            if (value.cleared != DNCString && !value.cleared.empty())
+                t.cleared = types::cleared_status_from_string(value.cleared);
+            transactions_.push_back(t);
+        }
+    }
+
+    void then_transaction_is(const std::vector<TransactionString>& values) {
+        for (const auto& value : values) {
+            const ledger::Transaction* t = nullptr;
+            for (const ledger::Transaction& one : transactions_)
+                if (one.ref.value() == value.ref) t = &one;
+            ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
+            if (value.payee != DNCString)
+                EXPECT_EQ(blank(value.payee), t->payee.value()) << value.ref << " payee";
+            if (value.sourceaccount != DNCString)
+                EXPECT_EQ(blank(value.sourceaccount), t->source_account.value())
+                    << value.ref << " source account";
+            if (value.destination != DNCString)
+                EXPECT_EQ(blank(value.destination), t->destination.value())
+                    << value.ref << " destination";
+            if (value.amount != DNCString)
+                EXPECT_EQ(Money(value.amount).cents(), t->amount.cents())
+                    << value.ref << " amount";
+            if (value.cleared != DNCString)
+                EXPECT_EQ(value.cleared, types::to_string(t->cleared)) << value.ref << " cleared";
+        }
+    }
+
+    static types::AccountPath path_or_empty(const std::string& text) {
+        const std::string b = blank(text);
+        return b.empty() ? types::AccountPath() : types::AccountPath(b);
+    }
+
 };
