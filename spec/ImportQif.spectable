@@ -2050,6 +2050,26 @@ Attributes InvoiceRecordKind
 | CarriesCategories | Boolean | false   |
 | Count             | String  |         |
 
+# Left $WIP: five of the seven rows are independently verified against the
+# real pughkilleen.QIF file (payments carry no split lines, 194/212 invoices
+# and 176/213 payments carry N, 37 payments carry none, and the stock-check-
+# number XI flag pattern). The remaining two resist verification rather than
+# merely needing more glue:
+#   - "Does it identify the invoice: Often; 156 agree on N, amount and payee"
+#     -- stripping the instalment-letter suffix from a payment's N, then
+#     requiring the invoice with that N to share the payment's payee and an
+#     equal-and-opposite T, finds 75 such pairs here, not 156. Loosening the
+#     amount test to "any subset of that payee's open payments sums to the
+#     invoice" (to cover instalments like 2820a-d, which this file does have
+#     and which do sum correctly) was not pinned down in the time spent on
+#     it.
+#   - "Is it enough to post income from: No; twelve reconstructions all
+#     missed" -- this is itself a conclusion from an investigation, not a
+#     computable fact; see the thirteenth attempt's own record in
+#     was_paid()'s comment in qif_import.h, which abandoned matching in
+#     favour of the cleared marker for exactly this reason.
+# Rather than force the stub, or weaken the two rows to something vacuous,
+# this stays tagged with the above on the record.
 $WIP
 BusinessRule What the N field is, and why nothing is posted from it
 Description N on an invoice is the invoice number and N on a payment is the
@@ -2435,6 +2455,19 @@ Then postings are : PostingRow
 # Both post their expense. T1 is cleared and T2 is not, and it makes no
 # difference here: what the marker decides is whether income is recognised.
 
+# Left $WIP: InvoicesUnpaid (8) reproduces exactly -- a document with no C
+# field and no payment whose N, suffix stripped, equals its own N -- and so
+# does its composition (the four old income-type ones plus the four recent
+# inter-company reimbursement ones). MatchedExactly/MatchedByPayee/
+# PaymentsUnmatched and EarliestUnpaid/LatestUnpaid do not: the closest
+# matching rule tried here (N stripped of its instalment letter, plus payee,
+# plus an equal-and-opposite T) gives 173/35/5 against the 184/20/9 wanted,
+# and the unpaid-date range it finds (2007-08-24 to 2025-12-09, spanning both
+# the old and the recent inter-company documents) does not land on the
+# 2006-01-01/2010-12-31 given either. This is the same reconstruction
+# was_paid() in qif_import.h already gave up on for posting, for the same
+# underlying reason -- see the BusinessRule above this section and its own
+# $WIP note for what was and was not independently verified.
 $WIP
 Scenario The migration report totals what invoicing left unresolved
 Description Four numbers that say how much of the invoice history did not

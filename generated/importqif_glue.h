@@ -1,7 +1,10 @@
 #pragma once
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <map>
+#include <sstream>
 #include <string>
 #include <vector>
 #include "common/common.h"
@@ -392,6 +395,39 @@ private:
         }
         return out;
     }
+
+    // The handful of BusinessRules in the "Things the two files in testdata
+    // settled" section are pinned to the real business file rather than a
+    // synthetic fixture -- this reads it from disk by a path relative to this
+    // header's own location, which is stable regardless of the test binary's
+    // working directory.
+    static std::string read_testdata_raw(const std::string& name) {
+        const std::filesystem::path here(__FILE__);
+        const std::filesystem::path path =
+            (here.parent_path() / ".." / "testdata" / name).lexically_normal();
+        std::ifstream in(path, std::ios::binary);
+        std::ostringstream ss;
+        ss << in.rdbuf();
+        return ss.str();
+    }
+
+    static qif::File read_testdata_file(const std::string& name) {
+        return qif::read(qif::decode(read_testdata_raw(name)));
+    }
+
+    // Which real !Type:Invoice record is a document and which a payment, by
+    // the same L-field test the importer itself uses (see is_document_record
+    // in qif_import.h): a payment names an account in brackets, a document
+    // names a category or --Split--.
+    static bool is_real_invoice_document(const qif::Record& r) {
+        const bool has_split_lines = r.has('$') && r.section != qif::Section::InvestmentTxns;
+        const std::string l = r.first('L');
+        const bool bracket = !l.empty() && l.front() == '[';
+        return has_split_lines || (!l.empty() && !bracket);
+    }
+
+    std::map<int, int> invoice_years_by_year_;
+
 public:
 
     void then_statement_balance_to_check_is(const std::vector<QifStatementBalanceString>& values) {
@@ -506,13 +542,29 @@ public:
         ADD_FAILURE() << "Not implemented: then_invoice_reconciliation_is";
     }
 
+    // Read straight from the real business file, not from anything a prior
+    // step imported -- this is a standalone diagnostic over the invoice
+    // section's own dates, independent of the importer's transaction output.
     void when_invoice_years_summarised() {
-        ADD_FAILURE() << "Not implemented: when_invoice_years_summarised";
+        invoice_years_by_year_.clear();
+        const qif::File file = read_testdata_file("pughkilleen.QIF");
+        for (const qif::Record& r : file.records) {
+            if (r.section != qif::Section::InvoiceTxns) continue;
+            if (!is_real_invoice_document(r)) continue;
+            const auto d = dates::parse_qif(r.first('D'), types::DateOrder::MDY);
+            if (d) ++invoice_years_by_year_[d->year()];
+        }
     }
 
     void then_invoice_years_are(const std::vector<InvoiceYearSpanString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_invoice_years_are";
+        for (const auto& v : values) {
+            const int from = std::stoi(v.fromyear);
+            const int to = std::stoi(v.toyear);
+            int actual = 0;
+            for (const auto& kv : invoice_years_by_year_)
+                if (kv.first >= from && kv.first <= to) actual += kv.second;
+            EXPECT_EQ(std::stoi(v.invoices), actual) << v.span << " (" << from << "-" << to << ")";
+        }
     }
 
     void given_today_is(const std::vector<TodayString>& values) {
@@ -651,9 +703,29 @@ public:
         ADD_FAILURE() << "Not implemented: examples_businessrule_which_investment_records_the_first_round_imports";
     }
 
+    // Classifies every real !Type:Invoice record the same way is_document_record
+    // in qif_import.h does, then counts each row's own Kind+LField combination
+    // against the real file -- not a synthetic fixture, because the point of
+    // this table is what the actual export contains.
     void examples_businessrule_how_the_invoice_section_is_shaped(const std::vector<InvoiceRecordKindString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_how_the_invoice_section_is_shaped";
+        const qif::File file = read_testdata_file("pughkilleen.QIF");
+        int split_count = 0, income_count = 0, payment_count = 0;
+        for (const qif::Record& r : file.records) {
+            if (r.section != qif::Section::InvoiceTxns) continue;
+            const bool has_split_lines = r.has('$') && r.section != qif::Section::InvestmentTxns;
+            const std::string l = r.first('L');
+            const bool bracket = !l.empty() && l.front() == '[';
+            if (has_split_lines) ++split_count;
+            else if (bracket) ++payment_count;
+            else if (!l.empty()) ++income_count;
+        }
+        for (const auto& v : values) {
+            int actual = 0;
+            if (v.kind == "Invoice" && v.lfield == "--Split--") actual = split_count;
+            else if (v.kind == "Invoice") actual = income_count;
+            else if (v.kind == "Payment") actual = payment_count;
+            EXPECT_EQ(std::stoi(v.count), actual) << v.kind << " / " << v.lfield;
+        }
     }
 
     void examples_businessrule_the_export_does_not_say_which_payment_paid_which_invoice(const std::vector<InvoiceLinkEvidenceString>& values) {
@@ -744,9 +816,63 @@ public:
         ADD_FAILURE() << "Not implemented: examples_businessrule_the_payment_names_the_invoice_it_paid_in_the_n_field";
     }
 
-    void examples_businessrule_what_the_cash_basis_is_worth_measured_against_the_all_dates_report(const std::vector<CashBasisTargetString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_what_the_cash_basis_is_worth_measured_against_the_all_dates_report";
+    // "Ours": the real full import's own all-dates category report, which is
+    // supposed to equal Quicken's own all-dates report because the cleared
+    // marker is followed rather than second-guessed (see was_paid() in
+    // qif_import.h). "Uncollected" is read straight off the raw invoice
+    // records the cleared marker leaves out, independent of the importer, so
+    // this does not just restate what the importer already does; "OnAccrual"
+    // is checked as the arithmetic identity the Description states rather
+    // than computed by any accrual-mode import, because the program has no
+    // such mode and none is wanted -- see the decision in README.md.
+    void examples_businessrule_what_the_cash_basis_is_worth_measured_against_the_all_dates_report(
+            const std::vector<CashBasisTargetString>& values) {
+        qif::Importer importer(types::DateOrder::MDY);
+        importer.import_into("Assets:Business Checking");
+        const qif::Imported real = importer.run(read_testdata_raw("pughkilleen.QIF"));
+        reports::Spec spec;
+        spec.from = types::Date(2000, 1, 1);
+        spec.to = types::Date(2030, 12, 31);
+        const reports::CategoryReport ours_report =
+            reports::category_report(real.accounts, real.book, spec);
+
+        const qif::File file = read_testdata_file("pughkilleen.QIF");
+        std::map<std::string, Money> uncollected;
+        for (const qif::Record& r : file.records) {
+            if (r.section != qif::Section::InvoiceTxns) continue;
+            if (!qif::detail::trim(r.first('C')).empty()) continue;  // collected
+            const bool has_split_lines = r.has('$') && r.section != qif::Section::InvestmentTxns;
+            const std::string l = r.first('L');
+            const bool bracket = !l.empty() && l.front() == '[';
+            if (bracket) continue;  // a payment, not a document
+            std::string category;
+            if (has_split_lines) {
+                for (const std::string& s : r.all('S')) {
+                    const std::string text = qif::detail::trim(s);
+                    if (!text.empty()) { category = text; break; }
+                }
+            } else {
+                category = l;
+            }
+            const auto amt = qif::parse_amount(r.first('T'), true);
+            if (amt) uncollected[category] += *amt;
+        }
+
+        for (const auto& v : values) {
+            const Money want_uncollected(v.uncollected);
+            const auto at = uncollected.find(v.category);
+            const Money got_uncollected = at != uncollected.end() ? at->second : Money();
+            EXPECT_EQ(want_uncollected.cents(), got_uncollected.cents()) << v.category << " uncollected";
+
+            Money ours;
+            for (const auto& row : ours_report.rows)
+                if (row.account == "Income:" + v.category) { ours = row.amount; break; }
+            EXPECT_EQ(Money(v.ours).cents(), ours.cents()) << v.category << " ours (all-dates report)";
+
+            EXPECT_EQ(Money(v.onaccrual).cents(),
+                      Money(v.quickenalldates).cents() + want_uncollected.cents())
+                << v.category << " accrual is all-dates plus uncollected";
+        }
     }
 
 public:
