@@ -324,6 +324,105 @@ Examples: ValidValues
 |       | false   | An account always has one       |
 
 # ---------------------------------------------------------------------------
+# Accounts and categories are separate entities
+# ---------------------------------------------------------------------------
+
+Description Account and Category are redone here as two separate entities
+Description rather than one Account entity that Type happens to make a
+Description category of. They keep almost nothing in common: a category has no
+Description bank and no account number, and is offered by typing rather than
+Description read off a statement, while an account is never found by typing
+Description part of its name. Keeping them apart is what "different data"
+Description means in practice.
+Details Nothing below removes the Account entity above, and nothing below
+Details changes what a ChartOfAccounts table in an existing scenario looks
+Details like: Path stays what every table in this specification names a node
+Details by, for both kinds, the same as it always has. What changes is what a
+Details node is identified and stored by underneath that convenience, which
+Details these new rules say and the existing ones did not have to.
+
+DataType CategoryId
+Description The identity a category is given once, when it is created, and
+Description never afterwards. Drawn from the same counter as AccountId: see
+Description the rule below. Zero is "none".
+Uses Integer
+Examples: ValidValues
+| Value | IsValid | Notes                               |
+| 2     | true    | The second id the counter gave out  |
+| 413   | true    |                                     |
+|       | false   | A category always has one           |
+
+BusinessRule An account id and a category id never collide
+Description Accounts and categories are two separate collections, but one
+Description number line between them: the counter that hands out an AccountId
+Description is the same counter that hands out a CategoryId, so a program
+Description handed a bare number and told "look this up" never has to be told
+Description which collection to look in first, and never guesses wrong.
+Details This is what makes it safe for a transaction or a posting to name "the
+Details other side" by one id with no separate flag saying which kind it is.
+Details See Transactions.
+Examples: IdsGivenOut
+| CreatedInOrder       | Kind     | Id | Notes                        |
+| First account made   | Account  | 1  |                              |
+| First category made  | Category | 2  | Not 1: the counter is shared |
+| Second account made   | Account  | 3  |                              |
+| Second category made  | Category | 4  |                              |
+
+Attributes IdsGivenOut
+| Attribute      | Type    | Default |
+| CreatedInOrder | String  |         |
+| Kind           | String  |         |
+| Id             | Integer | 0       |
+| Notes          | String  | none    |
+
+Entity Category
+Description A node Quicken calls a category -- Income, Expense or Equity --
+Description kept apart from Account because almost nothing else about it is
+Description shared. See the business rule above for why its id still cannot
+Description collide with an account's.
+Uses AccountPath and AccountType from CoreTypes
+| Attribute     | Type        | Default | Notes                               |
+| Id            | CategoryId  | none    | Identity; given once, never changes |
+| SubcategoryOf | CategoryId  | 0       | 0 is top-level; otherwise the category it sits under |
+| Path          | AccountPath |         | Unique; derived by walking SubcategoryOf and Name when the record is read, not stored as text itself |
+| Type          | AccountType | Expense | Income, Expense or Equity           |
+| Placeholder   | Boolean     | false   | A grouping node; takes no postings   |
+| Hidden        | Boolean     | false   | Kept out of pickers, history kept    |
+| Alias         | Text        | none    | A short way to type it; see finding a category |
+
+Collection Categories
+Description Every category in the book, in one tree, separate from Accounts.
+| DataType | Minimum | Maximum | Notes          |
+| Category | 0       | 100000  | Path is unique |
+
+Attributes CategoryRow
+Description A raw row as it would be read from storage, before its path is
+Description derived -- named by id and parent id, the way the database holds
+Description it, rather than by the path a person types.
+| Attribute     | Type        | Default |
+| Id            | Integer     | 0       |
+| SubcategoryOf | Integer     | 0       |
+| Name          | AccountName |         |
+| Type          | AccountType | Expense |
+
+Scenario A category's path is derived from its parent chain when it is read
+Description Nothing stores Expenses:Auto:Fuel as text. SubcategoryOf points at
+Description the category above, and the path is walked out from that, the same
+Description way an account's path already is worked out from the tree for
+Description display. See the identity rule above.
+Given raw category rows are : CategoryRow
+| Id | SubcategoryOf | Name     | Type    |
+| 1  | 0              | Expenses | Expense |
+| 2  | 1              | Auto     | Expense |
+| 3  | 2              | Fuel     | Expense |
+When the rows are read as categories
+Then categories are : Category CompareOnly
+| Path               |
+| Expenses           |
+| Expenses:Auto      |
+| Expenses:Auto:Fuel |
+
+# ---------------------------------------------------------------------------
 # Showing an account or a category as one line of text
 # ---------------------------------------------------------------------------
 
@@ -367,8 +466,9 @@ Attributes AccountDisplay
 Scenario Converting every account at once is cheap enough to repeat on every change
 Description A few hundred accounts and categories at most, so converting the
 Description whole chart over again -- rather than patching the one that moved --
-Description is simpler and still instant. This is what runs after any add,
-Description rename, move, or hide.
+Description is simpler and still instant. This runs when the book is opened,
+Description and again after any add, edit, move, rename, hide or delete of
+Description either an account or a category.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -382,6 +482,21 @@ Then accounts show as : AccountDisplay CompareOnly
 # Renaming Fuel to Petrol and rebuilding again would change only the first of
 # these two answers -- to Auto:Petrol (Expense) -- and nothing else, because
 # nothing else is downstream of the one node that changed.
+
+Scenario A category's display name is rebuilt the same way, and when the book opens
+Description Category is now a separate entity from Account, but the rebuild is
+Description one pass over everything either entity holds, not two: a book with
+Description a few hundred nodes between them converts all of them, every time
+Description it is opened and every time one is added, edited, moved, renamed,
+Description hidden or deleted, and it is still instant.
+Given the categories are : Categories
+| Path               | Placeholder |
+| Expenses:Auto      | true        |
+| Expenses:Auto:Fuel | false       |
+When the book is reopened
+Then categories show as : AccountDisplay CompareOnly
+| Path               | ShownAs             |
+| Expenses:Auto:Fuel | Auto:Fuel (Expense) |
 
 # ---------------------------------------------------------------------------
 # What is kept about an account

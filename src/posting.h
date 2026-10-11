@@ -86,7 +86,42 @@ struct Transaction {
     std::string memo;
     std::string tag;            // a Quicken class, kept on migration
     std::vector<Posting> postings;
+
+    // A second way of saying what a transaction is: the account it lives in,
+    // the other side, and the signed amount between them. Unset (an empty
+    // path, a zero amount) on a transaction recorded the old way, through
+    // postings instead. See the section on naming both accounts directly in
+    // Transactions.spectable.
+    types::AccountPath source_account;
+    types::AccountPath destination;
+    Money amount;
 };
+
+// One category line of a split recorded the new way: kept apart from the
+// transaction that carries the total and the account it was entered or
+// downloaded against, rather than folded into Postings the way a split is
+// today. See the TransactionSplit entity in Transactions.spectable.
+struct TransactionSplit {
+    types::TransactionId transaction_id;
+    types::AccountPath destination;
+    Money amount;
+    std::string memo;
+};
+
+// The parts of one split, in the order they were entered.
+inline std::vector<TransactionSplit> split_lines_of(
+        const std::vector<TransactionSplit>& all, const types::TransactionId& id) {
+    std::vector<TransactionSplit> out;
+    for (const TransactionSplit& s : all)
+        if (s.transaction_id.value() == id.value()) out.push_back(s);
+    return out;
+}
+
+inline Money split_total(const std::vector<TransactionSplit>& lines) {
+    Money total;
+    for (const TransactionSplit& s : lines) total += s.amount;
+    return total;
+}
 
 // The whole of double entry: the amounts of the postings of one transaction sum
 // to zero. Checked on every commit, on every import, and when a file is opened,
@@ -157,6 +192,39 @@ inline types::AccountPath unassigned() { return types::AccountPath(kUnassigned);
 
 inline bool is_unassigned(const types::AccountPath& path) {
     return path.value() == kUnassigned;
+}
+
+// The new-shape equivalent of assigning the other account: the transaction
+// itself names the other side, so there is no second posting to edit, only
+// this one row's Destination.
+inline bool assign_destination(std::vector<Transaction>* transactions,
+                               const types::TransactionId& id,
+                               const types::AccountPath& account) {
+    for (Transaction& t : *transactions) {
+        if (t.id.value() != id.value()) continue;
+        if (!is_unassigned(t.destination)) return false;
+        t.destination = account;
+        return true;
+    }
+    return false;
+}
+
+// The new-shape equivalent of matching two entries: each already exists as
+// its own row, so joining them is pointing each one's Destination at the
+// other's SourceAccount, not merging rows into one.
+inline bool match_destinations(std::vector<Transaction>* transactions,
+                               const types::TransactionId& a_id,
+                               const types::TransactionId& b_id) {
+    Transaction* a = nullptr;
+    Transaction* b = nullptr;
+    for (Transaction& t : *transactions) {
+        if (t.id.value() == a_id.value()) a = &t;
+        if (t.id.value() == b_id.value()) b = &t;
+    }
+    if (a == nullptr || b == nullptr) return false;
+    a->destination = b->source_account;
+    b->destination = a->source_account;
+    return true;
 }
 
 // Removing one side would leave the book out of balance, so a delete is always

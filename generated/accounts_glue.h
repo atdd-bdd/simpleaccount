@@ -565,4 +565,101 @@ public:
         }
     }
 
+public:
+
+    void given_raw_category_rows_are(const std::vector<CategoryRowString>& values) {
+        raw_category_rows_.clear();
+        for (const auto& value : values) {
+            chart::CategoryRawRow r;
+            r.id = std::stoll(value.id);
+            r.subcategory_of = std::stoll(value.subcategoryof);
+            r.name = value.name;
+            r.type = types::account_type_from_string(value.type);
+            raw_category_rows_.push_back(r);
+        }
+    }
+
+    void when_the_rows_are_read_as_categories() {
+        categories_from_raw_ = chart::categories_from_raw(raw_category_rows_);
+    }
+
+    void then_categories_are(const std::vector<CategoryString>& values) {
+        ASSERT_EQ(values.size(), categories_from_raw_.size()) << "number of categories";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            if (values[i].path != DNCString)
+                EXPECT_EQ(values[i].path, categories_from_raw_[i].path.value())
+                    << "category " << i;
+        }
+    }
+
+    void examples_datatype_categoryid(const std::vector<ValidValuesString>& values) {
+        for (const auto& value : values) {
+            const ValidValuesTyped v = ValidValuesTyped::from_string_struct(value);
+            bool accepted = true;
+            try {
+                if (v.value.empty()) throw std::invalid_argument("empty");
+                std::size_t pos = 0;
+                const long long n = std::stoll(v.value, &pos);
+                if (pos != v.value.size()) throw std::invalid_argument("not a number");
+                const chart::CategoryId parsed(n);
+                (void)parsed;
+            } catch (const std::exception&) {
+                accepted = false;
+            }
+            EXPECT_EQ(v.isvalid, accepted)
+                << "CategoryId given [" << v.value << "]"
+                << (v.notes.empty() ? "" : " -- " + v.notes);
+        }
+    }
+
+    // Drives Chart's own add()/add_category() in the order the table states,
+    // so what is checked is the production counter actually being shared --
+    // not just that the numbers in the table happen not to collide.
+    void examples_businessrule_an_account_id_and_a_category_id_never_collide(
+            const std::vector<IdsGivenOutString>& values) {
+        chart::Chart fixture;
+        for (const auto& value : values) {
+            long long got = 0;
+            if (value.kind == "Account") {
+                std::vector<chart::Account> created;
+                fixture.add(types::AccountPath("Node" + value.id), types::AccountType::Checking,
+                           &created);
+                ASSERT_FALSE(created.empty()) << value.createdinorder;
+                got = created.back().id.value();
+            } else if (value.kind == "Category") {
+                std::vector<chart::Category> created;
+                fixture.add_category(types::AccountPath("Node" + value.id),
+                                     types::AccountType::Expense, &created);
+                ASSERT_FALSE(created.empty()) << value.createdinorder;
+                got = created.back().id.value();
+            } else {
+                FAIL() << "unknown kind: " << value.kind;
+                continue;
+            }
+            EXPECT_EQ(std::stoll(value.id), got) << value.createdinorder;
+        }
+    }
+
+public:
+
+    void given_the_categories_are(const std::vector<CategoryString>& values) {
+        for (const auto& value : values) {
+            chart::Category c;
+            c.path = types::AccountPath(value.path);
+            c.type = types::account_type_from_string(value.type);
+            c.placeholder = parse_bool_cell(value.placeholder);
+            c.hidden = parse_bool_cell(value.hidden);
+            c.alias = blank(value.alias);
+            chart_.put_category(c);
+        }
+    }
+
+    void then_categories_show_as(const std::vector<AccountDisplayString>& values) {
+        for (const auto& value : values)
+            EXPECT_EQ(value.shownas, chart_.displayed(value.path)) << value.path;
+    }
+
+private:
+    std::vector<chart::CategoryRawRow> raw_category_rows_;
+    std::vector<chart::Category> categories_from_raw_;
 };

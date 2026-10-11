@@ -159,13 +159,25 @@ public:
     // register, and Ref is only ever a label of these tables. So the Ref is
     // resolved to an id here, the one place that gap between spec and
     // production addressing has to be bridged.
+    // A transaction recorded either shape may be named here: one with
+    // Postings is joined by reg::join_as_transfer/assign_other_account, the
+    // production functions MainWindow calls today; one recorded directly by
+    // SourceAccount/Destination has no posting to edit, so the new-shape
+    // functions in posting.h set Destination instead. Same step, same facts,
+    // whichever shape made the row.
     void when_the_other_account_is_assigned(const std::vector<AccountAssignmentString>& values) {
         for (const auto& value : values) {
             const ledger::Transaction* t = find_by_ref(value.ref);
             ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
-            const std::string id = t->id.value();
-            EXPECT_TRUE(reg::assign_other_account(&transactions_, id, value.account))
-                << "nothing unassigned in " << value.ref;
+            if (!t->postings.empty()) {
+                const std::string id = t->id.value();
+                EXPECT_TRUE(reg::assign_other_account(&transactions_, id, value.account))
+                    << "nothing unassigned in " << value.ref;
+            } else {
+                EXPECT_TRUE(ledger::assign_destination(&transactions_, t->id,
+                                                       types::AccountPath(value.account)))
+                    << "nothing unassigned in " << value.ref;
+            }
         }
         rebuild_book();
     }
@@ -176,10 +188,15 @@ public:
             ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
             const ledger::Transaction* other = find_by_ref(value.otherref);
             ASSERT_NE(nullptr, other) << "no transaction " << value.otherref;
-            const std::string id = t->id.value();
-            const std::string other_id = other->id.value();
-            EXPECT_TRUE(reg::join_as_transfer(&transactions_, id, other_id))
-                << value.ref << " could not be joined with " << value.otherref;
+            if (!t->postings.empty() || !other->postings.empty()) {
+                const std::string id = t->id.value();
+                const std::string other_id = other->id.value();
+                EXPECT_TRUE(reg::join_as_transfer(&transactions_, id, other_id))
+                    << value.ref << " could not be joined with " << value.otherref;
+            } else {
+                EXPECT_TRUE(ledger::match_destinations(&transactions_, t->id, other->id))
+                    << value.ref << " could not be joined with " << value.otherref;
+            }
         }
         rebuild_book();
     }
@@ -227,13 +244,7 @@ public:
         for (const auto& value : values) {
             const ledger::Transaction* t = find_by_ref(value.ref);
             ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
-            // Id is deliberately never named by a table -- see its Notes in the
-            // Entity -- so it is the one field this never compares.
-            EXPECT_EQ(value.date, t->date.iso()) << value.ref << " date";
-            EXPECT_EQ(blank(value.payee), t->payee.value()) << value.ref << " payee";
-            EXPECT_EQ(blank(value.checkno), t->check_no.value()) << value.ref << " check no";
-            EXPECT_EQ(blank(value.memo), t->memo) << value.ref << " memo";
-            EXPECT_EQ(blank(value.tag), t->tag) << value.ref << " tag";
+            EXPECT_EQ(value, as_string(*t)) << value.ref;
         }
     }
 
@@ -477,6 +488,54 @@ private:
         return nullptr;
     }
 
+    ledger::Transaction* find_by_id(const types::TransactionId& id) {
+        for (ledger::Transaction& t : transactions_)
+            if (t.id.value() == id.value()) return &t;
+        return nullptr;
+    }
+
+    // AccountPath rejects empty text -- a path is required -- so "none" (no
+    // other side known yet) has to stay the default-constructed, unchecked
+    // empty path rather than go through the constructor.
+    static types::AccountPath path_or_empty(const std::string& text) {
+        const std::string b = blank(text);
+        return b.empty() ? types::AccountPath() : types::AccountPath(b);
+    }
+
+    static ledger::Transaction make_transaction(const TransactionString& value) {
+        ledger::Transaction t;
+        t.id = ledger::new_id();
+        t.ref = types::TransactionRef(value.ref);
+        const auto on = types::Date::from_iso(value.date);
+        if (on) t.date = *on;
+        t.payee = types::PayeeName(blank(value.payee));
+        t.check_no = types::CheckNumber(blank(value.checkno));
+        t.memo = blank(value.memo);
+        t.tag = blank(value.tag);
+        t.source_account = path_or_empty(value.sourceaccount);
+        t.destination = path_or_empty(value.destination);
+        t.amount = Money(value.amount);
+        return t;
+    }
+
+    // Deliberately matches the convention in then_account_is: Id is never
+    // stated by a table, so it is always read back as "none" rather than the
+    // real, generated name.
+    static TransactionString as_string(const ledger::Transaction& t) {
+        TransactionString s;
+        s.id = "none";
+        s.ref = t.ref.value();
+        s.date = t.date.iso();
+        s.payee = t.payee.value().empty() ? "none" : t.payee.value();
+        s.checkno = t.check_no.value().empty() ? "none" : t.check_no.value();
+        s.memo = t.memo.empty() ? "none" : t.memo;
+        s.tag = t.tag.empty() ? "none" : t.tag;
+        s.sourceaccount = t.source_account.value().empty() ? "none" : t.source_account.value();
+        s.destination = t.destination.value().empty() ? "none" : t.destination.value();
+        s.amount = t.amount.in_register();
+        return s;
+    }
+
     void rebuild_book() {
         book_ = ledger::Ledger();
         for (const ledger::Transaction& t : transactions_)
@@ -517,4 +576,85 @@ private:
     std::string pending_account_;
     std::vector<reg::OfferedEntry> offered_;
     std::vector<std::string> created_names_;
+    std::vector<ledger::TransactionSplit> splits_;
+    types::TransactionId last_entered_id_;
+public:
+
+    void when_transaction_entered(const std::vector<TransactionString>& values) {
+        for (const auto& value : values) {
+            const ledger::Transaction t = make_transaction(value);
+            last_entered_id_ = t.id;
+            transactions_.push_back(t);
+        }
+        rebuild_book();
+    }
+
+    void then_no_split_lines_exist_for_it() {
+        EXPECT_TRUE(ledger::split_lines_of(splits_, last_entered_id_).empty())
+            << "expected no split lines";
+    }
+
+    void when_split_lines_entered(const std::vector<TransactionSplitString>& values) {
+        for (const auto& value : values) {
+            ledger::TransactionSplit s;
+            s.transaction_id = last_entered_id_;
+            s.destination = path_or_empty(value.destination);
+            s.amount = Money(value.amount);
+            s.memo = blank(value.memo);
+            splits_.push_back(s);
+        }
+    }
+
+    void then_the_split_lines_total_the_transaction_s_amount() {
+        const ledger::Transaction* t = find_by_id(last_entered_id_);
+        ASSERT_NE(nullptr, t) << "no transaction entered";
+        const Money total = ledger::split_total(ledger::split_lines_of(splits_, last_entered_id_));
+        // The parts are the other side: they sum to the negation of the
+        // transaction's own amount, the same way a posting's amount and its
+        // category's amount are opposite under the old shape.
+        EXPECT_EQ(t->amount.cents(), (-total).cents());
+    }
+
+    void when_another_entry_is_downloaded(const std::vector<TransactionString>& values) {
+        for (const auto& value : values) {
+            const ledger::Transaction t = make_transaction(value);
+            last_entered_id_ = t.id;
+            transactions_.push_back(t);
+        }
+        rebuild_book();
+    }
+
+    void then_entries_in_that_account_are(const std::vector<TransactionCountString>& values) {
+        for (const auto& value : values) {
+            int n = 0;
+            for (const ledger::Transaction& t : transactions_)
+                if (t.source_account.value() == value.account) ++n;
+            EXPECT_EQ(std::stoi(value.count), n) << value.account;
+        }
+    }
+
+    void examples_businessrule_a_split_s_lines_are_what_is_totalled_against_its_transaction_s_amount(const std::vector<SplitTotalCheckString>& values) {
+        for (const auto& value : values) {
+            const Money got = reg::abs_of(Money(value.transactionamount) - Money(value.linetotal));
+            EXPECT_EQ(Money(value.short_).cents(), got.cents()) << value.notes;
+        }
+    }
+
+public:
+
+    void given_transactions_are(const std::vector<TransactionString>& values) {
+        transactions_.clear();
+        for (const auto& value : values) transactions_.push_back(make_transaction(value));
+        rebuild_book();
+    }
+
+    void then_transactions_are(const std::vector<TransactionString>& values) {
+        ASSERT_EQ(values.size(), transactions_.size()) << "number of transactions";
+        for (const auto& value : values) {
+            const ledger::Transaction* t = find_by_ref(value.ref);
+            ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
+            EXPECT_EQ(value, as_string(*t)) << value.ref;
+        }
+    }
+
 };

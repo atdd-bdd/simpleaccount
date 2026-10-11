@@ -32,7 +32,7 @@ namespace store {
 // this when that shape changes, and add the upgrade it needs to open_at below --
 // a book already on disk was made by kSchema as it read on an earlier version,
 // and has to be brought forward in place rather than recreated.
-inline constexpr int kSchemaVersion = 2;
+inline constexpr int kSchemaVersion = 3;
 
 struct Failure {
     bool refused = false;
@@ -138,6 +138,14 @@ CREATE TABLE accounts (
   -- and the number on the statement, kept exactly as written.
   bank            TEXT  NOT NULL DEFAULT '',
   account_number  TEXT  NOT NULL DEFAULT '');
+
+CREATE TABLE categories (
+  path          TEXT    NOT NULL PRIMARY KEY,
+  type          TEXT    NOT NULL,
+  placeholder   INTEGER NOT NULL DEFAULT 0,
+  hidden        INTEGER NOT NULL DEFAULT 0,
+  -- A short way to type it; see the finding rule in Accounts.spectable.
+  alias         TEXT    NOT NULL DEFAULT '');
 
 CREATE TABLE transactions (
   -- The name the transaction was given when it was created, and what it is
@@ -345,6 +353,19 @@ private:
             for (const char* sql : columns)
                 if (!detail::exec(db, sql, why)) return false;
         }
+        if (from < 3) {
+            // Category did not exist as its own collection before this: a
+            // book written before version 3 has no categories table at all,
+            // which is exactly the empty collection a new book starts with.
+            static const char* const sql =
+                "CREATE TABLE categories ("
+                "  path          TEXT    NOT NULL PRIMARY KEY,"
+                "  type          TEXT    NOT NULL,"
+                "  placeholder   INTEGER NOT NULL DEFAULT 0,"
+                "  hidden        INTEGER NOT NULL DEFAULT 0,"
+                "  alias         TEXT    NOT NULL DEFAULT '')";
+            if (!detail::exec(db, sql, why)) return false;
+        }
         detail::Statement set(db, "UPDATE schema SET version = ?");
         if (!set.ok()) { if (why) *why = set.why(); return false; }
         set.bind(1, kSchemaVersion);
@@ -423,7 +444,8 @@ public:
         // See the note in development.txt.
         if (!detail::exec(db_.get(), "DELETE FROM posting_import_ids; "
                                      "DELETE FROM postings; DELETE FROM transactions; "
-                                     "DELETE FROM accounts; DELETE FROM payee_rules;",
+                                     "DELETE FROM accounts; DELETE FROM categories; "
+                                     "DELETE FROM payee_rules;",
                           &why))
             return fail(why);
 
@@ -442,6 +464,20 @@ public:
             account.bind(7, a.bank);
             account.bind(8, a.account_number);
             if (!account.run()) return fail(account.why());
+        }
+
+        detail::Statement category(db_.get(),
+            "INSERT INTO categories (path, type, placeholder, hidden, alias) "
+            "VALUES (?, ?, ?, ?, ?)");
+        if (!category.ok()) return fail(category.why());
+        for (const chart::Category& c : accounts.all_categories()) {
+            category.reset();
+            category.bind(1, c.path.value());
+            category.bind(2, types::to_string(c.type));
+            category.bind(3, c.placeholder ? 1 : 0);
+            category.bind(4, c.hidden ? 1 : 0);
+            category.bind(5, c.alias);
+            if (!category.run()) return fail(category.why());
         }
 
         detail::Statement header(db_.get(),
@@ -542,6 +578,19 @@ public:
             a.bank = account.text(6);
             a.account_number = account.text(7);
             accounts->put(a);
+        }
+
+        detail::Statement category(db_.get(),
+            "SELECT path, type, placeholder, hidden, alias FROM categories ORDER BY path");
+        if (!category.ok()) return {true, category.why()};
+        while (category.step_row()) {
+            chart::Category c;
+            c.path = types::AccountPath(category.text(0));
+            c.type = types::account_type_from_string(category.text(1));
+            c.placeholder = category.integer(2) != 0;
+            c.hidden = category.integer(3) != 0;
+            c.alias = category.text(4);
+            accounts->put_category(c);
         }
 
         detail::Statement header(db_.get(),

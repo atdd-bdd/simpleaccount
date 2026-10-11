@@ -69,14 +69,20 @@ Description in each, and losing either would make that file import twice.
 
 Entity Transaction
 Description What the two or more postings share.
-| Attribute | Type           | Default    | Notes                        |
-| Id        | TransactionId  | none       | Identity; given once, never changes. These tables never name one: it is given by whatever creates the transaction, so a table that stated one would be stating something no scenario controls |
-| Ref       | TransactionRef |            | A device of these tables; not stored |
-| Date      | Date           | 2024-01-01 | The date it is posted on     |
-| Payee     | PayeeName      | none       | Optional                     |
-| CheckNo   | CheckNumber    | none       | Optional                     |
-| Memo      | Text           | none       | For the transaction as a whole |
-| Tag       | Text           | none       | A Quicken class, kept on migration; see ImportQif |
+Details The three attributes below -- SourceAccount, Destination and Amount --
+Details are a second, newer way of saying what a transaction is; see the
+Details section on naming both accounts directly, further down this file.
+| Attribute     | Type           | Default    | Notes                        |
+| Id            | TransactionId  | none       | Identity; given once, never changes. These tables never name one: it is given by whatever creates the transaction, so a table that stated one would be stating something no scenario controls |
+| Ref           | TransactionRef |            | A device of these tables; not stored |
+| Date          | Date           | 2024-01-01 | The date it is posted on     |
+| Payee         | PayeeName      | none       | Optional                     |
+| CheckNo       | CheckNumber    | none       | Optional                     |
+| Memo          | Text           | none       | For the transaction as a whole |
+| Tag           | Text           | none       | A Quicken class, kept on migration; see ImportQif |
+| SourceAccount | AccountPath    | none       | The account this entry lives in: downloaded into, or typed in its register. An id underneath, the same as every account reference; see the identity rule in Accounts |
+| Destination   | AccountPath    | none       | The other side: a category, a real account, or the literal Split when the parts are in TransactionSplit below |
+| Amount        | Money          | 0.00       | Signed against SourceAccount; Destination carries the opposite effect by construction, so nothing here needs to sum to zero the way Postings does |
 
 Attributes PostingRow
 Description A posting with its transaction, which is how these tables are written.
@@ -766,6 +772,193 @@ Then postings are : PostingRow
 | T1  | 2024-04-15 | Acme Payroll | Assets:Checking | 2800.00  | none            |
 | T1  | 2024-04-15 | Acme Payroll | Income:Salary   | -3000.00 | Gross pay       |
 | T1  | 2024-04-15 | Acme Payroll | Assets:Savings  | 200.00   | Direct to saver |
+
+# ---------------------------------------------------------------------------
+# A transaction can name both accounts directly
+# ---------------------------------------------------------------------------
+
+Description Everything above this point is written against Postings, and
+Description nothing about it changes: those scenarios keep meaning what they
+Description always meant. SourceAccount, Destination and Amount on Transaction
+Description are a second shape for the same facts, built so that a register
+Description line can be read from the transaction alone, with no join against
+Description Postings needed for the ordinary case. A future pass moves the
+Description scenarios above onto this shape, a file at a time; this section is
+Description that shape, specified ahead of it.
+Details A split keeps a table of its own, TransactionSplit, rather than
+Details folding its parts into the transaction the way Postings folds every
+Details side into one collection today. An ordinary transaction -- the
+Details common case -- needs no second table at all: SourceAccount and
+Details Destination are both already on it.
+Details
+Details Every reference below -- SourceAccount, Destination, and a split
+Details line's own Destination -- is an id underneath, the same as every
+Details account or category reference elsewhere; AccountPath is this
+Details specification's reading of it, not what is stored. See the identity
+Details rule in Accounts.
+
+Scenario An ordinary transaction names both accounts directly, with no posting at all
+Description The register's category column becomes Destination; nothing is
+Description created that has to sum to anything, because there is only one row.
+Given the chart of accounts is as previous
+When transaction entered : Transaction Vertical
+| Ref           | T1                 |
+| SourceAccount | Assets:Checking    |
+| Date          | 2024-01-15         |
+| Payee         | Harris Teeter      |
+| Destination   | Expenses:Groceries |
+| Amount        | -45.00             |
+Then transaction is : Transaction Vertical CompareOnly
+| Ref           | T1                 |
+| SourceAccount | Assets:Checking    |
+| Destination   | Expenses:Groceries |
+| Amount        | -45.00             |
+Then no split lines exist for it
+
+Scenario A split names Split as its destination, and its categories live apart
+Description The transaction itself says Split and carries the total; the parts
+Description are rows of their own, found by the transaction's id, rather than
+Description folded into the transaction the way Postings folds them today.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Income:Salary          | Income  | false       |
+| Expenses:Taxes:Federal | Expense | false       |
+| Expenses:Insurance     | Expense | false       |
+When transaction entered : Transaction Vertical
+| Ref           | T1               |
+| SourceAccount | Assets:Checking |
+| Date          | 2024-04-15      |
+| Payee         | Acme Payroll    |
+| Destination   | Split           |
+| Amount        | 3550.00         |
+When split lines entered : TransactionSplit
+| Destination            | Amount   | Memo      |
+| Income:Salary          | -5000.00 | Gross pay |
+| Expenses:Taxes:Federal | 1200.00  | Withheld  |
+| Expenses:Insurance     | 250.00   | Premium   |
+Then the split lines total the transaction's amount
+
+Scenario A split line that is itself a transfer is matched by hand, not automatically
+Description Part of a paycheque goes straight to savings. The savings account
+Description gets its own, independently downloaded entry later; nothing here
+Description reaches across to find it, because matching a whole account's
+Description entry is already a careful, user-driven thing, and a split's line
+Description is a smaller, less certain thing to be matching blind. See the
+Description matching rule above.
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type    | Placeholder |
+| Assets:Checking | Checking | false       |
+| Assets:Savings  | Checking | false       |
+| Income:Salary   | Income  | false       |
+When transaction entered : Transaction Vertical
+| Ref           | T1               |
+| SourceAccount | Assets:Checking |
+| Date          | 2024-04-15      |
+| Payee         | Acme Payroll    |
+| Destination   | Split           |
+| Amount        | 2800.00         |
+When split lines entered : TransactionSplit
+| Destination    | Amount   | Memo            |
+| Income:Salary  | -3000.00 | Gross pay       |
+| Assets:Savings | 200.00   | Direct to saver |
+When another entry is downloaded : Transaction Vertical
+| Ref           | T2             |
+| SourceAccount | Assets:Savings |
+| Date          | 2024-04-16     |
+| Destination   | none           |
+| Amount        | 200.00         |
+Then entries in that account are : TransactionCount Vertical
+| Account | Assets:Savings |
+| Count   | 1              |
+# Just the one, the download: a split line naming a real account is a line of
+# Assets:Checking's split, not a row of its own in Assets:Savings' register.
+# Nothing here joined them, which is the point.
+
+Attributes TransactionCount
+| Attribute | Type        | Default |
+| Account   | AccountPath |         |
+| Count     | Integer     | 0       |
+
+Scenario Assigning the other account updates Destination, not a second posting
+Description The last resort, and the one that always works, done the new way:
+Description there is one row for this entry, and assigning the other account is
+Description changing what its Destination says, not creating or editing a
+Description second posting to Unassigned.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Checking   | false       |
+| Liabilities:Chase Visa | CreditCard | false       |
+| Unassigned             | OtherAsset | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee     | Destination | Amount   |
+| T1  | Assets:Checking | 2026-04-10 | CHASEBANK | Unassigned  | -1200.00 |
+When the other account is assigned : AccountAssignment Vertical
+| Ref     | T1                     |
+| Account | Liabilities:Chase Visa |
+Then transaction is : Transaction Vertical CompareOnly
+| Ref         | T1                     |
+| Destination | Liabilities:Chase Visa |
+
+Scenario Matching an entry in another register updates both transactions' Destination
+Description The card was imported weeks ago and the payment never paired. Both
+Description sides already exist as their own row, each with a real account as
+Description SourceAccount and Unassigned as Destination. Matching them points
+Description each one at the other's account; neither row is deleted and nothing
+Description is merged into one.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Checking   | false       |
+| Liabilities:Chase Visa | CreditCard | false       |
+| Unassigned             | OtherAsset | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount          | Date       | Payee            | Destination | Amount   |
+| T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | Unassigned  | -1200.00 |
+| T2  | Liabilities:Chase Visa | 2026-04-25 | PAYMENT RECEIVED | Unassigned  | 1200.00  |
+When the other entry is matched : EntryMatch Vertical
+| Ref      | T1 |
+| OtherRef | T2 |
+Then transactions are : Transaction CompareOnly
+| Ref | SourceAccount          | Destination            |
+| T1  | Assets:Checking        | Liabilities:Chase Visa |
+| T2  | Liabilities:Chase Visa | Assets:Checking         |
+
+Entity TransactionSplit
+Description One category line of a split, kept apart from the transaction that
+Description carries the total and the account it was entered or downloaded
+Description against. Only a split has rows here: an ordinary transaction's
+Description destination is a plain account or category, named directly on the
+Description transaction, and needs none of this.
+| Attribute     | Type          | Default | Notes                            |
+| TransactionId | TransactionId | none    | Which split this line belongs to; a unique id, not a name |
+| Destination   | AccountPath   |         | A category, or an account for a line entered by hand as a transfer |
+| Amount        | Money         | 0.00    | Positive is money leaving SourceAccount |
+| Memo          | Text          | none    |                                   |
+
+Collection TransactionSplits
+Description The lines of every split in the book.
+| DataType         | Minimum | Maximum | Notes |
+| TransactionSplit | 0       | 50      |       |
+
+BusinessRule A split's lines are what is totalled against its transaction's amount
+Description The transaction itself is never out of balance under this shape --
+Description it names one amount against one source account, and nothing sums
+Description against it. Only a split can be short or over, because only a
+Description split has more than one figure that is supposed to agree with
+Description another. See the existing shortfall scenario above, which already
+Description checks exactly this.
+Examples: SplitTotalCheck
+| TransactionAmount | LineTotal | Short | Notes                    |
+| 184.50             | 184.50    | 0.00  | Agrees                   |
+| 184.50             | 154.50    | 30.00 | Short by thirty          |
+| 3550.00            | 3550.00   | 0.00  | A paycheque split agrees |
+
+Attributes SplitTotalCheck
+| Attribute         | Type   | Default |
+| TransactionAmount | Money  | 0.00    |
+| LineTotal         | Money  | 0.00    |
+| Short             | Money  | 0.00    |
+| Notes             | String | none    |
 
 # ---------------------------------------------------------------------------
 # When the other side is not known

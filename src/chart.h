@@ -29,6 +29,78 @@ private:
     long long value_ = 0;
 };
 
+// The identity a category is given once, when it is created, and never
+// afterwards -- drawn from the same counter as AccountId, so the two never
+// collide. See the identity rule in Accounts.spectable. Zero is "none".
+class CategoryId {
+public:
+    CategoryId() = default;
+    explicit CategoryId(long long value) : value_(value) {}
+    long long value() const { return value_; }
+    bool is_none() const { return value_ == 0; }
+    bool operator==(const CategoryId& o) const { return value_ == o.value_; }
+    bool operator!=(const CategoryId& o) const { return value_ != o.value_; }
+
+private:
+    long long value_ = 0;
+};
+
+// A node Quicken calls a category -- Income, Expense or Equity -- kept apart
+// from Account because almost nothing else about it is shared. See the
+// Category entity in Accounts.spectable.
+struct Category {
+    CategoryId id;
+    CategoryId subcategory_of;   // 0 is top-level; otherwise the parent category
+    types::AccountPath path;
+    types::AccountType type = types::AccountType::Expense;
+    bool placeholder = false;
+    bool hidden = false;
+    // A short way to type it; see the finding rule in Accounts.spectable.
+    std::string alias;
+};
+
+// A row as it would be read from storage before its path is derived: named by
+// id and parent id, the way a future schema holds it, rather than by the path
+// a person types. See the path-derivation scenario in Accounts.spectable.
+struct CategoryRawRow {
+    long long id = 0;
+    long long subcategory_of = 0;
+    std::string name;
+    types::AccountType type = types::AccountType::Expense;
+};
+
+// Walks each row's SubcategoryOf chain back to a top-level category (0),
+// joining the names from the root down, the same way an account's path is
+// worked out from the tree for display rather than stored as text. One
+// output row per input row, in the input's own order.
+inline std::vector<Category> categories_from_raw(const std::vector<CategoryRawRow>& rows) {
+    std::map<long long, const CategoryRawRow*> by_id;
+    for (const CategoryRawRow& r : rows) by_id[r.id] = &r;
+
+    std::vector<Category> out;
+    for (const CategoryRawRow& r : rows) {
+        std::vector<std::string> segments;
+        const CategoryRawRow* cur = &r;
+        while (cur != nullptr) {
+            segments.push_back(cur->name);
+            if (cur->subcategory_of == 0) break;
+            const auto at = by_id.find(cur->subcategory_of);
+            cur = at == by_id.end() ? nullptr : at->second;
+        }
+        std::string path;
+        for (auto it = segments.rbegin(); it != segments.rend(); ++it)
+            path += (path.empty() ? "" : ":") + *it;
+
+        Category c;
+        c.id = CategoryId(r.id);
+        c.subcategory_of = CategoryId(r.subcategory_of);
+        c.path = types::AccountPath(path);
+        c.type = r.type;
+        out.push_back(c);
+    }
+    return out;
+}
+
 struct Account {
     AccountId id;
     types::AccountPath path;
@@ -94,6 +166,52 @@ public:
     void put(const Account& a) {
         accounts_[a.path.value()] = a;
         if (a.id.value() > next_id_) next_id_ = a.id.value();
+    }
+
+    // Categories are a separate collection from Accounts, but one counter: see
+    // the id-collision rule in Accounts.spectable. Used to establish a chart
+    // in a Given, and to bring one in from storage, the same as put() above.
+    void put_category(const Category& c) {
+        categories_[c.path.value()] = c;
+        if (c.id.value() > next_id_) next_id_ = c.id.value();
+    }
+
+    bool has_category(const std::string& path) const { return categories_.count(path) != 0; }
+
+    const Category* find_category(const std::string& path) const {
+        const auto at = categories_.find(path);
+        return at == categories_.end() ? nullptr : &at->second;
+    }
+
+    std::vector<Category> all_categories() const {
+        std::vector<Category> out;
+        for (const auto& entry : categories_) out.push_back(entry.second);
+        return out;
+    }
+
+    // Adding a category draws from the same counter as adding an account, so
+    // the two never collide; see the id-collision rule in Accounts.spectable.
+    // Mirrors add() above, including filling in a missing parent as a
+    // placeholder.
+    Rejection add_category(const types::AccountPath& path, types::AccountType type,
+                           std::vector<Category>* created = nullptr) {
+        if (has_category(path.value()))
+            return {true, "A category named " + path.value() + " exists"};
+
+        const std::vector<std::string> segments = types::segments_of(path);
+        std::string so_far;
+        for (std::size_t i = 0; i < segments.size(); ++i) {
+            so_far += (i == 0 ? "" : ":") + segments[i];
+            if (has_category(so_far)) continue;
+            Category c;
+            c.id = CategoryId(++next_id_);
+            c.path = types::AccountPath(so_far);
+            c.type = type;
+            c.placeholder = (i + 1 < segments.size());
+            categories_[so_far] = c;
+            if (created) created->push_back(c);
+        }
+        return {};
     }
 
     // Adding an account creates any missing level above it as a placeholder,
@@ -215,8 +333,13 @@ public:
     // the display-conversion rule in Accounts.spectable.
     std::string display_of(const std::string& path) const {
         const auto at = accounts_.find(path);
-        const types::AccountType type =
-            at == accounts_.end() ? types::AccountType::Checking : at->second.type;
+        types::AccountType type = types::AccountType::Checking;
+        if (at != accounts_.end()) {
+            type = at->second.type;
+        } else {
+            const auto cat = categories_.find(path);
+            if (cat != categories_.end()) type = cat->second.type;
+        }
         if (types::class_of(type) == types::AccountClass::Nominal) {
             const std::size_t colon = path.find(':');
             const std::string without_section =
@@ -233,6 +356,7 @@ public:
     void rebuild_display_names() {
         display_.clear();
         for (const auto& entry : accounts_) display_[entry.first] = display_of(entry.first);
+        for (const auto& entry : categories_) display_[entry.first] = display_of(entry.first);
     }
 
     // The cached conversion, or a freshly worked-out one if the cache has not
@@ -245,6 +369,7 @@ public:
 
 private:
     std::map<std::string, Account> accounts_;
+    std::map<std::string, Category> categories_;
     std::map<std::string, std::string> display_;
     PostingCounts counts_;
     long long next_id_ = 0;
