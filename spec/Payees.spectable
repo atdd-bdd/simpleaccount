@@ -611,6 +611,31 @@ Then postings are : PostingRow
 # and its hand-chosen Dining category and its untidied name are both left
 # exactly as they were.
 
+Scenario A transaction recorded the new way is categorised the same as one through postings
+Description Destination already is the category: a rule rewrites it directly
+Description rather than finding a posting to rewrite. See the section on naming
+Description both accounts directly in Transactions.spectable.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Auto:Fuel     | Expense | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given payee rules are : PayeeRule
+| Pattern   | MatchType | Payee     | Category           | Enabled |
+| SHELL OIL | Contains  | Shell Oil | Expenses:Auto:Fuel | true    |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee          | Destination            | Amount |
+| T1  | Assets:Checking | 2024-01-15 | SHELL OIL 3344 | Expenses:Uncategorized | -40.00 |
+When rules applied to the book
+Then applying the rules reported is : RuleApplication Vertical
+| Matched        | 1 |
+| AlreadyCorrect | 0 |
+| Skipped        | 0 |
+Then transaction is : Transaction Vertical CompareOnly
+| Ref         | T1                 |
+| Payee       | Shell Oil          |
+| Destination | Expenses:Auto:Fuel |
+
 Scenario Assigning payees according to rules leaves a reconciled transaction untouched
 Description A finished reconciliation agreed with a statement, name and all. A
 Description bulk pass across the whole book is not the time to find out that

@@ -267,6 +267,49 @@ inline BookApplication apply_to_book(const std::vector<Rule>& rules,
     if (transactions == nullptr) return out;
 
     for (ledger::Transaction& t : *transactions) {
+        // A transaction recorded the new way has no posting to find a
+        // category on or to rewrite: Destination already is the category,
+        // directly on the transaction. See the section on naming both
+        // accounts directly in Transactions.spectable.
+        const bool new_shape = t.postings.empty() && !t.source_account.value().empty();
+
+        if (new_shape) {
+            if (t.cleared == types::ClearedStatus::Reconciled) { ++out.skipped; continue; }
+            const std::string category = t.destination.value();
+            if (category.empty() || category == "Split" ||
+                !detail::is_a_category_account(accounts, category)) {
+                // A split, a transfer, or nothing known yet -- none of them a
+                // category a rule has anything to move.
+                ++out.skipped;
+                continue;
+            }
+
+            const std::string raw = t.raw_name.empty() ? t.payee.value() : t.raw_name;
+            const Rule* rule = best_for(rules, raw);
+            if (rule == nullptr) { ++out.skipped; continue; }
+
+            bool changed = false;
+            if (!rule->payee.empty() && rule->payee != raw && t.payee.value() != rule->payee) {
+                t.payee = types::PayeeName(rule->payee);
+                t.raw_name = raw;
+                changed = true;
+            }
+
+            if (!detail::has_category(*rule)) {
+                if (changed) ++out.matched; else ++out.already_correct;
+                continue;
+            }
+            if (category == rule->category) {
+                ++out.already_correct;
+            } else if (detail::is_uncategorized(category)) {
+                t.destination = types::AccountPath(rule->category);
+                ++out.matched;
+            } else {
+                ++out.skipped;
+            }
+            continue;
+        }
+
         bool locked = false;
         for (const ledger::Posting& p : t.postings)
             if (p.cleared == types::ClearedStatus::Reconciled) locked = true;
