@@ -110,7 +110,6 @@ Attributes HoldingValue
 | Value     | Money  | 0.00    |
 | Notes     | String | none    |
 
-$WIP
 Scenario The balance of a brokerage account is its cash and its holdings
 Description The brokerage account itself is a placeholder, so its balance is the
 Description roll-up of the cash account and the holdings beneath it, which is
@@ -150,7 +149,6 @@ Description What is typed to record a trade.
 | Fee       | Money       | 0.00       |
 | Proceeds  | Money       | 0.00       |
 
-$WIP
 Scenario Buying shares moves cash into the holding
 Description Two postings, and no gain to compute. The holding is carried at
 Description what was paid for it until a price is recorded.
@@ -176,6 +174,18 @@ Then holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-02-01 |
 
+# Left $WIP: "Given postings are as previous" establishes nothing -- this
+# file's Background only inlines a real chart of accounts, never a real
+# postings table, and no earlier step in this scenario gives one either. So
+# the ledger holds zero transactions when "shares bought" runs, and the new
+# purchase becomes T1, not the T2 the Then table below expects. The Then
+# table reads as if it continues the postings of "Buying shares moves cash
+# into the holding" (which does have a real T1), but "as previous" does not
+# reach across scenarios -- see the "Never write 'as previous'" rule in
+# CLAUDE.md. Either this scenario needs its own explicit "Given postings
+# are" table (most likely with a T1 opening balance, as the sibling
+# scenarios all have), or the Then table's Ref needs to read T1; that is a
+# decision for the spec's author, not a glue fix.
 $WIP
 Scenario A commission is an expense, not part of the holding
 Description Folding the fee into the value of the holding would make the
@@ -199,7 +209,6 @@ Then postings are : PostingRow
 | T2  | 2024-02-01 | Expenses:Investment:Fees | 6.95     |
 | T2  | 2024-02-01 | Assets:Brokerage:Cash    | -4006.95 |
 
-$WIP
 Scenario Buying more shares averages the price, because no lots are kept
 Description This is the simplification. Two purchases at different prices leave
 Description one holding at one price, and that price is the carrying value
@@ -250,7 +259,6 @@ Attributes AveragePrice
 | NewPrice     | Price  | 0       |
 | Notes        | String | none    |
 
-$WIP
 Scenario Selling shares at the carried price needs no gain
 Description The holding is carried at 106.6667 and sold at that price, so the
 Description cash in equals the value out and there is nothing left over.
@@ -278,7 +286,6 @@ Then holdings are : Holdings
 # The price is re-derived from the value that is left, 10666.66 over 100
 # shares, rather than carried forward, so the invariant stays exact.
 
-$WIP
 Scenario Selling above the carried price puts the difference to Equity
 Description The difference is a market value change, not income, so it does not
 Description appear in a report of income and expenses. It is also not a realised
@@ -306,7 +313,6 @@ Then holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 0      | 130.0000 | 2024-04-01 |
 
-$WIP
 Scenario Selling more shares than are held is refused
 Description Short positions are not modelled, so this is always either a missing
 Description purchase or a typing mistake, and both are worth stopping for.
@@ -328,7 +334,6 @@ Then rejected because : Rejection
 # Recording a price
 # ---------------------------------------------------------------------------
 
-$WIP
 Scenario Recording a new price revalues the holding
 Description This is how the balance is kept current, and it is the only thing
 Description that has to be done regularly for the figures to mean anything.
@@ -361,6 +366,18 @@ Attributes PriceEntry
 | Price     | Price  | 0          |
 | AsOf      | Date   | 2024-01-01 |
 
+# Left $WIP: both "Given holdings are as previous" and "Given postings are
+# as previous" establish nothing -- this file's Background inlines only a
+# real chart of accounts, and nothing earlier in this scenario gives a real
+# holdings or postings table either. So when "price recorded" runs there is
+# no VTSAX holding to look up at all, and the -1000.00 / 1000.00 in the Then
+# table below has nothing to be computed from. The scenario reads as if it
+# continues "Recording a new price revalues the holding" just above it (100
+# shares at 100.0000, a T1 of 10000.00), but "as previous" does not reach
+# across scenarios -- see the "Never write 'as previous'" rule in CLAUDE.md.
+# Spelling out the real holdings and postings tables (and the Then Ref,
+# which would then be T2) is a decision for the spec's author, not a glue
+# fix.
 $WIP
 Scenario A price that falls revalues downwards
 Given the chart of accounts is as previous
@@ -375,6 +392,12 @@ Then postings are : PostingRow
 | T2  | 2024-06-28 | Assets:Brokerage:VTSAX      | -1000.00 |
 | T2  | 2024-06-28 | Equity:Market Value Changes | 1000.00  |
 
+# Left $WIP for the same reason as "A price that falls revalues downwards"
+# just above: "Given holdings are as previous" establishes nothing (this
+# file's Background never gives a real holdings table, and nothing earlier
+# in this scenario does either), so there is no VTSAX holding of 100 shares
+# at 100.0000 for the Then table below to find. See the comment there and
+# the "Never write 'as previous'" rule in CLAUDE.md.
 $WIP
 Scenario Recording the price already held posts nothing
 Description A revaluation of zero is not worth a transaction, and a register
@@ -393,7 +416,6 @@ Then holdings are : Holdings
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-06-28 |
 # The date is still brought forward: the price was confirmed on the 28th.
 
-$WIP
 Scenario A price applies to every account holding that symbol
 Description The same fund held in two accounts is priced once. The revaluation
 Description is one transaction per holding, because each holding is its own
@@ -431,6 +453,16 @@ Then postings created are : PostingRow
 # Income from investments
 # ---------------------------------------------------------------------------
 
+# Left $WIP: there is no "Given postings are" of any kind in this scenario
+# (neither a real table nor "as previous"), so the ledger holds zero
+# transactions when "dividend recorded" runs and the new transaction becomes
+# T1 -- but the Then table below names it T5, which only makes sense if four
+# transactions already existed. Ref numbering is otherwise exactly "T" plus
+# one more than however many transactions already exist (confirmed by every
+# other scenario in this file that creates a new transaction), so T5 here
+# cannot be produced from what this scenario actually gives. Spelling out
+# four prior transactions, or changing the Then table's Ref to T1, is a
+# decision for the spec's author, not a glue fix.
 $WIP
 Scenario A dividend paid in cash is income
 Description Dividends and interest are income and belong in an income report,
@@ -462,7 +494,6 @@ Attributes IncomeEntry
 | Shares    | Shares      | 0          |
 | Price     | Price       | 0          |
 
-$WIP
 Scenario A reinvested dividend is income and a purchase at once
 Description Still income, so it still appears in an income report, and the cash
 Description never rests in the cash account. The shares go up and the carried
@@ -492,6 +523,31 @@ Then holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 102.5  | 100.0000 | 2024-06-30 |
 
+# Left $WIP: this scenario's Background chart (see "A brokerage account with
+# two holdings" above) types Assets:Brokerage:Cash as Brokerage, which is in
+# AccountGroup::Investments. T1 and T2 below post the dividend and the
+# interest straight into that same Cash account. report.h's category_report
+# (detail::is_an_investment, detail::investment_refs) excludes any
+# transaction that touches an AccountGroup::Investments account from the
+# default spending report -- that is Reports.spectable's own pinned
+# BusinessRule "Income and expense arising inside an investment account is
+# left out", whose Examples: InvestmentActivityCase table and "A dividend
+# reinvested inside a retirement account is not income" scenario confirm it
+# by having a dividend's cash land in Assets:Checking (type Checking, not an
+# Investments-group type) precisely so it counts. By that already-pinned
+# rule, T1 and T2 here are excluded too, because Assets:Brokerage:Cash is
+# typed as an investment account regardless of which sub-account of the
+# brokerage it is -- so the report would show Income 0.00, not the 262.00
+# this scenario's Then step expects. Either Assets:Brokerage:Cash needs a
+# type outside AccountGroup::Investments (changing the Background that six
+# other scenarios in this file also rely on), or the exclusion rule needs to
+# key off something narrower than account type (e.g. whether the account is
+# itself a holding, which report.h currently has no way to ask), or this
+# scenario's chart needs its dividend and interest to land in a real bank
+# account instead of Assets:Brokerage:Cash. Left $WIP pending a decision on
+# which side is right, rather than resolved by guessing -- see the matching
+# precedent in Reports.spectable left on ImportQif.spectable's "A
+# categorised investment cash movement does reach the spending report".
 $WIP
 Scenario Investment income shows in an income report and market movement does not
 Description The two scenarios above and a revaluation, reported together. This
@@ -526,7 +582,6 @@ Then report total is : ReportTotal Vertical
 # An account tracked by value alone
 # ---------------------------------------------------------------------------
 
-$WIP
 Scenario An account may carry a stated value with no holdings at all
 Description A pension or an employer plan reports one figure on one statement
 Description and the positions behind it are not worth entering. The account
@@ -559,7 +614,6 @@ Attributes ValueEntry
 | Value     | Money       | 0.00       |
 | AsOf      | Date        | 2024-01-01 |
 
-$WIP
 Scenario A stated value on an account that has holdings is refused
 Description The value of such an account is the total of its holdings. Setting
 Description it directly would make the invariant false and there would be no way
@@ -583,7 +637,6 @@ Then rejected because : Rejection
 # What is deliberately absent
 # ---------------------------------------------------------------------------
 
-$WIP
 Scenario No realised gain is reported, by design
 Description Asking for a gain report says what the program does instead, rather
 Description than offering a figure that would not agree with the 1099 and would
@@ -598,6 +651,11 @@ Attributes Notice
 | Attribute | Type | Default |
 | Message   | Text |         |
 
+# Left $WIP, re-added: the glue's then_holdings_report_rows_are comparison
+# fails on both rows as written (not a spec contradiction -- investing.h's
+# holdings_report_rows() and the glue's field-by-field conversion have a bug
+# not yet tracked down). Paused here on a priority change before finishing
+# the diagnosis; take the tag off once it is actually green.
 $WIP
 Scenario A holdings report shows what is held now, and when it was priced
 Description The age of a price is shown beside it, because a balance resting on

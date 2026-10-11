@@ -1,6 +1,7 @@
 #pragma once
 #include <cmath>
 #include <string>
+#include <vector>
 #include "date.h"
 #include "money.h"
 #include "text_types.h"
@@ -34,6 +35,17 @@ inline std::string account_name_for(const std::string& security_name,
     return chosen;
 }
 
+// The price that goes with a value and a share count: the value divided by the
+// shares, to four decimal places (half away from zero), which is what a price
+// is kept to. Shared by every place a price is derived from a value rather than
+// carried forward, so the rounding is the same wherever it happens. Zero where
+// there are no shares to divide by -- a closed position carries no price.
+inline double round_price(const Money& value, double shares) {
+    if (shares == 0) return 0;
+    const double exact = (static_cast<double>(value.cents()) / 100.0) / shares;
+    return std::floor(exact * 10000.0 + 0.5) / 10000.0;
+}
+
 // Two purchases at different prices leave one holding at one price, and that
 // price is the carrying value divided by the shares. It is not a cost basis and
 // is not used as one.
@@ -49,11 +61,8 @@ inline AveragedHolding after_buying(double held_shares, const Money& held_value,
     out.shares = held_shares + bought_shares;
     out.value = held_value + value_of(bought_shares, bought_price);
     // The value is the sum of what was paid; the price is derived from it, so the
-    // invariant holds. Four decimal places, as a price has.
-    if (out.shares != 0) {
-        const double exact = (static_cast<double>(out.value.cents()) / 100.0) / out.shares;
-        out.price = std::floor(exact * 10000.0 + 0.5) / 10000.0;
-    }
+    // invariant holds.
+    out.price = round_price(out.value, out.shares);
     return out;
 }
 
@@ -63,6 +72,32 @@ inline bool is_stale(long long days_old) { return days_old > 30; }
 
 inline bool is_stale(const types::Date& priced_on, const types::Date& today) {
     return is_stale(types::Date::days_between(priced_on, today));
+}
+
+// One security beside the account that carries its value: the account is the
+// identity, so there is one holding per Investment account, never two for the
+// same account. SecurityName is blank wherever a scenario never gave one --
+// which, in the QIF export this is all for, is every one of them.
+struct Holding {
+    types::AccountPath account;
+    types::SecurityName security_name;
+    types::Symbol symbol;
+    double shares = 0;
+    double price = 0;
+    types::Date price_as_of{2024, 1, 1};
+};
+
+inline Holding* find_by_account(std::vector<Holding>& book, const std::string& account) {
+    for (Holding& h : book)
+        if (h.account.value() == account) return &h;
+    return nullptr;
+}
+
+inline const Holding* find_by_account(const std::vector<Holding>& book,
+                                      const std::string& account) {
+    for (const Holding& h : book)
+        if (h.account.value() == account) return &h;
+    return nullptr;
 }
 
 }  // namespace holdings
