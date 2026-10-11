@@ -13,6 +13,7 @@
 #include "ofx_import.h"
 #include "ofx_reader.h"
 #include "posting.h"
+#include "report.h"
 #include "text_types.h"
 
 // Glue for ImportOfx.spectable.
@@ -24,12 +25,14 @@
 // anything -- so where a subset is the point, comparing string structs is the
 // right way round rather than comparing fields by hand.
 //
-// What is not connected, and why. The transfer-candidate scenarios, the
-// downloaded-account mapping and the ledger-balance check are specified but
-// have no production code behind them, so their steps are still stubs that fail
-// out loud, each naming what is missing. A stub that quietly passed would be
-// worse than a failing one: the failure count is the only honest record of how
-// far the specification runs ahead of the program.
+// What is not connected, and why. Three Examples tables under the
+// transfer-candidate rules -- TransferCandidateRule, DateWindow and
+// CandidatePriority -- restate a condition in words with no outcome column to
+// drive through, so their blocks stay $WIP and their stubs stay failing out
+// loud on purpose; the condition itself is exercised by the concrete
+// scenarios around them. A stub that quietly passed would be worse than a
+// failing one: the failure count is the only honest record of how far the
+// specification runs ahead of the program.
 class ImportOfxGlue {
 public:
     static constexpr const char* DNC_STRING = "?DNC?";
@@ -72,6 +75,11 @@ public:
                 if (t.ref.value() == value.ref) into = &t;
             if (into == nullptr) {
                 ledger::Transaction made;
+                // Given a real id, not left default: two Ref rows in the table
+                // would otherwise share the same empty TransactionId, and a
+                // completion looked up by id would silently find whichever
+                // transaction came first instead of the one that matched.
+                made.id = ledger::new_id();
                 made.ref = types::TransactionRef(value.ref);
                 const auto on = types::Date::from_iso(value.date);
                 ASSERT_TRUE(on.has_value()) << value.date;
@@ -93,6 +101,23 @@ public:
     void given_import_target_is(const std::vector<ImportTargetString>& values) {
         ASSERT_FALSE(values.empty());
         target_ = values.front().accountpath;
+    }
+
+    void given_account_mappings_are(const std::vector<AccountMappingString>& values) {
+        mappings_.clear();
+        for (const auto& v : values)
+            mappings_.push_back({blank(v.bankid), v.ofxaccountid, v.accountpath});
+    }
+
+    void given_the_book_setting_is(const std::vector<BookSettingString>& values) {
+        for (const auto& v : values) check_window_days_ = std::stoll(v.checkwindowdays);
+    }
+
+    void given_transfer_match_rules_are(const std::vector<TransferMatchRuleString>& values) {
+        match_rules_.clear();
+        for (const auto& v : values)
+            match_rules_.push_back({v.fromaccount, blank(v.frompattern), v.toaccount,
+                                    blank(v.topattern), parse_bool_cell(v.enabled)});
     }
 
     // ----------------------------------------------------------------- whens
@@ -193,6 +218,8 @@ public:
     void then_import_target_is(const std::vector<ImportTargetString>& values) {
         ASSERT_FALSE(values.empty());
         EXPECT_EQ(values.front().accountpath, target_);
+        if (values.front().asked != DNCString)
+            EXPECT_EQ(parse_bool_cell(values.front().asked), target_was_asked_) << "asked";
     }
 
     void then_postings_are(const std::vector<ImportedPostingRowString>& values) {
@@ -398,89 +425,238 @@ public:
         }
     }
 
-    // ------------------------------------------- specified, not yet written
+    // ------------------------------------------------ account mapping
 
-    void given_account_mappings_are(const std::vector<AccountMappingString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: mapping a downloaded account to one of ours";
-    }
-
+    // A statement header, with no transactions: the question here is only
+    // which account it is, not what is in it yet.
     void when_statement_imported(const std::vector<OfxStatementString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: mapping a downloaded account to one of ours";
+        ASSERT_FALSE(values.empty());
+        const OfxStatementString& value = values.front();
+        const std::string bank_id = blank(value.bankid);
+        const std::string account_id = value.ofxaccountid;
+        if (const ofx::AccountMapping* m = ofx::mapping_for(mappings_, bank_id, account_id)) {
+            target_ = m->account_path;
+            target_was_asked_ = false;
+            was_asked_ = false;
+        } else {
+            asked_.bankid = bank_id.empty() ? "none" : bank_id;
+            asked_.ofxaccountid = account_id;
+            asked_.ofxaccttype = value.ofxaccttype;
+            asked_.suggestion = "none";
+            was_asked_ = true;
+            target_was_asked_ = true;
+        }
     }
 
     void then_asked_to_choose_an_account_for(const std::vector<UnmappedAccountString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: mapping a downloaded account to one of ours";
+        ASSERT_FALSE(values.empty());
+        ASSERT_TRUE(was_asked_) << "nothing was asked";
+        EXPECT_EQ(values.front(), asked_);
     }
 
+    // ------------------------------------------------ several statements at once
+
+    static ofx::Transaction downloaded_from_file(const OfxImportFileString& value) {
+        ofx::Transaction t;
+        t.trn_type = value.trntype;
+        const auto on = types::Date::from_iso(value.dateposted);
+        EXPECT_TRUE(on.has_value()) << value.dateposted;
+        if (on.has_value()) t.date_posted = *on;
+        t.amount = Money(value.amount);
+        t.fit_id = blank(value.fitid);
+        t.name = blank(value.name);
+        t.memo = blank(value.memo);
+        t.check_num = blank(value.checknum);
+        return t;
+    }
+
+    // Grouped by the account each row's OfxAccountId resolves to. An id
+    // nothing has mapped yet contributes no rows at all: see
+    // ofx::account_for_id and the note on the scenario that relies on this.
     void when_statements_imported(const std::vector<OfxImportFileString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: importing more than one statement at once";
+        std::vector<ofx::AccountRows> by_account;
+        for (const auto& value : values) {
+            const std::string account = ofx::account_for_id(mappings_, value.ofxaccountid);
+            if (account.empty()) continue;
+            auto at = std::find_if(by_account.begin(), by_account.end(),
+                [&](const ofx::AccountRows& g) { return g.account == account; });
+            if (at == by_account.end()) {
+                by_account.push_back({account, {}});
+                at = std::prev(by_account.end());
+            }
+            at->rows.push_back(downloaded_from_file(value));
+        }
+        last_multi_ = ofx::decide_multi(by_account, &transactions_, &chart_, match_rules_);
+        summary_ = last_multi_.summary;
+        transactions_.insert(transactions_.end(), last_multi_.ready.begin(),
+                             last_multi_.ready.end());
+        candidates_ = last_multi_.candidates;
     }
 
     void then_transfer_candidates_are(const std::vector<TransferCandidateString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: pairing two downloaded rows as one transfer";
+        ASSERT_EQ(values.size(), candidates_.size()) << "candidates proposed: " << candidate_listing();
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const ofx::TransferCandidate& c = candidates_[i].candidate;
+            EXPECT_EQ(values[i].fromaccount, c.from_account) << "candidate " << i << " from account";
+            EXPECT_EQ(values[i].fromdate, c.from_date.iso()) << "candidate " << i << " from date";
+            EXPECT_EQ(values[i].toaccount, c.to_account) << "candidate " << i << " to account";
+            EXPECT_EQ(values[i].todate, c.to_date.iso()) << "candidate " << i << " to date";
+            EXPECT_EQ(Money(values[i].amount), c.amount) << "candidate " << i << " amount";
+            EXPECT_EQ(std::stoll(values[i].daysapart), c.days_apart)
+                << "candidate " << i << " days apart";
+            EXPECT_EQ(values[i].state, ofx::to_string(c.state)) << "candidate " << i << " state";
+        }
+    }
+
+    // Whether a listed candidate matches a pending one, on whatever the row
+    // names and leaves the rest as "?DNC?" -- which is the point of the
+    // CompareOnly steps that find a candidate by its shape rather than by
+    // every field.
+    static bool candidate_matches(const TransferCandidateString& v,
+                                  const ofx::TransferCandidate& c) {
+        if (v.fromaccount != DNCString && v.fromaccount != c.from_account) return false;
+        if (v.toaccount != DNCString && v.toaccount != c.to_account) return false;
+        if (v.amount != DNCString && Money(v.amount) != c.amount) return false;
+        if (v.fromname != DNCString && blank(v.fromname) != c.from_name) return false;
+        if (v.toname != DNCString && blank(v.toname) != c.to_name) return false;
+        return true;
     }
 
     void when_candidate_approved(const std::vector<TransferCandidateString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: pairing two downloaded rows as one transfer";
+        ASSERT_FALSE(values.empty());
+        const TransferCandidateString& v = values.front();
+        const auto at = std::find_if(candidates_.begin(), candidates_.end(),
+            [&](const ofx::TransferProposal& p) { return candidate_matches(v, p.candidate); });
+        if (at != candidates_.end()) {
+            offered_rule_ = ofx::rule_offered_for(at->candidate);
+            transactions_.push_back(ofx::merge_transfer(*at, transactions_.size()));
+            summary_.New += 1;
+            candidates_.erase(at);
+        } else {
+            // No pairing was ever proposed in this scenario -- it asks only
+            // about the rule an approval offers, built straight from what the
+            // table itself says.
+            ofx::TransferCandidate c;
+            c.from_account = v.fromaccount;
+            c.from_name = blank(v.fromname);
+            c.to_account = v.toaccount;
+            c.to_name = blank(v.toname);
+            c.amount = v.amount == DNCString ? Money() : Money(v.amount);
+            offered_rule_ = ofx::rule_offered_for(c);
+        }
     }
 
     void when_candidate_rejected(const std::vector<TransferCandidateString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: pairing two downloaded rows as one transfer";
+        ASSERT_FALSE(values.empty());
+        const TransferCandidateString& v = values.front();
+        const auto at = std::find_if(candidates_.begin(), candidates_.end(),
+            [&](const ofx::TransferProposal& p) { return candidate_matches(v, p.candidate); });
+        ASSERT_NE(candidates_.end(), at) << "no pending candidate matches " << v.to_string();
+        const std::vector<ledger::Transaction> made =
+            ofx::split_transfer(*at, transactions_.size(), &chart_);
+        transactions_.insert(transactions_.end(), made.begin(), made.end());
+        summary_.New += static_cast<int>(made.size());
+        candidates_.erase(at);
     }
 
     void then_rule_offered_is(const std::vector<TransferMatchRuleString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: remembering a transfer pairing";
+        ASSERT_FALSE(values.empty());
+        const TransferMatchRuleString& v = values.front();
+        EXPECT_EQ(v.fromaccount, offered_rule_.from_account) << "offered rule from account";
+        EXPECT_EQ(blank(v.frompattern), offered_rule_.from_pattern) << "offered rule from pattern";
+        EXPECT_EQ(v.toaccount, offered_rule_.to_account) << "offered rule to account";
+        EXPECT_EQ(blank(v.topattern), offered_rule_.to_pattern) << "offered rule to pattern";
+        EXPECT_EQ(parse_bool_cell(v.enabled), offered_rule_.enabled) << "offered rule enabled";
     }
 
-    void given_transfer_match_rules_are(const std::vector<TransferMatchRuleString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: remembering a transfer pairing";
-    }
-
+    // Every proposal, both halves, the gap, and the choices -- read straight
+    // off the pending candidates, which is what the dialog would be shown.
     void then_confirmation_dialog_shows(const std::vector<ConfirmationRowString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: the import confirmation dialog";
+        std::vector<const ofx::TransferProposal*> pending;
+        for (const auto& p : candidates_)
+            if (p.candidate.state == ofx::TransferCandidateState::Proposed) pending.push_back(&p);
+        ASSERT_EQ(values.size(), pending.size()) << "candidates offered: " << candidate_listing();
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const ofx::TransferCandidate& c = pending[i]->candidate;
+            EXPECT_EQ(values[i].fromaccount, c.from_account) << "row " << i << " from account";
+            EXPECT_EQ(blank(values[i].fromname), c.from_name) << "row " << i << " from name";
+            EXPECT_EQ(values[i].toaccount, c.to_account) << "row " << i << " to account";
+            EXPECT_EQ(blank(values[i].toname), c.to_name) << "row " << i << " to name";
+            EXPECT_EQ(Money(values[i].amount), c.amount) << "row " << i << " amount";
+            EXPECT_EQ(std::stoll(values[i].daysapart), c.days_apart) << "row " << i << " days apart";
+            EXPECT_EQ(values[i].choices, "Approve, Reject, ApproveAndRemember")
+                << "row " << i << " choices";
+        }
     }
 
     void then_import_preview_is(const std::vector<ImportPreviewString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: the import preview";
+        ASSERT_FALSE(values.empty());
+        const ofx::ImportPreview p = ofx::preview_of(last_multi_);
+        const ImportPreviewString& v = values.front();
+        EXPECT_EQ(std::stoi(v.newtransactions), p.new_transactions) << "new transactions";
+        EXPECT_EQ(std::stoi(v.duplicates), p.duplicates) << "duplicates";
+        EXPECT_EQ(std::stoi(v.matchedtoexisting), p.matched_to_existing) << "matched to existing";
+        EXPECT_EQ(std::stoi(v.transfercandidates), p.transfer_candidates) << "transfer candidates";
+        EXPECT_EQ(parse_bool_cell(v.committed), p.committed) << "committed";
     }
 
+    // ------------------------------------------------ the bank's own balance
+
     void when_ledger_balance_checked(const std::vector<LedgerBalanceCheckString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: checking the import against the balance the bank states";
+        ASSERT_FALSE(values.empty());
+        const LedgerBalanceCheckString& v = values.front();
+        balance_check_ = ofx::check_ledger_balance(transactions_, v.account, Money(v.statedbal));
     }
 
     void then_balance_check_is(const std::vector<LedgerBalanceResultString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: checking the import against the balance the bank states";
+        ASSERT_FALSE(values.empty());
+        const LedgerBalanceResultString& v = values.front();
+        EXPECT_EQ(Money(v.clearedbalance), balance_check_.cleared_balance) << "cleared balance";
+        EXPECT_EQ(Money(v.statedbal), balance_check_.stated_bal) << "stated balance";
+        EXPECT_EQ(Money(v.difference), balance_check_.difference) << "difference";
+        EXPECT_EQ(parse_bool_cell(v.agrees), balance_check_.agrees) << "agrees";
     }
 
+    // ------------------------------------------------ a report over an import
+
     void when_report_run(const std::vector<ReportSpecString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: running a report over an import in this file";
+        ASSERT_FALSE(values.empty());
+        const ReportSpecString& v = values.front();
+        reports::Spec spec;
+        const auto from = types::Date::from_iso(v.from);
+        const auto to = types::Date::from_iso(v.to);
+        if (from) spec.from = *from;
+        if (to) spec.to = *to;
+        report_ = reports::category_report(chart_, as_ledger(), spec);
     }
 
     void then_report_rows_are(const std::vector<ReportRowString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: running a report over an import in this file";
+        ASSERT_EQ(values.size(), report_.rows.size())
+            << "report rows: " << report_.rows.size() << " produced";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            EXPECT_EQ(values[i].account, report_.rows[i].account) << "row " << i;
+            EXPECT_EQ(std::stoi(values[i].level), report_.rows[i].level) << "row " << i << " level";
+            EXPECT_EQ(Money(values[i].amount), report_.rows[i].amount) << "row " << i << " amount";
+            EXPECT_EQ(parse_bool_cell(values[i].issubtotal), report_.rows[i].is_subtotal)
+                << "row " << i << " subtotal";
+        }
     }
+
+    // ------------------------------------------------ example tables
 
     void examples_datatype_transfercandidatestate(
             const std::vector<EnumerationValuesString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: pairing two downloaded rows as one transfer";
+        for (const auto& value : values)
+            EXPECT_EQ(value.value,
+                      ofx::to_string(ofx::transfer_candidate_state_from(value.value)))
+                << value.value << " does not survive being read -- " << value.notes;
     }
 
+    // These three stay $WIP: each Examples table only restates a condition in
+    // words, with no outcome column to drive through, and the condition
+    // itself is exercised by the concrete scenarios above (the one-account,
+    // already-matched, and priority-ordering cases). Left as stubs so a
+    // regeneration finds them already there if the tag ever comes off.
     void examples_businessrule_when_two_new_transactions_are_proposed_as_one_transfer(
             const std::vector<TransferCandidateRuleString>& values) {
         for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
@@ -506,6 +682,27 @@ private:
     std::string target_;
     ofx::Imported decided_;
     ofx::Summary summary_;
+    std::vector<ofx::AccountMapping> mappings_;
+    std::vector<ofx::TransferMatchRule> match_rules_;
+    long long check_window_days_ = ofx::kCheckWindow;
+    UnmappedAccountString asked_;
+    bool was_asked_ = false;
+    bool target_was_asked_ = false;
+    std::vector<ofx::TransferProposal> candidates_;
+    ofx::TransferMatchRule offered_rule_;
+    ofx::MultiImported last_multi_;
+    ofx::LedgerBalanceResult balance_check_;
+    reports::CategoryReport report_;
+
+    std::string candidate_listing() const {
+        if (candidates_.empty()) return "(none)";
+        std::string out;
+        for (const auto& p : candidates_)
+            out += "  " + p.candidate.from_account + " -> " + p.candidate.to_account + " " +
+                   p.candidate.amount.in_register() + " [" + ofx::to_string(p.candidate.state) +
+                   "]\n";
+        return out;
+    }
 
     // A Default of "none" arrives as the literal word.
     static std::string blank(const std::string& s) {
@@ -547,7 +744,7 @@ private:
     // then clear what was matched. Nothing is written for a duplicate or for a
     // possible duplicate, which is what the summary then shows.
     void import(const ofx::Statement& statement) {
-        decided_ = ofx::decide(statement, target_, transactions_, chart_);
+        decided_ = ofx::decide(statement, target_, transactions_, chart_, check_window_days_);
         summary_ = decided_.summary;
         const std::vector<ledger::Transaction> made =
             ofx::transactions_for(decided_, target_, transactions_.size(), &chart_);
@@ -883,13 +1080,6 @@ public:
         for (const ofx::Note& n : decided_.notes) out += "[" + n.kind + "] " + n.detail + "; ";
         return out;
     }
-public:
-
-    void given_the_book_setting_is(const std::vector<BookSettingString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: given_the_book_setting_is";
-    }
-
 public:
 
     // Each row driven both ways round: the bank first then the card, and the

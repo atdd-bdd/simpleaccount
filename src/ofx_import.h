@@ -163,8 +163,37 @@ inline constexpr long long kMatchWindow = 5;
 // but only for as long as the number means what it says. Check numbers are
 // reused: a new book of checks starts where the old one left off, and over
 // twenty years the same number comes round again. So a number settles a match
-// only within a day, and beyond that it is treated as coincidence.
+// only within a day, and beyond that it is treated as coincidence. The window
+// is a setting on the book; this is only the default a new book starts with.
 inline constexpr long long kCheckWindow = 1;
+
+// Which SimpleAccount account a downloaded account number belongs to. Recorded
+// once, on the first import, and used silently thereafter. See the account-
+// mapping rule in ImportOfx.spectable.
+struct AccountMapping {
+    std::string bank_id;
+    std::string ofx_account_id;
+    std::string account_path;
+};
+
+inline const AccountMapping* mapping_for(const std::vector<AccountMapping>& mappings,
+                                         const std::string& bank_id,
+                                         const std::string& ofx_account_id) {
+    for (const AccountMapping& m : mappings)
+        if (m.bank_id == bank_id && m.ofx_account_id == ofx_account_id) return &m;
+    return nullptr;
+}
+
+// A multi-file import names its account by OfxAccountId alone, since a single
+// combined table has no room for a BankId per row; the id is unique enough on
+// its own for that purpose. Empty where nothing maps it, which is how an
+// account not yet set up is told apart without asking mid-batch.
+inline std::string account_for_id(const std::vector<AccountMapping>& mappings,
+                                  const std::string& ofx_account_id) {
+    for (const AccountMapping& m : mappings)
+        if (m.ofx_account_id == ofx_account_id) return m.account_path;
+    return std::string();
+}
 
 // Two halves of one electronic transfer are a day or two apart at most, and
 // every extra day is another chance to pair two payments that were never one
@@ -233,7 +262,8 @@ inline Waiting waiting_for(const std::vector<ledger::Transaction>& transactions,
 // the other side is an account or a category.
 inline Imported decide(const Statement& statement, const std::string& account,
                        const std::vector<ledger::Transaction>& transactions,
-                       const chart::Chart& accounts) {
+                       const chart::Chart& accounts,
+                       long long check_window = kCheckWindow) {
     Imported out;
     std::vector<detail::Existing> already = existing_in(transactions, account);
     // What a payment to the account being imported into is called elsewhere, so
@@ -274,7 +304,7 @@ inline Imported decide(const Statement& statement, const std::string& account,
             };
             const auto within_a_day = [&](const detail::Existing& e) {
                 return std::abs(types::Date::days_between(e.date, downloaded.date_posted))
-                       <= kCheckWindow;
+                       <= check_window;
             };
             found = std::find_if(already.begin(), already.end(),
                 [&](const detail::Existing& e) { return same_number(e) && within_a_day(e); });
@@ -549,6 +579,364 @@ inline ledger::Transaction answer_different(const Decided& offered,
     const std::vector<ledger::Transaction> made =
         transactions_for(one, account, already_in_book, accounts);
     return made.empty() ? ledger::Transaction() : made.front();
+}
+
+// ---------------------------------------------------------------------------
+// Two downloaded transactions that are one transfer. See the pairing rules in
+// ImportOfx.spectable: neither half is already in the book, both halves are
+// new in the same import, and recognising them as one is a different problem
+// from matching a download against something entered by hand.
+// ---------------------------------------------------------------------------
+
+// kTransferWindow, used by the pairing below, is declared earlier in this
+// file -- it is the same two-day window the payment-completion rule already
+// uses, and the two were kept as one constant on purpose.
+
+enum class TransferCandidateState { Proposed, Approved, Rejected, Automatic };
+
+inline std::string to_string(TransferCandidateState s) {
+    switch (s) {
+        case TransferCandidateState::Proposed:  return "Proposed";
+        case TransferCandidateState::Approved:  return "Approved";
+        case TransferCandidateState::Rejected:  return "Rejected";
+        case TransferCandidateState::Automatic: return "Automatic";
+    }
+    return "Proposed";
+}
+
+inline TransferCandidateState transfer_candidate_state_from(const std::string& s) {
+    if (s == "Approved")  return TransferCandidateState::Approved;
+    if (s == "Rejected")  return TransferCandidateState::Rejected;
+    if (s == "Automatic") return TransferCandidateState::Automatic;
+    return TransferCandidateState::Proposed;
+}
+
+// One proposed pairing, with everything a person needs to judge it.
+struct TransferCandidate {
+    std::string from_account;
+    types::Date from_date{2026, 1, 1};
+    std::string from_name;
+    std::string from_fit_id;
+    std::string to_account;
+    types::Date to_date{2026, 1, 1};
+    std::string to_name;
+    std::string to_fit_id;
+    Money amount;
+    long long days_apart = 0;
+    TransferCandidateState state = TransferCandidateState::Proposed;
+};
+
+// A remembered approval: these two accounts, these two payee texts, matched by
+// Contains against the name as a payee rule is. No amount, because an autopay
+// is a different figure every month and that is the whole point of
+// remembering it.
+struct TransferMatchRule {
+    std::string from_account;
+    std::string from_pattern;
+    std::string to_account;
+    std::string to_pattern;
+    bool enabled = true;
+};
+
+// Everything needed to turn a proposed pairing into one transaction, or into
+// two, without having to search the book again.
+struct TransferProposal {
+    TransferCandidate candidate;
+    std::string from_account;
+    Transaction from_row;
+    std::string to_account;
+    Transaction to_row;
+    // Which side's name becomes the transaction's payee: whichever file's row
+    // was read first, same as the payment-completion rule above -- the first
+    // side's word for it is both the more useful one and the one already on
+    // the screen.
+    bool from_read_first = true;
+};
+
+inline bool transfer_rule_matches(const TransferMatchRule& rule, const std::string& from_account,
+                                  const std::string& from_name, const std::string& to_account,
+                                  const std::string& to_name) {
+    if (!rule.enabled) return false;
+    if (rule.from_account != from_account || rule.to_account != to_account) return false;
+    if (detail::fold(from_name).find(detail::fold(rule.from_pattern)) == std::string::npos)
+        return false;
+    if (detail::fold(to_name).find(detail::fold(rule.to_pattern)) == std::string::npos)
+        return false;
+    return true;
+}
+
+// One real account's rows from one combined import, grouped by the account
+// they resolved to.
+struct AccountRows {
+    std::string account;
+    std::vector<Transaction> rows;
+};
+
+struct MultiImported {
+    Summary summary;
+    std::vector<Note> notes;
+    // Ready to write: the unpaired new rows, and any pair a remembered rule
+    // already approved. Nothing here is a candidate any more.
+    std::vector<ledger::Transaction> ready;
+    // Every pairing found, proposed or already automatic, for the dialog and
+    // for the approve/reject steps to act on by account and amount.
+    std::vector<TransferProposal> candidates;
+};
+
+// Deciding several statements at once: each account's own duplicate, match
+// and possible-duplicate tests run exactly as a single statement's would, and
+// what is left over -- new rows nothing else claimed -- is checked for a
+// transfer before any of it becomes a transaction of its own.
+inline MultiImported decide_multi(const std::vector<AccountRows>& by_account,
+                                  std::vector<ledger::Transaction>* transactions,
+                                  chart::Chart* accounts,
+                                  const std::vector<TransferMatchRule>& rules = {}) {
+    MultiImported out;
+
+    struct Pending {
+        std::string account;
+        Transaction row;
+        std::size_t order = 0;
+    };
+    std::vector<Pending> news;
+    std::size_t order_counter = 0;
+
+    for (const AccountRows& ar : by_account) {
+        // An account id nothing has mapped yet contributes nothing: there is
+        // no account to decide against and no account to pair, and asking is
+        // a different step from this one.
+        if (ar.account.empty()) { order_counter += ar.rows.size(); continue; }
+        Statement statement;
+        statement.transactions = ar.rows;
+        const Imported one = decide(statement, ar.account, *transactions, *accounts);
+        out.summary.Duplicate += one.summary.Duplicate;
+        out.summary.Matched += one.summary.Matched;
+        out.summary.Possible += one.summary.Possible;
+        for (const Note& n : one.notes) out.notes.push_back(n);
+        apply_matches(one, ar.account, transactions);
+        apply_completions(one, ar.account, transactions);
+        for (const Decided& d : one.decided) {
+            if (d.disposition == Disposition::New)
+                news.push_back({ar.account, d.downloaded, order_counter});
+            ++order_counter;
+        }
+    }
+
+    // Pair across different accounts, equal and opposite, within the transfer
+    // window, closest gap first; a half once paired is not offered again.
+    std::vector<bool> used(news.size(), false);
+    struct Pair { std::size_t i; std::size_t j; long long gap; types::Date earliest; };
+    std::vector<Pair> pairs;
+    for (std::size_t i = 0; i < news.size(); ++i) {
+        for (std::size_t j = i + 1; j < news.size(); ++j) {
+            if (news[i].account == news[j].account) continue;
+            if (news[i].row.amount.cents() != -news[j].row.amount.cents()) continue;
+            const long long gap = std::abs(
+                types::Date::days_between(news[i].row.date_posted, news[j].row.date_posted));
+            if (gap > kTransferWindow) continue;
+            const types::Date earliest = news[i].row.date_posted < news[j].row.date_posted
+                                             ? news[i].row.date_posted
+                                             : news[j].row.date_posted;
+            pairs.push_back({i, j, gap, earliest});
+        }
+    }
+    std::stable_sort(pairs.begin(), pairs.end(), [](const Pair& a, const Pair& b) {
+        if (a.gap != b.gap) return a.gap < b.gap;
+        return a.earliest < b.earliest;
+    });
+
+    for (const Pair& pc : pairs) {
+        if (used[pc.i] || used[pc.j]) continue;
+        used[pc.i] = used[pc.j] = true;
+        const bool i_is_from = news[pc.i].row.amount.cents() < 0;
+        const Pending& from_p = i_is_from ? news[pc.i] : news[pc.j];
+        const Pending& to_p = i_is_from ? news[pc.j] : news[pc.i];
+
+        TransferProposal prop;
+        prop.from_account = from_p.account;
+        prop.from_row = from_p.row;
+        prop.to_account = to_p.account;
+        prop.to_row = to_p.row;
+        prop.from_read_first = from_p.order < to_p.order;
+
+        TransferCandidate c;
+        c.from_account = from_p.account;
+        c.from_date = from_p.row.date_posted;
+        c.from_name = from_p.row.name;
+        c.from_fit_id = from_p.row.fit_id;
+        c.to_account = to_p.account;
+        c.to_date = to_p.row.date_posted;
+        c.to_name = to_p.row.name;
+        c.to_fit_id = to_p.row.fit_id;
+        c.amount = from_p.row.amount.cents() < 0 ? -from_p.row.amount : from_p.row.amount;
+        c.days_apart = pc.gap;
+        c.state = TransferCandidateState::Proposed;
+        prop.candidate = c;
+
+        bool automatic = false;
+        for (const TransferMatchRule& r : rules) {
+            if (transfer_rule_matches(r, prop.from_account, prop.from_row.name,
+                                      prop.to_account, prop.to_row.name)) {
+                automatic = true;
+                break;
+            }
+        }
+        if (automatic) {
+            prop.candidate.state = TransferCandidateState::Automatic;
+            ledger::Transaction merged;
+            merged.id = ledger::new_id();
+            merged.ref = types::TransactionRef(
+                "T" + std::to_string(transactions->size() + out.ready.size() + 1));
+            merged.date = prop.from_row.date_posted;
+            const Transaction& named_from = prop.from_read_first ? prop.from_row : prop.to_row;
+            merged.payee = types::PayeeName(named_from.name);
+            merged.memo = named_from.memo;
+            ledger::Posting from_posting;
+            from_posting.account = types::AccountPath(prop.from_account);
+            from_posting.amount = prop.from_row.amount;
+            from_posting.cleared = types::ClearedStatus::Cleared;
+            ledger::stamp(&from_posting, types::ImportSource::Ofx, prop.from_row.fit_id);
+            ledger::Posting to_posting;
+            to_posting.account = types::AccountPath(prop.to_account);
+            to_posting.amount = prop.to_row.amount;
+            to_posting.cleared = types::ClearedStatus::Cleared;
+            ledger::stamp(&to_posting, types::ImportSource::Ofx, prop.to_row.fit_id);
+            merged.postings = {from_posting, to_posting};
+            out.ready.push_back(merged);
+            out.summary.New += 1;
+        }
+        out.candidates.push_back(prop);
+    }
+
+    // Unpaired new rows become ordinary transactions, exactly as a single
+    // statement would create them.
+    for (std::size_t i = 0; i < news.size(); ++i) {
+        if (used[i]) continue;
+        Imported one;
+        Decided d;
+        d.downloaded = news[i].row;
+        d.disposition = Disposition::New;
+        one.decided.push_back(d);
+        const std::vector<ledger::Transaction> made = transactions_for(
+            one, news[i].account, transactions->size() + out.ready.size(), accounts);
+        for (const ledger::Transaction& t : made) {
+            out.ready.push_back(t);
+            ++out.summary.New;
+        }
+    }
+    return out;
+}
+
+// Turning a proposed pairing into the one transaction it describes: both
+// sides real, both cleared, each carrying the identifier from the file that
+// described it. Dated and named from the side the money left, unless the
+// other side's file was read first -- see TransferProposal::from_read_first.
+inline ledger::Transaction merge_transfer(const TransferProposal& p,
+                                          std::size_t already_in_book) {
+    ledger::Transaction t;
+    t.id = ledger::new_id();
+    t.ref = types::TransactionRef("T" + std::to_string(already_in_book + 1));
+    t.date = p.from_row.date_posted;
+    const Transaction& named_from = p.from_read_first ? p.from_row : p.to_row;
+    t.payee = types::PayeeName(named_from.name);
+    t.memo = named_from.memo;
+    ledger::Posting from_posting;
+    from_posting.account = types::AccountPath(p.from_account);
+    from_posting.amount = p.from_row.amount;
+    from_posting.cleared = types::ClearedStatus::Cleared;
+    ledger::stamp(&from_posting, types::ImportSource::Ofx, p.from_row.fit_id);
+    ledger::Posting to_posting;
+    to_posting.account = types::AccountPath(p.to_account);
+    to_posting.amount = p.to_row.amount;
+    to_posting.cleared = types::ClearedStatus::Cleared;
+    ledger::stamp(&to_posting, types::ImportSource::Ofx, p.to_row.fit_id);
+    t.postings = {from_posting, to_posting};
+    return t;
+}
+
+// Rejecting a pairing: each side becomes its own ordinary new transaction,
+// with the Uncategorized or Unassigned side it would have had if it had
+// never been proposed at all.
+inline std::vector<ledger::Transaction> split_transfer(const TransferProposal& p,
+                                                        std::size_t already_in_book,
+                                                        chart::Chart* accounts) {
+    std::vector<ledger::Transaction> out;
+    for (const auto& side : {std::make_pair(p.from_account, p.from_row),
+                             std::make_pair(p.to_account, p.to_row)}) {
+        Imported one;
+        Decided d;
+        d.downloaded = side.second;
+        d.disposition = Disposition::New;
+        one.decided.push_back(d);
+        const std::vector<ledger::Transaction> made =
+            transactions_for(one, side.first, already_in_book + out.size(), accounts);
+        for (const ledger::Transaction& t : made) out.push_back(t);
+    }
+    return out;
+}
+
+// The rule offered after an approval. Not learned automatically: whether a
+// recurring pairing should always be approved is a judgement about the
+// accounts, and the offer is made, not taken.
+inline TransferMatchRule rule_offered_for(const TransferCandidate& c) {
+    TransferMatchRule r;
+    r.from_account = c.from_account;
+    r.from_pattern = c.from_name;
+    r.to_account = c.to_account;
+    r.to_pattern = c.to_name;
+    r.enabled = true;
+    return r;
+}
+
+// What the import says before anything is written: a batch of decisions is
+// one, and the candidates, the duplicates and the matches are all shown
+// together before it is committed.
+struct ImportPreview {
+    int new_transactions = 0;
+    int duplicates = 0;
+    int matched_to_existing = 0;
+    int transfer_candidates = 0;
+    bool committed = false;
+};
+
+inline ImportPreview preview_of(const MultiImported& m) {
+    ImportPreview p;
+    p.new_transactions = m.summary.New;
+    p.duplicates = m.summary.Duplicate;
+    p.matched_to_existing = m.summary.Matched;
+    int pending = 0;
+    for (const TransferProposal& c : m.candidates)
+        if (c.candidate.state == TransferCandidateState::Proposed) ++pending;
+    p.transfer_candidates = pending;
+    p.committed = false;
+    return p;
+}
+
+// Checking an import's result against what the bank itself says the balance
+// is. Only what has cleared counts: a check written but not yet presented is
+// in the register and not at the bank, and counting it would make every
+// import look wrong. See the ledger-balance rule in ImportOfx.spectable.
+struct LedgerBalanceResult {
+    Money cleared_balance;
+    Money stated_bal;
+    Money difference;
+    bool agrees = false;
+};
+
+inline LedgerBalanceResult check_ledger_balance(
+        const std::vector<ledger::Transaction>& transactions, const std::string& account,
+        const Money& stated_bal) {
+    Money cleared;
+    for (const ledger::Transaction& t : transactions)
+        for (const ledger::Posting& p : t.postings)
+            if (p.account.value() == account && p.cleared == types::ClearedStatus::Cleared)
+                cleared += p.amount;
+    LedgerBalanceResult r;
+    r.cleared_balance = cleared;
+    r.stated_bal = stated_bal;
+    r.difference = cleared - stated_bal;
+    r.agrees = r.difference.cents() == 0;
+    return r;
 }
 
 }  // namespace ofx
