@@ -32,7 +32,7 @@ namespace store {
 // this when that shape changes, and add the upgrade it needs to open_at below --
 // a book already on disk was made by kSchema as it read on an earlier version,
 // and has to be brought forward in place rather than recreated.
-inline constexpr int kSchemaVersion = 3;
+inline constexpr int kSchemaVersion = 4;
 
 struct Failure {
     bool refused = false;
@@ -103,6 +103,14 @@ private:
     bool ok_ = false;
 };
 
+// AccountPath rejects empty text -- a path is required -- so a column that
+// has never been given a source account or destination has to stay the
+// default-constructed, unchecked empty path rather than go through the
+// constructor.
+inline types::AccountPath path_or_empty(const std::string& text) {
+    return text.empty() ? types::AccountPath() : types::AccountPath(text);
+}
+
 inline bool exec(sqlite3* db, const std::string& sql, std::string* why) {
     char* error = nullptr;
     if (sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &error) == SQLITE_OK) return true;
@@ -166,7 +174,23 @@ CREATE TABLE transactions (
   raw_name  TEXT NOT NULL DEFAULT '',
   check_no  TEXT NOT NULL DEFAULT '',
   memo      TEXT NOT NULL DEFAULT '',
-  tag       TEXT NOT NULL DEFAULT '');
+  tag       TEXT NOT NULL DEFAULT '',
+  -- A second, newer way of saying what the transaction is: see the section on
+  -- naming both accounts directly in Transactions.spectable. Empty/zero on a
+  -- transaction recorded the old way, through postings instead.
+  source_account TEXT    NOT NULL DEFAULT '',
+  destination    TEXT    NOT NULL DEFAULT '',
+  amount_cents   INTEGER NOT NULL DEFAULT 0);
+
+CREATE TABLE transaction_splits (
+  -- A split's parts under the new shape, kept apart from postings rather
+  -- than folded into them. See TransactionSplit in Transactions.spectable.
+  transaction_id  TEXT    NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  line            INTEGER NOT NULL,
+  destination     TEXT    NOT NULL,
+  amount_cents    INTEGER NOT NULL,
+  memo            TEXT    NOT NULL DEFAULT '',
+  PRIMARY KEY (transaction_id, line));
 
 CREATE TABLE postings (
   transaction_id  TEXT    NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
@@ -366,6 +390,28 @@ private:
                 "  alias         TEXT    NOT NULL DEFAULT '')";
             if (!detail::exec(db, sql, why)) return false;
         }
+        if (from < 4) {
+            // SourceAccount, Destination and Amount did not exist on a
+            // transaction before this, and TransactionSplit did not exist as
+            // its own collection -- a book written before version 4 has
+            // neither, which is exactly what an empty default/table means.
+            static const char* const columns[] = {
+                "ALTER TABLE transactions ADD COLUMN source_account TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE transactions ADD COLUMN destination TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE transactions ADD COLUMN amount_cents INTEGER NOT NULL DEFAULT 0",
+            };
+            for (const char* sql : columns)
+                if (!detail::exec(db, sql, why)) return false;
+            static const char* const splits =
+                "CREATE TABLE transaction_splits ("
+                "  transaction_id  TEXT    NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,"
+                "  line            INTEGER NOT NULL,"
+                "  destination     TEXT    NOT NULL,"
+                "  amount_cents    INTEGER NOT NULL,"
+                "  memo            TEXT    NOT NULL DEFAULT '',"
+                "  PRIMARY KEY (transaction_id, line))";
+            if (!detail::exec(db, splits, why)) return false;
+        }
         detail::Statement set(db, "UPDATE schema SET version = ?");
         if (!set.ok()) { if (why) *why = set.why(); return false; }
         set.bind(1, kSchemaVersion);
@@ -430,7 +476,8 @@ public:
     // save leaves the file as it was rather than half of each.
     Failure write(const chart::Chart& accounts,
                   const std::vector<ledger::Transaction>& transactions,
-                  const std::vector<payees::Rule>& rules = {}) {
+                  const std::vector<payees::Rule>& rules = {},
+                  const std::vector<ledger::TransactionSplit>& splits = {}) {
         std::string why;
         if (!detail::exec(db_.get(), "BEGIN IMMEDIATE", &why)) return {true, why};
 
@@ -443,7 +490,8 @@ public:
         // should be the record and a save should touch the rows that changed.
         // See the note in development.txt.
         if (!detail::exec(db_.get(), "DELETE FROM posting_import_ids; "
-                                     "DELETE FROM postings; DELETE FROM transactions; "
+                                     "DELETE FROM postings; DELETE FROM transaction_splits; "
+                                     "DELETE FROM transactions; "
                                      "DELETE FROM accounts; DELETE FROM categories; "
                                      "DELETE FROM payee_rules;",
                           &why))
@@ -482,8 +530,9 @@ public:
 
         detail::Statement header(db_.get(),
             "INSERT INTO transactions "
-            "(id, ref, date, payee, raw_name, check_no, memo, tag) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            "(id, ref, date, payee, raw_name, check_no, memo, tag, "
+            "source_account, destination, amount_cents) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         if (!header.ok()) return fail(header.why());
         detail::Statement line(db_.get(),
             "INSERT INTO postings "
@@ -494,6 +543,11 @@ public:
             "INSERT INTO posting_import_ids (transaction_id, line, source, id) "
             "VALUES (?, ?, ?, ?)");
         if (!mark.ok()) return fail(mark.why());
+        detail::Statement split(db_.get(),
+            "INSERT INTO transaction_splits "
+            "(transaction_id, line, destination, amount_cents, memo) "
+            "VALUES (?, ?, ?, ?, ?)");
+        if (!split.ok()) return fail(split.why());
 
         for (const ledger::Transaction& t : transactions) {
             header.reset();
@@ -511,7 +565,22 @@ public:
             header.bind(6, t.check_no.value());
             header.bind(7, t.memo);
             header.bind(8, t.tag);
+            header.bind(9, t.source_account.value());
+            header.bind(10, t.destination.value());
+            header.bind(11, static_cast<long long>(t.amount.cents()));
             if (!header.run()) return fail(header.why());
+
+            int split_line = 0;
+            for (const ledger::TransactionSplit& s : splits) {
+                if (s.transaction_id.value() != t.id.value()) continue;
+                split.reset();
+                split.bind(1, t.id.value());
+                split.bind(2, split_line++);
+                split.bind(3, s.destination.value());
+                split.bind(4, static_cast<long long>(s.amount.cents()));
+                split.bind(5, s.memo);
+                if (!split.run()) return fail(split.why());
+            }
 
             // The line number keeps the order the postings were entered in, so
             // a register reopened reads the way it was written.
@@ -558,7 +627,8 @@ public:
     // so a balance can never disagree with the register.
     Failure read(chart::Chart* accounts, ledger::Ledger* book,
                  std::vector<ledger::Transaction>* transactions,
-                 std::vector<payees::Rule>* rules = nullptr) const {
+                 std::vector<payees::Rule>* rules = nullptr,
+                 std::vector<ledger::TransactionSplit>* splits = nullptr) const {
         *accounts = chart::Chart();
         *book = ledger::Ledger();
         transactions->clear();
@@ -594,7 +664,8 @@ public:
         }
 
         detail::Statement header(db_.get(),
-            "SELECT id, ref, date, payee, raw_name, check_no, memo, tag "
+            "SELECT id, ref, date, payee, raw_name, check_no, memo, tag, "
+            "source_account, destination, amount_cents "
             "FROM transactions "
             "ORDER BY date, rowid");
         if (!header.ok()) return {true, header.why()};
@@ -610,7 +681,29 @@ public:
             t.check_no = types::CheckNumber(header.text(5));
             t.memo = header.text(6);
             t.tag = header.text(7);
+            t.source_account = detail::path_or_empty(header.text(8));
+            t.destination = detail::path_or_empty(header.text(9));
+            t.amount = Money::from_cents(header.integer(10));
             transactions->push_back(t);
+        }
+
+        if (splits != nullptr) {
+            splits->clear();
+            for (const ledger::Transaction& t : *transactions) {
+                detail::Statement s(db_.get(),
+                    "SELECT destination, amount_cents, memo FROM transaction_splits "
+                    "WHERE transaction_id = ? ORDER BY line");
+                if (!s.ok()) return {true, s.why()};
+                s.bind(1, t.id.value());
+                while (s.step_row()) {
+                    ledger::TransactionSplit one;
+                    one.transaction_id = t.id;
+                    one.destination = detail::path_or_empty(s.text(0));
+                    one.amount = Money::from_cents(s.integer(1));
+                    one.memo = s.text(2);
+                    splits->push_back(one);
+                }
+            }
         }
 
         for (ledger::Transaction& t : *transactions) {
