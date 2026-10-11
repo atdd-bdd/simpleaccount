@@ -223,6 +223,28 @@ Then report rows are : ReportRow
 | Expenses:Zoo    | 1     | 300.00 | false      |
 # Entered largest first, reported alphabetically.
 
+Scenario A transaction recorded the new way reports the same as one through postings
+Description A category report reads the book's balances and does not care which
+Description shape put them there. See the section on naming both accounts
+Description directly in Transactions.spectable.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses           | Expense | true        |
+| Expenses:Groceries | Expense | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2024-01-01 |
+| To       | 2024-12-31 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account            | Level | Amount | IsSubtotal |
+| Expenses           | 0     | 45.00  | true       |
+| Expenses:Groceries | 1     | 45.00  | false      |
+
 Scenario A date range takes only the postings inside it
 Given the chart of accounts is as previous
 Given postings are as previous

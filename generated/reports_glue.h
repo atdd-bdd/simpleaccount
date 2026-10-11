@@ -603,4 +603,41 @@ private:
 
     types::Date balance_sheet_as_at_{2024, 1, 1};
     reports::BalanceSheet balance_sheet_;
+public:
+
+    // A transaction recorded through SourceAccount/Destination/Amount reports
+    // the same as one recorded through postings: it is turned into the same
+    // two DatedPosting entries a posting pair would be. A Destination of
+    // Split is not handled here yet -- see TransactionSplit in Transactions.
+    void given_transactions_are(const std::vector<TransactionString>& values) {
+        book_ = ledger::Ledger();
+        transactions_.clear();
+        for (const auto& value : values) {
+            const auto date = types::Date::from_iso(value.date);
+            ASSERT_TRUE(date.has_value()) << value.date;
+            const Money amount{value.amount};
+            const std::string source = blank(value.sourceaccount);
+            const std::string dest = blank(value.destination);
+            book_.add({*date, types::AccountPath(source), amount, value.ref});
+
+            ledger::Transaction t;
+            t.ref = types::TransactionRef(value.ref);
+            t.date = *date;
+            t.payee = types::PayeeName(blank(value.payee));
+            ledger::Posting p1;
+            p1.account = types::AccountPath(source);
+            p1.amount = amount;
+            t.postings.push_back(p1);
+
+            if (!dest.empty() && dest != "Split") {
+                book_.add({*date, types::AccountPath(dest), -amount, value.ref});
+                ledger::Posting p2;
+                p2.account = types::AccountPath(dest);
+                p2.amount = -amount;
+                t.postings.push_back(p2);
+            }
+            transactions_.push_back(t);
+        }
+    }
+
 };
