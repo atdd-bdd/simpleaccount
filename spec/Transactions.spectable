@@ -312,6 +312,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking   | false       |
 | Liabilities:Chase Visa | CreditCard | false       |
 | Unassigned             | OtherAsset | false       |
+| Expenses:Uncategorized | Expense    | false       |
 Given postings are : PostingRow
 | Ref | Date       | Payee            | Account                | Amount   | Memo | Cleared   |
 | T1  | 2026-04-10 | CHASEBANK        | Assets:Checking        | -1200.00 | none | Cleared   |
@@ -801,7 +802,10 @@ Details rule in Accounts.
 Scenario An ordinary transaction names both accounts directly, with no posting at all
 Description The register's category column becomes Destination; nothing is
 Description created that has to sum to anything, because there is only one row.
-Given the chart of accounts is as previous
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
 When transaction entered : Transaction Vertical
 | Ref           | T1                 |
 | SourceAccount | Assets:Checking    |

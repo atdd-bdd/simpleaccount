@@ -227,8 +227,8 @@ public:
             const std::string to_ref =
                 std::string(1, value.tobook.front()) + std::to_string(to_txns.size() + 1);
 
-            from_txns.push_back(books::draw_transaction(*date, -amount, from_ref));
-            to_txns.push_back(books::draw_transaction(*date, amount, to_ref));
+            from_txns.push_back(books::draw_transaction(&from_accounts, *date, -amount, from_ref));
+            to_txns.push_back(books::draw_transaction(&to_accounts, *date, amount, to_ref));
 
             write_back(value.frombook, from_accounts, from_txns);
             write_back(value.tobook, to_accounts, to_txns);
@@ -255,7 +255,8 @@ public:
         ledger_ = ledger::Ledger();
         for (const ledger::Transaction& t : transactions_)
             for (const ledger::Posting& p : t.postings)
-                ledger_.add({t.date, p.account, p.amount, t.ref.value()});
+                ledger_.add({t.date, types::AccountPath(chart_.path_for_ref(p.account)),
+                            p.amount, t.ref.value()});
 
         for (const auto& value : values) {
             reports::Spec spec;
@@ -455,7 +456,7 @@ public:
                 into = &transactions_.back();
             }
             ledger::Posting posting;
-            posting.account = types::AccountPath(value.account);
+            posting.account = chart_.ref_for_path(value.account);
             posting.amount = Money(value.amount);
             posting.memo = blank(value.memo);
             posting.cleared = types::cleared_status_from_string(value.cleared);
@@ -500,7 +501,7 @@ public:
                 row.ref = t.ref.value();
                 row.date = t.date.iso();
                 row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = posting.account.value();
+                row.account = chart_.path_for_ref(posting.account);
                 row.amount = posting.amount.in_register();
                 row.memo = posting.memo.empty() ? "none" : posting.memo;
                 row.cleared = types::to_string(posting.cleared);
@@ -810,12 +811,6 @@ private:
                 transactions.push_back(made);
                 into = &transactions.back();
             }
-            ledger::Posting posting;
-            posting.account = types::AccountPath(value.account);
-            posting.amount = Money(value.amount);
-            posting.memo = blank(value.memo);
-            posting.cleared = types::cleared_status_from_string(value.cleared);
-            into->postings.push_back(posting);
             // An account a posting names has to be in the chart for the book to
             // read back, and these scenarios are about the books being separate
             // rather than about the chart.
@@ -825,6 +820,12 @@ private:
                 a.type = account_type_guessed_from_path(value.account);
                 accounts.put(a);
             }
+            ledger::Posting posting;
+            posting.account = accounts.ref_for_path(value.account);
+            posting.amount = Money(value.amount);
+            posting.memo = blank(value.memo);
+            posting.cleared = types::cleared_status_from_string(value.cleared);
+            into->postings.push_back(posting);
         }
         write_back(name, accounts, transactions);
     }
@@ -875,7 +876,7 @@ private:
                 row.ref = t.ref.value();
                 row.date = t.date.iso();
                 row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = posting.account.value();
+                row.account = accounts.path_for_ref(posting.account);
                 row.amount = posting.amount.in_register();
                 row.memo = posting.memo.empty() ? "none" : posting.memo;
                 row.cleared = types::to_string(posting.cleared);
@@ -1007,8 +1008,8 @@ public:
             if (on) t.date = *on;
             t.payee = types::PayeeName(blank(value.payee));
             t.memo = blank(value.memo);
-            t.source_account = path_or_empty(value.sourceaccount);
-            t.destination = path_or_empty(value.destination);
+            t.source_account = chart_.ref_for_path(blank(value.sourceaccount));
+            t.destination = chart_.ref_for_path(blank(value.destination));
             t.amount = Money(value.amount);
             if (value.cleared != DNCString && !value.cleared.empty())
                 t.cleared = types::cleared_status_from_string(value.cleared);
@@ -1025,10 +1026,10 @@ public:
             if (value.payee != DNCString)
                 EXPECT_EQ(blank(value.payee), t->payee.value()) << value.ref << " payee";
             if (value.sourceaccount != DNCString)
-                EXPECT_EQ(blank(value.sourceaccount), t->source_account.value())
+                EXPECT_EQ(blank(value.sourceaccount), chart_.path_for_ref(t->source_account))
                     << value.ref << " source account";
             if (value.destination != DNCString)
-                EXPECT_EQ(blank(value.destination), t->destination.value())
+                EXPECT_EQ(blank(value.destination), chart_.path_for_ref(t->destination))
                     << value.ref << " destination";
             if (value.amount != DNCString)
                 EXPECT_EQ(Money(value.amount).cents(), t->amount.cents())
@@ -1036,11 +1037,6 @@ public:
             if (value.cleared != DNCString)
                 EXPECT_EQ(value.cleared, types::to_string(t->cleared)) << value.ref << " cleared";
         }
-    }
-
-    static types::AccountPath path_or_empty(const std::string& text) {
-        const std::string b = blank(text);
-        return b.empty() ? types::AccountPath() : types::AccountPath(b);
     }
 
 };

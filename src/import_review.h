@@ -46,14 +46,15 @@ namespace detail {
 //
 // The prepared transactions are in the order of the rows that produced them, and
 // only the New rows produce one, which is what lets them be zipped.
-inline void add_row(ui::ReviewRow* row, const ledger::Transaction& prepared,
-                    const std::string& account) {
+inline void add_row(const chart::Chart& accounts, ui::ReviewRow* row,
+                    const ledger::Transaction& prepared, const std::string& account) {
     row->payee = prepared.payee.value();
     row->raw_name = prepared.raw_name;
     row->memo = prepared.memo;
     row->check_no = prepared.check_no.value();
+    const chart::Ref account_ref = accounts.ref_for_path(account);
     for (const ledger::Posting& p : prepared.postings) {
-        if (p.account.value() == account) {
+        if (p.account == account_ref) {
             row->cleared = p.cleared;
             if (!p.import_ids.empty()) {
                 row->identifier = p.import_ids.front().id;
@@ -61,7 +62,7 @@ inline void add_row(ui::ReviewRow* row, const ledger::Transaction& prepared,
             }
             continue;
         }
-        row->category = p.account.value();
+        row->category = accounts.path_for_ref(p.account);
     }
 }
 
@@ -106,7 +107,7 @@ inline Prepared from_ofx(const std::string& text, const std::string& account,
             row.source = types::ImportSource::Ofx;
             row.disposition = ofx::to_string(one.disposition);
             if (one.disposition == ofx::Disposition::New && next < prepared.size())
-                detail::add_row(&row, prepared[next++], account);
+                detail::add_row(*accounts, &row, prepared[next++], account);
             if (one.disposition == ofx::Disposition::Duplicate) ++out.duplicates;
             if (one.disposition == ofx::Disposition::Matched) ++out.matched;
             out.rows.push_back(row);
@@ -164,7 +165,7 @@ inline Prepared from_csv(const std::string& text, const std::string& account,
         out.notes.push_back("line " + std::to_string(bad.line) +
                             " was not imported: " + bad.reason);
 
-    const csv::Imported decided = csv::decide(rows.rows, account, existing);
+    const csv::Imported decided = csv::decide(*accounts, rows.rows, account, existing);
     const std::vector<ledger::Transaction> prepared = csv::transactions_for(
         decided, account, existing.size(), accounts, rules);
 
@@ -187,7 +188,7 @@ inline Prepared from_csv(const std::string& text, const std::string& account,
         row.cleared = types::ClearedStatus::Uncleared;
         row.disposition = ofx::to_string(one.disposition);
         if (one.disposition == ofx::Disposition::New && next < prepared.size())
-            detail::add_row(&row, prepared[next++], account);
+            detail::add_row(*accounts, &row, prepared[next++], account);
         if (one.disposition == ofx::Disposition::Duplicate) ++out.duplicates;
         if (one.disposition == ofx::Disposition::Matched) ++out.matched;
         out.rows.push_back(row);

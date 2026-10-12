@@ -174,7 +174,7 @@ public:
                 into = &transactions_.back();
             }
             ledger::Posting posting;
-            posting.account = types::AccountPath(value.account);
+            posting.account = chart_.ref_for_path(value.account);
             posting.amount = Money(value.amount);
             posting.memo = blank(value.memo);
             if (value.cleared != DNCString && !value.cleared.empty())
@@ -190,7 +190,7 @@ public:
         ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
         const std::string raw = t->raw_name.empty() ? t->payee.value() : t->raw_name;
         offered_rule_ = payees::suggest(raw, value.toaccount);
-        edit::change_category(t, value.fromaccount, value.toaccount);
+        edit::change_category(chart_, t, value.fromaccount, value.toaccount);
     }
 
     void then_rule_offered_is(const std::vector<PayeeRuleString>& values) {
@@ -368,7 +368,7 @@ private:
                 row.ref = t.ref.value();
                 row.date = t.date.iso();
                 row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = p.account.value();
+                row.account = chart_.path_for_ref(p.account);
                 row.amount = p.amount.in_register();
                 row.memo = p.memo.empty() ? "none" : p.memo;
                 row.cleared = types::to_string(p.cleared);
@@ -516,8 +516,8 @@ public:
             if (on) t.date = *on;
             t.payee = types::PayeeName(blank(value.payee));
             t.memo = blank(value.memo);
-            t.source_account = path_or_empty(value.sourceaccount);
-            t.destination = path_or_empty(value.destination);
+            t.source_account = chart_.ref_for_path(blank(value.sourceaccount));
+            t.destination = chart_.ref_for_path(blank(value.destination));
             t.amount = Money(value.amount);
             if (value.cleared != DNCString && !value.cleared.empty())
                 t.cleared = types::cleared_status_from_string(value.cleared);
@@ -532,20 +532,14 @@ public:
             if (value.payee != DNCString)
                 EXPECT_EQ(blank(value.payee), t->payee.value()) << value.ref << " payee";
             if (value.destination != DNCString)
-                EXPECT_EQ(blank(value.destination), t->destination.value())
+                EXPECT_EQ(blank(value.destination), chart_.path_for_ref(t->destination))
                     << value.ref << " destination";
             if (value.sourceaccount != DNCString)
-                EXPECT_EQ(blank(value.sourceaccount), t->source_account.value())
+                EXPECT_EQ(blank(value.sourceaccount), chart_.path_for_ref(t->source_account))
                     << value.ref << " source account";
             if (value.amount != DNCString)
                 EXPECT_EQ(Money(value.amount).cents(), t->amount.cents())
                     << value.ref << " amount";
         }
-    }
-
-private:
-    static types::AccountPath path_or_empty(const std::string& text) {
-        const std::string b = blank(text);
-        return b.empty() ? types::AccountPath() : types::AccountPath(b);
     }
 };

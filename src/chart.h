@@ -101,6 +101,32 @@ inline std::vector<Category> categories_from_raw(const std::vector<CategoryRawRo
     return out;
 }
 
+// A reference to an account or a category, from the one shared counter the
+// two draw their ids from -- see the id-collision rule in Accounts.spectable.
+// This is what a posting or a transaction holds now instead of a path: it
+// cannot go stale when the node it names is renamed or moved, because
+// nothing about it is text. Zero is "none"; the reserved value -1 is the
+// sentinel for a split, whose parts live in TransactionSplit rather than at
+// any id. See the section on naming both accounts directly in
+// Transactions.spectable.
+class Ref {
+public:
+    Ref() = default;
+    explicit Ref(long long value) : value_(value) {}
+    long long value() const { return value_; }
+    bool is_none() const { return value_ == 0; }
+    bool operator==(const Ref& o) const { return value_ == o.value_; }
+    bool operator!=(const Ref& o) const { return value_ != o.value_; }
+    bool operator<(const Ref& o) const { return value_ < o.value_; }
+
+private:
+    long long value_ = 0;
+};
+
+inline constexpr long long kSplitRefValue = -1;
+inline Ref split_ref() { return Ref(kSplitRefValue); }
+inline bool is_split(const Ref& r) { return r.value() == kSplitRefValue; }
+
 struct Account {
     AccountId id;
     types::AccountPath path;
@@ -151,6 +177,55 @@ public:
         return at == accounts_.end() ? nullptr : &at->second;
     }
 
+    // Resolving between a path and the id a posting or a transaction now
+    // holds instead. "Split" is the one path that is never a real node;
+    // anything else is looked up among the accounts and then the
+    // categories, since the two never collide. Empty and not found both
+    // come back as Ref(), which a caller checks for the same way either way.
+    Ref ref_for_path(const std::string& path) const {
+        if (path.empty()) return Ref();
+        if (path == "Split") return split_ref();
+        const Account* a = find(path);
+        if (a != nullptr) return Ref(a->id.value());
+        const Category* c = find_category(path);
+        if (c != nullptr) return Ref(c->id.value());
+        return Ref();
+    }
+
+    // The other direction: what a ref is shown as while every table and
+    // every display still reads in text. A few hundred nodes at most, so a
+    // linear search over each collection costs nothing worth avoiding.
+    std::string path_for_ref(const Ref& r) const {
+        if (r.is_none()) return "";
+        if (is_split(r)) return "Split";
+        if (const Account* a = find_account_by_ref(r)) return a->path.value();
+        if (const Category* c = find_category_by_ref(r)) return c->path.value();
+        return "";
+    }
+
+    const Account* find_account_by_ref(const Ref& r) const {
+        if (r.is_none() || is_split(r)) return nullptr;
+        for (const auto& entry : accounts_)
+            if (entry.second.id.value() == r.value()) return &entry.second;
+        return nullptr;
+    }
+
+    const Category* find_category_by_ref(const Ref& r) const {
+        if (r.is_none() || is_split(r)) return nullptr;
+        for (const auto& entry : categories_)
+            if (entry.second.id.value() == r.value()) return &entry.second;
+        return nullptr;
+    }
+
+    // Whether the node a ref names is real or nominal, which is all most
+    // callers that are not displaying text need to know. A ref that resolves
+    // to nothing is treated as nominal: the safer wrong answer, since it
+    // keeps unknown money out of net worth rather than in it.
+    bool is_real(const Ref& r) const {
+        if (const Account* a = find_account_by_ref(r)) return types::class_of(a->type) == types::AccountClass::Real;
+        return false;
+    }
+
     // Every account, in path order, which is also the order a report wants.
     std::vector<Account> all() const {
         std::vector<Account> out;
@@ -162,18 +237,23 @@ public:
     // how it was built, and to bring one in from storage. Either way the
     // counter catches up to the highest id it has seen, so an id handed in
     // from outside -- a book read back from disk -- is never handed out again
-    // to the next account created by hand.
-    void put(const Account& a) {
-        accounts_[a.path.value()] = a;
+    // to the next account created by hand. A Given table names accounts by
+    // path only and never fills in Id, so an account arriving with none gets
+    // one here -- otherwise every such account would share the id "none" and
+    // every Ref naming one of them would be indistinguishable from empty.
+    void put(Account a) {
+        if (a.id.is_none()) a.id = AccountId(++next_id_);
         if (a.id.value() > next_id_) next_id_ = a.id.value();
+        accounts_[a.path.value()] = a;
     }
 
     // Categories are a separate collection from Accounts, but one counter: see
     // the id-collision rule in Accounts.spectable. Used to establish a chart
     // in a Given, and to bring one in from storage, the same as put() above.
-    void put_category(const Category& c) {
-        categories_[c.path.value()] = c;
+    void put_category(Category c) {
+        if (c.id.is_none()) c.id = CategoryId(++next_id_);
         if (c.id.value() > next_id_) next_id_ = c.id.value();
+        categories_[c.path.value()] = c;
     }
 
     bool has_category(const std::string& path) const { return categories_.count(path) != 0; }

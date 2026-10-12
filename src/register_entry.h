@@ -125,12 +125,12 @@ inline Committed commit(const BlankLine& line, const std::string& account,
     t.memo = line.memo;
 
     ledger::Posting here;
-    here.account = types::AccountPath(account);
+    here.account = accounts->ref_for_path(account);
     here.amount = amount;
     // Entered by hand, so nothing has cleared it: the bank has not been asked.
     here.cleared = line.cleared;
     ledger::Posting there;
-    there.account = types::AccountPath(other);
+    there.account = accounts->ref_for_path(other);
     there.amount = -amount;
     t.postings = {here, there};
 
@@ -190,7 +190,7 @@ inline Committed commit_split(const BlankLine& line, const std::string& account,
     t.memo = line.memo;
 
     ledger::Posting here;
-    here.account = types::AccountPath(account);
+    here.account = accounts->ref_for_path(account);
     here.amount = amount;
     here.cleared = line.cleared;
     t.postings.push_back(here);
@@ -200,7 +200,7 @@ inline Committed commit_split(const BlankLine& line, const std::string& account,
                           l.amount.cents() < 0 ? types::AccountType::Expense
                                                : types::AccountType::Income);
         ledger::Posting p;
-        p.account = types::AccountPath(l.category);
+        p.account = accounts->ref_for_path(l.category);
         p.amount = l.amount;
         p.memo = l.memo;
         t.postings.push_back(p);
@@ -215,13 +215,15 @@ inline Committed commit_split(const BlankLine& line, const std::string& account,
 // posting that said Unassigned is given an account; nothing is added and nothing
 // is removed, which is why the book still balances without anything being
 // checked. See the assignment scenario in Transactions.spectable.
-inline bool assign_other_account(std::vector<ledger::Transaction>* transactions,
+inline bool assign_other_account(const chart::Chart& accounts,
+                                 std::vector<ledger::Transaction>* transactions,
                                  const std::string& id, const std::string& account) {
+    const chart::Ref ref = accounts.ref_for_path(account);
     for (ledger::Transaction& t : *transactions) {
         if (t.id.value() != id) continue;
         for (ledger::Posting& p : t.postings) {
-            if (!ledger::is_unassigned(p.account)) continue;
-            p.account = types::AccountPath(account);
+            if (!ledger::is_unassigned(accounts, p.account)) continue;
+            p.account = ref;
             return true;
         }
         return false;        // found it, and it had nothing waiting
@@ -236,29 +238,31 @@ inline bool assign_other_account(std::vector<ledger::Transaction>* transactions,
 // paired them, and a person has picked the match out of the other register. The
 // date and payee kept are the ones already on screen, because the user is
 // looking at that row and did not ask for it to change.
-inline bool join_as_transfer(std::vector<ledger::Transaction>* transactions,
+inline bool join_as_transfer(const chart::Chart& accounts,
+                             std::vector<ledger::Transaction>* transactions,
                              const std::string& id, const std::string& other_id) {
-    std::string takes;
+    chart::Ref takes;
     types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
     for (const ledger::Transaction& t : *transactions) {
         if (t.id.value() != other_id) continue;
         for (const ledger::Posting& p : t.postings) {
-            if (ledger::is_unassigned(p.account)) continue;
-            takes = p.account.value();
+            if (ledger::is_unassigned(accounts, p.account)) continue;
+            takes = p.account;
             cleared = p.cleared;
             break;
         }
         break;
     }
-    if (takes.empty()) return false;
-    if (!assign_other_account(transactions, id, takes)) return false;
+    if (takes.is_none()) return false;
+    const std::string takes_path = accounts.path_for_ref(takes);
+    if (!assign_other_account(accounts, transactions, id, takes_path)) return false;
 
     // The newly filled posting carries the other side's cleared status, because
     // that side's bank is what reported it.
     for (ledger::Transaction& t : *transactions) {
         if (t.id.value() != id) continue;
         for (ledger::Posting& p : t.postings)
-            if (p.account.value() == takes) p.cleared = cleared;
+            if (p.account == takes) p.cleared = cleared;
     }
     return ledger::erase_transaction(transactions, other_id);
 }
@@ -277,21 +281,23 @@ struct OfferedEntry {
 // side of the transaction being assigned, because that is the one meant nine
 // times in ten. See the matching section of Transactions.spectable.
 inline std::vector<OfferedEntry> entries_offered_for(
+        const chart::Chart& accounts,
         const std::vector<ledger::Transaction>& transactions, const std::string& ref,
         const std::string& account) {
     Money target;
     for (const ledger::Transaction& t : transactions) {
         if (t.ref.value() != ref) continue;
         for (const ledger::Posting& p : t.postings)
-            if (!ledger::is_unassigned(p.account)) target = -p.amount;
+            if (!ledger::is_unassigned(accounts, p.account)) target = -p.amount;
         break;
     }
 
+    const chart::Ref account_ref = accounts.ref_for_path(account);
     std::vector<OfferedEntry> out;
     for (const ledger::Transaction& t : transactions) {
         if (t.ref.value() == ref) continue;
         for (const ledger::Posting& p : t.postings) {
-            if (p.account.value() != account) continue;
+            if (p.account != account_ref) continue;
             out.push_back({t.ref.value(), t.date, t.payee.value(), p.amount});
             break;
         }

@@ -72,7 +72,8 @@ struct BuyResult {
 // carried price: averaging rounds the price, so recomputing the value from it
 // would drift a cent from what is actually posted. See the invariant note under
 // "Selling shares at the carried price needs no gain" in Investments.spectable.
-inline BuyResult buy_shares(const types::AccountPath& account, double held_shares,
+inline BuyResult buy_shares(const chart::Chart& accounts, const types::AccountPath& account,
+                            double held_shares,
                             const Money& held_value, double bought_shares,
                             double bought_price, const Money& fee, const types::Date& date,
                             const std::string& ref) {
@@ -81,7 +82,7 @@ inline BuyResult buy_shares(const types::AccountPath& account, double held_share
 
     ledger::Transaction t = new_transaction(date, ref);
     ledger::Posting into;
-    into.account = account;
+    into.account = accounts.ref_for_path(account.value());
     into.amount = bought_value;
     t.postings.push_back(into);
 
@@ -91,13 +92,13 @@ inline BuyResult buy_shares(const types::AccountPath& account, double held_share
     Money cash_out = bought_value;
     if (fee.cents() != 0) {
         ledger::Posting f;
-        f.account = fees_account();
+        f.account = accounts.ref_for_path(fees_account().value());
         f.amount = fee;
         t.postings.push_back(f);
         cash_out += fee;
     }
     ledger::Posting cash;
-    cash.account = cash_account_for(account);
+    cash.account = accounts.ref_for_path(cash_account_for(account).value());
     cash.amount = -cash_out;
     t.postings.push_back(cash);
     out.transaction = t;
@@ -120,7 +121,8 @@ struct SellResult {
     double new_price = 0;
 };
 
-inline SellResult sell_shares(const types::AccountPath& account, const types::Symbol& symbol,
+inline SellResult sell_shares(const chart::Chart& accounts, const types::AccountPath& account,
+                              const types::Symbol& symbol,
                               double held_shares, double held_price, const Money& held_value,
                               double sold_shares, double sale_price, const types::Date& date,
                               const std::string& ref) {
@@ -142,18 +144,18 @@ inline SellResult sell_shares(const types::AccountPath& account, const types::Sy
 
     ledger::Transaction t = new_transaction(date, ref);
     ledger::Posting cash;
-    cash.account = cash_account_for(account);
+    cash.account = accounts.ref_for_path(cash_account_for(account).value());
     cash.amount = proceeds;
     t.postings.push_back(cash);
     ledger::Posting held;
-    held.account = account;
+    held.account = accounts.ref_for_path(account.value());
     held.amount = -carried_value_sold;
     t.postings.push_back(held);
     // A sale at exactly the carried price needs no third posting: there is
     // nothing to put to Equity.
     if (gain.cents() != 0) {
         ledger::Posting equity;
-        equity.account = market_value_changes_account();
+        equity.account = accounts.ref_for_path(market_value_changes_account().value());
         equity.amount = -gain;
         t.postings.push_back(equity);
     }
@@ -176,7 +178,8 @@ struct RevalueResult {
     ledger::Transaction transaction;
 };
 
-inline RevalueResult revalue(const types::AccountPath& account, const Money& held_value,
+inline RevalueResult revalue(const chart::Chart& accounts, const types::AccountPath& account,
+                             const Money& held_value,
                              double shares, double new_price, const types::Date& as_of,
                              const std::string& ref) {
     RevalueResult out;
@@ -185,10 +188,10 @@ inline RevalueResult revalue(const types::AccountPath& account, const Money& hel
     if (diff.cents() == 0) return out;
     ledger::Transaction t = new_transaction(as_of, ref);
     ledger::Posting held;
-    held.account = account;
+    held.account = accounts.ref_for_path(account.value());
     held.amount = diff;
     ledger::Posting equity;
-    equity.account = market_value_changes_account();
+    equity.account = accounts.ref_for_path(market_value_changes_account().value());
     equity.amount = -diff;
     t.postings = {held, equity};
     out.transaction = t;
@@ -209,7 +212,8 @@ struct DividendResult {
 // income report; a reinvested one is also a purchase, averaged in exactly as
 // buy_shares would. The cash of one not reinvested never touches the holding
 // at all -- it lands in the account's cash leg.
-inline DividendResult record_dividend(const types::AccountPath& account,
+inline DividendResult record_dividend(const chart::Chart& accounts,
+                                      const types::AccountPath& account,
                                       const types::AccountPath& category, const Money& amount,
                                       bool reinvest, double held_shares, const Money& held_value,
                                       double bought_shares, double bought_price,
@@ -217,10 +221,11 @@ inline DividendResult record_dividend(const types::AccountPath& account,
     DividendResult out;
     ledger::Transaction t = new_transaction(date, ref);
     ledger::Posting into;
-    into.account = reinvest ? account : cash_account_for(account);
+    into.account = accounts.ref_for_path(
+        reinvest ? account.value() : cash_account_for(account).value());
     into.amount = amount;
     ledger::Posting cat;
-    cat.account = category;
+    cat.account = accounts.ref_for_path(category.value());
     cat.amount = -amount;
     t.postings = {into, cat};
     out.transaction = t;
@@ -248,7 +253,8 @@ struct ValueResult {
 // The value of an account that holds something is the total of its holdings,
 // so setting it directly would make the invariant false with no way to tell
 // which figure was wrong -- hence the refusal whenever has_holding is true.
-inline ValueResult state_value(const types::AccountPath& account, bool has_holding,
+inline ValueResult state_value(const chart::Chart& accounts, const types::AccountPath& account,
+                               bool has_holding,
                                const types::Symbol& symbol, const Money& current_value,
                                const Money& new_value, const types::Date& as_of,
                                const std::string& ref) {
@@ -261,10 +267,10 @@ inline ValueResult state_value(const types::AccountPath& account, bool has_holdi
     const Money diff = new_value - current_value;
     ledger::Transaction t = new_transaction(as_of, ref);
     ledger::Posting held;
-    held.account = account;
+    held.account = accounts.ref_for_path(account.value());
     held.amount = diff;
     ledger::Posting equity;
-    equity.account = market_value_changes_account();
+    equity.account = accounts.ref_for_path(market_value_changes_account().value());
     equity.amount = -diff;
     t.postings = {held, equity};
     out.transaction = t;

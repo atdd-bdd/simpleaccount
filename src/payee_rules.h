@@ -233,14 +233,16 @@ struct BookApplication {
 
 namespace detail {
 
-inline bool is_a_category_account(const chart::Chart& accounts, const std::string& path) {
-    const chart::Account* a = accounts.find(path);
+inline bool is_a_category_account(const chart::Chart& accounts, const chart::Ref& ref) {
+    const chart::Account* a = accounts.find_account_by_ref(ref);
     return a != nullptr && (a->type == types::AccountType::Income ||
                             a->type == types::AccountType::Expense);
 }
 
-inline bool is_uncategorized(const std::string& path) {
-    return path == "Expenses:Uncategorized" || path == "Income:Uncategorized";
+inline bool is_uncategorized(const chart::Chart& accounts, const chart::Ref& ref) {
+    if (ref.is_none()) return false;
+    return ref == accounts.ref_for_path("Expenses:Uncategorized") ||
+          ref == accounts.ref_for_path("Income:Uncategorized");
 }
 
 inline bool has_category(const Rule& rule) {
@@ -271,13 +273,12 @@ inline BookApplication apply_to_book(const std::vector<Rule>& rules,
         // category on or to rewrite: Destination already is the category,
         // directly on the transaction. See the section on naming both
         // accounts directly in Transactions.spectable.
-        const bool new_shape = t.postings.empty() && !t.source_account.value().empty();
+        const bool new_shape = t.postings.empty() && !t.source_account.is_none();
 
         if (new_shape) {
             if (t.cleared == types::ClearedStatus::Reconciled) { ++out.skipped; continue; }
-            const std::string category = t.destination.value();
-            if (category.empty() || category == "Split" ||
-                !detail::is_a_category_account(accounts, category)) {
+            if (t.destination.is_none() || chart::is_split(t.destination) ||
+                !detail::is_a_category_account(accounts, t.destination)) {
                 // A split, a transfer, or nothing known yet -- none of them a
                 // category a rule has anything to move.
                 ++out.skipped;
@@ -299,10 +300,11 @@ inline BookApplication apply_to_book(const std::vector<Rule>& rules,
                 if (changed) ++out.matched; else ++out.already_correct;
                 continue;
             }
-            if (category == rule->category) {
+            const chart::Ref rule_ref = accounts.ref_for_path(rule->category);
+            if (t.destination == rule_ref) {
                 ++out.already_correct;
-            } else if (detail::is_uncategorized(category)) {
-                t.destination = types::AccountPath(rule->category);
+            } else if (detail::is_uncategorized(accounts, t.destination)) {
+                t.destination = rule_ref;
                 ++out.matched;
             } else {
                 ++out.skipped;
@@ -317,7 +319,7 @@ inline BookApplication apply_to_book(const std::vector<Rule>& rules,
 
         std::vector<std::size_t> categories;
         for (std::size_t i = 0; i < t.postings.size(); ++i)
-            if (detail::is_a_category_account(accounts, t.postings[i].account.value()))
+            if (detail::is_a_category_account(accounts, t.postings[i].account))
                 categories.push_back(i);
         if (categories.size() != 1) { ++out.skipped; continue; }
         ledger::Posting& on = t.postings[categories.front()];
@@ -338,10 +340,11 @@ inline BookApplication apply_to_book(const std::vector<Rule>& rules,
             if (changed) ++out.matched; else ++out.already_correct;
             continue;
         }
-        if (on.account.value() == rule->category) {
+        const chart::Ref rule_ref = accounts.ref_for_path(rule->category);
+        if (on.account == rule_ref) {
             ++out.already_correct;
-        } else if (detail::is_uncategorized(on.account.value())) {
-            on.account = types::AccountPath(rule->category);
+        } else if (detail::is_uncategorized(accounts, on.account)) {
+            on.account = rule_ref;
             ++out.matched;
         } else {
             // Categorised by hand to something else, which is a decision.
@@ -502,10 +505,10 @@ inline PayeeSuggestion category_last_used_for(
     for (const ledger::Transaction& t : transactions) {
         if (t.payee.value() != payee) continue;
         for (const ledger::Posting& p : t.postings) {
-            if (!detail::is_a_category_account(accounts, p.account.value())) continue;
+            if (!detail::is_a_category_account(accounts, p.account)) continue;
             if (!out.found || t.date > out.based_on) {
                 out.found = true;
-                out.category = p.account.value();
+                out.category = accounts.path_for_ref(p.account);
                 out.based_on = t.date;
             }
         }

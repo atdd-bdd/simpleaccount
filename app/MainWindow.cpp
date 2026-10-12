@@ -768,7 +768,7 @@ void MainWindow::newAccount() {
             t.payee = types::PayeeName("Opening Balance");
             for (const ledger::DatedPosting& p : postings) {
                 ledger::Posting posting;
-                posting.account = p.account;
+                posting.account = chart_.ref_for_path(p.account.value());
                 posting.amount = p.amount;
                 t.postings.push_back(posting);
                 book_.add({p.date, p.account, p.amount, t.ref.value()});
@@ -860,8 +860,8 @@ void MainWindow::importQifForReview() {
         row.line = ++line;
         row.date = t.date;
         row.payee = t.payee.value();
-        row.account = t.postings[0].account.value();
-        row.category = t.postings[1].account.value();
+        row.account = chart_.path_for_ref(t.postings[0].account);
+        row.category = chart_.path_for_ref(t.postings[1].account);
         row.amount = t.postings[0].amount;
         row.disposition = "New";
         if (into.empty()) into = row.account;
@@ -1237,7 +1237,8 @@ void MainWindow::assignPayeesAccordingToRules() {
     book_ = ledger::Ledger();
     for (const ledger::Transaction& t : transactions_)
         for (const ledger::Posting& p : t.postings)
-            book_.add({t.date, p.account, p.amount, t.ref.value()});
+            book_.add({t.date, types::AccountPath(chart_.path_for_ref(p.account)),
+                      p.amount, t.ref.value()});
     save();
     rebuildWorkspace();
     refresh();
@@ -1865,8 +1866,8 @@ void MainWindow::recordBlankLine(int tabPosition) {
     }
     transactions_.push_back(done.transaction);
     for (const ledger::Posting& posting : done.transaction.postings)
-        book_.add({done.transaction.date, posting.account, posting.amount,
-                   done.transaction.ref.value()});
+        book_.add({done.transaction.date, types::AccountPath(chart_.path_for_ref(posting.account)),
+                   posting.amount, done.transaction.ref.value()});
     // A book is a file rather than a session, so an entry is written as it is
     // made. The next blank line keeps the date just used, because entering a
     // morning of receipts means typing the same date over and over otherwise.

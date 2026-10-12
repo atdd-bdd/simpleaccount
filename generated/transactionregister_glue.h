@@ -115,7 +115,7 @@ public:
     void when_line_expanded(const std::vector<TransactionSelectString>& values) {
         ASSERT_FALSE(values.empty());
         open_if_needed();
-        split_ = reg::split_lines_of(transactions_, values.front().ref, account_);
+        split_ = reg::split_lines_of(chart_, transactions_, values.front().ref, account_);
     }
 
     void when_register_filtered_to_dates(const std::vector<DateRangeString>& values) {
@@ -411,13 +411,6 @@ private:
         return (s == "none" || s == DNCString) ? std::string() : s;
     }
 
-    // AccountPath rejects empty text -- a path is required -- so "none" (no
-    // other side) has to stay the default-constructed, unchecked empty path.
-    static types::AccountPath path_or_empty(const std::string& text) {
-        const std::string b = blank(text);
-        return b.empty() ? types::AccountPath() : types::AccountPath(b);
-    }
-
     void add_posting(const std::string& ref, const std::string& date,
                      const std::string& payee, const std::string& account,
                      const std::string& amount, const std::string& memo,
@@ -437,7 +430,7 @@ private:
             into = &transactions_.back();
         }
         ledger::Posting p;
-        p.account = types::AccountPath(account);
+        p.account = chart_.ref_for_path(account);
         p.amount = Money(amount);
         p.memo = blank(memo);
         if (cleared != DNCString && !cleared.empty())
@@ -496,8 +489,8 @@ public:
             t.check_no = types::CheckNumber(blank(value.checkno));
             t.memo = blank(value.memo);
             t.tag = blank(value.tag);
-            t.source_account = path_or_empty(value.sourceaccount);
-            t.destination = path_or_empty(value.destination);
+            t.source_account = chart_.ref_for_path(blank(value.sourceaccount));
+            t.destination = chart_.ref_for_path(blank(value.destination));
             t.amount = Money(value.amount);
             if (value.cleared != DNCString && !value.cleared.empty())
                 t.cleared = types::cleared_status_from_string(value.cleared);

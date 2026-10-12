@@ -103,12 +103,13 @@ public:
                 into = &transactions_.back();
             }
             ledger::Posting posting;
-            posting.account = types::AccountPath(value.account);
+            posting.account = chart_.ref_for_path(value.account);
             posting.amount = Money(value.amount);
             posting.memo = blank(value.memo);
             posting.cleared = types::cleared_status_from_string(value.cleared);
             into->postings.push_back(posting);
-            ledger_.add({into->date, posting.account, posting.amount, into->ref.value()});
+            ledger_.add({into->date, types::AccountPath(value.account), posting.amount,
+                        into->ref.value()});
         }
     }
 
@@ -139,7 +140,7 @@ public:
             const Money held_value = ledger_.raw_balance(account.value());
 
             const investing::BuyResult result = investing::buy_shares(
-                account, held_shares, held_value, shares, price, fee, *date, next_ref());
+                chart_, account, held_shares, held_value, shares, price, fee, *date, next_ref());
             apply_transaction(result.transaction);
 
             if (existing != nullptr) {
@@ -173,7 +174,7 @@ public:
             const Money held_value = ledger_.raw_balance(account.value());
 
             const investing::SellResult result = investing::sell_shares(
-                account, existing->symbol, existing->shares, existing->price, held_value,
+                chart_, account, existing->symbol, existing->shares, existing->price, held_value,
                 shares, price, *date, next_ref());
             rejection_ = result.rejection;
             if (rejection_.refused) continue;
@@ -198,7 +199,7 @@ public:
                 if (h.symbol.value() != symbol.value()) continue;
                 const Money held_value = ledger_.raw_balance(h.account.value());
                 const investing::RevalueResult result = investing::revalue(
-                    h.account, held_value, h.shares, new_price, *as_of, next_ref());
+                    chart_, h.account, held_value, h.shares, new_price, *as_of, next_ref());
                 if (result.posted) apply_transaction(result.transaction);
                 // The date is brought forward even where nothing posted: the
                 // price was confirmed, whether or not it changed.
@@ -225,7 +226,7 @@ public:
             const double bought_price = std::stod(value.price);
 
             const investing::DividendResult result = investing::record_dividend(
-                account, category, amount, reinvest, held_shares, held_value, bought_shares,
+                chart_, account, category, amount, reinvest, held_shares, held_value, bought_shares,
                 bought_price, *date, next_ref());
             apply_transaction(result.transaction);
 
@@ -252,7 +253,7 @@ public:
             const types::Symbol symbol = existing != nullptr ? existing->symbol : types::Symbol();
 
             const investing::ValueResult result = investing::state_value(
-                account, existing != nullptr, symbol, current_value, new_value, *as_of,
+                chart_, account, existing != nullptr, symbol, current_value, new_value, *as_of,
                 next_ref());
             rejection_ = result.rejection;
             if (rejection_.refused) continue;
@@ -477,12 +478,13 @@ private:
     void apply_transaction(const ledger::Transaction& t) {
         transactions_.push_back(t);
         for (const ledger::Posting& p : t.postings) {
-            ledger_.add({t.date, p.account, p.amount, t.ref.value()});
+            const std::string path = chart_.path_for_ref(p.account);
+            ledger_.add({t.date, types::AccountPath(path), p.amount, t.ref.value()});
             PostingRowString row;
             row.ref = t.ref.value();
             row.date = t.date.iso();
             row.payee = "none";
-            row.account = p.account.value();
+            row.account = path;
             row.amount = p.amount.in_register();
             row.memo = "none";
             row.cleared = "Uncleared";

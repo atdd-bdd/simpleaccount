@@ -58,7 +58,7 @@ public:
                 at = by_ref.emplace(value.ref, transactions_.size() - 1).first;
             }
             ledger::Posting p;
-            p.account = types::AccountPath(value.account);
+            p.account = chart_.ref_for_path(value.account);
             p.amount = amount;
             p.memo = value.memo == "none" ? std::string() : value.memo;
             transactions_[at->second].postings.push_back(p);
@@ -145,12 +145,13 @@ public:
         for (const ledger::Transaction& t : transactions_) {
             if (t.date < spec_.from || spec_.to < t.date) continue;
             for (const ledger::Posting& p : t.postings) {
-                if (!chart::Chart::is_descendant_or_self(p.account.value(), opened_)) continue;
+                const std::string p_path = chart_.path_for_ref(p.account);
+                if (!chart::Chart::is_descendant_or_self(p_path, opened_)) continue;
                 DrillDownRowString row;
                 row.ref = t.ref.value();
                 row.date = t.date.iso();
                 row.payee = t.payee.value();
-                row.account = p.account.value();
+                row.account = p_path;
                 row.amount = p.amount.in_register();
                 got.push_back(row);
             }
@@ -411,7 +412,7 @@ public:
             for (const auto& leg : legs) {
                 book_.add({on, types::AccountPath(leg.first), leg.second, t.ref.value()});
                 ledger::Posting posting;
-                posting.account = types::AccountPath(leg.first);
+                posting.account = chart_.ref_for_path(leg.first);
                 posting.amount = leg.second;
                 t.postings.push_back(posting);
             }
@@ -625,14 +626,14 @@ public:
             t.date = *date;
             t.payee = types::PayeeName(blank(value.payee));
             ledger::Posting p1;
-            p1.account = types::AccountPath(source);
+            p1.account = chart_.ref_for_path(source);
             p1.amount = amount;
             t.postings.push_back(p1);
 
             if (!dest.empty() && dest != "Split") {
                 book_.add({*date, types::AccountPath(dest), -amount, value.ref});
                 ledger::Posting p2;
-                p2.account = types::AccountPath(dest);
+                p2.account = chart_.ref_for_path(dest);
                 p2.amount = -amount;
                 t.postings.push_back(p2);
             }

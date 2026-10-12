@@ -60,7 +60,7 @@ public:
                 at = by_ref.emplace(value.ref, transactions_.size() - 1).first;
             }
             ledger::Posting p;
-            p.account = types::AccountPath(value.account);
+            p.account = chart_.ref_for_path(value.account);
             p.amount = amount;
             p.memo = blank(value.memo);
             p.cleared = types::cleared_status_from_string(
@@ -324,7 +324,8 @@ private:
         book_ = ledger::Ledger();
         for (const ledger::Transaction& t : transactions_)
             for (const ledger::Posting& p : t.postings)
-                book_.add({t.date, p.account, p.amount, t.ref.value()});
+                book_.add({t.date, types::AccountPath(chart_.path_for_ref(p.account)),
+                          p.amount, t.ref.value()});
     }
 
     ui::Workspace& workspace() {
@@ -361,7 +362,7 @@ public:
         for (const ledger::Transaction& t : workspace().accepted()) {
             for (const ledger::Posting& p : t.postings) {
                 AcceptedPostingString row;
-                row.account = p.account.value();
+                row.account = workspace().accounts().path_for_ref(p.account);
                 row.amount = p.amount.in_register();
                 // A posting carries at most one identifier per source, and an
                 // imported row has one source, so the first is the one.

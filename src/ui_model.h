@@ -254,6 +254,12 @@ public:
               const std::vector<ledger::Transaction>& transactions)
         : accounts_(accounts), book_(book), transactions_(transactions) {}
 
+    // Accepting an import can create a category the chart handed in at
+    // construction never had, so a caller that wants to show a ref the
+    // workspace made afterwards has to read it from here, not from its own
+    // copy of the chart.
+    const chart::Chart& accounts() const { return accounts_; }
+
     // --------------------------------------------------------------- tabs
 
     // Opens the register of this account in a tab, or returns to it if one is
@@ -386,21 +392,28 @@ public:
             t.raw_name = r.raw_name;
             t.memo = r.memo;
             t.check_no = types::CheckNumber(r.check_no);
+            if (accounts_.find(r.account) == nullptr)
+                accounts_.add(types::AccountPath(r.account), types::AccountType::Checking);
             ledger::Posting here;
-            here.account = types::AccountPath(r.account);
+            here.account = accounts_.ref_for_path(r.account);
             here.amount = r.amount;
             here.cleared = r.cleared;
             // The identifier belongs to the side the statement is for. The bank
             // has never heard of the category, so the other side carries none.
             ledger::stamp(&here, r.source, r.identifier);
+            const Money other_amount = -r.amount;
+            if (accounts_.find(r.category) == nullptr)
+                accounts_.add(types::AccountPath(r.category),
+                              other_amount.cents() < 0 ? types::AccountType::Expense
+                                                       : types::AccountType::Income);
             ledger::Posting other;
-            other.account = types::AccountPath(r.category);
-            other.amount = -r.amount;
+            other.account = accounts_.ref_for_path(r.category);
+            other.amount = other_amount;
             t.postings = {here, other};
             transactions_.push_back(t);
             accepted_.push_back(t);
-            book_.add({r.date, here.account, here.amount});
-            book_.add({r.date, other.account, other.amount});
+            book_.add({r.date, types::AccountPath(r.account), here.amount});
+            book_.add({r.date, types::AccountPath(r.category), other.amount});
         }
         committed_ = true;
         // The second pane existed to compare the import against the register
@@ -518,10 +531,10 @@ public:
         const ledger::Transaction* found = by_ref_const(ref);
         if (found == nullptr) return out;
         for (const ledger::Posting& p : found->postings) {
-            const chart::Account* a = accounts_.find(p.account.value());
+            const chart::Account* a = accounts_.find_account_by_ref(p.account);
             if (a == nullptr) continue;
             if (types::class_of(a->type) != types::AccountClass::Real) continue;
-            out.push_back(p.account.value());
+            out.push_back(accounts_.path_for_ref(p.account));
         }
         return out;
     }
@@ -698,7 +711,8 @@ private:
         ledger::Ledger fresh;
         for (const ledger::Transaction& t : transactions_)
             for (const ledger::Posting& p : t.postings)
-                fresh.add({t.date, p.account, p.amount, t.ref.value()});
+                fresh.add({t.date, types::AccountPath(accounts_.path_for_ref(p.account)),
+                          p.amount, t.ref.value()});
         book_ = fresh;
     }
 

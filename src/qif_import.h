@@ -205,6 +205,19 @@ public:
 
     Imported run(const std::string& text) {
         const File file = read(decode(text), target_);
+        // The target is where every record with no account block posts, so it
+        // has to resolve to a ref the same as any other account -- a file with
+        // no !Account block of its own never otherwise names it. The target
+        // itself is not a migration note -- it is where the import was
+        // pointed, not something the import discovered -- but a placeholder
+        // filled in above it is new all the same, and is reported as such.
+        if (!target_.empty() && !result_.accounts.has(target_)) {
+            std::vector<chart::Account> created;
+            result_.accounts.add(types::AccountPath(target_), types::AccountType::Checking,
+                                 &created);
+            for (const chart::Account& a : created)
+                if (a.path.value() != target_) result_.accounts_created.push_back(a);
+        }
         declare_accounts(file);
         declare_categories(file);
         read_records(file);
@@ -501,7 +514,7 @@ private:
 
             // Splits, or a single category, or neither.
             ledger::Posting own_posting;
-            own_posting.account = types::AccountPath(real_posting_account(rec.account));
+            own_posting.account = result_.accounts.ref_for_path(real_posting_account(rec.account));
             own_posting.amount = rec.amount;
             own_posting.memo = rec.memo;
             own_posting.cleared = cleared_of(rec.cleared_text);
@@ -826,7 +839,7 @@ private:
     ledger::Posting posting(const ReadRecord& rec, const std::string& account,
                             const Money& amount) const {
         ledger::Posting p;
-        p.account = types::AccountPath(account);
+        p.account = result_.accounts.ref_for_path(account);
         p.amount = amount;
         p.memo = rec.memo;
         // The cleared marker belongs to the account whose section the record is
@@ -851,7 +864,8 @@ private:
         result_.transactions.push_back(t);
         ++result_.summary.created;
         for (const ledger::Posting& p : postings) {
-            const ledger::DatedPosting dp{from.date, p.account, p.amount, t.ref.value()};
+            const ledger::DatedPosting dp{from.date, types::AccountPath(result_.accounts.path_for_ref(p.account)),
+                                          p.amount, t.ref.value()};
             result_.postings.push_back(dp);
             result_.book.add(dp);
         }

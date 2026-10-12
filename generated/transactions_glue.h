@@ -116,7 +116,7 @@ public:
             const Money deposit{value.deposit};
             const Money signed_amount = payment.cents() != 0 ? -payment : deposit;
             const edit::AmountOutcome done =
-                edit::change_amount(&transactions_, value.ref, value.account, signed_amount);
+                edit::change_amount(chart_, &transactions_, value.ref, value.account, signed_amount);
             warning_ = done.warning;
             rejection_ = done.changed ? chart::Rejection{} : chart::Rejection{true, done.reason};
         }
@@ -128,7 +128,7 @@ public:
             ledger::Transaction* t = find_by_ref(value.ref);
             ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
             const edit::Outcome done =
-                edit::change_category(t, value.fromaccount, value.toaccount);
+                edit::change_category(chart_, t, value.fromaccount, value.toaccount);
             rejection_ = done.changed ? chart::Rejection{} : chart::Rejection{true, done.reason};
         }
         rebuild_book();
@@ -144,8 +144,9 @@ public:
             ledger::Transaction* t = find_by_ref(value.ref);
             ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
             bool found = false;
+            const chart::Ref account_ref = chart_.ref_for_path(value.account);
             for (ledger::Posting& p : t->postings)
-                if (p.account.value() == value.account) {
+                if (p.account == account_ref) {
                     p.cleared = types::ClearedStatus::Cleared;
                     found = true;
                 }
@@ -171,11 +172,11 @@ public:
             ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
             if (!t->postings.empty()) {
                 const std::string id = t->id.value();
-                EXPECT_TRUE(reg::assign_other_account(&transactions_, id, value.account))
+                EXPECT_TRUE(reg::assign_other_account(chart_, &transactions_, id, value.account))
                     << "nothing unassigned in " << value.ref;
             } else {
-                EXPECT_TRUE(ledger::assign_destination(&transactions_, t->id,
-                                                       types::AccountPath(value.account)))
+                EXPECT_TRUE(ledger::assign_destination(chart_, &transactions_, t->id,
+                                                       chart_.ref_for_path(value.account)))
                     << "nothing unassigned in " << value.ref;
             }
         }
@@ -191,7 +192,7 @@ public:
             if (!t->postings.empty() || !other->postings.empty()) {
                 const std::string id = t->id.value();
                 const std::string other_id = other->id.value();
-                EXPECT_TRUE(reg::join_as_transfer(&transactions_, id, other_id))
+                EXPECT_TRUE(reg::join_as_transfer(chart_, &transactions_, id, other_id))
                     << value.ref << " could not be joined with " << value.otherref;
             } else {
                 EXPECT_TRUE(ledger::match_destinations(&transactions_, t->id, other->id))
@@ -203,7 +204,7 @@ public:
 
     void when_entries_offered_for(const std::vector<AccountAssignmentString>& values) {
         ASSERT_FALSE(values.empty());
-        offered_ = reg::entries_offered_for(transactions_, values.front().ref,
+        offered_ = reg::entries_offered_for(chart_, transactions_, values.front().ref,
                                             values.front().account);
     }
 
@@ -253,15 +254,15 @@ public:
         const ledger::Transaction& t = transactions_.back();
         std::vector<types::AccountType> kinds;
         for (const ledger::Posting& p : t.postings) {
-            const chart::Account* a = chart_.find(p.account.value());
+            const chart::Account* a = chart_.find_account_by_ref(p.account);
             kinds.push_back(a == nullptr ? types::AccountType::Checking : a->type);
         }
         const bool is_transfer = ledger::is_transfer(kinds);
         std::string from, to;
         if (is_transfer) {
             for (const ledger::Posting& p : t.postings) {
-                if (p.amount.cents() < 0) from = p.account.value();
-                else if (p.amount.cents() > 0) to = p.account.value();
+                if (p.amount.cents() < 0) from = chart_.path_for_ref(p.account);
+                else if (p.amount.cents() > 0) to = chart_.path_for_ref(p.account);
             }
         }
         for (const auto& value : values) {
@@ -404,7 +405,9 @@ public:
         for (const auto& value : values) {
             if (value.theunknown == "Unassigned") {
                 EXPECT_EQ(std::string("A real account"), value.whereitlives);
-                EXPECT_TRUE(ledger::is_unassigned(ledger::unassigned()));
+                chart::Chart fixture;
+                fixture.add(ledger::unassigned(), types::AccountType::OtherAsset);
+                EXPECT_TRUE(ledger::is_unassigned(fixture, fixture.ref_for_path(ledger::kUnassigned)));
             } else if (value.theunknown == "Uncategorized") {
                 EXPECT_EQ(std::string("A category"), value.whereitlives);
                 EXPECT_NE(ledger::unassigned().value(),
@@ -445,8 +448,8 @@ private:
         return (s == "none" || s == DNCString) ? std::string() : s;
     }
 
-    static void group_into(std::vector<ledger::Transaction>* into,
-                           const PostingRowString& value) {
+    void group_into(std::vector<ledger::Transaction>* into,
+                    const PostingRowString& value) {
         ledger::Transaction* found = nullptr;
         for (ledger::Transaction& t : *into)
             if (t.ref.value() == value.ref) { found = &t; break; }
@@ -461,7 +464,7 @@ private:
             found = &into->back();
         }
         ledger::Posting p;
-        p.account = types::AccountPath(value.account);
+        p.account = chart_.ref_for_path(value.account);
         p.amount = Money(value.amount);
         p.memo = blank(value.memo);
         if (value.cleared != DNCString && !value.cleared.empty())
@@ -494,15 +497,7 @@ private:
         return nullptr;
     }
 
-    // AccountPath rejects empty text -- a path is required -- so "none" (no
-    // other side known yet) has to stay the default-constructed, unchecked
-    // empty path rather than go through the constructor.
-    static types::AccountPath path_or_empty(const std::string& text) {
-        const std::string b = blank(text);
-        return b.empty() ? types::AccountPath() : types::AccountPath(b);
-    }
-
-    static ledger::Transaction make_transaction(const TransactionString& value) {
+    ledger::Transaction make_transaction(const TransactionString& value) {
         ledger::Transaction t;
         t.id = ledger::new_id();
         t.ref = types::TransactionRef(value.ref);
@@ -512,8 +507,8 @@ private:
         t.check_no = types::CheckNumber(blank(value.checkno));
         t.memo = blank(value.memo);
         t.tag = blank(value.tag);
-        t.source_account = path_or_empty(value.sourceaccount);
-        t.destination = path_or_empty(value.destination);
+        t.source_account = chart_.ref_for_path(blank(value.sourceaccount));
+        t.destination = chart_.ref_for_path(blank(value.destination));
         t.amount = Money(value.amount);
         if (value.cleared != DNCString && !value.cleared.empty())
             t.cleared = types::cleared_status_from_string(value.cleared);
@@ -523,7 +518,7 @@ private:
     // Deliberately matches the convention in then_account_is: Id is never
     // stated by a table, so it is always read back as "none" rather than the
     // real, generated name.
-    static TransactionString as_string(const ledger::Transaction& t) {
+    TransactionString as_string(const ledger::Transaction& t) const {
         TransactionString s;
         s.id = "none";
         s.ref = t.ref.value();
@@ -532,8 +527,11 @@ private:
         s.checkno = t.check_no.value().empty() ? "none" : t.check_no.value();
         s.memo = t.memo.empty() ? "none" : t.memo;
         s.tag = t.tag.empty() ? "none" : t.tag;
-        s.sourceaccount = t.source_account.value().empty() ? "none" : t.source_account.value();
-        s.destination = t.destination.value().empty() ? "none" : t.destination.value();
+        const std::string source_path = chart_.path_for_ref(t.source_account);
+        const std::string dest_path =
+            chart::is_split(t.destination) ? "Split" : chart_.path_for_ref(t.destination);
+        s.sourceaccount = source_path.empty() ? "none" : source_path;
+        s.destination = dest_path.empty() ? "none" : dest_path;
         s.amount = t.amount.in_register();
         s.cleared = types::to_string(t.cleared);
         return s;
@@ -543,7 +541,8 @@ private:
         book_ = ledger::Ledger();
         for (const ledger::Transaction& t : transactions_)
             for (const ledger::Posting& p : t.postings)
-                book_.add({t.date, p.account, p.amount, t.ref.value()});
+                book_.add({t.date, types::AccountPath(chart_.path_for_ref(p.account)),
+                          p.amount, t.ref.value()});
     }
 
     std::vector<PostingRowString> flatten() const {
@@ -554,7 +553,7 @@ private:
                 row.ref = t.ref.value();
                 row.date = t.date.iso();
                 row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = p.account.value();
+                row.account = chart_.path_for_ref(p.account);
                 row.amount = p.amount.in_register();
                 row.memo = p.memo.empty() ? "none" : p.memo;
                 row.cleared = types::to_string(p.cleared);
@@ -601,7 +600,7 @@ public:
         for (const auto& value : values) {
             ledger::TransactionSplit s;
             s.transaction_id = last_entered_id_;
-            s.destination = path_or_empty(value.destination);
+            s.destination = chart_.ref_for_path(blank(value.destination));
             s.amount = Money(value.amount);
             s.memo = blank(value.memo);
             splits_.push_back(s);
@@ -631,7 +630,7 @@ public:
         for (const auto& value : values) {
             int n = 0;
             for (const ledger::Transaction& t : transactions_)
-                if (t.source_account.value() == value.account) ++n;
+                if (chart_.path_for_ref(t.source_account) == value.account) ++n;
             EXPECT_EQ(std::stoi(value.count), n) << value.account;
         }
     }

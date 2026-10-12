@@ -353,7 +353,7 @@ private:
                 row.ref = t.ref.value();
                 row.date = t.date.iso();
                 row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = p.account.value();
+                row.account = result_.accounts.path_for_ref(p.account);
                 row.amount = p.amount.in_register();
                 row.memo = p.memo.empty() ? "none" : p.memo;
                 row.cleared = types::to_string(p.cleared);
@@ -641,7 +641,7 @@ public:
             const ledger::Transaction& made = out.transactions.front();
             ASSERT_EQ(2u, made.postings.size());
             const ledger::Posting& other = made.postings[1];
-            EXPECT_EQ(t.accountpath, other.account.value()) << t.categorytext;
+            EXPECT_EQ(t.accountpath, out.accounts.path_for_ref(other.account)) << t.categorytext;
             const bool guessed = std::any_of(
                 out.notes.begin(), out.notes.end(),
                 [](const qif::Note& n) { return n.kind == "CategoryGuessed"; });

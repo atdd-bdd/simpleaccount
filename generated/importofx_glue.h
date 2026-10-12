@@ -90,7 +90,7 @@ public:
                 into = &transactions_.back();
             }
             ledger::Posting p;
-            p.account = types::AccountPath(value.account);
+            p.account = chart_.ref_for_path(value.account);
             p.amount = Money(value.amount);
             p.cleared = types::cleared_status_from_string(value.cleared);
             ledger::stamp(&p, types::ImportSource::Ofx, blank(value.fitid));
@@ -140,7 +140,7 @@ public:
                     offered = &one;
             ASSERT_NE(nullptr, offered) << "nothing possible was offered for " << value.fitid;
             if (value.answer == "TheSame") {
-                EXPECT_TRUE(ofx::answer_the_same(*offered, target_, &transactions_))
+                EXPECT_TRUE(ofx::answer_the_same(chart_, *offered, target_, &transactions_))
                     << "could not clear " << offered->claimed_ref;
             } else if (value.answer == "Different") {
                 const ledger::Transaction made = ofx::answer_different(
@@ -388,7 +388,7 @@ public:
             const std::size_t before = transactions_.size();
 
             if (value.answer == "TheSame") {
-                ASSERT_TRUE(ofx::answer_the_same(offered, target_, &transactions_));
+                ASSERT_TRUE(ofx::answer_the_same(chart_, offered, target_, &transactions_));
                 EXPECT_EQ(before, transactions_.size()) << value.thedownloadedrow;
                 const ledger::Posting* here = posting_in(target_);
                 ASSERT_NE(nullptr, here);
@@ -529,7 +529,7 @@ public:
             [&](const ofx::TransferProposal& p) { return candidate_matches(v, p.candidate); });
         if (at != candidates_.end()) {
             offered_rule_ = ofx::rule_offered_for(at->candidate);
-            transactions_.push_back(ofx::merge_transfer(*at, transactions_.size()));
+            transactions_.push_back(ofx::merge_transfer(&chart_, *at, transactions_.size()));
             summary_.New += 1;
             candidates_.erase(at);
         } else {
@@ -605,7 +605,7 @@ public:
     void when_ledger_balance_checked(const std::vector<LedgerBalanceCheckString>& values) {
         ASSERT_FALSE(values.empty());
         const LedgerBalanceCheckString& v = values.front();
-        balance_check_ = ofx::check_ledger_balance(transactions_, v.account, Money(v.statedbal));
+        balance_check_ = ofx::check_ledger_balance(chart_, transactions_, v.account, Money(v.statedbal));
     }
 
     void then_balance_check_is(const std::vector<LedgerBalanceResultString>& values) {
@@ -748,15 +748,16 @@ private:
         summary_ = decided_.summary;
         const std::vector<ledger::Transaction> made =
             ofx::transactions_for(decided_, target_, transactions_.size(), &chart_);
-        ofx::apply_matches(decided_, target_, &transactions_);
-        ofx::apply_completions(decided_, target_, &transactions_);
+        ofx::apply_matches(chart_, decided_, target_, &transactions_);
+        ofx::apply_completions(chart_, decided_, target_, &transactions_);
         transactions_.insert(transactions_.end(), made.begin(), made.end());
     }
 
     const ledger::Posting* posting_in(const std::string& account) const {
+        const chart::Ref account_ref = chart_.ref_for_path(account);
         for (const ledger::Transaction& t : transactions_)
             for (const ledger::Posting& p : t.postings)
-                if (p.account.value() == account) return &p;
+                if (p.account == account_ref) return &p;
         return nullptr;
     }
 
@@ -764,7 +765,8 @@ private:
         ledger::Ledger out;
         for (const ledger::Transaction& t : transactions_)
             for (const ledger::Posting& p : t.postings)
-                out.add({t.date, p.account, p.amount, t.ref.value()});
+                out.add({t.date, types::AccountPath(chart_.path_for_ref(p.account)),
+                        p.amount, t.ref.value()});
         return out;
     }
 
@@ -776,7 +778,7 @@ private:
                 row.ref = t.ref.value();
                 row.date = t.date.iso();
                 row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = p.account.value();
+                row.account = chart_.path_for_ref(p.account);
                 row.amount = p.amount.in_register();
                 row.cleared = types::to_string(p.cleared);
                 row.checkno = t.check_no.value().empty() ? "none" : t.check_no.value();
@@ -883,7 +885,7 @@ private:
         t.payee = types::PayeeName("HARRIS TEETER");
 
         ledger::Posting here;
-        here.account = types::AccountPath("Assets:Checking");
+        here.account = chart_.ref_for_path("Assets:Checking");
         here.amount = Money("-45.00");
         // Cleared, so neither match test can claim it and the only question
         // left is the one about identifiers.
@@ -902,7 +904,7 @@ private:
         }
 
         ledger::Posting there;
-        there.account = types::AccountPath("Expenses:Uncategorized");
+        there.account = chart_.ref_for_path("Expenses:Uncategorized");
         there.amount = Money("45.00");
         t.postings = {here, there};
         transactions_ = {t};
@@ -933,11 +935,11 @@ private:
         t.date = types::Date(2026, 2, 5);
         t.payee = types::PayeeName("Harris Teeter");
         ledger::Posting here;
-        here.account = types::AccountPath("Assets:Checking");
+        here.account = chart_.ref_for_path("Assets:Checking");
         here.amount = Money("-88.20");
         here.cleared = types::ClearedStatus::Cleared;
         ledger::Posting there;
-        there.account = types::AccountPath("Expenses:Groceries");
+        there.account = chart_.ref_for_path("Expenses:Groceries");
         there.amount = Money("88.20");
         t.postings = {here, there};
         transactions_ = {t};
@@ -961,10 +963,10 @@ private:
         t.ref = types::TransactionRef("T1");
         t.payee = types::PayeeName("HARRIS TEETER");
         ledger::Posting here;
-        here.account = types::AccountPath("Assets:Checking");
+        here.account = chart_.ref_for_path("Assets:Checking");
         here.amount = Money("-45.00");
         ledger::Posting there;
-        there.account = types::AccountPath("Expenses:Uncategorized");
+        there.account = chart_.ref_for_path("Expenses:Uncategorized");
         there.amount = Money("45.00");
 
         bool anything_already_there = true;
@@ -1040,10 +1042,10 @@ public:
             t.payee = types::PayeeName("County Tax Office");
             t.check_no = types::CheckNumber("2041");
             ledger::Posting here;
-            here.account = types::AccountPath("Assets:Checking");
+            here.account = chart_.ref_for_path("Assets:Checking");
             here.amount = Money("-1250.00");
             ledger::Posting there;
-            there.account = types::AccountPath("Expenses:Uncategorized");
+            there.account = chart_.ref_for_path("Expenses:Uncategorized");
             there.amount = Money("1250.00");
             t.postings = {here, there};
             transactions_ = {t};

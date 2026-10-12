@@ -546,14 +546,15 @@ struct Imported {
     ofx::Summary summary;
 };
 
-inline Imported decide(const std::vector<RowRead>& rows, const std::string& account,
+inline Imported decide(const chart::Chart& accounts, const std::vector<RowRead>& rows,
+                       const std::string& account,
                        const std::vector<ledger::Transaction>& transactions) {
     Imported out;
     // Claim pairing, shared with the OFX import rather than written twice: a
     // transaction already in the book may be claimed once, so two identical rows
     // pair off against two identical transactions and not against one of them
     // twice. See the claim rule in ImportCsv.spectable.
-    std::vector<ofx::detail::Existing> already = ofx::existing_in(transactions, account);
+    std::vector<ofx::detail::Existing> already = ofx::existing_in(accounts, transactions, account);
     const auto unclaimed = [](const ofx::detail::Existing& e) { return !e.claimed; };
 
     for (const RowRead& row : rows) {
@@ -665,7 +666,7 @@ inline std::vector<ledger::Transaction> transactions_for(
         t.memo = one.row.memo;
 
         ledger::Posting here;
-        here.account = types::AccountPath(account);
+        here.account = accounts->ref_for_path(account);
         here.amount = amount;
         // Left uncleared. A CSV file carries no statement and says nothing about
         // what the bank has settled, so nothing here can honestly say it has --
@@ -676,7 +677,7 @@ inline std::vector<ledger::Transaction> transactions_for(
         ledger::stamp(&here, types::ImportSource::Csv, std::to_string(one.row.line));
 
         ledger::Posting there;
-        there.account = types::AccountPath(other);
+        there.account = accounts->ref_for_path(other);
         there.amount = -amount;
         t.postings = {here, there};
         out.push_back(t);

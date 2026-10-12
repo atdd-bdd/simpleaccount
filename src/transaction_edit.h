@@ -25,8 +25,8 @@ struct Outcome {
 
 namespace detail {
 
-inline bool is_a_category(const chart::Chart& accounts, const std::string& path) {
-    const chart::Account* a = accounts.find(path);
+inline bool is_a_category(const chart::Chart& accounts, const chart::Ref& ref) {
+    const chart::Account* a = accounts.find_account_by_ref(ref);
     return a != nullptr && (a->type == types::AccountType::Income ||
                             a->type == types::AccountType::Expense);
 }
@@ -40,36 +40,17 @@ inline bool is_a_category(const chart::Chart& accounts, const std::string& path)
 // The account moved to may be a real one, and then the transaction has become a
 // transfer rather than an expense -- which is the whole of what makes a card
 // payment a transfer, and it needs no special case here.
-inline Outcome change_category(ledger::Transaction* t, const std::string& from,
-                               const std::string& to) {
+inline Outcome change_category(const chart::Chart& accounts, ledger::Transaction* t,
+                               const std::string& from, const std::string& to) {
     if (t == nullptr) return {false, "no transaction"};
     if (to.empty()) return {false, "a category is required"};
+    const chart::Ref from_ref = accounts.ref_for_path(from);
     for (ledger::Posting& p : t->postings) {
-        if (p.account.value() != from) continue;
-        p.account = types::AccountPath(to);
+        if (p.account != from_ref) continue;
+        p.account = accounts.ref_for_path(to);
         return {true, std::string()};
     }
     return {false, "nothing is posted to " + from};
-}
-
-// Repoints every posting at or under this path to the corresponding path
-// under the new one -- the same substitution chart::Chart::move_subtree makes
-// to the account itself, applied to what was posted to it. A posting carries
-// the path as plain text and the chart has no other way to identify an
-// account yet (see TODO.md on account identity), so without this a rename or
-// a move would silently orphan every transaction already on the account: the
-// chart would show the new path with nothing in it, and the old one gone
-// from the chart but still named by postings nobody could find again.
-inline int move_postings(std::vector<ledger::Transaction>* transactions,
-                         const std::string& from, const std::string& to) {
-    int changed = 0;
-    for (ledger::Transaction& t : *transactions)
-        for (ledger::Posting& p : t.postings)
-            if (chart::Chart::is_descendant_or_self(p.account.value(), from)) {
-                p.account = types::AccountPath(to + p.account.value().substr(from.size()));
-                ++changed;
-            }
-    return changed;
 }
 
 // The same, for the flat ledger a lower-level test reads balances from rather
@@ -101,7 +82,8 @@ inline Money abs_of(const Money& m) { return m.cents() < 0 ? -m : m; }
 // named posting changes, or it does not and the change is refused with the
 // shortfall, same as a split entry that does not add up. See the changing
 // section of Transactions.spectable.
-inline AmountOutcome change_amount(std::vector<ledger::Transaction>* transactions,
+inline AmountOutcome change_amount(const chart::Chart& accounts,
+                                   std::vector<ledger::Transaction>* transactions,
                                    const std::string& ref, const std::string& account,
                                    const Money& new_signed_amount) {
     AmountOutcome out;
@@ -110,9 +92,10 @@ inline AmountOutcome change_amount(std::vector<ledger::Transaction>* transaction
         if (one.ref.value() == ref) { t = &one; break; }
     if (t == nullptr) { out.reason = "no transaction named " + ref; return out; }
 
+    const chart::Ref account_ref = accounts.ref_for_path(account);
     ledger::Posting* named = nullptr;
     for (ledger::Posting& p : t->postings)
-        if (p.account.value() == account) { named = &p; break; }
+        if (p.account == account_ref) { named = &p; break; }
     if (named == nullptr) { out.reason = "nothing is posted to " + account; return out; }
 
     Money other_sum;
@@ -169,12 +152,12 @@ inline Outcome assign_category(ledger::Transaction* t, const chart::Chart& accou
     if (to.empty()) return {false, "a category is required"};
     std::vector<std::size_t> found;
     for (std::size_t i = 0; i < t->postings.size(); ++i)
-        if (detail::is_a_category(accounts, t->postings[i].account.value()))
+        if (detail::is_a_category(accounts, t->postings[i].account))
             found.push_back(i);
     if (found.empty()) return {false, "it has no category posting"};
     if (found.size() > 1)
         return {false, "it is a split; name the posting to change"};
-    t->postings[found.front()].account = types::AccountPath(to);
+    t->postings[found.front()].account = accounts.ref_for_path(to);
     return {true, std::string()};
 }
 

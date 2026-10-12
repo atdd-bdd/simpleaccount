@@ -1,5 +1,7 @@
 #pragma once
 #include <string>
+#include "account_type.h"
+#include "chart.h"
 #include "date.h"
 #include "ledger.h"
 #include "money.h"
@@ -30,20 +32,25 @@ inline const types::AccountPath& draw_equity_account() {
 
 // One book's half of the draw. signed_cash_amount is from this book's own
 // point of view: positive where the money arrives, negative where it leaves.
-inline ledger::Transaction draw_transaction(const types::Date& date,
+inline ledger::Transaction draw_transaction(chart::Chart* accounts, const types::Date& date,
                                             Money signed_cash_amount,
                                             const std::string& ref) {
+    if (accounts->find(draw_cash_account().value()) == nullptr)
+        accounts->add(draw_cash_account(), types::AccountType::Checking);
+    if (accounts->find(draw_equity_account().value()) == nullptr)
+        accounts->add(draw_equity_account(), types::AccountType::Equity);
+
     ledger::Transaction t;
     t.id = ledger::new_id();
     t.ref = types::TransactionRef(ref);
     t.date = date;
 
     ledger::Posting cash;
-    cash.account = draw_cash_account();
+    cash.account = accounts->ref_for_path(draw_cash_account().value());
     cash.amount = signed_cash_amount;
 
     ledger::Posting equity;
-    equity.account = draw_equity_account();
+    equity.account = accounts->ref_for_path(draw_equity_account().value());
     equity.amount = -signed_cash_amount;
 
     t.postings = {cash, equity};

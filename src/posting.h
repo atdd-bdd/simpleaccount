@@ -31,7 +31,7 @@ struct ImportId {
 };
 
 struct Posting {
-    types::AccountPath account;
+    chart::Ref account;
     Money amount;
     std::string memo;
     // Per posting, not per transaction: a transfer leaves one account and
@@ -88,12 +88,12 @@ struct Transaction {
     std::vector<Posting> postings;
 
     // A second way of saying what a transaction is: the account it lives in,
-    // the other side, and the signed amount between them. Unset (an empty
-    // path, a zero amount) on a transaction recorded the old way, through
-    // postings instead. See the section on naming both accounts directly in
+    // the other side, and the signed amount between them. Unset (Ref(), a
+    // zero amount) on a transaction recorded the old way, through postings
+    // instead. See the section on naming both accounts directly in
     // Transactions.spectable.
-    types::AccountPath source_account;
-    types::AccountPath destination;
+    chart::Ref source_account;
+    chart::Ref destination;
     Money amount;
     // Per entry, not per posting: under this shape the transaction itself is
     // already one side, the same thing Cleared on a Posting always meant.
@@ -106,7 +106,7 @@ struct Transaction {
 // today. See the TransactionSplit entity in Transactions.spectable.
 struct TransactionSplit {
     types::TransactionId transaction_id;
-    types::AccountPath destination;
+    chart::Ref destination;
     Money amount;
     std::string memo;
 };
@@ -175,6 +175,9 @@ inline Money category_amount_of(const Money& payment, const Money& deposit) {
 // by the same amount with the net still right -- the shape of error that looks
 // like success. Measured against the 2026 report, where it is 104,300.69 one way
 // and 91,331.00 the other.
+// A well-known path rather than a ref: the account this names may not exist
+// in the chart yet -- creating it on demand is the caller's next step -- so
+// there is nothing yet to resolve an id from.
 inline types::AccountPath uncategorized_for(const Money& known_amount) {
     return types::AccountPath(known_amount.cents() > 0 ? "Income:Uncategorized"
                                                        : "Expenses:Uncategorized");
@@ -193,19 +196,24 @@ inline const char* kUnassigned = "Unassigned";
 
 inline types::AccountPath unassigned() { return types::AccountPath(kUnassigned); }
 
-inline bool is_unassigned(const types::AccountPath& path) {
-    return path.value() == kUnassigned;
+inline chart::Ref unassigned_ref(const chart::Chart& accounts) {
+    return accounts.ref_for_path(kUnassigned);
+}
+
+inline bool is_unassigned(const chart::Chart& accounts, const chart::Ref& r) {
+    return !r.is_none() && r == unassigned_ref(accounts);
 }
 
 // The new-shape equivalent of assigning the other account: the transaction
 // itself names the other side, so there is no second posting to edit, only
 // this one row's Destination.
-inline bool assign_destination(std::vector<Transaction>* transactions,
+inline bool assign_destination(const chart::Chart& accounts,
+                               std::vector<Transaction>* transactions,
                                const types::TransactionId& id,
-                               const types::AccountPath& account) {
+                               const chart::Ref& account) {
     for (Transaction& t : *transactions) {
         if (t.id.value() != id.value()) continue;
-        if (!is_unassigned(t.destination)) return false;
+        if (!is_unassigned(accounts, t.destination)) return false;
         t.destination = account;
         return true;
     }
@@ -269,14 +277,14 @@ inline chart::Rejection validate(const chart::Chart& accounts, const Transaction
     if (t.postings.size() < 2)
         return {true, "A transaction needs at least two postings"};
     std::vector<Money> amounts;
-    std::set<std::string> seen;
+    std::set<long long> seen;
     for (const Posting& p : t.postings) {
         amounts.push_back(p.amount);
         if (!seen.insert(p.account.value()).second)
             return {true, "A transfer must name two different accounts"};
-        const chart::Account* a = accounts.find(p.account.value());
+        const chart::Account* a = accounts.find_account_by_ref(p.account);
         if (a != nullptr && a->placeholder)
-            return {true, p.account.value() + " is a placeholder; choose one below it"};
+            return {true, a->path.value() + " is a placeholder; choose one below it"};
     }
     if (!balances(amounts)) {
         const Money off = imbalance_of(amounts);

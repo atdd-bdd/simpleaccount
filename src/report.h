@@ -359,7 +359,7 @@ inline bool is_other_line(const chart::Chart& accounts, const std::string& label
 inline bool touches_an_investment(const chart::Chart& accounts,
                                   const ledger::Transaction& t) {
     for (const ledger::Posting& p : t.postings) {
-        const chart::Account* a = accounts.find(p.account.value());
+        const chart::Account* a = accounts.find_account_by_ref(p.account);
         if (a != nullptr && detail::is_an_investment(a->type)) return true;
     }
     return false;
@@ -429,7 +429,7 @@ inline std::vector<DetailLine> detail_report(
             // to the figure above them even where a split posted to the same
             // category twice.
             for (const ledger::Posting& p : t.postings) {
-                if (p.account.value() != holds) continue;
+                if (accounts.path_for_ref(p.account) != holds) continue;
                 DetailLine under;
                 under.kind = LineKind::Transaction;
                 under.account = holds;
@@ -479,7 +479,7 @@ inline std::vector<PayeeRow> payee_report(
         if (!spec.include_investment_activity) {
             bool investment = false;
             for (const ledger::Posting& p : t.postings) {
-                const chart::Account* a = accounts.find(p.account.value());
+                const chart::Account* a = accounts.find_account_by_ref(p.account);
                 if (a != nullptr && detail::is_an_investment(a->type)) {
                     investment = true;
                     break;
@@ -490,13 +490,13 @@ inline std::vector<PayeeRow> payee_report(
         Money amount;
         bool counted = false;
         for (const ledger::Posting& p : t.postings) {
-            const chart::Account* a = accounts.find(p.account.value());
+            const chart::Account* a = accounts.find_account_by_ref(p.account);
             if (a == nullptr) continue;
             if (a->type != types::AccountType::Income &&
                 a->type != types::AccountType::Expense)
                 continue;
             if (only_category &&
-                !chart::Chart::is_descendant_or_self(p.account.value(), *only_category))
+                !chart::Chart::is_descendant_or_self(accounts.path_for_ref(p.account), *only_category))
                 continue;
             amount += types::display_sign(a->type) < 0 ? -p.amount : p.amount;
             counted = true;

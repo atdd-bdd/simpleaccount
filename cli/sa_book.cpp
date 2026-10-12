@@ -137,7 +137,7 @@ int import_csv(const std::string& text, const std::string& account, bool accept,
     for (const csv::RowError& bad : rows.rejected)
         std::printf("line %d was not imported: %s\n", bad.line, bad.reason.c_str());
 
-    const csv::Imported decided = csv::decide(rows.rows, account, open->transactions);
+    const csv::Imported decided = csv::decide(open->accounts, rows.rows, account, open->transactions);
     std::printf("%-10s %-28s %10s %-12s\n", "date", "payee", "amount", "decision");
     for (const csv::Decided& one : decided.decided)
         std::printf("%-10s %-28s %10s %-12s\n", one.row.date.iso().c_str(),
@@ -160,7 +160,8 @@ int import_csv(const std::string& text, const std::string& account, bool accept,
     ledger::Ledger book;
     for (const ledger::Transaction& t : open->transactions)
         for (const ledger::Posting& posting : t.postings)
-            book.add({t.date, posting.account, posting.amount, t.ref.value()});
+            book.add({t.date, types::AccountPath(open->accounts.path_for_ref(posting.account)),
+                     posting.amount, t.ref.value()});
     for (const csv::BalanceAtRow& check : csv::balance_checks(rows.rows, book, account))
         if (!check.agrees)
             std::printf("line %d says the balance is %s; the book makes it %s\n",
@@ -269,7 +270,7 @@ int main(int argc, char** argv) {
                 for (const ledger::DatedPosting& p : ledger::Ledger::opening_balance_postings(
                          types::AccountPath(path), kind, stated, *when)) {
                     ledger::Posting posting;
-                    posting.account = p.account;
+                    posting.account = open.accounts.ref_for_path(p.account.value());
                     posting.amount = p.amount;
                     t.postings.push_back(posting);
                 }
@@ -309,10 +310,10 @@ int main(int argc, char** argv) {
         t.date = *when;
         t.payee = types::PayeeName(argv[4]);
         ledger::Posting here;
-        here.account = types::AccountPath(account);
+        here.account = open.accounts.ref_for_path(account);
         here.amount = amount;
         ledger::Posting there;
-        there.account = types::AccountPath(category);
+        there.account = open.accounts.ref_for_path(category);
         there.amount = -amount;
         t.postings = {here, there};
         open.transactions.push_back(t);
@@ -497,16 +498,16 @@ int main(int argc, char** argv) {
 
             // A match clears the transaction already there rather than making a
             // second copy of it.
-            matched_clear += ofx::apply_matches(decided, account, &open.transactions);
+            matched_clear += ofx::apply_matches(open.accounts, decided, account, &open.transactions);
             // And the payments this file is the other half of.
-            completed += ofx::apply_completions(decided, account, &open.transactions);
+            completed += ofx::apply_completions(open.accounts, decided, account, &open.transactions);
 
             // Then whatever was answered about the rows it could not settle.
             for (const ofx::Decided& one : decided.decided) {
                 if (one.disposition != ofx::Disposition::Possible) continue;
                 const std::string& id = one.downloaded.fit_id;
                 if (was_answered(say_same, id)) {
-                    if (ofx::answer_the_same(one, account, &open.transactions)) {
+                    if (ofx::answer_the_same(open.accounts, one, account, &open.transactions)) {
                         ++answered_same;
                         std::printf("  %s is the same as %s\n", id.c_str(),
                                     one.claimed_ref.c_str());

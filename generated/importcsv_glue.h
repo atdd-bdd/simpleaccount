@@ -129,7 +129,7 @@ public:
                 into = &transactions_.back();
             }
             ledger::Posting p;
-            p.account = types::AccountPath(value.account);
+            p.account = chart_.ref_for_path(value.account);
             p.amount = Money(value.amount);
             p.memo = blank(value.memo);
             if (value.cleared != DNCString && !value.cleared.empty())
@@ -181,7 +181,7 @@ public:
     void when_rows_imported() {
         rematch();
         rows_ = csv::rows_of(file_, matching_, order(), style(), outward());
-        decided_ = csv::decide(rows_.rows, target_, transactions_);
+        decided_ = csv::decide(chart_, rows_.rows, target_, transactions_);
         const std::vector<ledger::Transaction> made =
             csv::transactions_for(decided_, target_, transactions_.size(), &chart_);
         created_.clear();
@@ -577,7 +577,7 @@ public:
             a_book_of_identical_transactions(in_book);
             std::vector<csv::RowRead> rows;
             for (int i = 0; i < in_file; ++i) rows.push_back(one_identical_row());
-            const csv::Imported got = csv::decide(rows, kAccount, transactions_);
+            const csv::Imported got = csv::decide(chart_, rows, kAccount, transactions_);
             ClaimPairingString back = value;
             back.possible = std::to_string(got.summary.Possible);
             back.new_ = std::to_string(got.summary.New);
@@ -754,7 +754,8 @@ private:
         ledger::Ledger out;
         for (const ledger::Transaction& t : transactions_)
             for (const ledger::Posting& p : t.postings)
-                out.add({t.date, p.account, p.amount, t.ref.value()});
+                out.add({t.date, types::AccountPath(chart_.path_for_ref(p.account)),
+                        p.amount, t.ref.value()});
         return out;
     }
 
@@ -766,7 +767,7 @@ private:
                 row.ref = t.ref.value();
                 row.date = t.date.iso();
                 row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = p.account.value();
+                row.account = chart_.path_for_ref(p.account);
                 row.amount = p.amount.in_register();
                 row.memo = p.memo.empty() ? "none" : p.memo;
                 row.cleared = types::to_string(p.cleared);
@@ -812,11 +813,11 @@ private:
             t.date = types::Date(2024, 1, 15);
             t.payee = types::PayeeName("STARBUCKS");
             ledger::Posting here;
-            here.account = types::AccountPath(kAccount);
+            here.account = chart_.ref_for_path(kAccount);
             here.amount = Money("-4.75");
             here.cleared = types::ClearedStatus::Cleared;
             ledger::Posting there;
-            there.account = types::AccountPath("Expenses:Uncategorized");
+            there.account = chart_.ref_for_path("Expenses:Uncategorized");
             there.amount = Money("4.75");
             t.postings = {here, there};
             transactions_.push_back(t);
@@ -834,10 +835,10 @@ private:
         t.ref = types::TransactionRef("T1");
         t.payee = types::PayeeName("STARBUCKS");
         ledger::Posting here;
-        here.account = types::AccountPath(kAccount);
+        here.account = chart_.ref_for_path(kAccount);
         here.amount = Money("-4.75");
         ledger::Posting there;
-        there.account = types::AccountPath("Expenses:Uncategorized");
+        there.account = chart_.ref_for_path("Expenses:Uncategorized");
         there.amount = Money("4.75");
 
         if (test == "1") {
@@ -857,7 +858,7 @@ private:
             t.payee = types::PayeeName("SOMEWHERE ELSE");
         } else {
             // Test 4: an empty book.
-            const csv::Imported got = csv::decide({row}, kAccount, transactions_);
+            const csv::Imported got = csv::decide(chart_, {row}, kAccount, transactions_);
             EXPECT_EQ(1u, got.decided.size());
             return got.decided.empty() ? ofx::Disposition::New
                                        : got.decided.front().disposition;
@@ -865,7 +866,7 @@ private:
 
         t.postings = {here, there};
         transactions_ = {t};
-        const csv::Imported got = csv::decide({row}, kAccount, transactions_);
+        const csv::Imported got = csv::decide(chart_, {row}, kAccount, transactions_);
         EXPECT_EQ(1u, got.decided.size()) << "test " << test;
         return got.decided.empty() ? ofx::Disposition::New
                                    : got.decided.front().disposition;

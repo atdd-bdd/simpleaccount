@@ -134,12 +134,14 @@ struct Existing {
 // What the account already holds, in the form the decision needs. The FITID is
 // carried on the posting in the statement's own account.
 inline std::vector<detail::Existing> existing_in(
+        const chart::Chart& accounts,
         const std::vector<ledger::Transaction>& transactions,
         const std::string& account) {
     std::vector<detail::Existing> out;
+    const chart::Ref account_ref = accounts.ref_for_path(account);
     for (const ledger::Transaction& t : transactions) {
         for (const ledger::Posting& p : t.postings) {
-            if (p.account.value() != account) continue;
+            if (p.account != account_ref) continue;
             detail::Existing one;
             one.id = t.id.value();
             one.ref = t.ref.value();
@@ -230,20 +232,22 @@ struct Waiting {
     bool found = false;
 };
 
-inline Waiting waiting_for(const std::vector<ledger::Transaction>& transactions,
+inline Waiting waiting_for(const chart::Chart& accounts,
+                           const std::vector<ledger::Transaction>& transactions,
                            const Transaction& downloaded, const std::string& account) {
     Waiting out;
+    const chart::Ref account_ref = accounts.ref_for_path(account);
     for (const ledger::Transaction& t : transactions) {
         // The row being imported describes one side; the side that is waiting is
         // the other one, so a transaction already holding a posting in this
         // account is this row's own transaction and not a half to complete.
         bool here = false;
         for (const ledger::Posting& p : t.postings)
-            if (p.account.value() == account) here = true;
+            if (p.account == account_ref) here = true;
         if (here) continue;
 
         for (std::size_t i = 0; i < t.postings.size(); ++i) {
-            if (!ledger::is_unassigned(t.postings[i].account)) continue;
+            if (!ledger::is_unassigned(accounts, t.postings[i].account)) continue;
             if (t.postings[i].amount.cents() != downloaded.amount.cents()) continue;
             if (std::abs(types::Date::days_between(t.date, downloaded.date_posted))
                 > kTransferWindow)
@@ -265,7 +269,7 @@ inline Imported decide(const Statement& statement, const std::string& account,
                        const chart::Chart& accounts,
                        long long check_window = kCheckWindow) {
     Imported out;
-    std::vector<detail::Existing> already = existing_in(transactions, account);
+    std::vector<detail::Existing> already = existing_in(accounts, transactions, account);
     // What a payment to the account being imported into is called elsewhere, so
     // a card's own statement can recognise a payment received as a payment.
     std::string statement_payee;
@@ -375,7 +379,7 @@ inline Imported decide(const Statement& statement, const std::string& account,
             !accounts_paid_by(accounts, downloaded.name).empty() ||
             !accounts_paid_by(accounts, statement_payee).empty();
         if (could_be_a_payment) {
-            const Waiting waiting = waiting_for(transactions, downloaded, account);
+            const Waiting waiting = waiting_for(accounts, transactions, downloaded, account);
             if (waiting.found) {
                 decided.disposition = Disposition::Completes;
                 decided.claimed_id = waiting.transaction_id;
@@ -450,7 +454,7 @@ inline std::vector<ledger::Transaction> transactions_for(
         t.memo = one.downloaded.memo;
 
         ledger::Posting here;
-        here.account = types::AccountPath(account);
+        here.account = accounts->ref_for_path(account);
         here.amount = amount;
         // Kept on the posting in the account the statement is for, and named
         // for the kind of file that gave it, which is what makes a second
@@ -458,7 +462,7 @@ inline std::vector<ledger::Transaction> transactions_for(
         ledger::stamp(&here, types::ImportSource::Ofx, one.downloaded.fit_id);
         here.cleared = types::ClearedStatus::Cleared;
         ledger::Posting there;
-        there.account = types::AccountPath(other);
+        there.account = accounts->ref_for_path(other);
         there.amount = -amount;
         t.postings = {here, there};
         out.push_back(t);
@@ -473,16 +477,18 @@ inline std::vector<ledger::Transaction> transactions_for(
 // bank says CHASEBANK, a card says PAYMENT RECEIVED -- and the first is both the
 // more useful and the one already on the screen, so overwriting it would be a
 // surprise with nothing to recommend it.
-inline int apply_completions(const Imported& decided, const std::string& account,
+inline int apply_completions(const chart::Chart& accounts, const Imported& decided,
+                             const std::string& account,
                              std::vector<ledger::Transaction>* transactions) {
     int completed = 0;
+    const chart::Ref account_ref = accounts.ref_for_path(account);
     for (const Decided& one : decided.decided) {
         if (one.disposition != Disposition::Completes) continue;
         for (ledger::Transaction& t : *transactions) {
             if (t.id.value() != one.claimed_id) continue;
             if (one.completes_posting >= t.postings.size()) break;
             ledger::Posting& waiting = t.postings[one.completes_posting];
-            waiting.account = types::AccountPath(account);
+            waiting.account = account_ref;
             waiting.cleared = types::ClearedStatus::Cleared;
             ledger::stamp(&waiting, types::ImportSource::Ofx, one.downloaded.fit_id);
             ++completed;
@@ -500,15 +506,17 @@ inline int apply_completions(const Imported& decided, const std::string& account
 // same row matches the same hand-entered transaction again every time the file
 // is read, and a transaction that has already been reconciled goes on offering
 // itself for ever.
-inline int apply_matches(const Imported& decided, const std::string& account,
+inline int apply_matches(const chart::Chart& accounts, const Imported& decided,
+                         const std::string& account,
                          std::vector<ledger::Transaction>* transactions) {
     int cleared = 0;
+    const chart::Ref account_ref = accounts.ref_for_path(account);
     for (const Decided& one : decided.decided) {
         if (one.disposition != Disposition::Matched) continue;
         for (ledger::Transaction& t : *transactions) {
             if (t.id.value() != one.claimed_id) continue;
             for (ledger::Posting& p : t.postings) {
-                if (p.account.value() != account) continue;
+                if (p.account != account_ref) continue;
                 p.cleared = types::ClearedStatus::Cleared;
                 ledger::stamp(&p, types::ImportSource::Ofx, one.downloaded.fit_id);
                 ++cleared;
@@ -549,12 +557,14 @@ enum class Answer { TheSame, Different };
 //
 // The stamp is the point: without it the same file asks the same question for
 // ever, and a transaction that has already been settled goes on offering itself.
-inline bool answer_the_same(const Decided& offered, const std::string& account,
+inline bool answer_the_same(const chart::Chart& accounts, const Decided& offered,
+                            const std::string& account,
                             std::vector<ledger::Transaction>* transactions) {
+    const chart::Ref account_ref = accounts.ref_for_path(account);
     for (ledger::Transaction& t : *transactions) {
         if (t.id.value() != offered.claimed_id) continue;
         for (ledger::Posting& p : t.postings) {
-            if (p.account.value() != account) continue;
+            if (p.account != account_ref) continue;
             p.cleared = types::ClearedStatus::Cleared;
             ledger::stamp(&p, types::ImportSource::Ofx, offered.downloaded.fit_id);
             return true;
@@ -713,8 +723,8 @@ inline MultiImported decide_multi(const std::vector<AccountRows>& by_account,
         out.summary.Matched += one.summary.Matched;
         out.summary.Possible += one.summary.Possible;
         for (const Note& n : one.notes) out.notes.push_back(n);
-        apply_matches(one, ar.account, transactions);
-        apply_completions(one, ar.account, transactions);
+        apply_matches(*accounts, one, ar.account, transactions);
+        apply_completions(*accounts, one, ar.account, transactions);
         for (const Decided& d : one.decided) {
             if (d.disposition == Disposition::New)
                 news.push_back({ar.account, d.downloaded, order_counter});
@@ -792,12 +802,12 @@ inline MultiImported decide_multi(const std::vector<AccountRows>& by_account,
             merged.payee = types::PayeeName(named_from.name);
             merged.memo = named_from.memo;
             ledger::Posting from_posting;
-            from_posting.account = types::AccountPath(prop.from_account);
+            from_posting.account = accounts->ref_for_path(prop.from_account);
             from_posting.amount = prop.from_row.amount;
             from_posting.cleared = types::ClearedStatus::Cleared;
             ledger::stamp(&from_posting, types::ImportSource::Ofx, prop.from_row.fit_id);
             ledger::Posting to_posting;
-            to_posting.account = types::AccountPath(prop.to_account);
+            to_posting.account = accounts->ref_for_path(prop.to_account);
             to_posting.amount = prop.to_row.amount;
             to_posting.cleared = types::ClearedStatus::Cleared;
             ledger::stamp(&to_posting, types::ImportSource::Ofx, prop.to_row.fit_id);
@@ -831,7 +841,7 @@ inline MultiImported decide_multi(const std::vector<AccountRows>& by_account,
 // sides real, both cleared, each carrying the identifier from the file that
 // described it. Dated and named from the side the money left, unless the
 // other side's file was read first -- see TransferProposal::from_read_first.
-inline ledger::Transaction merge_transfer(const TransferProposal& p,
+inline ledger::Transaction merge_transfer(chart::Chart* accounts, const TransferProposal& p,
                                           std::size_t already_in_book) {
     ledger::Transaction t;
     t.id = ledger::new_id();
@@ -841,12 +851,12 @@ inline ledger::Transaction merge_transfer(const TransferProposal& p,
     t.payee = types::PayeeName(named_from.name);
     t.memo = named_from.memo;
     ledger::Posting from_posting;
-    from_posting.account = types::AccountPath(p.from_account);
+    from_posting.account = accounts->ref_for_path(p.from_account);
     from_posting.amount = p.from_row.amount;
     from_posting.cleared = types::ClearedStatus::Cleared;
     ledger::stamp(&from_posting, types::ImportSource::Ofx, p.from_row.fit_id);
     ledger::Posting to_posting;
-    to_posting.account = types::AccountPath(p.to_account);
+    to_posting.account = accounts->ref_for_path(p.to_account);
     to_posting.amount = p.to_row.amount;
     to_posting.cleared = types::ClearedStatus::Cleared;
     ledger::stamp(&to_posting, types::ImportSource::Ofx, p.to_row.fit_id);
@@ -924,12 +934,14 @@ struct LedgerBalanceResult {
 };
 
 inline LedgerBalanceResult check_ledger_balance(
+        const chart::Chart& accounts,
         const std::vector<ledger::Transaction>& transactions, const std::string& account,
         const Money& stated_bal) {
+    const chart::Ref account_ref = accounts.ref_for_path(account);
     Money cleared;
     for (const ledger::Transaction& t : transactions)
         for (const ledger::Posting& p : t.postings)
-            if (p.account.value() == account && p.cleared == types::ClearedStatus::Cleared)
+            if (p.account == account_ref && p.cleared == types::ClearedStatus::Cleared)
                 cleared += p.amount;
     LedgerBalanceResult r;
     r.cleared_balance = cleared;

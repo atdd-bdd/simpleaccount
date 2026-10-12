@@ -90,8 +90,9 @@ inline std::vector<Line> lines_for(
         // A transaction recorded the new way has no postings to walk: it
         // already names its one line directly. See the section on naming
         // both accounts directly in Transactions.spectable.
-        if (t.postings.empty() && !t.source_account.value().empty()) {
-            if (!chart::Chart::is_descendant_or_self(t.source_account.value(), account))
+        if (t.postings.empty() && !t.source_account.is_none()) {
+            const std::string source_path = accounts.path_for_ref(t.source_account);
+            if (!chart::Chart::is_descendant_or_self(source_path, account))
                 continue;
             Line line;
             line.ref = t.ref.value();
@@ -104,10 +105,10 @@ inline std::vector<Line> lines_for(
             if (t.amount.cents() < 0) line.payment = -t.amount;
             else line.deposit = t.amount;
 
-            const std::string other = t.destination.value();
-            if (other == "Split") {
+            if (chart::is_split(t.destination)) {
                 line.category = "--Split--";
             } else {
+                const std::string other = accounts.path_for_ref(t.destination);
                 line.category = other.empty() ? std::string() : detail::displayed(accounts, other);
                 line.category_detail = other;
             }
@@ -120,7 +121,8 @@ inline std::vector<Line> lines_for(
 
         // Every posting of this transaction that lands in the register.
         for (const ledger::Posting& p : t.postings) {
-            if (!chart::Chart::is_descendant_or_self(p.account.value(), account)) continue;
+            const std::string p_path = accounts.path_for_ref(p.account);
+            if (!chart::Chart::is_descendant_or_self(p_path, account)) continue;
             Line line;
             line.ref = t.ref.value();
             line.id = t.id.value();
@@ -136,7 +138,7 @@ inline std::vector<Line> lines_for(
             // and otherwise that there are several.
             std::vector<std::string> others;
             for (const ledger::Posting& q : t.postings)
-                if (&q != &p) others.push_back(q.account.value());
+                if (&q != &p) others.push_back(accounts.path_for_ref(q.account));
             // The other side, as this register sees it. One other posting is
             // simply that account. Where there are several, what to name depends
             // on where you are standing: from the bank, a split across three
@@ -167,7 +169,7 @@ inline std::vector<Line> lines_for(
                 for (const ledger::Posting& q : t.postings) {
                     if (&q == &p) continue;
                     if (!line.category_detail.empty()) line.category_detail += '\n';
-                    line.category_detail += q.account.value() + "   " +
+                    line.category_detail += accounts.path_for_ref(q.account) + "   " +
                                             q.amount.in_register();
                     if (!q.memo.empty()) line.category_detail += "   " + q.memo;
                 }
@@ -303,15 +305,17 @@ struct SplitLine {
 // --Split-- in the category column, which says nothing on its own; this is what
 // it stands for.
 inline std::vector<SplitLine> split_lines_of(
+        const chart::Chart& accounts,
         const std::vector<ledger::Transaction>& transactions,
         const std::string& ref, const std::string& account) {
     std::vector<SplitLine> out;
     for (const ledger::Transaction& t : transactions) {
         if (t.ref.value() != ref) continue;
         for (const ledger::Posting& p : t.postings) {
-            if (chart::Chart::is_descendant_or_self(p.account.value(), account)) continue;
+            const std::string p_path = accounts.path_for_ref(p.account);
+            if (chart::Chart::is_descendant_or_self(p_path, account)) continue;
             SplitLine line;
-            line.category = p.account.value();
+            line.category = p_path;
             line.amount = p.amount;
             line.memo = p.memo;
             out.push_back(line);

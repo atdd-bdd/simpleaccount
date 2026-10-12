@@ -32,7 +32,7 @@ namespace store {
 // this when that shape changes, and add the upgrade it needs to open_at below --
 // a book already on disk was made by kSchema as it read on an earlier version,
 // and has to be brought forward in place rather than recreated.
-inline constexpr int kSchemaVersion = 5;
+inline constexpr int kSchemaVersion = 6;
 
 struct Failure {
     bool refused = false;
@@ -103,14 +103,6 @@ private:
     bool ok_ = false;
 };
 
-// AccountPath rejects empty text -- a path is required -- so a column that
-// has never been given a source account or destination has to stay the
-// default-constructed, unchecked empty path rather than go through the
-// constructor.
-inline types::AccountPath path_or_empty(const std::string& text) {
-    return text.empty() ? types::AccountPath() : types::AccountPath(text);
-}
-
 inline bool exec(sqlite3* db, const std::string& sql, std::string* why) {
     char* error = nullptr;
     if (sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &error) == SQLITE_OK) return true;
@@ -175,11 +167,13 @@ CREATE TABLE transactions (
   check_no  TEXT NOT NULL DEFAULT '',
   memo      TEXT NOT NULL DEFAULT '',
   tag       TEXT NOT NULL DEFAULT '',
-  -- A second, newer way of saying what the transaction is: see the section on
-  -- naming both accounts directly in Transactions.spectable. Empty/zero on a
-  -- transaction recorded the old way, through postings instead.
-  source_account TEXT    NOT NULL DEFAULT '',
-  destination    TEXT    NOT NULL DEFAULT '',
+  -- A second, newer way of saying what the transaction is, by id rather
+  -- than path -- see chart::Ref -- so a rename or a move never has to
+  -- rewrite one: see the section on naming both accounts directly in
+  -- Transactions.spectable. Zero on a transaction recorded the old way,
+  -- through postings instead.
+  source_ref     INTEGER NOT NULL DEFAULT 0,
+  destination_ref INTEGER NOT NULL DEFAULT 0,
   amount_cents   INTEGER NOT NULL DEFAULT 0,
   -- Per entry under this shape: see the Cleared attribute on Transaction in
   -- Transactions.spectable.
@@ -190,7 +184,7 @@ CREATE TABLE transaction_splits (
   -- than folded into them. See TransactionSplit in Transactions.spectable.
   transaction_id  TEXT    NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
   line            INTEGER NOT NULL,
-  destination     TEXT    NOT NULL,
+  destination_ref INTEGER NOT NULL,
   amount_cents    INTEGER NOT NULL,
   memo            TEXT    NOT NULL DEFAULT '',
   PRIMARY KEY (transaction_id, line));
@@ -198,7 +192,9 @@ CREATE TABLE transaction_splits (
 CREATE TABLE postings (
   transaction_id  TEXT    NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
   line            INTEGER NOT NULL,
-  account         TEXT    NOT NULL,
+  -- The account or category this posting names, by id rather than path --
+  -- see chart::Ref -- so a rename or a move never has to rewrite a posting.
+  account_ref     INTEGER NOT NULL,
   amount_cents    INTEGER NOT NULL,
   memo            TEXT    NOT NULL DEFAULT '',
   cleared         TEXT    NOT NULL DEFAULT 'Uncleared',
@@ -253,7 +249,7 @@ CREATE TABLE csv_header_matches (
   field   TEXT NOT NULL,
   PRIMARY KEY (profile, heading));
 
-CREATE INDEX postings_by_account ON postings(account);
+CREATE INDEX postings_by_account ON postings(account_ref);
 CREATE INDEX import_ids_by_id ON posting_import_ids(source, id);
 CREATE INDEX transactions_by_date ON transactions(date);
 )sql";
@@ -399,8 +395,8 @@ private:
             // its own collection -- a book written before version 4 has
             // neither, which is exactly what an empty default/table means.
             static const char* const columns[] = {
-                "ALTER TABLE transactions ADD COLUMN source_account TEXT NOT NULL DEFAULT ''",
-                "ALTER TABLE transactions ADD COLUMN destination TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE transactions ADD COLUMN source_ref INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE transactions ADD COLUMN destination_ref INTEGER NOT NULL DEFAULT 0",
                 "ALTER TABLE transactions ADD COLUMN amount_cents INTEGER NOT NULL DEFAULT 0",
             };
             for (const char* sql : columns)
@@ -409,7 +405,7 @@ private:
                 "CREATE TABLE transaction_splits ("
                 "  transaction_id  TEXT    NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,"
                 "  line            INTEGER NOT NULL,"
-                "  destination     TEXT    NOT NULL,"
+                "  destination_ref INTEGER NOT NULL,"
                 "  amount_cents    INTEGER NOT NULL,"
                 "  memo            TEXT    NOT NULL DEFAULT '',"
                 "  PRIMARY KEY (transaction_id, line))";
@@ -423,6 +419,35 @@ private:
             static const char* const sql =
                 "ALTER TABLE transactions ADD COLUMN cleared TEXT NOT NULL DEFAULT 'Uncleared'";
             if (!detail::exec(db, sql, why)) return false;
+        }
+        if (from < 6) {
+            // A posting's account moves from path text to an id -- see
+            // chart::Ref -- which is not a column type ALTER can carry a
+            // value across. The author does not need the old rows kept: a
+            // book from before this version is re-imported from its QIF
+            // rather than opened, so the column is simply remade empty.
+            static const char* const sql[] = {
+                "DELETE FROM posting_import_ids",
+                "DROP TABLE postings",
+                "CREATE TABLE postings ("
+                "  transaction_id  TEXT    NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,"
+                "  line            INTEGER NOT NULL,"
+                "  account_ref     INTEGER NOT NULL,"
+                "  amount_cents    INTEGER NOT NULL,"
+                "  memo            TEXT    NOT NULL DEFAULT '',"
+                "  cleared         TEXT    NOT NULL DEFAULT 'Uncleared',"
+                "  PRIMARY KEY (transaction_id, line))",
+                "DROP TABLE IF EXISTS transaction_splits",
+                "CREATE TABLE transaction_splits ("
+                "  transaction_id  TEXT    NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,"
+                "  line            INTEGER NOT NULL,"
+                "  destination_ref INTEGER NOT NULL,"
+                "  amount_cents    INTEGER NOT NULL,"
+                "  memo            TEXT    NOT NULL DEFAULT '',"
+                "  PRIMARY KEY (transaction_id, line))",
+            };
+            for (const char* s : sql)
+                if (!detail::exec(db, s, why)) return false;
         }
         detail::Statement set(db, "UPDATE schema SET version = ?");
         if (!set.ok()) { if (why) *why = set.why(); return false; }
@@ -543,12 +568,12 @@ public:
         detail::Statement header(db_.get(),
             "INSERT INTO transactions "
             "(id, ref, date, payee, raw_name, check_no, memo, tag, "
-            "source_account, destination, amount_cents, cleared) "
+            "source_ref, destination_ref, amount_cents, cleared) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         if (!header.ok()) return fail(header.why());
         detail::Statement line(db_.get(),
             "INSERT INTO postings "
-            "(transaction_id, line, account, amount_cents, memo, cleared) "
+            "(transaction_id, line, account_ref, amount_cents, memo, cleared) "
             "VALUES (?, ?, ?, ?, ?, ?)");
         if (!line.ok()) return fail(line.why());
         detail::Statement mark(db_.get(),
@@ -557,7 +582,7 @@ public:
         if (!mark.ok()) return fail(mark.why());
         detail::Statement split(db_.get(),
             "INSERT INTO transaction_splits "
-            "(transaction_id, line, destination, amount_cents, memo) "
+            "(transaction_id, line, destination_ref, amount_cents, memo) "
             "VALUES (?, ?, ?, ?, ?)");
         if (!split.ok()) return fail(split.why());
 
@@ -678,7 +703,7 @@ public:
 
         detail::Statement header(db_.get(),
             "SELECT id, ref, date, payee, raw_name, check_no, memo, tag, "
-            "source_account, destination, amount_cents, cleared "
+            "source_ref, destination_ref, amount_cents, cleared "
             "FROM transactions "
             "ORDER BY date, rowid");
         if (!header.ok()) return {true, header.why()};
@@ -694,8 +719,8 @@ public:
             t.check_no = types::CheckNumber(header.text(5));
             t.memo = header.text(6);
             t.tag = header.text(7);
-            t.source_account = detail::path_or_empty(header.text(8));
-            t.destination = detail::path_or_empty(header.text(9));
+            t.source_account = chart::Ref(header.integer(8));
+            t.destination = chart::Ref(header.integer(9));
             t.amount = Money::from_cents(header.integer(10));
             t.cleared = types::cleared_status_from_string(header.text(11));
             transactions->push_back(t);
@@ -705,14 +730,14 @@ public:
             splits->clear();
             for (const ledger::Transaction& t : *transactions) {
                 detail::Statement s(db_.get(),
-                    "SELECT destination, amount_cents, memo FROM transaction_splits "
+                    "SELECT destination_ref, amount_cents, memo FROM transaction_splits "
                     "WHERE transaction_id = ? ORDER BY line");
                 if (!s.ok()) return {true, s.why()};
                 s.bind(1, t.id.value());
                 while (s.step_row()) {
                     ledger::TransactionSplit one;
                     one.transaction_id = t.id;
-                    one.destination = detail::path_or_empty(s.text(0));
+                    one.destination = chart::Ref(s.integer(0));
                     one.amount = Money::from_cents(s.integer(1));
                     one.memo = s.text(2);
                     splits->push_back(one);
@@ -722,13 +747,13 @@ public:
 
         for (ledger::Transaction& t : *transactions) {
             detail::Statement line(db_.get(),
-                "SELECT account, amount_cents, memo, cleared, line FROM postings "
+                "SELECT account_ref, amount_cents, memo, cleared, line FROM postings "
                 "WHERE transaction_id = ? ORDER BY line");
             if (!line.ok()) return {true, line.why()};
             line.bind(1, t.id.value());
             while (line.step_row()) {
                 ledger::Posting p;
-                p.account = types::AccountPath(line.text(0));
+                p.account = chart::Ref(line.integer(0));
                 p.amount = Money::from_cents(line.integer(1));
                 p.memo = line.text(2);
                 p.cleared = types::cleared_status_from_string(line.text(3));
@@ -743,7 +768,8 @@ public:
                     p.import_ids.push_back(ledger::ImportId{
                         types::import_source_from_string(mark.text(0)), mark.text(1)});
                 t.postings.push_back(p);
-                book->add({t.date, p.account, p.amount, t.ref.value()});
+                book->add({t.date, types::AccountPath(accounts->path_for_ref(p.account)),
+                          p.amount, t.ref.value()});
             }
         }
 
