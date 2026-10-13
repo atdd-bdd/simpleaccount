@@ -82,7 +82,7 @@ public:
             << target_ << " file was rejected: " << rows.rejected.front().reason;
         const csv::Imported decided = csv::decide(chart_, rows.rows, target_, transactions_);
         const std::vector<ledger::Transaction> made =
-            csv::transactions_for(decided, target_, transactions_.size(), &chart_);
+            csv::transactions_for(decided, target_, ledger::transaction_count(transactions_), &chart_);
         transactions_.insert(transactions_.end(), made.begin(), made.end());
     }
 
@@ -177,10 +177,7 @@ private:
     // register against a report in the same file.
     ledger::Ledger book() const {
         ledger::Ledger out;
-        for (const ledger::Transaction& t : transactions_)
-            for (const ledger::Posting& p : t.postings)
-                out.add({t.date, types::AccountPath(chart_.path_for_ref(p.account)),
-                        p.amount, t.ref.value()});
+        ledger::add_to_book(&out, chart_, transactions_, {});
         return out;
     }
 

@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
 #include "common/common.h"
@@ -59,18 +60,27 @@ public:
 
     void given_postings_are(const std::vector<PostingRowString>& values) {
         transactions_.clear();
+        splits_.clear();
+        second_row_amount_.clear();
+        std::map<std::string, int> counts;
+        for (const auto& value : values) ++counts[value.ref];
         for (const auto& value : values) add_posting(value.ref, value.date, value.payee,
                                                      value.account, value.amount,
-                                                     value.memo, value.cleared);
+                                                     value.memo, value.cleared,
+                                                     counts[value.ref]);
     }
 
     // The order they were entered in, which is what the register falls back on
     // when two transactions share a date.
     void given_postings_in_entry_order_are(const std::vector<SequencedPostingRowString>& values) {
         transactions_.clear();
+        splits_.clear();
+        second_row_amount_.clear();
+        std::map<std::string, int> counts;
+        for (const auto& value : values) ++counts[value.ref];
         for (const auto& value : values)
             add_posting(value.ref, value.date, value.payee, value.account, value.amount,
-                        std::string("none"), std::string("Uncleared"));
+                        std::string("none"), std::string("Uncleared"), counts[value.ref]);
     }
 
     void given_today_is(const std::vector<TodayString>& values) {
@@ -99,7 +109,7 @@ public:
     void when_register_opened_on(const std::vector<AccountSelectString>& values) {
         ASSERT_FALSE(values.empty());
         account_ = values.front().path;
-        lines_ = reg::lines_for(chart_, transactions_, account_);
+        lines_ = reg::lines_for(chart_, transactions_, splits_, account_);
         balance_shown_ = true;
     }
 
@@ -115,7 +125,7 @@ public:
     void when_line_expanded(const std::vector<TransactionSelectString>& values) {
         ASSERT_FALSE(values.empty());
         open_if_needed();
-        split_ = reg::split_lines_of(chart_, transactions_, values.front().ref, account_);
+        split_ = reg::split_lines_of(chart_, transactions_, splits_, values.front().ref);
     }
 
     void when_register_filtered_to_dates(const std::vector<DateRangeString>& values) {
@@ -158,9 +168,12 @@ public:
     void when_blank_line_left() {
         if (!filled_) blank_ = reg::blank_line_on(today_);
         const reg::Committed done =
-            reg::commit(blank_, account_, transactions_.size(), &chart_);
-        if (done.committed) transactions_.push_back(done.transaction);
-        lines_ = reg::lines_for(chart_, transactions_, account_);
+            reg::commit(blank_, account_, ledger::transaction_count(transactions_), &chart_);
+        if (done.committed) {
+            transactions_.push_back(done.transaction);
+            if (done.is_transfer) transactions_.push_back(done.other_side);
+        }
+        lines_ = reg::lines_for(chart_, transactions_, splits_, account_);
         filled_ = false;
     }
 
@@ -335,14 +348,14 @@ public:
             for (const auto& value : values) {
                 if (value.entryseq != want) continue;
                 add_posting(one.second, value.date, "Shop " + one.second,
-                            "Assets:Checking", "-10.00", "none", "Uncleared");
+                            "Assets:Checking", "-10.00", "none", "Uncleared", 2);
                 add_posting(one.second, value.date, "Shop " + one.second,
-                            "Expenses:Groceries", "10.00", "none", "Uncleared");
+                            "Expenses:Groceries", "10.00", "none", "Uncleared", 2);
                 break;
             }
         }
         account_ = "Assets:Checking";
-        lines_ = reg::lines_for(chart_, transactions_, account_);
+        lines_ = reg::lines_for(chart_, transactions_, splits_, account_);
 
         ASSERT_EQ(values.size(), lines_.size()) << "lines in the register";
         for (const auto& value : values) {
@@ -378,6 +391,12 @@ public:
 private:
     chart::Chart chart_;
     std::vector<ledger::Transaction> transactions_;
+    std::vector<ledger::TransactionSplit> splits_;
+    // See the matching member in transactions_glue.h: a second row's own
+    // amount and memo, kept per transaction id in case a third row later
+    // promotes its destination to a split line.
+    struct PendingSecondRow { Money amount; std::string memo; };
+    std::map<std::string, PendingSecondRow> second_row_amount_;
     std::vector<reg::Line> lines_;
     std::vector<reg::SplitLine> split_;
     reg::Filtered filtered_;
@@ -404,38 +423,105 @@ private:
             account_ = a.path.value();
             break;
         }
-        lines_ = reg::lines_for(chart_, transactions_, account_);
+        lines_ = reg::lines_for(chart_, transactions_, splits_, account_);
     }
 
     static std::string blank(const std::string& s) {
         return (s == "none" || s == DNCString) ? std::string() : s;
     }
 
+    // Groups rows into a transaction with a Ref column, the way these tables
+    // have always written one down -- it says nothing about how a
+    // transaction is stored. See the matching comment on group_into in
+    // transactions_glue.h, which this mirrors.
     void add_posting(const std::string& ref, const std::string& date,
                      const std::string& payee, const std::string& account,
                      const std::string& amount, const std::string& memo,
-                     const std::string& cleared) {
-        ledger::Transaction* into = nullptr;
-        for (ledger::Transaction& t : transactions_)
-            if (t.ref.value() == ref) into = &t;
-        if (into == nullptr) {
+                     const std::string& cleared, int total_for_ref) {
+        ledger::Transaction* first = nullptr;
+        for (ledger::Transaction& t : transactions_) {
+            if (t.ref.value() != ref) continue;
+            first = &t;
+            break;
+        }
+        const auto on = types::Date::from_iso(date);
+        ASSERT_TRUE(on.has_value()) << date;
+        const chart::Ref account_ref = chart_.ref_for_path(account);
+        const Money money{amount};
+        const std::string memo_text = blank(memo);
+        types::ClearedStatus cleared_status = types::ClearedStatus::Uncleared;
+        if (cleared != DNCString && !cleared.empty())
+            cleared_status = types::cleared_status_from_string(cleared);
+
+        if (first == nullptr) {
             ledger::Transaction made;
             made.id = ledger::new_id();
             made.ref = types::TransactionRef(ref);
-            const auto on = types::Date::from_iso(date);
-            ASSERT_TRUE(on.has_value()) << date;
             made.date = *on;
             made.payee = types::PayeeName(blank(payee));
+            made.memo = memo_text;
+            made.source_account = account_ref;
+            made.amount = money;
+            made.cleared = cleared_status;
             transactions_.push_back(made);
-            into = &transactions_.back();
+            return;
         }
-        ledger::Posting p;
-        p.account = chart_.ref_for_path(account);
-        p.amount = Money(amount);
-        p.memo = blank(memo);
-        if (cleared != DNCString && !cleared.empty())
-            p.cleared = types::cleared_status_from_string(cleared);
-        into->postings.push_back(p);
+
+        // Which row this is for its transaction is read from the
+        // transaction's own state, not from how many rows have been seen:
+        // a third or later row collapses into the same one object as the
+        // second once its Destination is set, so counting objects sharing
+        // a Ref stops distinguishing a third row from a second.
+        ledger::Transaction& t = *first;
+        if (t.destination.is_none()) {
+            const bool transfer = total_for_ref == 2 && account_ref != t.source_account &&
+                                  chart_.is_real(t.source_account) &&
+                                  chart_.is_real(account_ref) &&
+                                  !ledger::is_unassigned(chart_, t.source_account) &&
+                                  !ledger::is_unassigned(chart_, account_ref);
+            if (transfer) {
+                ledger::Transaction made;
+                made.id = ledger::new_id();
+                made.ref = t.ref;
+                made.date = *on;
+                made.payee = types::PayeeName(blank(payee));
+                made.memo = memo_text;
+                made.source_account = account_ref;
+                made.destination = t.source_account;
+                made.amount = money;
+                made.cleared = cleared_status;
+                // Set before push_back: the vector may reallocate, and t is a
+                // reference into it -- writing through it afterward would be
+                // a dangling write.
+                t.destination = account_ref;
+                transactions_.push_back(made);
+            } else {
+                t.destination = account_ref;
+                second_row_amount_[t.id.value()] = {money, memo_text};
+            }
+            return;
+        }
+
+        if (!chart::is_split(t.destination)) {
+            ledger::TransactionSplit promoted;
+            promoted.transaction_id = t.id;
+            promoted.destination = t.destination;
+            const auto at = second_row_amount_.find(t.id.value());
+            if (at != second_row_amount_.end()) {
+                promoted.amount = at->second.amount;
+                promoted.memo = at->second.memo;
+            } else {
+                promoted.amount = -t.amount;
+            }
+            splits_.push_back(promoted);
+            t.destination = chart::split_ref();
+        }
+        ledger::TransactionSplit s;
+        s.transaction_id = t.id;
+        s.destination = account_ref;
+        s.amount = money;
+        s.memo = memo_text;
+        splits_.push_back(s);
     }
 
     std::string listing() const {
@@ -468,12 +554,12 @@ private:
         const char* others[] = {"10.00", "20.00", "30.00"};
         for (int i = 0; i < 3; ++i) {
             add_posting(refs[i], dates[i], std::string("Shop ") + refs[i],
-                        "Assets:Checking", amounts[i], "none", "Uncleared");
+                        "Assets:Checking", amounts[i], "none", "Uncleared", 2);
             add_posting(refs[i], dates[i], std::string("Shop ") + refs[i],
-                        "Expenses:Groceries", others[i], "none", "Uncleared");
+                        "Expenses:Groceries", others[i], "none", "Uncleared", 2);
         }
         account_ = "Assets:Checking";
-        lines_ = reg::lines_for(chart_, transactions_, account_);
+        lines_ = reg::lines_for(chart_, transactions_, splits_, account_);
     }
 public:
 

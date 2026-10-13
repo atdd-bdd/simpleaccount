@@ -269,60 +269,14 @@ inline BookApplication apply_to_book(const std::vector<Rule>& rules,
     if (transactions == nullptr) return out;
 
     for (ledger::Transaction& t : *transactions) {
-        // A transaction recorded the new way has no posting to find a
-        // category on or to rewrite: Destination already is the category,
-        // directly on the transaction. See the section on naming both
-        // accounts directly in Transactions.spectable.
-        const bool new_shape = t.postings.empty() && !t.source_account.is_none();
-
-        if (new_shape) {
-            if (t.cleared == types::ClearedStatus::Reconciled) { ++out.skipped; continue; }
-            if (t.destination.is_none() || chart::is_split(t.destination) ||
-                !detail::is_a_category_account(accounts, t.destination)) {
-                // A split, a transfer, or nothing known yet -- none of them a
-                // category a rule has anything to move.
-                ++out.skipped;
-                continue;
-            }
-
-            const std::string raw = t.raw_name.empty() ? t.payee.value() : t.raw_name;
-            const Rule* rule = best_for(rules, raw);
-            if (rule == nullptr) { ++out.skipped; continue; }
-
-            bool changed = false;
-            if (!rule->payee.empty() && rule->payee != raw && t.payee.value() != rule->payee) {
-                t.payee = types::PayeeName(rule->payee);
-                t.raw_name = raw;
-                changed = true;
-            }
-
-            if (!detail::has_category(*rule)) {
-                if (changed) ++out.matched; else ++out.already_correct;
-                continue;
-            }
-            const chart::Ref rule_ref = accounts.ref_for_path(rule->category);
-            if (t.destination == rule_ref) {
-                ++out.already_correct;
-            } else if (detail::is_uncategorized(accounts, t.destination)) {
-                t.destination = rule_ref;
-                ++out.matched;
-            } else {
-                ++out.skipped;
-            }
+        if (t.cleared == types::ClearedStatus::Reconciled) { ++out.skipped; continue; }
+        if (t.destination.is_none() || chart::is_split(t.destination) ||
+            !detail::is_a_category_account(accounts, t.destination)) {
+            // A split, a transfer, or nothing known yet -- none of them a
+            // category a rule has anything to move.
+            ++out.skipped;
             continue;
         }
-
-        bool locked = false;
-        for (const ledger::Posting& p : t.postings)
-            if (p.cleared == types::ClearedStatus::Reconciled) locked = true;
-        if (locked) { ++out.skipped; continue; }
-
-        std::vector<std::size_t> categories;
-        for (std::size_t i = 0; i < t.postings.size(); ++i)
-            if (detail::is_a_category_account(accounts, t.postings[i].account))
-                categories.push_back(i);
-        if (categories.size() != 1) { ++out.skipped; continue; }
-        ledger::Posting& on = t.postings[categories.front()];
 
         const std::string raw = t.raw_name.empty() ? t.payee.value() : t.raw_name;
         const Rule* rule = best_for(rules, raw);
@@ -336,18 +290,16 @@ inline BookApplication apply_to_book(const std::vector<Rule>& rules,
         }
 
         if (!detail::has_category(*rule)) {
-            // A pattern-only rule: the name is the whole of what it does.
             if (changed) ++out.matched; else ++out.already_correct;
             continue;
         }
         const chart::Ref rule_ref = accounts.ref_for_path(rule->category);
-        if (on.account == rule_ref) {
+        if (t.destination == rule_ref) {
             ++out.already_correct;
-        } else if (detail::is_uncategorized(accounts, on.account)) {
-            on.account = rule_ref;
+        } else if (detail::is_uncategorized(accounts, t.destination)) {
+            t.destination = rule_ref;
             ++out.matched;
         } else {
-            // Categorised by hand to something else, which is a decision.
             ++out.skipped;
         }
     }
@@ -500,15 +452,15 @@ struct PayeeSuggestion {
 
 inline PayeeSuggestion category_last_used_for(
         const std::vector<ledger::Transaction>& transactions, const chart::Chart& accounts,
-        const std::string& payee) {
+        const std::vector<ledger::TransactionSplit>& splits, const std::string& payee) {
     PayeeSuggestion out;
     for (const ledger::Transaction& t : transactions) {
         if (t.payee.value() != payee) continue;
-        for (const ledger::Posting& p : t.postings) {
-            if (!detail::is_a_category_account(accounts, p.account)) continue;
+        for (const ledger::Side& s : ledger::sides_of(t, splits)) {
+            if (!detail::is_a_category_account(accounts, s.account)) continue;
             if (!out.found || t.date > out.based_on) {
                 out.found = true;
-                out.category = accounts.path_for_ref(p.account);
+                out.category = accounts.path_for_ref(s.account);
                 out.based_on = t.date;
             }
         }

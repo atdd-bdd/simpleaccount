@@ -119,4 +119,38 @@ private:
     std::vector<DatedPosting> postings_;
 };
 
+// Filling a ledger from the transactions of a book. Every transaction credits
+// its own SourceAccount; its Destination is credited too, UNLESS that
+// Destination is itself another transaction's own SourceAccount -- a matched
+// transfer, where the other half of the movement is that transaction's own
+// entry, and crediting it again here would count one movement of money
+// twice. A split's lines are never paired this way, so each is always
+// credited. See the two-rows-for-a-transfer rule in Transactions.spectable.
+inline void add_to_book(Ledger* book, const chart::Chart& accounts,
+                        const std::vector<Transaction>& transactions,
+                        const std::vector<TransactionSplit>& splits) {
+    for (const Transaction& t : transactions) {
+        book->add({t.date, types::AccountPath(accounts.path_for_ref(t.source_account)),
+                   t.amount, t.ref.value()});
+        if (is_split(t.destination)) {
+            for (const TransactionSplit& s : split_lines_of(splits, t.id))
+                book->add({t.date, types::AccountPath(accounts.path_for_ref(s.destination)),
+                          s.amount, t.ref.value()});
+            continue;
+        }
+        if (t.destination.is_none()) continue;
+        bool paired = false;
+        if (accounts.is_real(t.destination))
+            for (const Transaction& other : transactions)
+                if (&other != &t && other.source_account == t.destination &&
+                    other.destination == t.source_account) {
+                    paired = true;
+                    break;
+                }
+        if (!paired)
+            book->add({t.date, types::AccountPath(accounts.path_for_ref(t.destination)),
+                      -t.amount, t.ref.value()});
+    }
+}
+
 }  // namespace ledger

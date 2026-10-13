@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
 #include "common/common.h"
@@ -69,33 +70,92 @@ public:
     // identifier in the FitId column is one an earlier Ofx import left.
     void given_postings_are(const std::vector<ImportedPostingRowString>& values) {
         transactions_.clear();
-        for (const auto& value : values) {
-            ledger::Transaction* into = nullptr;
-            for (ledger::Transaction& t : transactions_)
-                if (t.ref.value() == value.ref) into = &t;
-            if (into == nullptr) {
+        splits_.clear();
+        second_row_amount_.clear();
+        std::map<std::string, int> counts;
+        for (const auto& value : values) ++counts[value.ref];
+        for (const auto& value : values) group_into(&transactions_, value, counts[value.ref]);
+    }
+
+    void group_into(std::vector<ledger::Transaction>* into,
+                    const ImportedPostingRowString& value, int total_for_ref) {
+        ledger::Transaction* first = nullptr;
+        for (ledger::Transaction& t : *into) {
+            if (t.ref.value() != value.ref) continue;
+            first = &t;
+            break;
+        }
+        const auto on = types::Date::from_iso(value.date);
+        const chart::Ref account_ref = chart_.ref_for_path(value.account);
+        const Money amount{value.amount};
+        const types::ClearedStatus cleared = types::cleared_status_from_string(value.cleared);
+        const std::string fit_id = blank(value.fitid);
+
+        if (first == nullptr) {
+            ledger::Transaction made;
+            made.id = ledger::new_id();
+            made.ref = types::TransactionRef(value.ref);
+            if (on) made.date = *on;
+            made.payee = types::PayeeName(blank(value.payee));
+            made.check_no = types::CheckNumber(blank(value.checkno));
+            made.source_account = account_ref;
+            made.amount = amount;
+            made.cleared = cleared;
+            ledger::stamp(&made, types::ImportSource::Ofx, fit_id);
+            into->push_back(made);
+            return;
+        }
+
+        // Which row this is for its transaction is read from the
+        // transaction's own state, not from how many rows have been seen:
+        // a third or later row collapses into the same one object as the
+        // second once its Destination is set, so counting objects sharing
+        // a Ref stops distinguishing a third row from a second.
+        if (first->destination.is_none()) {
+            ledger::Transaction& t = *first;
+            const bool transfer = total_for_ref == 2 && account_ref != t.source_account &&
+                                  chart_.is_real(t.source_account) &&
+                                  chart_.is_real(account_ref) &&
+                                  !ledger::is_unassigned(chart_, t.source_account) &&
+                                  !ledger::is_unassigned(chart_, account_ref);
+            if (transfer) {
                 ledger::Transaction made;
-                // Given a real id, not left default: two Ref rows in the table
-                // would otherwise share the same empty TransactionId, and a
-                // completion looked up by id would silently find whichever
-                // transaction came first instead of the one that matched.
                 made.id = ledger::new_id();
-                made.ref = types::TransactionRef(value.ref);
-                const auto on = types::Date::from_iso(value.date);
-                ASSERT_TRUE(on.has_value()) << value.date;
-                made.date = *on;
+                made.ref = t.ref;
+                if (on) made.date = *on;
                 made.payee = types::PayeeName(blank(value.payee));
                 made.check_no = types::CheckNumber(blank(value.checkno));
-                transactions_.push_back(made);
-                into = &transactions_.back();
+                made.source_account = account_ref;
+                made.destination = t.source_account;
+                made.amount = amount;
+                made.cleared = cleared;
+                ledger::stamp(&made, types::ImportSource::Ofx, fit_id);
+                t.destination = account_ref;
+                into->push_back(made);
+            } else {
+                t.destination = account_ref;
+                second_row_amount_[t.id.value()] = amount;
             }
-            ledger::Posting p;
-            p.account = chart_.ref_for_path(value.account);
-            p.amount = Money(value.amount);
-            p.cleared = types::cleared_status_from_string(value.cleared);
-            ledger::stamp(&p, types::ImportSource::Ofx, blank(value.fitid));
-            into->postings.push_back(p);
+            return;
         }
+
+        ledger::Transaction& t = *first;
+        if (!chart::is_split(t.destination)) {
+            if (!t.destination.is_none()) {
+                ledger::TransactionSplit promoted;
+                promoted.transaction_id = t.id;
+                promoted.destination = t.destination;
+                const auto at = second_row_amount_.find(t.id.value());
+                promoted.amount = at != second_row_amount_.end() ? at->second : -t.amount;
+                splits_.push_back(promoted);
+            }
+            t.destination = chart::split_ref();
+        }
+        ledger::TransactionSplit s;
+        s.transaction_id = t.id;
+        s.destination = account_ref;
+        s.amount = amount;
+        splits_.push_back(s);
     }
 
     void given_import_target_is(const std::vector<ImportTargetString>& values) {
@@ -144,8 +204,8 @@ public:
                     << "could not clear " << offered->claimed_ref;
             } else if (value.answer == "Different") {
                 const ledger::Transaction made = ofx::answer_different(
-                    *offered, target_, transactions_.size(), &chart_);
-                ASSERT_FALSE(made.postings.empty()) << "nothing was created for " << value.fitid;
+                    *offered, target_, ledger::transaction_count(transactions_), &chart_);
+                ASSERT_FALSE(made.source_account.is_none()) << "nothing was created for " << value.fitid;
                 transactions_.push_back(made);
             } else {
                 FAIL() << "there is no answer called " << value.answer;
@@ -318,7 +378,7 @@ public:
             statement.transactions.push_back(t);
             import(statement);
 
-            const ledger::Posting* here = posting_in(account);
+            const ledger::Transaction* here = transaction_in(account);
             ASSERT_NE(nullptr, here) << value.ofxaccttype << " " << value.trnamt
                                      << " produced no posting in " << account;
             EXPECT_EQ(Money(value.postingamount).cents(), here->amount.cents())
@@ -348,7 +408,7 @@ public:
     void examples_businessrule_an_identifier_is_only_an_identifier_to_the_file_that_gave_it(
             const std::vector<IdentifierScopeString>& values) {
         for (const auto& value : values) {
-            const ledger::Posting here = already_there(value.postingcarries);
+            const ledger::Transaction here = already_there(value.postingcarries);
 
             // The one row stated about a Csv import, which has no import of its
             // own yet. What it turns on is that a stamp is found under the
@@ -390,7 +450,7 @@ public:
             if (value.answer == "TheSame") {
                 ASSERT_TRUE(ofx::answer_the_same(chart_, offered, target_, &transactions_));
                 EXPECT_EQ(before, transactions_.size()) << value.thedownloadedrow;
-                const ledger::Posting* here = posting_in(target_);
+                const ledger::Transaction* here = transaction_in(target_);
                 ASSERT_NE(nullptr, here);
                 EXPECT_EQ(types::ClearedStatus::Cleared, here->cleared)
                     << value.theonealreadythere;
@@ -399,19 +459,19 @@ public:
                 EXPECT_EQ("F003", *id) << value.theonealreadythere;
             } else if (value.answer == "Different") {
                 const ledger::Transaction made = ofx::answer_different(
-                    offered, target_, transactions_.size(), &chart_);
-                ASSERT_FALSE(made.postings.empty()) << value.thedownloadedrow;
+                    offered, target_, ledger::transaction_count(transactions_), &chart_);
+                ASSERT_FALSE(made.source_account.is_none()) << value.thedownloadedrow;
                 transactions_.push_back(made);
                 EXPECT_EQ(before + 1, transactions_.size()) << value.thedownloadedrow;
                 // And nothing happened to the one already there.
-                const ledger::Posting* first = posting_in(target_);
+                const ledger::Transaction* first = transaction_in(target_);
                 ASSERT_NE(nullptr, first);
                 EXPECT_EQ(nullptr, ledger::id_from(*first, types::ImportSource::Ofx))
                     << value.theonealreadythere;
             } else if (value.answer == "Unanswered") {
                 // Nothing is called at all, which is the row being specified.
                 EXPECT_EQ(before, transactions_.size()) << value.thedownloadedrow;
-                const ledger::Posting* here = posting_in(target_);
+                const ledger::Transaction* here = transaction_in(target_);
                 ASSERT_NE(nullptr, here);
                 EXPECT_EQ(nullptr, ledger::id_from(*here, types::ImportSource::Ofx))
                     << value.theonealreadythere;
@@ -529,7 +589,9 @@ public:
             [&](const ofx::TransferProposal& p) { return candidate_matches(v, p.candidate); });
         if (at != candidates_.end()) {
             offered_rule_ = ofx::rule_offered_for(at->candidate);
-            transactions_.push_back(ofx::merge_transfer(&chart_, *at, transactions_.size()));
+            const auto merged = ofx::merge_transfer(&chart_, *at, ledger::transaction_count(transactions_));
+            transactions_.push_back(merged.first);
+            transactions_.push_back(merged.second);
             summary_.New += 1;
             candidates_.erase(at);
         } else {
@@ -553,7 +615,7 @@ public:
             [&](const ofx::TransferProposal& p) { return candidate_matches(v, p.candidate); });
         ASSERT_NE(candidates_.end(), at) << "no pending candidate matches " << v.to_string();
         const std::vector<ledger::Transaction> made =
-            ofx::split_transfer(*at, transactions_.size(), &chart_);
+            ofx::split_transfer(*at, ledger::transaction_count(transactions_), &chart_);
         transactions_.insert(transactions_.end(), made.begin(), made.end());
         summary_.New += static_cast<int>(made.size());
         candidates_.erase(at);
@@ -676,9 +738,11 @@ public:
     }
 
 private:
+    std::map<std::string, Money> second_row_amount_;
     ofx::Read read_;
     chart::Chart chart_;
     std::vector<ledger::Transaction> transactions_;
+    std::vector<ledger::TransactionSplit> splits_;
     std::string target_;
     ofx::Imported decided_;
     ofx::Summary summary_;
@@ -747,42 +811,57 @@ private:
         decided_ = ofx::decide(statement, target_, transactions_, chart_, check_window_days_);
         summary_ = decided_.summary;
         const std::vector<ledger::Transaction> made =
-            ofx::transactions_for(decided_, target_, transactions_.size(), &chart_);
+            ofx::transactions_for(decided_, target_, ledger::transaction_count(transactions_), &chart_);
         ofx::apply_matches(chart_, decided_, target_, &transactions_);
-        ofx::apply_completions(chart_, decided_, target_, &transactions_);
+        const ofx::Completed completed = ofx::apply_completions(
+            chart_, decided_, target_, ledger::transaction_count(transactions_) + made.size(), &transactions_);
         transactions_.insert(transactions_.end(), made.begin(), made.end());
+        transactions_.insert(transactions_.end(), completed.created.begin(),
+                             completed.created.end());
     }
 
-    const ledger::Posting* posting_in(const std::string& account) const {
+    const ledger::Transaction* transaction_in(const std::string& account) const {
         const chart::Ref account_ref = chart_.ref_for_path(account);
         for (const ledger::Transaction& t : transactions_)
-            for (const ledger::Posting& p : t.postings)
-                if (p.account == account_ref) return &p;
+            if (t.source_account == account_ref) return &t;
+        return nullptr;
+    }
+
+    // Unassigned is never an account a transaction's own download is in -- it
+    // is only ever the other side, waiting to be filled in -- so finding one
+    // waiting on it means searching Destination, not SourceAccount.
+    const ledger::Transaction* transaction_waiting_on(const std::string& account) const {
+        const chart::Ref account_ref = chart_.ref_for_path(account);
+        for (const ledger::Transaction& t : transactions_)
+            if (t.destination == account_ref) return &t;
         return nullptr;
     }
 
     ledger::Ledger as_ledger() const {
         ledger::Ledger out;
-        for (const ledger::Transaction& t : transactions_)
-            for (const ledger::Posting& p : t.postings)
-                out.add({t.date, types::AccountPath(chart_.path_for_ref(p.account)),
-                        p.amount, t.ref.value()});
+        ledger::add_to_book(&out, chart_, transactions_, splits_);
         return out;
     }
 
     std::vector<ImportedPostingRowString> flatten() const {
         std::vector<ImportedPostingRowString> out;
         for (const ledger::Transaction& t : transactions_) {
-            for (const ledger::Posting& p : t.postings) {
+            const std::vector<ledger::Side> sides =
+                ledger::sides_of_display(chart_, t, transactions_, splits_);
+            for (std::size_t i = 0; i < sides.size(); ++i) {
+                const ledger::Side& s = sides[i];
                 ImportedPostingRowString row;
                 row.ref = t.ref.value();
                 row.date = t.date.iso();
                 row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = chart_.path_for_ref(p.account);
-                row.amount = p.amount.in_register();
-                row.cleared = types::to_string(p.cleared);
+                row.account = chart_.path_for_ref(s.account);
+                row.amount = s.amount.in_register();
+                const bool is_source = (i == 0);
+                row.cleared = types::to_string(is_source ? t.cleared
+                                                         : types::ClearedStatus::Uncleared);
                 row.checkno = t.check_no.value().empty() ? "none" : t.check_no.value();
-                const std::string* id = ledger::id_from(p, types::ImportSource::Ofx);
+                const std::string* id = is_source
+                    ? ledger::id_from(t, types::ImportSource::Ofx) : nullptr;
                 row.fitid = id == nullptr || id->empty() ? "none" : *id;
                 out.push_back(row);
             }
@@ -877,38 +956,34 @@ private:
     // The posting already in the book, stamped as the row says. Returned by
     // value so a row can be asked what it carries without reaching back into
     // the book, which is what the Csv row needs.
-    ledger::Posting already_there(const std::string& carries) {
+    ledger::Transaction already_there(const std::string& carries) {
         start_fresh("Assets:Checking", types::AccountType::Checking);
         ledger::Transaction t;
+        t.id = ledger::new_id();
         t.ref = types::TransactionRef("T1");
         t.date = types::Date(2024, 1, 15);
         t.payee = types::PayeeName("HARRIS TEETER");
-
-        ledger::Posting here;
-        here.account = chart_.ref_for_path("Assets:Checking");
-        here.amount = Money("-45.00");
+        t.source_account = chart_.ref_for_path("Assets:Checking");
+        t.amount = Money("-45.00");
         // Cleared, so neither match test can claim it and the only question
         // left is the one about identifiers.
-        here.cleared = types::ClearedStatus::Cleared;
+        t.cleared = types::ClearedStatus::Cleared;
         if (carries == "An Ofx id, the same") {
-            ledger::stamp(&here, types::ImportSource::Ofx, "F100");
+            ledger::stamp(&t, types::ImportSource::Ofx, "F100");
         } else if (carries == "An Ofx id, a different one") {
-            ledger::stamp(&here, types::ImportSource::Ofx, "F999");
+            ledger::stamp(&t, types::ImportSource::Ofx, "F999");
         } else if (carries == "A Csv id only") {
-            ledger::stamp(&here, types::ImportSource::Csv, "F100");
+            ledger::stamp(&t, types::ImportSource::Csv, "F100");
         } else if (carries == "A Csv id and an Ofx id") {
-            ledger::stamp(&here, types::ImportSource::Csv, "F100");
-            ledger::stamp(&here, types::ImportSource::Ofx, "F100");
+            ledger::stamp(&t, types::ImportSource::Csv, "F100");
+            ledger::stamp(&t, types::ImportSource::Ofx, "F100");
         } else {
             EXPECT_EQ("Nothing", carries) << "unlisted case";
         }
 
-        ledger::Posting there;
-        there.account = chart_.ref_for_path("Expenses:Uncategorized");
-        there.amount = Money("45.00");
-        t.postings = {here, there};
+        t.destination = chart_.ref_for_path("Expenses:Uncategorized");
         transactions_ = {t};
-        return here;
+        return t;
     }
 
     // --- the possible-duplicate rows --------------------------------------
@@ -931,17 +1006,14 @@ private:
         start_fresh("Assets:Checking", types::AccountType::Checking);
         chart_.put(account_of("Expenses:Groceries", types::AccountType::Expense));
         ledger::Transaction t;
+        t.id = ledger::new_id();
         t.ref = types::TransactionRef("T1");
         t.date = types::Date(2026, 2, 5);
         t.payee = types::PayeeName("Harris Teeter");
-        ledger::Posting here;
-        here.account = chart_.ref_for_path("Assets:Checking");
-        here.amount = Money("-88.20");
-        here.cleared = types::ClearedStatus::Cleared;
-        ledger::Posting there;
-        there.account = chart_.ref_for_path("Expenses:Groceries");
-        there.amount = Money("88.20");
-        t.postings = {here, there};
+        t.source_account = chart_.ref_for_path("Assets:Checking");
+        t.amount = Money("-88.20");
+        t.cleared = types::ClearedStatus::Cleared;
+        t.destination = chart_.ref_for_path("Expenses:Groceries");
         transactions_ = {t};
         import(offered_statement());
     }
@@ -960,21 +1032,19 @@ private:
         row.name = "HARRIS TEETER";
 
         ledger::Transaction t;
+        t.id = ledger::new_id();
         t.ref = types::TransactionRef("T1");
         t.payee = types::PayeeName("HARRIS TEETER");
-        ledger::Posting here;
-        here.account = chart_.ref_for_path("Assets:Checking");
-        here.amount = Money("-45.00");
-        ledger::Posting there;
-        there.account = chart_.ref_for_path("Expenses:Uncategorized");
-        there.amount = Money("45.00");
+        t.source_account = chart_.ref_for_path("Assets:Checking");
+        t.amount = Money("-45.00");
+        t.destination = chart_.ref_for_path("Expenses:Uncategorized");
 
         bool anything_already_there = true;
         if (test == "1") {
             // Already carries this FITID from an Ofx import.
             t.date = types::Date(2024, 1, 20);
-            here.cleared = types::ClearedStatus::Cleared;
-            ledger::stamp(&here, types::ImportSource::Ofx, "F001");
+            t.cleared = types::ClearedStatus::Cleared;
+            ledger::stamp(&t, types::ImportSource::Ofx, "F001");
         } else if (test == "2") {
             // Uncleared, same amount and check number, inside the window.
             //
@@ -994,14 +1064,13 @@ private:
             // Cleared, same amount and date, no identifier: nothing above can
             // apply, and it is too like the downloaded row to create blindly.
             t.date = types::Date(2024, 1, 20);
-            here.cleared = types::ClearedStatus::Cleared;
+            t.cleared = types::ClearedStatus::Cleared;
         } else {
             // Test 5: an empty book, so nothing above applies.
             anything_already_there = false;
         }
 
         if (anything_already_there) {
-            t.postings = {here, there};
             transactions_ = {t};
         }
         ofx::Statement statement;
@@ -1037,17 +1106,14 @@ public:
             start_fresh("Assets:Checking", types::AccountType::Checking);
 
             ledger::Transaction t;
+            t.id = ledger::new_id();
             t.ref = types::TransactionRef("T1");
             t.date = types::Date(2024, 1, 2);
             t.payee = types::PayeeName("County Tax Office");
             t.check_no = types::CheckNumber("2041");
-            ledger::Posting here;
-            here.account = chart_.ref_for_path("Assets:Checking");
-            here.amount = Money("-1250.00");
-            ledger::Posting there;
-            there.account = chart_.ref_for_path("Expenses:Uncategorized");
-            there.amount = Money("1250.00");
-            t.postings = {here, there};
+            t.source_account = chart_.ref_for_path("Assets:Checking");
+            t.amount = Money("-1250.00");
+            t.destination = chart_.ref_for_path("Expenses:Uncategorized");
             transactions_ = {t};
 
             ofx::Statement statement;
@@ -1102,7 +1168,7 @@ public:
 
             // Whatever arrives first records the payment with its other side
             // waiting, which is what the second column says.
-            const ledger::Posting* waiting = posting_in(ledger::kUnassigned);
+            const ledger::Transaction* waiting = transaction_waiting_on(ledger::kUnassigned);
             ASSERT_NE(nullptr, waiting) << value.whatitrecords;
 
             if (only_one) {
@@ -1112,11 +1178,13 @@ public:
 
             target_ = second;
             import(payment_side(second));
-            // One transaction still, with the account filled in and this file's
-            // identifier on the posting it describes.
-            EXPECT_EQ(1u, transactions_.size()) << value.whattheseconddoes;
-            EXPECT_EQ(nullptr, posting_in(ledger::kUnassigned)) << value.whattheseconddoes;
-            const ledger::Posting* filled = posting_in(second);
+            // Two transactions now: the first, with its Unassigned side filled
+            // in, and a new row of this account's own -- a transaction being
+            // one account's own download, the second side gets its own row
+            // the same as the first did, with this file's identifier on it.
+            EXPECT_EQ(2u, transactions_.size()) << value.whattheseconddoes;
+            EXPECT_EQ(nullptr, transaction_waiting_on(ledger::kUnassigned)) << value.whattheseconddoes;
+            const ledger::Transaction* filled = transaction_in(second);
             ASSERT_NE(nullptr, filled) << value.whattheseconddoes;
             const std::string* id = ledger::id_from(*filled, types::ImportSource::Ofx);
             ASSERT_NE(nullptr, id) << value.whattheseconddoes;

@@ -9,62 +9,24 @@
 #include "money.h"
 #include "text_types.h"
 
-// The transaction and its postings, and the three rules that decide what a
-// transaction looks like. See Transactions.spectable.
+// The transaction and the rules that decide what one looks like. See
+// Transactions.spectable.
 //
 // A split and a transfer are not separate kinds of thing here. A split is a
-// transaction with three or more postings; a transfer is one whose postings are
-// all to real accounts. Both fall out of the same shape, which is why nothing
-// downstream needs a special case for either.
+// transaction whose Destination is Split, with three or more lines in
+// TransactionSplit; a transfer is a pair of transactions each naming the
+// other as Destination. Both fall out of the same shape, which is why
+// nothing downstream needs a special case for either.
 namespace ledger {
 
-// One side of a transaction. Debits are positive and credits are negative, for
-// every account type alike; what each type shows on screen is then the display
-// sign from Accounts.
-// An identifier a file gave to one posting, and which file gave it. Per posting
-// rather than per transaction, because a download describes one side of it: the
-// bank knows what left the chequing account and has never heard of the category
-// it was spent on.
+// An identifier a file gave to a transaction, and which file gave it. At most
+// one per source: a transaction has exactly one home account -- the one it
+// was downloaded into or typed against -- so there is no second side with an
+// identifier of its own the way a second posting once had.
 struct ImportId {
     types::ImportSource source = types::ImportSource::Ofx;
     std::string id;
 };
-
-struct Posting {
-    chart::Ref account;
-    Money amount;
-    std::string memo;
-    // Per posting, not per transaction: a transfer leaves one account and
-    // arrives in another on two different statements, so it clears twice.
-    types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
-    // The identifiers this posting has collected, at most one per source. More
-    // than one because a posting imported from a CSV and later recognised in a
-    // QFX has a name in each, and losing either would make that file import
-    // twice over. Empty for anything entered by hand.
-    std::vector<ImportId> import_ids;
-};
-
-// What this posting is called by that kind of file, if anything. An identifier
-// is only an identifier to the file that gave it: against any other source the
-// posting counts as having none, and the weaker tests decide.
-inline const std::string* id_from(const Posting& p, types::ImportSource source) {
-    for (const ImportId& one : p.import_ids)
-        if (one.source == source) return &one.id;
-    return nullptr;
-}
-
-// Recording what a file called it. Stamping the same source twice replaces the
-// identifier rather than collecting both, because a posting has one name in any
-// one file.
-inline void stamp(Posting* p, types::ImportSource source, const std::string& id) {
-    if (id.empty()) return;
-    for (ImportId& one : p->import_ids) {
-        if (one.source != source) continue;
-        one.id = id;
-        return;
-    }
-    p->import_ids.push_back(ImportId{source, id});
-}
 
 struct Transaction {
     // Given once when the transaction is created and never changed. See
@@ -72,7 +34,7 @@ struct Transaction {
     // on a transaction that has not been created yet -- a candidate being shown
     // in a dialog, say.
     types::TransactionId id;
-    // What the register shows and what postings are grouped by in the spec
+    // What the register shows and what rows are grouped by in the spec
     // tables. Not the identity: see id.
     types::TransactionRef ref;
     types::Date date;
@@ -85,20 +47,46 @@ struct Transaction {
     types::CheckNumber check_no;
     std::string memo;
     std::string tag;            // a Quicken class, kept on migration
-    std::vector<Posting> postings;
 
-    // A second way of saying what a transaction is: the account it lives in,
-    // the other side, and the signed amount between them. Unset (Ref(), a
-    // zero amount) on a transaction recorded the old way, through postings
-    // instead. See the section on naming both accounts directly in
-    // Transactions.spectable.
+    // What a transaction is: the account it lives in, the other side, and the
+    // signed amount between them. The other side is a plain account or
+    // category, or the literal Split sentinel when the parts are in
+    // TransactionSplit instead. See the section on naming both accounts
+    // directly in Transactions.spectable.
     chart::Ref source_account;
     chart::Ref destination;
     Money amount;
-    // Per entry, not per posting: under this shape the transaction itself is
-    // already one side, the same thing Cleared on a Posting always meant.
     types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
+
+    // The identifiers this transaction has collected, at most one per source.
+    // More than one because a transaction imported from a CSV and later
+    // recognised in a QFX has a name in each, and losing either would make
+    // that file import twice over. Empty for anything entered by hand.
+    std::vector<ImportId> import_ids;
 };
+
+// What this transaction is called by that kind of file, if anything. An
+// identifier is only an identifier to the file that gave it: against any
+// other source the transaction counts as having none, and the weaker tests
+// decide.
+inline const std::string* id_from(const Transaction& t, types::ImportSource source) {
+    for (const ImportId& one : t.import_ids)
+        if (one.source == source) return &one.id;
+    return nullptr;
+}
+
+// Recording what a file called it. Stamping the same source twice replaces
+// the identifier rather than collecting both, because a transaction has one
+// name in any one file.
+inline void stamp(Transaction* t, types::ImportSource source, const std::string& id) {
+    if (id.empty()) return;
+    for (ImportId& one : t->import_ids) {
+        if (one.source != source) continue;
+        one.id = id;
+        return;
+    }
+    t->import_ids.push_back(ImportId{source, id});
+}
 
 // One category line of a split recorded the new way: kept apart from the
 // transaction that carries the total and the account it was entered or
@@ -126,9 +114,49 @@ inline Money split_total(const std::vector<TransactionSplit>& lines) {
     return total;
 }
 
-// The whole of double entry: the amounts of the postings of one transaction sum
-// to zero. Checked on every commit, on every import, and when a file is opened,
-// because a book that does not balance cannot be trusted to report anything.
+// One side of a transaction read out generically -- an account and the
+// amount against it -- the shape almost everything that walks a book wants,
+// whether the other side is a plain Destination or a split's several lines.
+// The source is always first, at the transaction's own Amount and Memo.
+struct Side {
+    chart::Ref account;
+    Money amount;
+    std::string memo;
+};
+
+inline std::vector<Side> sides_of(const Transaction& t,
+                                  const std::vector<TransactionSplit>& splits) {
+    std::vector<Side> out;
+    out.push_back({t.source_account, t.amount, t.memo});
+    if (is_split(t.destination)) {
+        for (const TransactionSplit& s : split_lines_of(splits, t.id))
+            out.push_back({s.destination, s.amount, s.memo});
+    } else {
+        out.push_back({t.destination, -t.amount, t.memo});
+    }
+    return out;
+}
+
+// The same, for listing every side in the book without a movement appearing
+// twice: a real Destination that is itself another transaction's own
+// SourceAccount is a matched transfer, already listed from that other
+// transaction's side, so it is left out here. See the two-rows-for-a-transfer
+// rule in Transactions.spectable and ledger::add_to_book, which this mirrors.
+inline std::vector<Side> sides_of_display(const chart::Chart& accounts, const Transaction& t,
+                                          const std::vector<Transaction>& transactions,
+                                          const std::vector<TransactionSplit>& splits) {
+    if (is_split(t.destination) || t.destination.is_none() || !accounts.is_real(t.destination))
+        return sides_of(t, splits);
+    for (const Transaction& other : transactions)
+        if (&other != &t && other.source_account == t.destination &&
+            other.destination == t.source_account)
+            return {{t.source_account, t.amount, t.memo}};
+    return sides_of(t, splits);
+}
+
+// The whole of double entry: a split's lines sum to its transaction's amount,
+// the one place under this shape where more than one figure has to agree with
+// another. Checked on every commit and on every import.
 inline Money imbalance_of(const std::vector<Money>& amounts) {
     Money total;
     for (const Money& a : amounts) total += a;
@@ -259,6 +287,16 @@ inline std::vector<std::string> ids_labelled(
     return out;
 }
 
+// How many distinct transactions are already there, for naming the next one
+// "T" plus this. Counts refs, not rows: a transfer is two rows sharing one
+// ref, and numbering by row count would skip a number for every transfer
+// already in the book.
+inline std::size_t transaction_count(const std::vector<Transaction>& transactions) {
+    std::set<std::string> refs;
+    for (const Transaction& t : transactions) refs.insert(t.ref.value());
+    return refs.size();
+}
+
 inline bool erase_transaction(std::vector<Transaction>* transactions,
                               const std::string& id) {
     const auto at = std::find_if(transactions->begin(), transactions->end(),
@@ -268,39 +306,50 @@ inline bool erase_transaction(std::vector<Transaction>* transactions,
     return true;
 }
 
-// Checked on every path that builds a transaction directly from its postings
-// rather than through the register or the split window, which each enforce
-// their own shape as they go: at least two postings, no two to the same
-// account, and the whole balancing to zero. See the shape-of-a-transaction
-// section of Transactions.spectable.
-inline chart::Rejection validate(const chart::Chart& accounts, const Transaction& t) {
-    if (t.postings.size() < 2)
+// Checked on every path that builds a transaction directly rather than
+// through the register or the split window, which each enforce their own
+// shape as they go: a source and a destination, naming two different
+// accounts, neither a placeholder, and -- for a split -- lines that sum to
+// the transaction's amount. See the shape-of-a-transaction section of
+// Transactions.spectable.
+inline chart::Rejection validate(const chart::Chart& accounts, const Transaction& t,
+                                 const std::vector<TransactionSplit>& splits = {}) {
+    if (t.source_account.is_none() || t.destination.is_none())
         return {true, "A transaction needs at least two postings"};
-    std::vector<Money> amounts;
-    std::set<long long> seen;
-    for (const Posting& p : t.postings) {
-        amounts.push_back(p.amount);
-        if (!seen.insert(p.account.value()).second)
-            return {true, "A transfer must name two different accounts"};
-        const chart::Account* a = accounts.find_account_by_ref(p.account);
-        if (a != nullptr && a->placeholder)
-            return {true, a->path.value() + " is a placeholder; choose one below it"};
+    const chart::Account* source = accounts.find_account_by_ref(t.source_account);
+    if (source != nullptr && source->placeholder)
+        return {true, source->path.value() + " is a placeholder; choose one below it"};
+    if (is_split(t.destination)) {
+        const std::vector<TransactionSplit> lines =
+            split_lines_of(splits, t.id);
+        std::set<long long> seen{t.source_account.value()};
+        for (const TransactionSplit& s : lines) {
+            if (!seen.insert(s.destination.value()).second)
+                return {true, "A transfer must name two different accounts"};
+            const chart::Account* a = accounts.find_account_by_ref(s.destination);
+            if (a != nullptr && a->placeholder)
+                return {true, a->path.value() + " is a placeholder; choose one below it"};
+        }
+        const Money off = t.amount - split_total(lines);
+        if (off.cents() != 0) {
+            const Money magnitude = off.cents() < 0 ? -off : off;
+            return {true, "The split is " + magnitude.in_register() + " short of " +
+                          t.amount.in_register()};
+        }
+        return {};
     }
-    if (!balances(amounts)) {
-        const Money off = imbalance_of(amounts);
-        const Money magnitude = off.cents() < 0 ? -off : off;
-        return {true, t.ref.value() + " is out of balance by " + magnitude.in_register()};
-    }
+    if (t.source_account == t.destination)
+        return {true, "A transfer must name two different accounts"};
+    const chart::Account* dest = accounts.find_account_by_ref(t.destination);
+    if (dest != nullptr && dest->placeholder)
+        return {true, dest->path.value() + " is a placeholder; choose one below it"};
     return {};
 }
 
 // A transfer is recognised by its shape rather than recorded as its own kind:
-// every posting is to a real account.
-inline bool is_transfer(const std::vector<types::AccountType>& types_of_postings) {
-    if (types_of_postings.size() < 2) return false;
-    for (types::AccountType t : types_of_postings)
-        if (types::class_of(t) != types::AccountClass::Real) return false;
-    return true;
+// both the source and the destination are real accounts.
+inline bool is_transfer(const chart::Chart& accounts, const Transaction& t) {
+    return accounts.is_real(t.source_account) && accounts.is_real(t.destination);
 }
 
 }  // namespace ledger

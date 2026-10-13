@@ -1,6 +1,7 @@
 #pragma once
 #include <gtest/gtest.h>
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
 #include "common/common.h"
@@ -83,7 +84,7 @@ public:
         const ofx::Imported decided =
             ofx::decide(statement, target_, transactions_, chart_);
         const std::vector<ledger::Transaction> made = ofx::transactions_for(
-            decided, target_, transactions_.size(), &chart_, rules_);
+            decided, target_, ledger::transaction_count(transactions_), &chart_, rules_);
         transactions_.insert(transactions_.end(), made.begin(), made.end());
     }
 
@@ -158,29 +159,74 @@ public:
 
     void given_postings_are(const std::vector<PostingRowString>& values) {
         transactions_.clear();
-        for (const auto& value : values) {
-            ledger::Transaction* into = nullptr;
-            for (ledger::Transaction& t : transactions_)
-                if (t.ref.value() == value.ref) into = &t;
-            if (into == nullptr) {
-                ledger::Transaction made;
-                made.id = ledger::new_id();
-                made.ref = types::TransactionRef(value.ref);
-                const auto on = types::Date::from_iso(value.date);
-                ASSERT_TRUE(on.has_value()) << value.date;
-                made.date = *on;
-                made.payee = types::PayeeName(blank(value.payee));
-                transactions_.push_back(made);
-                into = &transactions_.back();
-            }
-            ledger::Posting posting;
-            posting.account = chart_.ref_for_path(value.account);
-            posting.amount = Money(value.amount);
-            posting.memo = blank(value.memo);
-            if (value.cleared != DNCString && !value.cleared.empty())
-                posting.cleared = types::cleared_status_from_string(value.cleared);
-            into->postings.push_back(posting);
+        splits_.clear();
+        second_row_amount_.clear();
+        for (const auto& value : values) group_into(&transactions_, value);
+    }
+
+    void group_into(std::vector<ledger::Transaction>* into, const PostingRowString& value) {
+        ledger::Transaction* first = nullptr;
+        for (ledger::Transaction& t : *into) {
+            if (t.ref.value() != value.ref) continue;
+            first = &t;
+            break;
         }
+        const auto on = types::Date::from_iso(value.date);
+        ASSERT_TRUE(on.has_value()) << value.date;
+        const chart::Ref account_ref = chart_.ref_for_path(value.account);
+        const Money amount{value.amount};
+        const std::string memo = blank(value.memo);
+        types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
+        if (value.cleared != DNCString && !value.cleared.empty())
+            cleared = types::cleared_status_from_string(value.cleared);
+
+        if (first == nullptr) {
+            ledger::Transaction made;
+            made.id = ledger::new_id();
+            made.ref = types::TransactionRef(value.ref);
+            if (on) made.date = *on;
+            made.payee = types::PayeeName(blank(value.payee));
+            made.memo = memo;
+            made.source_account = account_ref;
+            made.amount = amount;
+            made.cleared = cleared;
+            into->push_back(made);
+            return;
+        }
+        // Which row this is for its transaction is read from the
+        // transaction's own state, not from how many rows have been seen:
+        // a third or later row collapses into the same one object as the
+        // second once its Destination is set, so counting objects sharing
+        // a Ref stops distinguishing a third row from a second.
+        if (first->destination.is_none()) {
+            first->destination = account_ref;
+            if (first->memo.empty() && !memo.empty()) first->memo = memo;
+            second_row_amount_[first->id.value()] = {amount, memo};
+            return;
+        }
+        ledger::Transaction& t = *first;
+        if (!chart::is_split(t.destination)) {
+            if (!t.destination.is_none()) {
+                ledger::TransactionSplit promoted;
+                promoted.transaction_id = t.id;
+                promoted.destination = t.destination;
+                const auto at = second_row_amount_.find(t.id.value());
+                if (at != second_row_amount_.end()) {
+                    promoted.amount = at->second.amount;
+                    promoted.memo = at->second.memo;
+                } else {
+                    promoted.amount = -t.amount;
+                }
+                splits_.push_back(promoted);
+            }
+            t.destination = chart::split_ref();
+        }
+        ledger::TransactionSplit s;
+        s.transaction_id = t.id;
+        s.destination = account_ref;
+        s.amount = amount;
+        s.memo = memo;
+        splits_.push_back(s);
     }
 
     void when_category_changed(const std::vector<CategoryChangeString>& values) {
@@ -190,7 +236,7 @@ public:
         ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
         const std::string raw = t->raw_name.empty() ? t->payee.value() : t->raw_name;
         offered_rule_ = payees::suggest(raw, value.toaccount);
-        edit::change_category(chart_, t, value.fromaccount, value.toaccount);
+        edit::change_category(chart_, t, &splits_, value.fromaccount, value.toaccount);
     }
 
     void then_rule_offered_is(const std::vector<PayeeRuleString>& values) {
@@ -237,7 +283,7 @@ public:
 
     void when_payee_typed(const std::vector<PayeeSelectString>& values) {
         ASSERT_FALSE(values.empty());
-        suggested_ = payees::category_last_used_for(transactions_, chart_, values.front().payee);
+        suggested_ = payees::category_last_used_for(transactions_, chart_, splits_, values.front().payee);
     }
 
     void then_category_suggested_is(const std::vector<CategorySuggestionString>& values) {
@@ -312,8 +358,11 @@ public:
 
 
 private:
+    struct PendingSecondRow { Money amount; std::string memo; };
+    std::map<std::string, PendingSecondRow> second_row_amount_;
     chart::Chart chart_;
     std::vector<ledger::Transaction> transactions_;
+    std::vector<ledger::TransactionSplit> splits_;
     payees::BookApplication applied_;
     std::vector<payees::Rule> rules_;
     payees::Refusal refusal_;
@@ -363,15 +412,19 @@ private:
     std::vector<PostingRowString> flatten() const {
         std::vector<PostingRowString> out;
         for (const ledger::Transaction& t : transactions_) {
-            for (const ledger::Posting& p : t.postings) {
+            const std::vector<ledger::Side> sides =
+                ledger::sides_of_display(chart_, t, transactions_, splits_);
+            for (std::size_t i = 0; i < sides.size(); ++i) {
+                const ledger::Side& s = sides[i];
                 PostingRowString row;
                 row.ref = t.ref.value();
                 row.date = t.date.iso();
                 row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = chart_.path_for_ref(p.account);
-                row.amount = p.amount.in_register();
-                row.memo = p.memo.empty() ? "none" : p.memo;
-                row.cleared = types::to_string(p.cleared);
+                row.account = chart_.path_for_ref(s.account);
+                row.amount = s.amount.in_register();
+                row.memo = s.memo.empty() ? "none" : s.memo;
+                row.cleared = types::to_string(i == 0 ? t.cleared
+                                                      : types::ClearedStatus::Uncleared);
                 out.push_back(row);
             }
         }

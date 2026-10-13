@@ -357,9 +357,10 @@ inline bool is_other_line(const chart::Chart& accounts, const std::string& label
 }
 
 inline bool touches_an_investment(const chart::Chart& accounts,
-                                  const ledger::Transaction& t) {
-    for (const ledger::Posting& p : t.postings) {
-        const chart::Account* a = accounts.find_account_by_ref(p.account);
+                                  const ledger::Transaction& t,
+                                  const std::vector<ledger::TransactionSplit>& splits) {
+    for (const ledger::Side& s : ledger::sides_of(t, splits)) {
+        const chart::Account* a = accounts.find_account_by_ref(s.account);
         if (a != nullptr && detail::is_an_investment(a->type)) return true;
     }
     return false;
@@ -375,7 +376,8 @@ inline bool touches_an_investment(const chart::Chart& accounts,
 // disagree with the category line above it. See Reports.spectable.
 inline std::vector<DetailLine> detail_report(
         const chart::Chart& accounts, const ledger::Ledger& book,
-        const std::vector<ledger::Transaction>& transactions, const Spec& spec) {
+        const std::vector<ledger::Transaction>& transactions,
+        const std::vector<ledger::TransactionSplit>& splits, const Spec& spec) {
     // The whole tree, whatever was asked for: the transactions are the detail,
     // so a depth limit would hide the categories they belong to.
     Spec whole = spec;
@@ -423,13 +425,13 @@ inline std::vector<DetailLine> detail_report(
         for (const ledger::Transaction& t : transactions) {
             if (t.date < spec.from || spec.to < t.date) continue;
             if (!spec.include_investment_activity &&
-                detail::touches_an_investment(accounts, t))
+                detail::touches_an_investment(accounts, t, splits))
                 continue;
-            // One line per posting against this category, so the lines add up
+            // One line per side against this category, so the lines add up
             // to the figure above them even where a split posted to the same
             // category twice.
-            for (const ledger::Posting& p : t.postings) {
-                if (accounts.path_for_ref(p.account) != holds) continue;
+            for (const ledger::Side& s : ledger::sides_of(t, splits)) {
+                if (accounts.path_for_ref(s.account) != holds) continue;
                 DetailLine under;
                 under.kind = LineKind::Transaction;
                 under.account = holds;
@@ -438,7 +440,7 @@ inline std::vector<DetailLine> detail_report(
                 under.payee = t.payee.value();
                 under.ref = t.ref.value();
                 under.id = t.id.value();
-                under.each = sign < 0 ? -p.amount : p.amount;
+                under.each = sign < 0 ? -s.amount : s.amount;
                 if (turn) under.each = -under.each;
                 under.has_each = true;
                 lines.push_back(under);
@@ -467,19 +469,21 @@ struct PayeeRow {
 
 inline std::vector<PayeeRow> payee_report(
         const chart::Chart& accounts,
-        const std::vector<ledger::Transaction>& transactions, const Spec& spec,
+        const std::vector<ledger::Transaction>& transactions,
+        const std::vector<ledger::TransactionSplit>& splits, const Spec& spec,
         const std::optional<std::string>& only_category = std::nullopt) {
     std::map<std::string, PayeeRow> by_payee;
     for (const ledger::Transaction& t : transactions) {
         if (t.date < spec.from || spec.to < t.date) continue;
+        const std::vector<ledger::Side> sides = ledger::sides_of(t, splits);
         // The same rule as the category report: a brokerage would otherwise be
         // the largest payee in the book, for money that was never spent
         // anywhere. Here the transaction is in hand, so there is no need to go
         // by ref.
         if (!spec.include_investment_activity) {
             bool investment = false;
-            for (const ledger::Posting& p : t.postings) {
-                const chart::Account* a = accounts.find_account_by_ref(p.account);
+            for (const ledger::Side& s : sides) {
+                const chart::Account* a = accounts.find_account_by_ref(s.account);
                 if (a != nullptr && detail::is_an_investment(a->type)) {
                     investment = true;
                     break;
@@ -489,16 +493,16 @@ inline std::vector<PayeeRow> payee_report(
         }
         Money amount;
         bool counted = false;
-        for (const ledger::Posting& p : t.postings) {
-            const chart::Account* a = accounts.find_account_by_ref(p.account);
+        for (const ledger::Side& s : sides) {
+            const chart::Account* a = accounts.find_account_by_ref(s.account);
             if (a == nullptr) continue;
             if (a->type != types::AccountType::Income &&
                 a->type != types::AccountType::Expense)
                 continue;
             if (only_category &&
-                !chart::Chart::is_descendant_or_self(accounts.path_for_ref(p.account), *only_category))
+                !chart::Chart::is_descendant_or_self(accounts.path_for_ref(s.account), *only_category))
                 continue;
-            amount += types::display_sign(a->type) < 0 ? -p.amount : p.amount;
+            amount += types::display_sign(a->type) < 0 ? -s.amount : s.amount;
             counted = true;
         }
         if (!counted) continue;

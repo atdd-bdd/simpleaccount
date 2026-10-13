@@ -40,35 +40,102 @@ public:
     }
 
     void given_postings_are(const std::vector<PostingRowString>& values) {
-        book_ = ledger::Ledger();
         transactions_.clear();
-        std::map<std::string, std::size_t> by_ref;
-        for (const auto& value : values) {
-            const auto date = types::Date::from_iso(value.date);
-            ASSERT_TRUE(date.has_value()) << value.date;
-            const Money amount{value.amount};
-            book_.add({*date, types::AccountPath(value.account), amount});
-
-            auto at = by_ref.find(value.ref);
-            if (at == by_ref.end()) {
-                ledger::Transaction t;
-                t.id = ledger::new_id();
-                t.ref = types::TransactionRef(value.ref);
-                t.date = *date;
-                t.payee = types::PayeeName(value.payee);
-                transactions_.push_back(t);
-                at = by_ref.emplace(value.ref, transactions_.size() - 1).first;
-            }
-            ledger::Posting p;
-            p.account = chart_.ref_for_path(value.account);
-            p.amount = amount;
-            p.memo = blank(value.memo);
-            p.cleared = types::cleared_status_from_string(
-                value.cleared.empty() || value.cleared == DNCString ? "Uncleared"
-                                                                    : value.cleared);
-            transactions_[at->second].postings.push_back(p);
-        }
+        splits_.clear();
+        second_row_amount_.clear();
+        std::map<std::string, int> counts;
+        for (const auto& value : values) ++counts[value.ref];
+        for (const auto& value : values) group_into(&transactions_, value, counts[value.ref]);
+        rebuild_book();
         workspace_.reset();
+    }
+
+    void group_into(std::vector<ledger::Transaction>* into, const PostingRowString& value,
+                    int total_for_ref) {
+        ledger::Transaction* first = nullptr;
+        for (ledger::Transaction& t : *into) {
+            if (t.ref.value() != value.ref) continue;
+            first = &t;
+            break;
+        }
+        const auto on = types::Date::from_iso(value.date);
+        const chart::Ref account_ref = chart_.ref_for_path(value.account);
+        const Money amount{value.amount};
+        const std::string memo = blank(value.memo);
+        types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
+        if (value.cleared != DNCString && !value.cleared.empty())
+            cleared = types::cleared_status_from_string(value.cleared);
+
+        if (first == nullptr) {
+            ledger::Transaction made;
+            made.id = ledger::new_id();
+            made.ref = types::TransactionRef(value.ref);
+            if (on) made.date = *on;
+            made.payee = types::PayeeName(blank(value.payee));
+            made.memo = memo;
+            made.source_account = account_ref;
+            made.amount = amount;
+            made.cleared = cleared;
+            into->push_back(made);
+            return;
+        }
+
+        // Which row this is for its transaction is read from the
+        // transaction's own state, not from how many rows have been seen:
+        // a third or later row collapses into the same one object as the
+        // second once its Destination is set, so counting objects sharing
+        // a Ref stops distinguishing a third row from a second.
+        if (first->destination.is_none()) {
+            ledger::Transaction& t = *first;
+            const bool transfer = total_for_ref == 2 && account_ref != t.source_account &&
+                                  chart_.is_real(t.source_account) &&
+                                  chart_.is_real(account_ref) &&
+                                  !ledger::is_unassigned(chart_, t.source_account) &&
+                                  !ledger::is_unassigned(chart_, account_ref);
+            if (transfer) {
+                ledger::Transaction made;
+                made.id = ledger::new_id();
+                made.ref = t.ref;
+                if (on) made.date = *on;
+                made.payee = types::PayeeName(blank(value.payee));
+                made.memo = memo;
+                made.source_account = account_ref;
+                made.destination = t.source_account;
+                made.amount = amount;
+                made.cleared = cleared;
+                t.destination = account_ref;
+                into->push_back(made);
+            } else {
+                t.destination = account_ref;
+                if (t.memo.empty() && !memo.empty()) t.memo = memo;
+                second_row_amount_[t.id.value()] = {amount, memo};
+            }
+            return;
+        }
+
+        ledger::Transaction& t = *first;
+        if (!chart::is_split(t.destination)) {
+            if (!t.destination.is_none()) {
+                ledger::TransactionSplit promoted;
+                promoted.transaction_id = t.id;
+                promoted.destination = t.destination;
+                const auto at = second_row_amount_.find(t.id.value());
+                if (at != second_row_amount_.end()) {
+                    promoted.amount = at->second.amount;
+                    promoted.memo = at->second.memo;
+                } else {
+                    promoted.amount = -t.amount;
+                }
+                splits_.push_back(promoted);
+            }
+            t.destination = chart::split_ref();
+        }
+        ledger::TransactionSplit s;
+        s.transaction_id = t.id;
+        s.destination = account_ref;
+        s.amount = amount;
+        s.memo = memo;
+        splits_.push_back(s);
     }
 
     void given_the_chart_of_accounts_is_as_previous() {}
@@ -167,14 +234,6 @@ public:
             EXPECT_EQ(blank(values[i].account), got[i].account) << "pane " << pane;
             EXPECT_EQ(parse_bool_cell(values[i].active), workspace().active_pane() == pane)
                 << "pane " << pane << " active";
-        }
-    }
-
-    void then_split_state_is(const std::vector<SplitStateString>& values) {
-        for (const auto& value : values) {
-            EXPECT_EQ(parse_bool_cell(value.open), workspace().split_open()) << "split open";
-            EXPECT_EQ(std::stoi(value.panecount), workspace().pane_count()) << "pane count";
-            EXPECT_EQ(std::stoi(value.activepane), workspace().active_pane()) << "active pane";
         }
     }
 
@@ -282,6 +341,8 @@ public:
     }
 
 private:
+    struct PendingSecondRow { Money amount; std::string memo; };
+    std::map<std::string, PendingSecondRow> second_row_amount_;
     std::string opened_;
     ui::Workspace::ActiveRegister import_refusal_;
     ui::Recategorised recategorised_;
@@ -289,6 +350,7 @@ private:
     chart::Chart chart_;
     ledger::Ledger book_;
     std::vector<ledger::Transaction> transactions_;
+    std::vector<ledger::TransactionSplit> splits_;
     std::unique_ptr<ui::Workspace> workspace_;
     bool show_hidden_ = false;
     std::vector<ui::ReviewRow> last_review_;
@@ -322,10 +384,7 @@ private:
 
     void rebuild_book() {
         book_ = ledger::Ledger();
-        for (const ledger::Transaction& t : transactions_)
-            for (const ledger::Posting& p : t.postings)
-                book_.add({t.date, types::AccountPath(chart_.path_for_ref(p.account)),
-                          p.amount, t.ref.value()});
+        ledger::add_to_book(&book_, chart_, transactions_, splits_);
     }
 
     ui::Workspace& workspace() {
@@ -360,20 +419,27 @@ public:
     void then_accepted_postings_are(const std::vector<AcceptedPostingString>& values) {
         std::vector<AcceptedPostingString> got;
         for (const ledger::Transaction& t : workspace().accepted()) {
-            for (const ledger::Posting& p : t.postings) {
+            const std::vector<ledger::Side> sides = ledger::sides_of(t, {});
+            for (std::size_t i = 0; i < sides.size(); ++i) {
+                const ledger::Side& s = sides[i];
                 AcceptedPostingString row;
-                row.account = workspace().accounts().path_for_ref(p.account);
-                row.amount = p.amount.in_register();
-                // A posting carries at most one identifier per source, and an
-                // imported row has one source, so the first is the one.
-                row.identifier = p.import_ids.empty() ? "none" : p.import_ids.front().id;
-                row.source = types::to_string(p.import_ids.empty()
-                                                  ? types::ImportSource::Ofx
-                                                  : p.import_ids.front().source);
+                row.account = workspace().accounts().path_for_ref(s.account);
+                row.amount = s.amount.in_register();
+                // At most one identifier per source, and an imported row has
+                // one source, so the first is the one. Carried only on the
+                // side the statement is for: the category side is never
+                // stamped, the same as a posting once was.
+                const bool is_source = (i == 0);
+                row.identifier = (is_source && !t.import_ids.empty())
+                                     ? t.import_ids.front().id : "none";
+                row.source = types::to_string((is_source && !t.import_ids.empty())
+                                                  ? t.import_ids.front().source
+                                                  : types::ImportSource::Ofx);
                 row.rawname = t.raw_name.empty() ? "none" : t.raw_name;
                 row.memo = t.memo.empty() ? "none" : t.memo;
                 row.checkno = t.check_no.value().empty() ? "none" : t.check_no.value();
-                row.cleared = types::to_string(p.cleared);
+                row.cleared = types::to_string(is_source ? t.cleared
+                                                         : types::ClearedStatus::Uncleared);
                 got.push_back(row);
             }
         }
@@ -494,7 +560,7 @@ public:
         ASSERT_FALSE(values.empty());
         const int line = std::stoi(values.front().line);
         const std::vector<reports::DetailLine> lines =
-            reports::detail_report(chart_, book_, transactions_, last_report_spec_);
+            reports::detail_report(chart_, book_, transactions_, splits_, last_report_spec_);
         if (line < 1 || line > static_cast<int>(lines.size())) return;
         const reports::DetailLine& chosen = lines[static_cast<std::size_t>(line - 1)];
         if (chosen.kind != reports::LineKind::Transaction) return;
@@ -513,7 +579,7 @@ public:
     // for it carries the same one the register would.
     void then_the_transaction_id_shown_is(const std::vector<IdShownString>& values) {
         const std::vector<reports::DetailLine> lines =
-            reports::detail_report(chart_, book_, transactions_, last_report_spec_);
+            reports::detail_report(chart_, book_, transactions_, splits_, last_report_spec_);
         for (const auto& value : values) {
             const ledger::Transaction* t = nullptr;
             for (const ledger::Transaction& one : transactions_)
@@ -590,7 +656,7 @@ public:
         report_selected_refs_.clear();
         report_selection_all_transactions_ = true;
         const std::vector<reports::DetailLine> lines =
-            reports::detail_report(chart_, book_, transactions_, last_report_spec_);
+            reports::detail_report(chart_, book_, transactions_, splits_, last_report_spec_);
         for (const auto& value : values) {
             const int line = std::stoi(value.line);
             if (line < 1 || line > static_cast<int>(lines.size()) ||
@@ -665,6 +731,43 @@ public:
 
     void when_tab_selected(const std::vector<TabSelectString>& values) {
         for (const auto& value : values) workspace().select_tab(std::stoi(value.position));
+    }
+
+public:
+
+    void then_bottom_panel_is(const std::vector<BottomPanelString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_bottom_panel_is";
+    }
+
+    void then_bottom_panel_tabs_are(const std::vector<BottomPanelTabRowString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_bottom_panel_tabs_are";
+    }
+
+    void when_find_performed(const std::vector<FindCriteriaString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_find_performed";
+    }
+
+    void when_bottom_panel_tab_selected(const std::vector<BottomPanelTabSelectString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_bottom_panel_tab_selected";
+    }
+
+    void then_find_results_are(const std::vector<FindResultRowString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_find_results_are";
+    }
+
+    void examples_datatype_bottompaneltabkind(const std::vector<EnumerationValuesString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_datatype_bottompaneltabkind";
+    }
+
+    void examples_datatype_findscope(const std::vector<EnumerationValuesString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_datatype_findscope";
     }
 
 };

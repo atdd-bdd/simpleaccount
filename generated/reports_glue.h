@@ -15,6 +15,7 @@
 #include "report.h"
 #include "report_ranges.h"
 #include "text_types.h"
+#include "transaction_id.h"
 
 // Glue for Reports.spectable.
 class ReportsGlue {
@@ -39,30 +40,77 @@ public:
     // Postings grouped into transactions by their Ref, which is how these tables
     // say that two rows belong together.
     void given_postings_are(const std::vector<PostingRowString>& values) {
-        book_ = ledger::Ledger();
         transactions_.clear();
-        std::map<std::string, std::size_t> by_ref;
-        for (const auto& value : values) {
-            const auto date = types::Date::from_iso(value.date);
-            ASSERT_TRUE(date.has_value()) << value.date;
-            const Money amount{value.amount};
-            book_.add({*date, types::AccountPath(value.account), amount, value.ref});
+        splits_.clear();
+        second_row_amount_.clear();
+        for (const auto& value : values) group_into(&transactions_, value);
+        rebuild_book();
+    }
 
-            auto at = by_ref.find(value.ref);
-            if (at == by_ref.end()) {
-                ledger::Transaction t;
-                t.ref = types::TransactionRef(value.ref);
-                t.date = *date;
-                t.payee = types::PayeeName(value.payee);
-                transactions_.push_back(t);
-                at = by_ref.emplace(value.ref, transactions_.size() - 1).first;
-            }
-            ledger::Posting p;
-            p.account = chart_.ref_for_path(value.account);
-            p.amount = amount;
-            p.memo = value.memo == "none" ? std::string() : value.memo;
-            transactions_[at->second].postings.push_back(p);
+    void group_into(std::vector<ledger::Transaction>* into, const PostingRowString& value) {
+        ledger::Transaction* first = nullptr;
+        for (ledger::Transaction& t : *into) {
+            if (t.ref.value() != value.ref) continue;
+            first = &t;
+            break;
         }
+        const auto on = types::Date::from_iso(value.date);
+        ASSERT_TRUE(on.has_value()) << value.date;
+        const chart::Ref account_ref = chart_.ref_for_path(value.account);
+        const Money amount{value.amount};
+        const std::string memo = value.memo == "none" ? std::string() : value.memo;
+
+        if (first == nullptr) {
+            ledger::Transaction made;
+            made.id = ledger::new_id();
+            made.ref = types::TransactionRef(value.ref);
+            made.date = *on;
+            made.payee = types::PayeeName(value.payee);
+            made.memo = memo;
+            made.source_account = account_ref;
+            made.amount = amount;
+            into->push_back(made);
+            return;
+        }
+        // Which row this is for its transaction is read from the
+        // transaction's own state, not from how many rows have been seen:
+        // a third or later row collapses into the same one object as the
+        // second once its Destination is set, so counting objects sharing
+        // a Ref stops distinguishing a third row from a second.
+        if (first->destination.is_none()) {
+            first->destination = account_ref;
+            if (first->memo.empty() && !memo.empty()) first->memo = memo;
+            second_row_amount_[first->id.value()] = {amount, memo};
+            return;
+        }
+        ledger::Transaction& t = *first;
+        if (!chart::is_split(t.destination)) {
+            if (!t.destination.is_none()) {
+                ledger::TransactionSplit promoted;
+                promoted.transaction_id = t.id;
+                promoted.destination = t.destination;
+                const auto at = second_row_amount_.find(t.id.value());
+                if (at != second_row_amount_.end()) {
+                    promoted.amount = at->second.amount;
+                    promoted.memo = at->second.memo;
+                } else {
+                    promoted.amount = -t.amount;
+                }
+                splits_.push_back(promoted);
+            }
+            t.destination = chart::split_ref();
+        }
+        ledger::TransactionSplit s;
+        s.transaction_id = t.id;
+        s.destination = account_ref;
+        s.amount = amount;
+        s.memo = memo;
+        splits_.push_back(s);
+    }
+
+    void rebuild_book() {
+        book_ = ledger::Ledger();
+        ledger::add_to_book(&book_, chart_, transactions_, splits_);
     }
 
     // ----------------------------------------------------------------- whens
@@ -128,7 +176,7 @@ public:
             category_filter_.empty() ? std::nullopt
                                      : std::optional<std::string>(category_filter_);
         const std::vector<reports::PayeeRow> got =
-            reports::payee_report(chart_, transactions_, spec_, only);
+            reports::payee_report(chart_, transactions_, splits_, spec_, only);
         ASSERT_EQ(values.size(), got.size()) << "number of payee rows";
         for (std::size_t i = 0; i < values.size(); ++i) {
             EXPECT_EQ(values[i].payee, got[i].payee) << "row " << i;
@@ -144,15 +192,15 @@ public:
         std::vector<DrillDownRowString> got;
         for (const ledger::Transaction& t : transactions_) {
             if (t.date < spec_.from || spec_.to < t.date) continue;
-            for (const ledger::Posting& p : t.postings) {
-                const std::string p_path = chart_.path_for_ref(p.account);
+            for (const ledger::Side& s : ledger::sides_of(t, splits_)) {
+                const std::string p_path = chart_.path_for_ref(s.account);
                 if (!chart::Chart::is_descendant_or_self(p_path, opened_)) continue;
                 DrillDownRowString row;
                 row.ref = t.ref.value();
                 row.date = t.date.iso();
                 row.payee = t.payee.value();
                 row.account = p_path;
-                row.amount = p.amount.in_register();
+                row.amount = s.amount.in_register();
                 got.push_back(row);
             }
         }
@@ -197,9 +245,12 @@ public:
     }
 
 private:
+    struct PendingSecondRow { Money amount; std::string memo; };
+    std::map<std::string, PendingSecondRow> second_row_amount_;
     chart::Chart chart_;
     ledger::Ledger book_;
     std::vector<ledger::Transaction> transactions_;
+    std::vector<ledger::TransactionSplit> splits_;
     reports::Spec spec_;
     reports::CategoryReport report_;
     std::vector<reports::DetailLine> lines_;
@@ -228,7 +279,7 @@ private:
         // Both shapes, every time. The detailed one walks the report rather
         // than totalling anything again, so having it here costs nothing and
         // the two can never be out of step with each other.
-        lines_ = reports::detail_report(chart_, book_, transactions_, spec_);
+        lines_ = reports::detail_report(chart_, book_, transactions_, splits_, spec_);
     }
 public:
 
@@ -409,12 +460,22 @@ public:
                 legs.push_back({"Assets:Checking", is_income ? hundred : -hundred});
             }
 
-            for (const auto& leg : legs) {
+            t.id = ledger::new_id();
+            for (const auto& leg : legs)
                 book_.add({on, types::AccountPath(leg.first), leg.second, t.ref.value()});
-                ledger::Posting posting;
-                posting.account = chart_.ref_for_path(leg.first);
-                posting.amount = leg.second;
-                t.postings.push_back(posting);
+            t.source_account = chart_.ref_for_path(legs[0].first);
+            t.amount = legs[0].second;
+            if (legs.size() == 2) {
+                t.destination = chart_.ref_for_path(legs[1].first);
+            } else {
+                t.destination = chart::split_ref();
+                for (std::size_t i = 1; i < legs.size(); ++i) {
+                    ledger::TransactionSplit s;
+                    s.transaction_id = t.id;
+                    s.destination = chart_.ref_for_path(legs[i].first);
+                    s.amount = legs[i].second;
+                    splits_.push_back(s);
+                }
             }
             transactions_.push_back(t);
 
@@ -607,38 +668,27 @@ private:
 public:
 
     // A transaction recorded through SourceAccount/Destination/Amount reports
-    // the same as one recorded through postings: it is turned into the same
-    // two DatedPosting entries a posting pair would be. A Destination of
-    // Split is not handled here yet -- see TransactionSplit in Transactions.
+    // the same as one recorded through postings. A Destination of Split is
+    // not handled here yet -- see TransactionSplit in Transactions.
     void given_transactions_are(const std::vector<TransactionString>& values) {
-        book_ = ledger::Ledger();
         transactions_.clear();
         for (const auto& value : values) {
             const auto date = types::Date::from_iso(value.date);
             ASSERT_TRUE(date.has_value()) << value.date;
-            const Money amount{value.amount};
-            const std::string source = blank(value.sourceaccount);
             const std::string dest = blank(value.destination);
-            book_.add({*date, types::AccountPath(source), amount, value.ref});
 
             ledger::Transaction t;
+            t.id = ledger::new_id();
             t.ref = types::TransactionRef(value.ref);
             t.date = *date;
             t.payee = types::PayeeName(blank(value.payee));
-            ledger::Posting p1;
-            p1.account = chart_.ref_for_path(source);
-            p1.amount = amount;
-            t.postings.push_back(p1);
-
-            if (!dest.empty() && dest != "Split") {
-                book_.add({*date, types::AccountPath(dest), -amount, value.ref});
-                ledger::Posting p2;
-                p2.account = chart_.ref_for_path(dest);
-                p2.amount = -amount;
-                t.postings.push_back(p2);
-            }
+            t.source_account = chart_.ref_for_path(blank(value.sourceaccount));
+            t.amount = Money(value.amount);
+            if (!dest.empty() && dest != "Split")
+                t.destination = chart_.ref_for_path(dest);
             transactions_.push_back(t);
         }
+        rebuild_book();
     }
 
 };

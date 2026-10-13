@@ -251,8 +251,9 @@ struct Recategorised {
 class Workspace {
 public:
     Workspace(const chart::Chart& accounts, const ledger::Ledger& book,
-              const std::vector<ledger::Transaction>& transactions)
-        : accounts_(accounts), book_(book), transactions_(transactions) {}
+              const std::vector<ledger::Transaction>& transactions,
+              const std::vector<ledger::TransactionSplit>& splits = {})
+        : accounts_(accounts), book_(book), transactions_(transactions), splits_(splits) {}
 
     // Accepting an import can create a category the chart handed in at
     // construction never had, so a caller that wants to show a ref the
@@ -386,7 +387,8 @@ public:
             if (!r.accepted) continue;
             ledger::Transaction t;
             t.id = ledger::new_id();
-            t.ref = types::TransactionRef("T" + std::to_string(transactions_.size() + 1));
+            t.ref = types::TransactionRef(
+                "T" + std::to_string(ledger::transaction_count(transactions_) + 1));
             t.date = r.date;
             t.payee = types::PayeeName(r.payee);
             t.raw_name = r.raw_name;
@@ -394,26 +396,22 @@ public:
             t.check_no = types::CheckNumber(r.check_no);
             if (accounts_.find(r.account) == nullptr)
                 accounts_.add(types::AccountPath(r.account), types::AccountType::Checking);
-            ledger::Posting here;
-            here.account = accounts_.ref_for_path(r.account);
-            here.amount = r.amount;
-            here.cleared = r.cleared;
+            t.source_account = accounts_.ref_for_path(r.account);
+            t.amount = r.amount;
+            t.cleared = r.cleared;
             // The identifier belongs to the side the statement is for. The bank
             // has never heard of the category, so the other side carries none.
-            ledger::stamp(&here, r.source, r.identifier);
+            ledger::stamp(&t, r.source, r.identifier);
             const Money other_amount = -r.amount;
             if (accounts_.find(r.category) == nullptr)
                 accounts_.add(types::AccountPath(r.category),
                               other_amount.cents() < 0 ? types::AccountType::Expense
                                                        : types::AccountType::Income);
-            ledger::Posting other;
-            other.account = accounts_.ref_for_path(r.category);
-            other.amount = other_amount;
-            t.postings = {here, other};
+            t.destination = accounts_.ref_for_path(r.category);
             transactions_.push_back(t);
             accepted_.push_back(t);
-            book_.add({r.date, types::AccountPath(r.account), here.amount});
-            book_.add({r.date, types::AccountPath(r.category), other.amount});
+            book_.add({r.date, types::AccountPath(r.account), t.amount});
+            book_.add({r.date, types::AccountPath(r.category), other_amount});
         }
         committed_ = true;
         // The second pane existed to compare the import against the register
@@ -461,7 +459,7 @@ public:
         }
         int removed = 0;
         for (const std::string& ref : refs)
-            if (edit::delete_transaction(&transactions_, ref).changed) ++removed;
+            if (edit::delete_transaction(&transactions_, ref, &splits_).changed) ++removed;
         if (removed > 0) rebuild_book();
         selected_.clear();
         return removed;
@@ -530,11 +528,11 @@ public:
         std::vector<std::string> out;
         const ledger::Transaction* found = by_ref_const(ref);
         if (found == nullptr) return out;
-        for (const ledger::Posting& p : found->postings) {
-            const chart::Account* a = accounts_.find_account_by_ref(p.account);
+        for (const ledger::Side& s : ledger::sides_of(*found, splits_)) {
+            const chart::Account* a = accounts_.find_account_by_ref(s.account);
             if (a == nullptr) continue;
             if (types::class_of(a->type) != types::AccountClass::Real) continue;
-            out.push_back(accounts_.path_for_ref(p.account));
+            out.push_back(accounts_.path_for_ref(s.account));
         }
         return out;
     }
@@ -636,7 +634,7 @@ public:
         const std::vector<Pane> rows = panes();
         const std::size_t index = static_cast<std::size_t>(pane_one_based - 1);
         if (index >= rows.size() || rows[index].account.empty()) return {};
-        return reg::lines_for(accounts_, transactions_, rows[index].account);
+        return reg::lines_for(accounts_, transactions_, splits_, rows[index].account);
     }
 
     std::vector<AccountRow> account_rows(bool show_hidden) const {
@@ -645,6 +643,7 @@ public:
 
     const ledger::Ledger& book() const { return book_; }
     const std::vector<ledger::Transaction>& transactions() const { return transactions_; }
+    const std::vector<ledger::TransactionSplit>& splits() const { return splits_; }
 
 private:
     void close_review() {
@@ -709,16 +708,14 @@ private:
     // every balance under both of them changes with it.
     void rebuild_book() {
         ledger::Ledger fresh;
-        for (const ledger::Transaction& t : transactions_)
-            for (const ledger::Posting& p : t.postings)
-                fresh.add({t.date, types::AccountPath(accounts_.path_for_ref(p.account)),
-                          p.amount, t.ref.value()});
+        ledger::add_to_book(&fresh, accounts_, transactions_, splits_);
         book_ = fresh;
     }
 
     chart::Chart accounts_;
     ledger::Ledger book_;
     std::vector<ledger::Transaction> transactions_;
+    std::vector<ledger::TransactionSplit> splits_;
     std::vector<Tab> tabs_;
     std::size_t active_tab_ = 0;
     bool review_open_ = false;

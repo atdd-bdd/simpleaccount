@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <sqlite3.h>
 #include "common/common.h"
 #include "account_type.h"
@@ -163,15 +164,16 @@ public:
         const std::vector<std::string> both = {"Business", "Personal"};
         for (const std::string& name : both) {
             std::vector<ledger::Transaction> transactions;
-            if (!read_book(name, nullptr, &transactions)) continue;
+            std::vector<ledger::TransactionSplit> splits;
+            if (!read_book(name, nullptr, &transactions, &splits)) continue;
             PerBookCheckString row;
             row.book = name;
             row.transactionschecked = std::to_string(transactions.size());
             int out = 0;
             for (const ledger::Transaction& t : transactions) {
                 std::vector<Money> amounts;
-                for (const ledger::Posting& posting : t.postings)
-                    amounts.push_back(posting.amount);
+                for (const ledger::Side& s : ledger::sides_of(t, splits))
+                    amounts.push_back(s.amount);
                 if (ledger::imbalance_of(amounts).cents() != 0) ++out;
             }
             row.outofbalance = std::to_string(out);
@@ -251,12 +253,9 @@ public:
         make_if_needed(current_book_);
         chart_ = chart::Chart();
         transactions_.clear();
-        ASSERT_TRUE(read_book(current_book_, &chart_, &transactions_));
+        ASSERT_TRUE(read_book(current_book_, &chart_, &transactions_, &splits_));
         ledger_ = ledger::Ledger();
-        for (const ledger::Transaction& t : transactions_)
-            for (const ledger::Posting& p : t.postings)
-                ledger_.add({t.date, types::AccountPath(chart_.path_for_ref(p.account)),
-                            p.amount, t.ref.value()});
+        ledger::add_to_book(&ledger_, chart_, transactions_, splits_);
 
         for (const auto& value : values) {
             reports::Spec spec;
@@ -400,7 +399,8 @@ public:
         chart::Chart accounts;
         ledger::Ledger book;
         std::vector<ledger::Transaction> transactions;
-        const store::Failure no = store_.read(&accounts, &book, &transactions);
+        std::vector<ledger::TransactionSplit> splits;
+        const store::Failure no = store_.read(&accounts, &book, &transactions, nullptr, &splits);
         ASSERT_FALSE(no.refused) << no.reason;
         EXPECT_EQ(want.accounts, std::to_string(accounts.all().size())) << "accounts";
         EXPECT_EQ(want.transactions, std::to_string(transactions.size())) << "transactions";
@@ -409,9 +409,11 @@ public:
         // itself was wrong.
         bool balances = true;
         for (const ledger::Transaction& t : transactions) {
+            if (!chart::is_split(t.destination)) continue;
             std::vector<Money> amounts;
-            for (const ledger::Posting& posting : t.postings) amounts.push_back(posting.amount);
-            if (ledger::imbalance_of(amounts).cents() != 0) balances = false;
+            for (const ledger::TransactionSplit& s : ledger::split_lines_of(splits, t.id))
+                amounts.push_back(s.amount);
+            if (t.amount.cents() + ledger::imbalance_of(amounts).cents() != 0) balances = false;
         }
         EXPECT_EQ(parse_bool_cell(want.balances), balances) << "balances";
     }
@@ -438,29 +440,64 @@ public:
 
     void given_postings_are(const std::vector<PostingRowString>& values) {
         transactions_.clear();
+        splits_.clear();
+        second_row_amount_.clear();
         for (const auto& value : values) {
-            ledger::Transaction* into = nullptr;
-            for (ledger::Transaction& t : transactions_)
-                if (t.ref.value() == value.ref) into = &t;
-            if (into == nullptr) {
-                ledger::Transaction made;
+            ledger::Transaction* first = nullptr;
+            for (ledger::Transaction& t : transactions_) {
+                if (t.ref.value() != value.ref) continue;
+                first = &t;
+                break;
+            }
+            const auto on = types::Date::from_iso(value.date);
+            ASSERT_TRUE(on.has_value()) << value.date;
+            const chart::Ref account_ref = chart_.ref_for_path(value.account);
+            const Money amount{value.amount};
+            const std::string memo = blank(value.memo);
+            const types::ClearedStatus cleared = types::cleared_status_from_string(value.cleared);
+
+            if (first == nullptr) {
                 // Named here as any creator must name one: the store refuses a
                 // transaction with no id rather than inventing one.
+                ledger::Transaction made;
                 made.id = ledger::new_id();
                 made.ref = types::TransactionRef(value.ref);
-                const auto on = types::Date::from_iso(value.date);
-                ASSERT_TRUE(on.has_value()) << value.date;
                 made.date = *on;
                 made.payee = types::PayeeName(blank(value.payee));
+                made.memo = memo;
+                made.source_account = account_ref;
+                made.amount = amount;
+                made.cleared = cleared;
                 transactions_.push_back(made);
-                into = &transactions_.back();
+            } else if (first->destination.is_none()) {
+                first->destination = account_ref;
+                if (first->memo.empty() && !memo.empty()) first->memo = memo;
+                second_row_amount_[first->id.value()] = {amount, memo};
+            } else {
+                ledger::Transaction& t = *first;
+                if (!chart::is_split(t.destination)) {
+                    if (!t.destination.is_none()) {
+                        ledger::TransactionSplit promoted;
+                        promoted.transaction_id = t.id;
+                        promoted.destination = t.destination;
+                        const auto at = second_row_amount_.find(t.id.value());
+                        if (at != second_row_amount_.end()) {
+                            promoted.amount = at->second.amount;
+                            promoted.memo = at->second.memo;
+                        } else {
+                            promoted.amount = -t.amount;
+                        }
+                        splits_.push_back(promoted);
+                    }
+                    t.destination = chart::split_ref();
+                }
+                ledger::TransactionSplit s;
+                s.transaction_id = t.id;
+                s.destination = account_ref;
+                s.amount = amount;
+                s.memo = memo;
+                splits_.push_back(s);
             }
-            ledger::Posting posting;
-            posting.account = chart_.ref_for_path(value.account);
-            posting.amount = Money(value.amount);
-            posting.memo = blank(value.memo);
-            posting.cleared = types::cleared_status_from_string(value.cleared);
-            into->postings.push_back(posting);
         }
     }
 
@@ -469,7 +506,7 @@ public:
     // program holds it has not been saved at all.
     void when_the_book_is_saved_and_opened_again() {
         ASSERT_TRUE(store_.is_open()) << "no book was made";
-        last_ = store_.write(chart_, transactions_);
+        last_ = store_.write(chart_, transactions_, {}, splits_);
         ASSERT_FALSE(last_.refused) << last_.reason;
         store_ = store::Book();
 
@@ -477,8 +514,9 @@ public:
         ASSERT_FALSE(last_.refused) << last_.reason;
         chart_ = chart::Chart();
         transactions_.clear();
+        splits_.clear();
         ledger::Ledger ignored;
-        last_ = store_.read(&chart_, &ignored, &transactions_);
+        last_ = store_.read(&chart_, &ignored, &transactions_, nullptr, &splits_);
         ASSERT_FALSE(last_.refused) << last_.reason;
     }
 
@@ -496,15 +534,19 @@ public:
     void then_postings_are(const std::vector<PostingRowString>& values) {
         std::vector<PostingRowString> got;
         for (const ledger::Transaction& t : transactions_) {
-            for (const ledger::Posting& posting : t.postings) {
+            const std::vector<ledger::Side> sides =
+                ledger::sides_of_display(chart_, t, transactions_, splits_);
+            for (std::size_t i = 0; i < sides.size(); ++i) {
+                const ledger::Side& s = sides[i];
                 PostingRowString row;
                 row.ref = t.ref.value();
                 row.date = t.date.iso();
                 row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = chart_.path_for_ref(posting.account);
-                row.amount = posting.amount.in_register();
-                row.memo = posting.memo.empty() ? "none" : posting.memo;
-                row.cleared = types::to_string(posting.cleared);
+                row.account = chart_.path_for_ref(s.account);
+                row.amount = s.amount.in_register();
+                row.memo = s.memo.empty() ? "none" : s.memo;
+                row.cleared = types::to_string(i == 0 ? t.cleared
+                                                      : types::ClearedStatus::Uncleared);
                 got.push_back(row);
             }
         }
@@ -582,7 +624,7 @@ public:
             if (value.scope != "PerBook") continue;
             std::vector<std::string> wanted;
             if (value.thing == "Accounts" || value.thing == "Categories") wanted = {"accounts"};
-            else if (value.thing == "Transactions and postings") wanted = {"transactions", "postings"};
+            else if (value.thing == "Transactions and splits") wanted = {"transactions", "transaction_splits"};
             else if (value.thing == "Payee rules") wanted = {"payee_rules"};
             else if (value.thing == "Remembered splits") wanted = {"payee_split_rules"};
             else if (value.thing == "Account mappings for OFX") wanted = {"ofx_account_mappings"};
@@ -705,9 +747,12 @@ public:
     }
 
 private:
+    struct PendingSecondRow { Money amount; std::string memo; };
+    std::map<std::string, PendingSecondRow> second_row_amount_;
     store::Book store_;
     chart::Chart chart_;
     std::vector<ledger::Transaction> transactions_;
+    std::vector<ledger::TransactionSplit> splits_;
     std::vector<std::string> named_;
     std::vector<std::string> listed_;
     std::string open_name_;
@@ -738,13 +783,15 @@ private:
     }
 
     bool read_book(const std::string& name, chart::Chart* accounts,
-                   std::vector<ledger::Transaction>* transactions) {
-        return read_book_with_rules(name, accounts, transactions, nullptr);
+                   std::vector<ledger::Transaction>* transactions,
+                   std::vector<ledger::TransactionSplit>* splits = nullptr) {
+        return read_book_with_rules(name, accounts, transactions, nullptr, splits);
     }
 
     bool read_book_with_rules(const std::string& name, chart::Chart* accounts,
                               std::vector<ledger::Transaction>* transactions,
-                              std::vector<payees::Rule>* rules) {
+                              std::vector<payees::Rule>* rules,
+                              std::vector<ledger::TransactionSplit>* splits = nullptr) {
         store::Book opened;
         store::Failure no = store::Book::open_named(name, &opened);
         if (no.refused) { ADD_FAILURE() << no.reason; return false; }
@@ -752,20 +799,23 @@ private:
         ledger::Ledger unused;
         std::vector<ledger::Transaction> theirs;
         std::vector<payees::Rule> their_rules;
-        no = opened.read(&mine, &unused, &theirs, &their_rules);
+        std::vector<ledger::TransactionSplit> their_splits;
+        no = opened.read(&mine, &unused, &theirs, &their_rules, &their_splits);
         if (no.refused) { ADD_FAILURE() << no.reason; return false; }
         if (accounts != nullptr) *accounts = mine;
         if (transactions != nullptr) *transactions = theirs;
         if (rules != nullptr) *rules = their_rules;
+        if (splits != nullptr) *splits = their_splits;
         return true;
     }
 
     void write_back(const std::string& name, const chart::Chart& accounts,
-                    const std::vector<ledger::Transaction>& transactions) {
+                    const std::vector<ledger::Transaction>& transactions,
+                    const std::vector<ledger::TransactionSplit>& splits = {}) {
         store::Book opened;
         const store::Failure where = store::Book::open_named(name, &opened);
         ASSERT_FALSE(where.refused) << where.reason;
-        const store::Failure no = opened.write(accounts, transactions);
+        const store::Failure no = opened.write(accounts, transactions, {}, splits);
         ASSERT_FALSE(no.refused) << no.reason;
     }
 
@@ -794,23 +844,9 @@ private:
         chart::Chart accounts;
         std::vector<ledger::Transaction> transactions;
         ASSERT_TRUE(read_book(name, &accounts, &transactions));
+        std::vector<ledger::TransactionSplit> splits;
+        std::map<std::string, PendingSecondRow> second_row_amount;
         for (const auto& value : values) {
-            ledger::Transaction* into = nullptr;
-            for (ledger::Transaction& t : transactions)
-                if (t.ref.value() == value.ref) into = &t;
-            if (into == nullptr) {
-                ledger::Transaction made;
-                // Named here as any creator must name one: the store refuses a
-                // transaction with no id rather than inventing one.
-                made.id = ledger::new_id();
-                made.ref = types::TransactionRef(value.ref);
-                const auto on = types::Date::from_iso(value.date);
-                ASSERT_TRUE(on.has_value()) << value.date;
-                made.date = *on;
-                made.payee = types::PayeeName(blank(value.payee));
-                transactions.push_back(made);
-                into = &transactions.back();
-            }
             // An account a posting names has to be in the chart for the book to
             // read back, and these scenarios are about the books being separate
             // rather than about the chart.
@@ -820,14 +856,64 @@ private:
                 a.type = account_type_guessed_from_path(value.account);
                 accounts.put(a);
             }
-            ledger::Posting posting;
-            posting.account = accounts.ref_for_path(value.account);
-            posting.amount = Money(value.amount);
-            posting.memo = blank(value.memo);
-            posting.cleared = types::cleared_status_from_string(value.cleared);
-            into->postings.push_back(posting);
+
+            ledger::Transaction* first = nullptr;
+            for (ledger::Transaction& t : transactions) {
+                if (t.ref.value() != value.ref) continue;
+                first = &t;
+                break;
+            }
+            const auto on = types::Date::from_iso(value.date);
+            ASSERT_TRUE(on.has_value()) << value.date;
+            const chart::Ref account_ref = accounts.ref_for_path(value.account);
+            const Money amount{value.amount};
+            const std::string memo = blank(value.memo);
+            const types::ClearedStatus cleared = types::cleared_status_from_string(value.cleared);
+
+            if (first == nullptr) {
+                ledger::Transaction made;
+                // Named here as any creator must name one: the store refuses a
+                // transaction with no id rather than inventing one.
+                made.id = ledger::new_id();
+                made.ref = types::TransactionRef(value.ref);
+                made.date = *on;
+                made.payee = types::PayeeName(blank(value.payee));
+                made.memo = memo;
+                made.source_account = account_ref;
+                made.amount = amount;
+                made.cleared = cleared;
+                transactions.push_back(made);
+            } else if (first->destination.is_none()) {
+                first->destination = account_ref;
+                if (first->memo.empty() && !memo.empty()) first->memo = memo;
+                second_row_amount[first->id.value()] = {amount, memo};
+            } else {
+                ledger::Transaction& t = *first;
+                if (!chart::is_split(t.destination)) {
+                    if (!t.destination.is_none()) {
+                        ledger::TransactionSplit promoted;
+                        promoted.transaction_id = t.id;
+                        promoted.destination = t.destination;
+                        const auto at = second_row_amount.find(t.id.value());
+                        if (at != second_row_amount.end()) {
+                            promoted.amount = at->second.amount;
+                            promoted.memo = at->second.memo;
+                        } else {
+                            promoted.amount = -t.amount;
+                        }
+                        splits.push_back(promoted);
+                    }
+                    t.destination = chart::split_ref();
+                }
+                ledger::TransactionSplit s;
+                s.transaction_id = t.id;
+                s.destination = account_ref;
+                s.amount = amount;
+                s.memo = memo;
+                splits.push_back(s);
+            }
         }
-        write_back(name, accounts, transactions);
+        write_back(name, accounts, transactions, splits);
     }
 
     // A guess good enough for a fixture whose point is book separation rather
@@ -868,18 +954,23 @@ private:
     void check_postings_of(const std::string& name, const std::vector<PostingRowString>& values) {
         chart::Chart accounts;
         std::vector<ledger::Transaction> transactions;
-        ASSERT_TRUE(read_book(name, &accounts, &transactions));
+        std::vector<ledger::TransactionSplit> splits;
+        ASSERT_TRUE(read_book(name, &accounts, &transactions, &splits));
         std::vector<PostingRowString> got;
         for (const ledger::Transaction& t : transactions) {
-            for (const ledger::Posting& posting : t.postings) {
+            const std::vector<ledger::Side> sides =
+                ledger::sides_of_display(accounts, t, transactions, splits);
+            for (std::size_t i = 0; i < sides.size(); ++i) {
+                const ledger::Side& s = sides[i];
                 PostingRowString row;
                 row.ref = t.ref.value();
                 row.date = t.date.iso();
                 row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = accounts.path_for_ref(posting.account);
-                row.amount = posting.amount.in_register();
-                row.memo = posting.memo.empty() ? "none" : posting.memo;
-                row.cleared = types::to_string(posting.cleared);
+                row.account = accounts.path_for_ref(s.account);
+                row.amount = s.amount.in_register();
+                row.memo = s.memo.empty() ? "none" : s.memo;
+                row.cleared = types::to_string(i == 0 ? t.cleared
+                                                      : types::ClearedStatus::Uncleared);
                 got.push_back(row);
             }
         }
@@ -961,7 +1052,7 @@ private:
     // Where in the schema each attribute type actually appears, so the rule is
     // checked against a column rather than asserted.
     static std::pair<std::string, std::string> example_column(const std::string& type) {
-        if (type == "Money")          return {"postings", "amount_cents"};
+        if (type == "Money")          return {"transactions", "amount_cents"};
         if (type == "Date")           return {"transactions", "date"};
         if (type == "Integer")        return {"book", "fiscal_year_start"};
         if (type == "Boolean")        return {"accounts", "placeholder"};

@@ -32,7 +32,7 @@ int main(int argc, char** argv) {
     }
 
     const std::vector<reg::Line> lines =
-        reg::lines_for(book.accounts, book.transactions, argv[2]);
+        reg::lines_for(book.accounts, book.transactions, book.splits, argv[2]);
     std::printf("date\tnum\tpayee\tcategory\tamount\tbalance\n");
     for (const reg::Line& line : lines) {
         const Money amount = line.payment.cents() != 0 ? -line.payment : line.deposit;

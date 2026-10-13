@@ -464,7 +464,7 @@ void MainWindow::rebuildWorkspace() {
         }
     }
 
-    workspace_ = std::make_unique<ui::Workspace>(chart_, book_, transactions_);
+    workspace_ = std::make_unique<ui::Workspace>(chart_, book_, transactions_, splits_);
     for (const std::string& account : accounts) workspace_->select(account);
     // select() activates whatever it opens or returns to, so selecting them
     // back in order leaves the last one active; asking for the one that
@@ -543,7 +543,8 @@ void MainWindow::openNamed(const QString& name) {
     ledger::Ledger ledger;
     std::vector<ledger::Transaction> transactions;
     std::vector<payees::Rule> rules;
-    no = opened.read(&accounts, &ledger, &transactions, &rules);
+    std::vector<ledger::TransactionSplit> splits;
+    no = opened.read(&accounts, &ledger, &transactions, &rules, &splits);
     if (no.refused) {
         QMessageBox::warning(this, "SimpleAccount", QString::fromStdString(no.reason));
         return;
@@ -553,6 +554,7 @@ void MainWindow::openNamed(const QString& name) {
     book_ = ledger;
     transactions_ = transactions;
     rules_ = rules;
+    splits_ = splits;
     rememberRecent(name);
     bookChanged(name);
 }
@@ -561,7 +563,7 @@ void MainWindow::openNamed(const QString& name) {
 // Closing the window is not a way to lose a morning's entry.
 bool MainWindow::save() {
     if (!store_.is_open()) return false;
-    const store::Failure no = store_.write(chart_, transactions_, rules_);
+    const store::Failure no = store_.write(chart_, transactions_, rules_, splits_);
     if (no.refused) {
         QMessageBox::warning(this, "SimpleAccount", QString::fromStdString(no.reason));
         return false;
@@ -766,13 +768,13 @@ void MainWindow::newAccount() {
             t.ref = types::TransactionRef("T" + std::to_string(transactions_.size() + 1));
             t.date = when;
             t.payee = types::PayeeName("Opening Balance");
-            for (const ledger::DatedPosting& p : postings) {
-                ledger::Posting posting;
-                posting.account = chart_.ref_for_path(p.account.value());
-                posting.amount = p.amount;
-                t.postings.push_back(posting);
-                book_.add({p.date, p.account, p.amount, t.ref.value()});
+            if (postings.size() == 2) {
+                t.source_account = chart_.ref_for_path(postings[0].account.value());
+                t.destination = chart_.ref_for_path(postings[1].account.value());
+                t.amount = postings[0].amount;
             }
+            for (const ledger::DatedPosting& p : postings)
+                book_.add({p.date, p.account, p.amount, t.ref.value()});
             transactions_.push_back(t);
         }
     }
@@ -855,14 +857,14 @@ void MainWindow::importQifForReview() {
     int line = 0;
     std::string into;
     for (const ledger::Transaction& t : imported.transactions) {
-        if (t.postings.size() != 2) continue;
+        if (chart::is_split(t.destination)) continue;
         ui::ReviewRow row;
         row.line = ++line;
         row.date = t.date;
         row.payee = t.payee.value();
-        row.account = chart_.path_for_ref(t.postings[0].account);
-        row.category = chart_.path_for_ref(t.postings[1].account);
-        row.amount = t.postings[0].amount;
+        row.account = chart_.path_for_ref(t.source_account);
+        row.category = chart_.path_for_ref(t.destination);
+        row.amount = t.amount;
         row.disposition = "New";
         if (into.empty()) into = row.account;
         rows.push_back(row);
@@ -1063,7 +1065,7 @@ MainWindow::TabWidgets MainWindow::makeReportTab(int tabPosition, const std::str
 
         if (entries) {
             const std::vector<reports::DetailLine> lines =
-                reports::detail_report(chart_, book_, transactions_, spec);
+                reports::detail_report(chart_, book_, transactions_, splits_, spec);
             *shown = lines;
             table->setRowCount(static_cast<int>(lines.size()));
             for (int r = 0; r < static_cast<int>(lines.size()); ++r) {
@@ -1235,10 +1237,7 @@ void MainWindow::assignPayeesAccordingToRules() {
     const payees::BookApplication done =
         payees::apply_to_book(rules_, chart_, &transactions_);
     book_ = ledger::Ledger();
-    for (const ledger::Transaction& t : transactions_)
-        for (const ledger::Posting& p : t.postings)
-            book_.add({t.date, types::AccountPath(chart_.path_for_ref(p.account)),
-                      p.amount, t.ref.value()});
+    ledger::add_to_book(&book_, chart_, transactions_, splits_);
     save();
     rebuildWorkspace();
     refresh();
@@ -1699,7 +1698,7 @@ void MainWindow::refreshPane(int tabPosition) {
             ? rows[static_cast<std::size_t>(tabPosition - 1)].account
             : std::string();
     const std::vector<reg::Line> lines =
-        reg::lines_for(chart_, transactions_, account);
+        reg::lines_for(chart_, transactions_, splits_, account);
     // The two amount columns are headed with the words the account uses: a
     // credit card is charged and paid, not paid and deposited into.
     const chart::Account* a = account.empty() ? nullptr : chart_.find(account);
@@ -1855,7 +1854,7 @@ void MainWindow::recordBlankLine(int tabPosition) {
     TabWidgets& p = tabWidgets_[static_cast<std::size_t>(tabPosition - 1)];
 
     const reg::Committed done = reg::commit(p.blank, row.account,
-                                            transactions_.size(), &chart_);
+                                            ledger::transaction_count(transactions_), &chart_);
     if (!done.committed) {
         // A line with no amount is a line nobody meant, and is not an error.
         // Anything else is, and is worth saying.
@@ -1865,9 +1864,8 @@ void MainWindow::recordBlankLine(int tabPosition) {
         return;
     }
     transactions_.push_back(done.transaction);
-    for (const ledger::Posting& posting : done.transaction.postings)
-        book_.add({done.transaction.date, types::AccountPath(chart_.path_for_ref(posting.account)),
-                   posting.amount, done.transaction.ref.value()});
+    if (done.is_transfer) transactions_.push_back(done.other_side);
+    ledger::add_to_book(&book_, chart_, transactions_, splits_);
     // A book is a file rather than a session, so an entry is written as it is
     // made. The next blank line keeps the date just used, because entering a
     // morning of receipts means typing the same date over and over otherwise.

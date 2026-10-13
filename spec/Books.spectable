@@ -69,7 +69,7 @@ Details importing from a second Quicken book should not ask at all.
 Examples: BookScope
 | Thing                        | Scope    | Why                                       |
 | Accounts                     | PerBook  | A fact about money                        |
-| Transactions and postings    | PerBook  |                                           |
+| Transactions and splits      | PerBook  |                                           |
 | Categories                   | PerBook  | The business chart is not the personal one |
 | Payees                       | PerBook  | Derived from the transactions of the book  |
 | Payee rules                  | PerBook  | A business payee takes a business category |
@@ -356,8 +356,8 @@ Examples: EntityStorage
 | Entity            | Collection          | Table                 | Where       |
 | Account           | ChartOfAccounts     | accounts              | The book    |
 | Transaction       |                     | transactions          | The book    |
-| Posting           | Postings            | postings              | The book    |
-| ImportId          | ImportIds           | posting_import_ids    | The book    |
+| TransactionSplit  | TransactionSplits   | transaction_splits    | The book    |
+| ImportId          | ImportIds           | transaction_import_ids | The book   |
 | Holding           | Holdings            |                       | Not yet     |
 | PayeeRule         | PayeeRules          | payee_rules           | The book    |
 | PayeeSplitRule    |                     | payee_split_rules     | The book    |
@@ -527,8 +527,8 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Given postings are : PostingRow
-| Ref | Date       | Payee         | Account            | Amount | Memo  | Cleared   |
-| T1  | 2026-01-15 | Harris Teeter | Assets:Checking    | -45.00 | none  | Cleared   |
+| Ref | Date       | Payee         | Account            | Amount | Memo   | Cleared   |
+| T1  | 2026-01-15 | Harris Teeter | Assets:Checking    | -45.00 | none   | Cleared   |
 | T1  | 2026-01-15 | Harris Teeter | Expenses:Groceries | 45.00  | Apples | Uncleared |
 When the book is saved and opened again
 Then the chart of accounts is : ChartOfAccounts
@@ -536,11 +536,12 @@ Then the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 Then postings are : PostingRow
-| Ref | Date       | Payee         | Account            | Amount | Memo  | Cleared   |
-| T1  | 2026-01-15 | Harris Teeter | Assets:Checking    | -45.00 | none  | Cleared   |
+| Ref | Date       | Payee         | Account            | Amount | Memo   | Cleared   |
+| T1  | 2026-01-15 | Harris Teeter | Assets:Checking    | -45.00 | Apples | Cleared   |
 | T1  | 2026-01-15 | Harris Teeter | Expenses:Groceries | 45.00  | Apples | Uncleared |
-# Every field survives, including the per-posting memo and the cleared marker
-# that is on one side and not the other.
+# The cleared marker is still on one side and not the other. The memo is the
+# transaction's one memo now rather than a per-posting field, so it reads the
+# same on both sides regardless of which one it was typed against.
 
 Scenario A transaction recorded the new way survives being saved and opened again
 Description SourceAccount, Destination, Amount and Cleared round-trip through the

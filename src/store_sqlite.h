@@ -32,7 +32,7 @@ namespace store {
 // this when that shape changes, and add the upgrade it needs to open_at below --
 // a book already on disk was made by kSchema as it read on an earlier version,
 // and has to be brought forward in place rather than recreated.
-inline constexpr int kSchemaVersion = 6;
+inline constexpr int kSchemaVersion = 8;
 
 struct Failure {
     bool refused = false;
@@ -125,6 +125,10 @@ CREATE TABLE book (
   check_window_days INTEGER NOT NULL DEFAULT 1);
 
 CREATE TABLE accounts (
+  -- The identity a posting or a transaction names instead of the path --
+  -- see chart::Ref. Zero only transiently, between being created in memory
+  -- and first written; every row written by this store carries a real one.
+  id            INTEGER NOT NULL DEFAULT 0,
   path          TEXT    NOT NULL PRIMARY KEY,
   type          TEXT    NOT NULL,
   placeholder   INTEGER NOT NULL DEFAULT 0,
@@ -140,6 +144,7 @@ CREATE TABLE accounts (
   account_number  TEXT  NOT NULL DEFAULT '');
 
 CREATE TABLE categories (
+  id            INTEGER NOT NULL DEFAULT 0,
   path          TEXT    NOT NULL PRIMARY KEY,
   type          TEXT    NOT NULL,
   placeholder   INTEGER NOT NULL DEFAULT 0,
@@ -167,11 +172,8 @@ CREATE TABLE transactions (
   check_no  TEXT NOT NULL DEFAULT '',
   memo      TEXT NOT NULL DEFAULT '',
   tag       TEXT NOT NULL DEFAULT '',
-  -- A second, newer way of saying what the transaction is, by id rather
-  -- than path -- see chart::Ref -- so a rename or a move never has to
-  -- rewrite one: see the section on naming both accounts directly in
-  -- Transactions.spectable. Zero on a transaction recorded the old way,
-  -- through postings instead.
+  -- What the transaction is, by id rather than path -- see chart::Ref -- so
+  -- a rename or a move never has to rewrite one. See Transactions.spectable.
   source_ref     INTEGER NOT NULL DEFAULT 0,
   destination_ref INTEGER NOT NULL DEFAULT 0,
   amount_cents   INTEGER NOT NULL DEFAULT 0,
@@ -189,25 +191,13 @@ CREATE TABLE transaction_splits (
   memo            TEXT    NOT NULL DEFAULT '',
   PRIMARY KEY (transaction_id, line));
 
-CREATE TABLE postings (
-  transaction_id  TEXT    NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
-  line            INTEGER NOT NULL,
-  -- The account or category this posting names, by id rather than path --
-  -- see chart::Ref -- so a rename or a move never has to rewrite a posting.
-  account_ref     INTEGER NOT NULL,
-  amount_cents    INTEGER NOT NULL,
-  memo            TEXT    NOT NULL DEFAULT '',
-  cleared         TEXT    NOT NULL DEFAULT 'Uncleared',
-  PRIMARY KEY (transaction_id, line));
-
-CREATE TABLE posting_import_ids (
-  transaction_id  TEXT    NOT NULL,
-  line            INTEGER NOT NULL,
-  source          TEXT    NOT NULL,
-  id              TEXT    NOT NULL,
-  PRIMARY KEY (transaction_id, line, source),
-  FOREIGN KEY (transaction_id, line)
-    REFERENCES postings(transaction_id, line) ON DELETE CASCADE);
+CREATE TABLE transaction_import_ids (
+  -- At most one per source, since a transaction is one account's own
+  -- download and has exactly one home account to carry an identifier for.
+  transaction_id  TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  source          TEXT NOT NULL,
+  id              TEXT NOT NULL,
+  PRIMARY KEY (transaction_id, source));
 
 CREATE TABLE payee_rules (
   pattern    TEXT    NOT NULL,
@@ -249,8 +239,7 @@ CREATE TABLE csv_header_matches (
   field   TEXT NOT NULL,
   PRIMARY KEY (profile, heading));
 
-CREATE INDEX postings_by_account ON postings(account_ref);
-CREATE INDEX import_ids_by_id ON posting_import_ids(source, id);
+CREATE INDEX import_ids_by_id ON transaction_import_ids(source, id);
 CREATE INDEX transactions_by_date ON transactions(date);
 )sql";
 
@@ -449,6 +438,40 @@ private:
             for (const char* s : sql)
                 if (!detail::exec(db, s, why)) return false;
         }
+        if (from < 7) {
+            // Postings go away entirely: a transaction is its own one side,
+            // with a split's lines in transaction_splits, so nothing keyed
+            // on postings(transaction_id, line) has anywhere left to point.
+            // Same as the version 6 upgrade, a book from before this is
+            // re-imported from its QIF rather than carried across.
+            static const char* const sql[] = {
+                "DROP TABLE IF EXISTS posting_import_ids",
+                "DROP TABLE IF EXISTS postings",
+                "CREATE TABLE transaction_import_ids ("
+                "  transaction_id  TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,"
+                "  source          TEXT NOT NULL,"
+                "  id              TEXT NOT NULL,"
+                "  PRIMARY KEY (transaction_id, source))",
+            };
+            for (const char* s : sql)
+                if (!detail::exec(db, s, why)) return false;
+        }
+        if (from < 8) {
+            // Account and Category were never given an id column, so every
+            // open reassigned fresh ones in path order and silently
+            // orphaned every source_ref/destination_ref already written.
+            // Caught before any real book had been through a save/reopen
+            // cycle under the new shape, so there is nothing to backfill --
+            // the accounts and categories below get their ids the normal
+            // way, from read()'s own put()/put_category() calls, the next
+            // time this book is opened after this ALTER runs.
+            static const char* const sql[] = {
+                "ALTER TABLE accounts ADD COLUMN id INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE categories ADD COLUMN id INTEGER NOT NULL DEFAULT 0",
+            };
+            for (const char* s : sql)
+                if (!detail::exec(db, s, why)) return false;
+        }
         detail::Statement set(db, "UPDATE schema SET version = ?");
         if (!set.ok()) { if (why) *why = set.why(); return false; }
         set.bind(1, kSchemaVersion);
@@ -526,8 +549,8 @@ public:
         // Still a whole-book rewrite, which is the next thing to go: the store
         // should be the record and a save should touch the rows that changed.
         // See the note in development.txt.
-        if (!detail::exec(db_.get(), "DELETE FROM posting_import_ids; "
-                                     "DELETE FROM postings; DELETE FROM transaction_splits; "
+        if (!detail::exec(db_.get(), "DELETE FROM transaction_import_ids; "
+                                     "DELETE FROM transaction_splits; "
                                      "DELETE FROM transactions; "
                                      "DELETE FROM accounts; DELETE FROM categories; "
                                      "DELETE FROM payee_rules;",
@@ -535,33 +558,35 @@ public:
             return fail(why);
 
         detail::Statement account(db_.get(),
-            "INSERT INTO accounts (path, type, placeholder, hidden, alias, "
-            "payment_payee, bank, account_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            "INSERT INTO accounts (id, path, type, placeholder, hidden, alias, "
+            "payment_payee, bank, account_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
         if (!account.ok()) return fail(account.why());
         for (const chart::Account& a : accounts.all()) {
             account.reset();
-            account.bind(1, a.path.value());
-            account.bind(2, types::to_string(a.type));
-            account.bind(3, a.placeholder ? 1 : 0);
-            account.bind(4, a.hidden ? 1 : 0);
-            account.bind(5, a.alias);
-            account.bind(6, a.payment_payee);
-            account.bind(7, a.bank);
-            account.bind(8, a.account_number);
+            account.bind(1, a.id.value());
+            account.bind(2, a.path.value());
+            account.bind(3, types::to_string(a.type));
+            account.bind(4, a.placeholder ? 1 : 0);
+            account.bind(5, a.hidden ? 1 : 0);
+            account.bind(6, a.alias);
+            account.bind(7, a.payment_payee);
+            account.bind(8, a.bank);
+            account.bind(9, a.account_number);
             if (!account.run()) return fail(account.why());
         }
 
         detail::Statement category(db_.get(),
-            "INSERT INTO categories (path, type, placeholder, hidden, alias) "
-            "VALUES (?, ?, ?, ?, ?)");
+            "INSERT INTO categories (id, path, type, placeholder, hidden, alias) "
+            "VALUES (?, ?, ?, ?, ?, ?)");
         if (!category.ok()) return fail(category.why());
         for (const chart::Category& c : accounts.all_categories()) {
             category.reset();
-            category.bind(1, c.path.value());
-            category.bind(2, types::to_string(c.type));
-            category.bind(3, c.placeholder ? 1 : 0);
-            category.bind(4, c.hidden ? 1 : 0);
-            category.bind(5, c.alias);
+            category.bind(1, c.id.value());
+            category.bind(2, c.path.value());
+            category.bind(3, types::to_string(c.type));
+            category.bind(4, c.placeholder ? 1 : 0);
+            category.bind(5, c.hidden ? 1 : 0);
+            category.bind(6, c.alias);
             if (!category.run()) return fail(category.why());
         }
 
@@ -571,14 +596,9 @@ public:
             "source_ref, destination_ref, amount_cents, cleared) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         if (!header.ok()) return fail(header.why());
-        detail::Statement line(db_.get(),
-            "INSERT INTO postings "
-            "(transaction_id, line, account_ref, amount_cents, memo, cleared) "
-            "VALUES (?, ?, ?, ?, ?, ?)");
-        if (!line.ok()) return fail(line.why());
         detail::Statement mark(db_.get(),
-            "INSERT INTO posting_import_ids (transaction_id, line, source, id) "
-            "VALUES (?, ?, ?, ?)");
+            "INSERT INTO transaction_import_ids (transaction_id, source, id) "
+            "VALUES (?, ?, ?)");
         if (!mark.ok()) return fail(mark.why());
         detail::Statement split(db_.get(),
             "INSERT INTO transaction_splits "
@@ -620,26 +640,12 @@ public:
                 if (!split.run()) return fail(split.why());
             }
 
-            // The line number keeps the order the postings were entered in, so
-            // a register reopened reads the way it was written.
-            int at = 0;
-            for (const ledger::Posting& p : t.postings) {
-                line.reset();
-                line.bind(1, t.id.value());
-                line.bind(2, at++);
-                line.bind(3, p.account.value());
-                line.bind(4, static_cast<long long>(p.amount.cents()));
-                line.bind(5, p.memo);
-                line.bind(6, types::to_string(p.cleared));
-                if (!line.run()) return fail(line.why());
-                for (const ledger::ImportId& one : p.import_ids) {
-                    mark.reset();
-                    mark.bind(1, t.id.value());
-                    mark.bind(2, at - 1);
-                    mark.bind(3, types::to_string(one.source));
-                    mark.bind(4, one.id);
-                    if (!mark.run()) return fail(mark.why());
-                }
+            for (const ledger::ImportId& one : t.import_ids) {
+                mark.reset();
+                mark.bind(1, t.id.value());
+                mark.bind(2, types::to_string(one.source));
+                mark.bind(3, one.id);
+                if (!mark.run()) return fail(mark.why());
             }
         }
 
@@ -672,32 +678,34 @@ public:
         transactions->clear();
 
         detail::Statement account(db_.get(),
-            "SELECT path, type, placeholder, hidden, alias, payment_payee, "
+            "SELECT id, path, type, placeholder, hidden, alias, payment_payee, "
             "bank, account_number FROM accounts ORDER BY path");
         if (!account.ok()) return {true, account.why()};
         while (account.step_row()) {
             chart::Account a;
-            a.path = types::AccountPath(account.text(0));
-            a.type = types::account_type_from_string(account.text(1));
-            a.placeholder = account.integer(2) != 0;
-            a.hidden = account.integer(3) != 0;
-            a.alias = account.text(4);
-            a.payment_payee = account.text(5);
-            a.bank = account.text(6);
-            a.account_number = account.text(7);
+            a.id = chart::AccountId(account.integer(0));
+            a.path = types::AccountPath(account.text(1));
+            a.type = types::account_type_from_string(account.text(2));
+            a.placeholder = account.integer(3) != 0;
+            a.hidden = account.integer(4) != 0;
+            a.alias = account.text(5);
+            a.payment_payee = account.text(6);
+            a.bank = account.text(7);
+            a.account_number = account.text(8);
             accounts->put(a);
         }
 
         detail::Statement category(db_.get(),
-            "SELECT path, type, placeholder, hidden, alias FROM categories ORDER BY path");
+            "SELECT id, path, type, placeholder, hidden, alias FROM categories ORDER BY path");
         if (!category.ok()) return {true, category.why()};
         while (category.step_row()) {
             chart::Category c;
-            c.path = types::AccountPath(category.text(0));
-            c.type = types::account_type_from_string(category.text(1));
-            c.placeholder = category.integer(2) != 0;
-            c.hidden = category.integer(3) != 0;
-            c.alias = category.text(4);
+            c.id = chart::CategoryId(category.integer(0));
+            c.path = types::AccountPath(category.text(1));
+            c.type = types::account_type_from_string(category.text(2));
+            c.placeholder = category.integer(3) != 0;
+            c.hidden = category.integer(4) != 0;
+            c.alias = category.text(5);
             accounts->put_category(c);
         }
 
@@ -726,52 +734,38 @@ public:
             transactions->push_back(t);
         }
 
-        if (splits != nullptr) {
-            splits->clear();
-            for (const ledger::Transaction& t : *transactions) {
-                detail::Statement s(db_.get(),
-                    "SELECT destination_ref, amount_cents, memo FROM transaction_splits "
-                    "WHERE transaction_id = ? ORDER BY line");
-                if (!s.ok()) return {true, s.why()};
-                s.bind(1, t.id.value());
-                while (s.step_row()) {
-                    ledger::TransactionSplit one;
-                    one.transaction_id = t.id;
-                    one.destination = chart::Ref(s.integer(0));
-                    one.amount = Money::from_cents(s.integer(1));
-                    one.memo = s.text(2);
-                    splits->push_back(one);
-                }
+        // Read regardless of whether the caller wants the lines back: a
+        // split's own sides are only in this table now, and the book has to
+        // have all of them whether or not splits is null.
+        std::vector<ledger::TransactionSplit> all_splits;
+        for (const ledger::Transaction& t : *transactions) {
+            detail::Statement s(db_.get(),
+                "SELECT destination_ref, amount_cents, memo FROM transaction_splits "
+                "WHERE transaction_id = ? ORDER BY line");
+            if (!s.ok()) return {true, s.why()};
+            s.bind(1, t.id.value());
+            while (s.step_row()) {
+                ledger::TransactionSplit one;
+                one.transaction_id = t.id;
+                one.destination = chart::Ref(s.integer(0));
+                one.amount = Money::from_cents(s.integer(1));
+                one.memo = s.text(2);
+                all_splits.push_back(one);
             }
         }
+        if (splits != nullptr) *splits = all_splits;
 
         for (ledger::Transaction& t : *transactions) {
-            detail::Statement line(db_.get(),
-                "SELECT account_ref, amount_cents, memo, cleared, line FROM postings "
-                "WHERE transaction_id = ? ORDER BY line");
-            if (!line.ok()) return {true, line.why()};
-            line.bind(1, t.id.value());
-            while (line.step_row()) {
-                ledger::Posting p;
-                p.account = chart::Ref(line.integer(0));
-                p.amount = Money::from_cents(line.integer(1));
-                p.memo = line.text(2);
-                p.cleared = types::cleared_status_from_string(line.text(3));
-
-                detail::Statement mark(db_.get(),
-                    "SELECT source, id FROM posting_import_ids "
-                    "WHERE transaction_id = ? AND line = ? ORDER BY source");
-                if (!mark.ok()) return {true, mark.why()};
-                mark.bind(1, t.id.value());
-                mark.bind(2, line.integer(4));
-                while (mark.step_row())
-                    p.import_ids.push_back(ledger::ImportId{
-                        types::import_source_from_string(mark.text(0)), mark.text(1)});
-                t.postings.push_back(p);
-                book->add({t.date, types::AccountPath(accounts->path_for_ref(p.account)),
-                          p.amount, t.ref.value()});
-            }
+            detail::Statement mark(db_.get(),
+                "SELECT source, id FROM transaction_import_ids "
+                "WHERE transaction_id = ? ORDER BY source");
+            if (!mark.ok()) return {true, mark.why()};
+            mark.bind(1, t.id.value());
+            while (mark.step_row())
+                t.import_ids.push_back(ledger::ImportId{
+                    types::import_source_from_string(mark.text(0)), mark.text(1)});
         }
+        ledger::add_to_book(book, *accounts, *transactions, all_splits);
 
         if (rules != nullptr) {
             rules->clear();

@@ -65,6 +65,15 @@ struct Committed {
     bool committed = false;
     std::string reason;          // why not, where it was not
     ledger::Transaction transaction;
+    // The category lines, where the transaction's own Destination is Split.
+    // Empty otherwise.
+    std::vector<ledger::TransactionSplit> splits;
+    // A transfer is two rows, one for each account, sharing transaction's own
+    // Ref but each its own Id -- so each clears on its own account's
+    // statement without the other. Unset where the other side is a category
+    // rather than a real account.
+    bool is_transfer = false;
+    ledger::Transaction other_side;
 };
 
 // Leaving the blank line. Committed only where an amount was typed; otherwise
@@ -123,19 +132,33 @@ inline Committed commit(const BlankLine& line, const std::string& account,
     t.payee = types::PayeeName(line.payee);
     t.check_no = types::CheckNumber(line.check_no);
     t.memo = line.memo;
-
-    ledger::Posting here;
-    here.account = accounts->ref_for_path(account);
-    here.amount = amount;
+    t.source_account = accounts->ref_for_path(account);
+    t.destination = accounts->ref_for_path(other);
+    t.amount = amount;
     // Entered by hand, so nothing has cleared it: the bank has not been asked.
-    here.cleared = line.cleared;
-    ledger::Posting there;
-    there.account = accounts->ref_for_path(other);
-    there.amount = -amount;
-    t.postings = {here, there};
+    t.cleared = line.cleared;
 
     out.transaction = t;
     out.committed = true;
+
+    // A transfer is two downloads of one movement of money, entered here as
+    // both at once: the other account's own row, naming this one back. Each
+    // clears on its own statement, which is why it is not one row with two
+    // accounts on it.
+    if (accounts->is_real(t.destination)) {
+        out.is_transfer = true;
+        ledger::Transaction other_t;
+        other_t.id = ledger::new_id();
+        other_t.ref = t.ref;
+        other_t.date = t.date;
+        other_t.payee = t.payee;
+        other_t.check_no = t.check_no;
+        other_t.memo = t.memo;
+        other_t.source_account = t.destination;
+        other_t.destination = t.source_account;
+        other_t.amount = -amount;
+        out.other_side = other_t;
+    }
     return out;
 }
 
@@ -188,22 +211,22 @@ inline Committed commit_split(const BlankLine& line, const std::string& account,
     t.payee = types::PayeeName(line.payee);
     t.check_no = types::CheckNumber(line.check_no);
     t.memo = line.memo;
+    t.source_account = accounts->ref_for_path(account);
+    t.destination = chart::split_ref();
+    t.amount = amount;
+    t.cleared = line.cleared;
 
-    ledger::Posting here;
-    here.account = accounts->ref_for_path(account);
-    here.amount = amount;
-    here.cleared = line.cleared;
-    t.postings.push_back(here);
     for (const SplitLine& l : lines) {
         if (accounts->find(l.category) == nullptr)
             accounts->add(types::AccountPath(l.category),
                           l.amount.cents() < 0 ? types::AccountType::Expense
                                                : types::AccountType::Income);
-        ledger::Posting p;
-        p.account = accounts->ref_for_path(l.category);
-        p.amount = l.amount;
-        p.memo = l.memo;
-        t.postings.push_back(p);
+        ledger::TransactionSplit s;
+        s.transaction_id = t.id;
+        s.destination = accounts->ref_for_path(l.category);
+        s.amount = l.amount;
+        s.memo = l.memo;
+        out.splits.push_back(s);
     }
 
     out.transaction = t;
@@ -211,72 +234,16 @@ inline Committed commit_split(const BlankLine& line, const std::string& account,
     return out;
 }
 
-// Assigning the other account of a transfer by hand, in the register. The one
-// posting that said Unassigned is given an account; nothing is added and nothing
-// is removed, which is why the book still balances without anything being
-// checked. See the assignment scenario in Transactions.spectable.
-inline bool assign_other_account(const chart::Chart& accounts,
-                                 std::vector<ledger::Transaction>* transactions,
-                                 const std::string& id, const std::string& account) {
-    const chart::Ref ref = accounts.ref_for_path(account);
-    for (ledger::Transaction& t : *transactions) {
-        if (t.id.value() != id) continue;
-        for (ledger::Posting& p : t.postings) {
-            if (!ledger::is_unassigned(accounts, p.account)) continue;
-            p.account = ref;
-            return true;
-        }
-        return false;        // found it, and it had nothing waiting
-    }
-    return false;
-}
-
-// Joining two transactions that describe one movement of money: the half with an
-// unassigned side takes the other's real account, and the other goes away.
-//
-// Used where the two sides were imported too far apart for anything to have
-// paired them, and a person has picked the match out of the other register. The
-// date and payee kept are the ones already on screen, because the user is
-// looking at that row and did not ask for it to change.
-inline bool join_as_transfer(const chart::Chart& accounts,
-                             std::vector<ledger::Transaction>* transactions,
-                             const std::string& id, const std::string& other_id) {
-    chart::Ref takes;
-    types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
-    for (const ledger::Transaction& t : *transactions) {
-        if (t.id.value() != other_id) continue;
-        for (const ledger::Posting& p : t.postings) {
-            if (ledger::is_unassigned(accounts, p.account)) continue;
-            takes = p.account;
-            cleared = p.cleared;
-            break;
-        }
-        break;
-    }
-    if (takes.is_none()) return false;
-    const std::string takes_path = accounts.path_for_ref(takes);
-    if (!assign_other_account(accounts, transactions, id, takes_path)) return false;
-
-    // The newly filled posting carries the other side's cleared status, because
-    // that side's bank is what reported it.
-    for (ledger::Transaction& t : *transactions) {
-        if (t.id.value() != id) continue;
-        for (ledger::Posting& p : t.postings)
-            if (p.account == takes) p.cleared = cleared;
-    }
-    return ledger::erase_transaction(transactions, other_id);
-}
-
 // One row offered while picking the entry an Unassigned side should join.
 struct OfferedEntry {
     std::string ref;
     types::Date date;
     std::string payee;
-    Money amount;   // this candidate's own posting in the target account
+    Money amount;   // this candidate's own amount in the target account
 };
 
 // What the register offers to match an Unassigned side against: every other
-// transaction with a posting in the target account, nearest first to the
+// transaction whose SourceAccount is the target account, nearest first to the
 // amount that would actually balance -- equal and opposite to the known real
 // side of the transaction being assigned, because that is the one meant nine
 // times in ten. See the matching section of Transactions.spectable.
@@ -287,8 +254,7 @@ inline std::vector<OfferedEntry> entries_offered_for(
     Money target;
     for (const ledger::Transaction& t : transactions) {
         if (t.ref.value() != ref) continue;
-        for (const ledger::Posting& p : t.postings)
-            if (!ledger::is_unassigned(accounts, p.account)) target = -p.amount;
+        target = -t.amount;
         break;
     }
 
@@ -296,11 +262,8 @@ inline std::vector<OfferedEntry> entries_offered_for(
     std::vector<OfferedEntry> out;
     for (const ledger::Transaction& t : transactions) {
         if (t.ref.value() == ref) continue;
-        for (const ledger::Posting& p : t.postings) {
-            if (p.account != account_ref) continue;
-            out.push_back({t.ref.value(), t.date, t.payee.value(), p.amount});
-            break;
-        }
+        if (t.source_account != account_ref) continue;
+        out.push_back({t.ref.value(), t.date, t.payee.value(), t.amount});
     }
     std::sort(out.begin(), out.end(), [&](const OfferedEntry& a, const OfferedEntry& b) {
         return std::abs((a.amount - target).cents()) < std::abs((b.amount - target).cents());

@@ -69,12 +69,14 @@ struct Loaded {
     chart::Chart accounts;
     ledger::Ledger ledger;
     std::vector<ledger::Transaction> transactions;
+    std::vector<ledger::TransactionSplit> splits;
 };
 
 bool load(const std::string& name, Loaded* into, store::Failure* no) {
     *no = store::Book::open_named(name, &into->book);
     if (no->refused) return false;
-    *no = into->book.read(&into->accounts, &into->ledger, &into->transactions, &into->rules);
+    *no = into->book.read(&into->accounts, &into->ledger, &into->transactions, &into->rules,
+                          &into->splits);
     return !no->refused;
 }
 
@@ -152,23 +154,20 @@ int import_csv(const std::string& text, const std::string& account, bool accept,
         return 0;
     }
     const std::vector<ledger::Transaction> made = csv::transactions_for(
-        decided, account, open->transactions.size(), &open->accounts, open->rules);
+        decided, account, ledger::transaction_count(open->transactions), &open->accounts, open->rules);
     open->transactions.insert(open->transactions.end(), made.begin(), made.end());
 
     // The balance the file states against what the import makes it, which is the
     // strongest check a CSV offers and the nearest thing it has to a statement.
     ledger::Ledger book;
-    for (const ledger::Transaction& t : open->transactions)
-        for (const ledger::Posting& posting : t.postings)
-            book.add({t.date, types::AccountPath(open->accounts.path_for_ref(posting.account)),
-                     posting.amount, t.ref.value()});
+    ledger::add_to_book(&book, open->accounts, open->transactions, open->splits);
     for (const csv::BalanceAtRow& check : csv::balance_checks(rows.rows, book, account))
         if (!check.agrees)
             std::printf("line %d says the balance is %s; the book makes it %s\n",
                         check.line, check.row_balance.in_register().c_str(),
                         check.computed.in_register().c_str());
 
-    const store::Failure no = open->book.write(open->accounts, open->transactions, open->rules);
+    const store::Failure no = open->book.write(open->accounts, open->transactions, open->rules, open->splits);
     if (no.refused) {
         std::fprintf(stderr, "%s\n", no.reason.c_str());
         return 1;
@@ -267,17 +266,17 @@ int main(int argc, char** argv) {
                 t.ref = types::TransactionRef(next_ref(open.transactions));
                 t.date = *when;
                 t.payee = types::PayeeName("Opening Balance");
-                for (const ledger::DatedPosting& p : ledger::Ledger::opening_balance_postings(
-                         types::AccountPath(path), kind, stated, *when)) {
-                    ledger::Posting posting;
-                    posting.account = open.accounts.ref_for_path(p.account.value());
-                    posting.amount = p.amount;
-                    t.postings.push_back(posting);
+                const auto postings = ledger::Ledger::opening_balance_postings(
+                    types::AccountPath(path), kind, stated, *when);
+                if (postings.size() == 2) {
+                    t.source_account = open.accounts.ref_for_path(postings[0].account.value());
+                    t.destination = open.accounts.ref_for_path(postings[1].account.value());
+                    t.amount = postings[0].amount;
                 }
                 open.transactions.push_back(t);
             }
         }
-        no = open.book.write(open.accounts, open.transactions, open.rules);
+        no = open.book.write(open.accounts, open.transactions, open.rules, open.splits);
         if (no.refused) return complain(no);
         std::printf("added %s\n", path.c_str());
         return 0;
@@ -309,16 +308,12 @@ int main(int argc, char** argv) {
         t.ref = types::TransactionRef(next_ref(open.transactions));
         t.date = *when;
         t.payee = types::PayeeName(argv[4]);
-        ledger::Posting here;
-        here.account = open.accounts.ref_for_path(account);
-        here.amount = amount;
-        ledger::Posting there;
-        there.account = open.accounts.ref_for_path(category);
-        there.amount = -amount;
-        t.postings = {here, there};
+        t.source_account = open.accounts.ref_for_path(account);
+        t.destination = open.accounts.ref_for_path(category);
+        t.amount = amount;
         open.transactions.push_back(t);
 
-        no = open.book.write(open.accounts, open.transactions, open.rules);
+        no = open.book.write(open.accounts, open.transactions, open.rules, open.splits);
         if (no.refused) return complain(no);
         std::printf("%s  %s  %s %s  %s\n", t.ref.value().c_str(), when->iso().c_str(),
                     account.c_str(), amount.in_register().c_str(), category.c_str());
@@ -335,7 +330,7 @@ int main(int argc, char** argv) {
         std::printf("%-10s %-24s %-30s %12s %12s %14s\n", "date", "payee", "category",
                     "payment", "deposit", "balance");
         for (const reg::Line& line :
-             reg::lines_for(open.accounts, open.transactions, account))
+             reg::lines_for(open.accounts, open.transactions, open.splits, account))
             std::printf("%-10s %-24s %-30s %12s %12s %14s\n", line.date.iso().c_str(),
                         line.payee.c_str(), line.category.c_str(),
                         line.payment.cents() == 0 ? "" : line.payment.in_register().c_str(),
@@ -373,7 +368,7 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "There is no transaction %s\n", id.c_str());
             return 1;
         }
-        no = open.book.write(open.accounts, open.transactions, open.rules);
+        no = open.book.write(open.accounts, open.transactions, open.rules, open.splits);
         if (no.refused) return complain(no);
         std::printf("deleted %s\n", ref.c_str());
         return 0;
@@ -392,7 +387,7 @@ int main(int argc, char** argv) {
         made.payee = payee;
         open.rules.push_back(made);
 
-        no = open.book.write(open.accounts, open.transactions, open.rules);
+        no = open.book.write(open.accounts, open.transactions, open.rules, open.splits);
         if (no.refused) return complain(no);
         std::printf("%s -> pattern %s, payee %s, category %s\n",
                     raw_name.c_str(), made.pattern.c_str(), made.payee.c_str(),
@@ -500,7 +495,14 @@ int main(int argc, char** argv) {
             // second copy of it.
             matched_clear += ofx::apply_matches(open.accounts, decided, account, &open.transactions);
             // And the payments this file is the other half of.
-            completed += ofx::apply_completions(open.accounts, decided, account, &open.transactions);
+            const ofx::Completed done_completing = ofx::apply_completions(
+                open.accounts, decided, account,
+                ledger::transaction_count(open.transactions) + ledger::transaction_count(adding), &open.transactions);
+            completed += done_completing.completed;
+            for (const ledger::Transaction& t : done_completing.created) {
+                open.transactions.push_back(t);
+                adding.push_back(t);
+            }
 
             // Then whatever was answered about the rows it could not settle.
             for (const ofx::Decided& one : decided.decided) {
@@ -514,9 +516,9 @@ int main(int argc, char** argv) {
                     }
                 } else if (was_answered(say_different, id)) {
                     ledger::Transaction made = ofx::answer_different(
-                        one, account, open.transactions.size() + adding.size(),
+                        one, account, ledger::transaction_count(open.transactions) + ledger::transaction_count(adding),
                         &open.accounts);
-                    if (!made.postings.empty()) {
+                    if (!made.source_account.is_none()) {
                         open.transactions.push_back(made);
                         adding.push_back(made);
                         ++answered_different;
@@ -531,7 +533,7 @@ int main(int argc, char** argv) {
             // The decision for the next statement must see what this one added,
             // or two statements naming one transaction would both create it.
             std::vector<ledger::Transaction> made = ofx::transactions_for(
-                decided, account, open.transactions.size() + adding.size(), &open.accounts);
+                decided, account, ledger::transaction_count(open.transactions) + ledger::transaction_count(adding), &open.accounts);
             for (ledger::Transaction& t : made) {
                 open.transactions.push_back(t);
                 adding.push_back(t);
@@ -550,7 +552,7 @@ int main(int argc, char** argv) {
             std::printf("nothing written; pass --accept to keep it\n");
             return 0;
         }
-        no = open.book.write(open.accounts, open.transactions, open.rules);
+        no = open.book.write(open.accounts, open.transactions, open.rules, open.splits);
         if (no.refused) return complain(no);
         std::printf("added %zu transactions, cleared %d already there\n",
                     adding.size(), matched_clear + answered_same);

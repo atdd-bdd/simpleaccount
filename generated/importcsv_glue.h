@@ -113,29 +113,99 @@ public:
 
     void given_postings_are(const std::vector<PostingRowString>& values) {
         transactions_.clear();
-        for (const auto& value : values) {
-            ledger::Transaction* into = nullptr;
-            for (ledger::Transaction& t : transactions_)
-                if (t.ref.value() == value.ref) into = &t;
-            if (into == nullptr) {
+        splits_.clear();
+        second_row_amount_.clear();
+        std::map<std::string, int> counts;
+        for (const auto& value : values) ++counts[value.ref];
+        for (const auto& value : values) group_into(&transactions_, value, counts[value.ref]);
+    }
+
+    void group_into(std::vector<ledger::Transaction>* into, const PostingRowString& value,
+                    int total_for_ref) {
+        ledger::Transaction* first = nullptr;
+        for (ledger::Transaction& t : *into) {
+            if (t.ref.value() != value.ref) continue;
+            first = &t;
+            break;
+        }
+        const auto on = types::Date::from_iso(value.date);
+        const chart::Ref account_ref = chart_.ref_for_path(value.account);
+        const Money amount{value.amount};
+        const std::string memo = blank(value.memo);
+        types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
+        if (value.cleared != DNCString && !value.cleared.empty())
+            cleared = types::cleared_status_from_string(value.cleared);
+
+        if (first == nullptr) {
+            ledger::Transaction made;
+            made.id = ledger::new_id();
+            made.ref = types::TransactionRef(value.ref);
+            if (on) made.date = *on;
+            made.payee = types::PayeeName(blank(value.payee));
+            made.memo = memo;
+            made.source_account = account_ref;
+            made.amount = amount;
+            made.cleared = cleared;
+            into->push_back(made);
+            return;
+        }
+
+        // Which row this is for its transaction is read from the
+        // transaction's own state, not from how many rows have been seen:
+        // a third or later row collapses into the same one object as the
+        // second once its Destination is set, so counting objects sharing
+        // a Ref stops distinguishing a third row from a second.
+        if (first->destination.is_none()) {
+            ledger::Transaction& t = *first;
+            const bool transfer = total_for_ref == 2 && account_ref != t.source_account &&
+                                  chart_.is_real(t.source_account) &&
+                                  chart_.is_real(account_ref) &&
+                                  !ledger::is_unassigned(chart_, t.source_account) &&
+                                  !ledger::is_unassigned(chart_, account_ref);
+            if (transfer) {
                 ledger::Transaction made;
                 made.id = ledger::new_id();
-                made.ref = types::TransactionRef(value.ref);
-                const auto on = types::Date::from_iso(value.date);
-                ASSERT_TRUE(on.has_value()) << value.date;
-                made.date = *on;
+                made.ref = t.ref;
+                if (on) made.date = *on;
                 made.payee = types::PayeeName(blank(value.payee));
-                transactions_.push_back(made);
-                into = &transactions_.back();
+                made.memo = memo;
+                made.source_account = account_ref;
+                made.destination = t.source_account;
+                made.amount = amount;
+                made.cleared = cleared;
+                t.destination = account_ref;
+                into->push_back(made);
+            } else {
+                t.destination = account_ref;
+                if (t.memo.empty() && !memo.empty()) t.memo = memo;
+                second_row_amount_[t.id.value()] = {amount, memo};
             }
-            ledger::Posting p;
-            p.account = chart_.ref_for_path(value.account);
-            p.amount = Money(value.amount);
-            p.memo = blank(value.memo);
-            if (value.cleared != DNCString && !value.cleared.empty())
-                p.cleared = types::cleared_status_from_string(value.cleared);
-            into->postings.push_back(p);
+            return;
         }
+
+        ledger::Transaction& t = *first;
+        if (!chart::is_split(t.destination)) {
+            if (!t.destination.is_none()) {
+                ledger::TransactionSplit promoted;
+                promoted.transaction_id = t.id;
+                promoted.destination = t.destination;
+                const auto at = second_row_amount_.find(t.id.value());
+                if (at != second_row_amount_.end()) {
+                    promoted.amount = at->second.amount;
+                    promoted.memo = at->second.memo;
+                } else {
+                    promoted.amount = -t.amount;
+                }
+                splits_.push_back(promoted);
+            }
+            t.destination = chart::split_ref();
+        }
+        ledger::TransactionSplit s;
+        s.transaction_id = t.id;
+        s.destination = account_ref;
+        s.amount = amount;
+        s.memo = memo;
+        splits_.push_back(s);
     }
 
     void given_import_target_is(const std::vector<ImportTargetString>& values) {
@@ -183,7 +253,7 @@ public:
         rows_ = csv::rows_of(file_, matching_, order(), style(), outward());
         decided_ = csv::decide(chart_, rows_.rows, target_, transactions_);
         const std::vector<ledger::Transaction> made =
-            csv::transactions_for(decided_, target_, transactions_.size(), &chart_);
+            csv::transactions_for(decided_, target_, ledger::transaction_count(transactions_), &chart_);
         created_.clear();
         for (const ledger::Transaction& t : made) created_.push_back(t);
         transactions_.insert(transactions_.end(), made.begin(), made.end());
@@ -590,6 +660,8 @@ public:
 private:
     static constexpr const char* kAccount = "Assets:Checking";
 
+    struct PendingSecondRow { Money amount; std::string memo; };
+    std::map<std::string, PendingSecondRow> second_row_amount_;
     std::string text_;
     csv::Read file_;
     csv::Profile profile_;
@@ -603,6 +675,7 @@ private:
     std::vector<ledger::Transaction> created_;
     chart::Chart chart_;
     std::vector<ledger::Transaction> transactions_;
+    std::vector<ledger::TransactionSplit> splits_;
     std::string target_ = kAccount;
 
     static std::string blank(const std::string& s) {
@@ -752,25 +825,26 @@ private:
 
     ledger::Ledger as_ledger() const {
         ledger::Ledger out;
-        for (const ledger::Transaction& t : transactions_)
-            for (const ledger::Posting& p : t.postings)
-                out.add({t.date, types::AccountPath(chart_.path_for_ref(p.account)),
-                        p.amount, t.ref.value()});
+        ledger::add_to_book(&out, chart_, transactions_, splits_);
         return out;
     }
 
     std::vector<PostingRowString> flatten() const {
         std::vector<PostingRowString> out;
         for (const ledger::Transaction& t : transactions_) {
-            for (const ledger::Posting& p : t.postings) {
+            const std::vector<ledger::Side> sides =
+                ledger::sides_of_display(chart_, t, transactions_, splits_);
+            for (std::size_t i = 0; i < sides.size(); ++i) {
+                const ledger::Side& s = sides[i];
                 PostingRowString row;
                 row.ref = t.ref.value();
                 row.date = t.date.iso();
                 row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = chart_.path_for_ref(p.account);
-                row.amount = p.amount.in_register();
-                row.memo = p.memo.empty() ? "none" : p.memo;
-                row.cleared = types::to_string(p.cleared);
+                row.account = chart_.path_for_ref(s.account);
+                row.amount = s.amount.in_register();
+                row.memo = s.memo.empty() ? "none" : s.memo;
+                row.cleared = types::to_string(i == 0 ? t.cleared
+                                                      : types::ClearedStatus::Uncleared);
                 out.push_back(row);
             }
         }
@@ -812,14 +886,10 @@ private:
             t.ref = types::TransactionRef("T" + std::to_string(i + 1));
             t.date = types::Date(2024, 1, 15);
             t.payee = types::PayeeName("STARBUCKS");
-            ledger::Posting here;
-            here.account = chart_.ref_for_path(kAccount);
-            here.amount = Money("-4.75");
-            here.cleared = types::ClearedStatus::Cleared;
-            ledger::Posting there;
-            there.account = chart_.ref_for_path("Expenses:Uncategorized");
-            there.amount = Money("4.75");
-            t.postings = {here, there};
+            t.source_account = chart_.ref_for_path(kAccount);
+            t.amount = Money("-4.75");
+            t.cleared = types::ClearedStatus::Cleared;
+            t.destination = chart_.ref_for_path("Expenses:Uncategorized");
             transactions_.push_back(t);
         }
         target_ = kAccount;
@@ -834,17 +904,14 @@ private:
         t.id = ledger::new_id();
         t.ref = types::TransactionRef("T1");
         t.payee = types::PayeeName("STARBUCKS");
-        ledger::Posting here;
-        here.account = chart_.ref_for_path(kAccount);
-        here.amount = Money("-4.75");
-        ledger::Posting there;
-        there.account = chart_.ref_for_path("Expenses:Uncategorized");
-        there.amount = Money("4.75");
+        t.source_account = chart_.ref_for_path(kAccount);
+        t.amount = Money("-4.75");
+        t.destination = chart_.ref_for_path("Expenses:Uncategorized");
 
         if (test == "1") {
             // The same fingerprint: same day, same amount, same payee.
             t.date = types::Date(2024, 1, 15);
-            here.cleared = types::ClearedStatus::Cleared;
+            t.cleared = types::ClearedStatus::Cleared;
         } else if (test == "2") {
             // Uncleared, same amount and check number, and far enough away that
             // the five-day test could not have claimed it.
@@ -864,7 +931,6 @@ private:
                                        : got.decided.front().disposition;
         }
 
-        t.postings = {here, there};
         transactions_ = {t};
         const csv::Imported got = csv::decide(chart_, {row}, kAccount, transactions_);
         EXPECT_EQ(1u, got.decided.size()) << "test " << test;

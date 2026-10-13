@@ -144,6 +144,7 @@ private:
     chart::Chart chart_;
     ledger::Ledger book_;
     std::vector<ledger::Transaction> transactions_;
+    std::vector<ledger::TransactionSplit> splits_;
     // The book's payee rules, held with it because they are part of it: an
     // import asks them for the payee and the category of every row.
     std::vector<payees::Rule> rules_;

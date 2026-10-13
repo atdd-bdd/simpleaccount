@@ -1,6 +1,7 @@
 #pragma once
 #include <gtest/gtest.h>
 #include <iostream>
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
@@ -51,18 +52,41 @@ public:
 
     void given_postings_are(const std::vector<PostingRowString>& values) {
         transactions_.clear();
-        for (const auto& value : values) group_into(&transactions_, value);
+        splits_.clear();
+        second_row_amount_.clear();
+        std::map<std::string, int> counts;
+        for (const auto& value : values) ++counts[value.ref];
+        for (const auto& value : values) group_into(&transactions_, value, counts[value.ref]);
         rebuild_book();
     }
 
     // ----------------------------------------------------------------- whens
 
     void when_postings_committed(const std::vector<PostingRowString>& values) {
-        std::vector<ledger::Transaction> batch;
-        for (const auto& value : values) group_into(&batch, value);
         rejection_ = {};
+        // An exactly-two-row group that does not sum to zero has nowhere to
+        // keep the disagreement under this shape -- a plain Transaction's
+        // Destination balances by construction, so a mismatch has to be
+        // caught here, against the rows as given, before it is lost.
+        std::map<std::string, Money> sums;
+        std::map<std::string, int> counts;
+        for (const auto& value : values) {
+            sums[value.ref] += Money(value.amount);
+            ++counts[value.ref];
+        }
+        for (const auto& entry : counts) {
+            if (entry.second != 2 || sums[entry.first].cents() == 0) continue;
+            const Money off = sums[entry.first];
+            const Money magnitude = off.cents() < 0 ? -off : off;
+            rejection_ = {true, entry.first + " is out of balance by " +
+                                magnitude.in_register()};
+            return;
+        }
+
+        std::vector<ledger::Transaction> batch;
+        for (const auto& value : values) group_into(&batch, value, counts[value.ref]);
         for (const ledger::Transaction& t : batch) {
-            rejection_ = ledger::validate(chart_, t);
+            rejection_ = ledger::validate(chart_, t, splits_);
             if (rejection_.refused) return;   // all or nothing: nothing committed
         }
         for (const ledger::Transaction& t : batch) transactions_.push_back(t);
@@ -73,9 +97,10 @@ public:
         for (const auto& value : values) {
             const reg::BlankLine line = to_blank_line(value);
             const reg::Committed done =
-                reg::commit(line, value.account, transactions_.size(), &chart_);
+                reg::commit(line, value.account, ledger::transaction_count(transactions_), &chart_);
             if (done.committed) {
                 transactions_.push_back(done.transaction);
+                if (done.is_transfer) transactions_.push_back(done.other_side);
                 rejection_ = {};
             } else if (done.reason != "nothing was entered") {
                 rejection_ = {true, done.reason};
@@ -100,9 +125,10 @@ public:
             lines.push_back(l);
         }
         const reg::Committed done = reg::commit_split(
-            pending_line_, pending_account_, lines, transactions_.size(), &chart_);
+            pending_line_, pending_account_, lines, ledger::transaction_count(transactions_), &chart_);
         if (done.committed) {
             transactions_.push_back(done.transaction);
+            splits_.insert(splits_.end(), done.splits.begin(), done.splits.end());
             rejection_ = {};
         } else {
             rejection_ = {true, done.reason};
@@ -116,7 +142,8 @@ public:
             const Money deposit{value.deposit};
             const Money signed_amount = payment.cents() != 0 ? -payment : deposit;
             const edit::AmountOutcome done =
-                edit::change_amount(chart_, &transactions_, value.ref, value.account, signed_amount);
+                edit::change_amount(chart_, &transactions_, &splits_, value.ref, value.account,
+                                    signed_amount);
             warning_ = done.warning;
             rejection_ = done.changed ? chart::Rejection{} : chart::Rejection{true, done.reason};
         }
@@ -128,7 +155,7 @@ public:
             ledger::Transaction* t = find_by_ref(value.ref);
             ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
             const edit::Outcome done =
-                edit::change_category(chart_, t, value.fromaccount, value.toaccount);
+                edit::change_category(chart_, t, &splits_, value.fromaccount, value.toaccount);
             rejection_ = done.changed ? chart::Rejection{} : chart::Rejection{true, done.reason};
         }
         rebuild_book();
@@ -141,44 +168,34 @@ public:
 
     void when_posting_cleared(const std::vector<PostingSelectString>& values) {
         for (const auto& value : values) {
-            ledger::Transaction* t = find_by_ref(value.ref);
-            ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
             bool found = false;
             const chart::Ref account_ref = chart_.ref_for_path(value.account);
-            for (ledger::Posting& p : t->postings)
-                if (p.account == account_ref) {
-                    p.cleared = types::ClearedStatus::Cleared;
-                    found = true;
-                }
+            for (ledger::Transaction& t : transactions_) {
+                if (t.ref.value() != value.ref) continue;
+                // Only the transaction that is this account's own entry: a
+                // transfer is two rows precisely so each clears on its own
+                // account's statement, never the other's.
+                if (t.source_account != account_ref) continue;
+                t.cleared = types::ClearedStatus::Cleared;
+                found = true;
+            }
             EXPECT_TRUE(found) << "no posting on " << value.account << " in " << value.ref;
         }
         rebuild_book();
     }
 
-    // These two production functions take the transaction's id, not its Ref --
-    // the id is what MainWindow actually has in hand, from a selection in the
+    // The production function takes the transaction's id, not its Ref -- the
+    // id is what MainWindow actually has in hand, from a selection in the
     // register, and Ref is only ever a label of these tables. So the Ref is
     // resolved to an id here, the one place that gap between spec and
     // production addressing has to be bridged.
-    // A transaction recorded either shape may be named here: one with
-    // Postings is joined by reg::join_as_transfer/assign_other_account, the
-    // production functions MainWindow calls today; one recorded directly by
-    // SourceAccount/Destination has no posting to edit, so the new-shape
-    // functions in posting.h set Destination instead. Same step, same facts,
-    // whichever shape made the row.
     void when_the_other_account_is_assigned(const std::vector<AccountAssignmentString>& values) {
         for (const auto& value : values) {
             const ledger::Transaction* t = find_by_ref(value.ref);
             ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
-            if (!t->postings.empty()) {
-                const std::string id = t->id.value();
-                EXPECT_TRUE(reg::assign_other_account(chart_, &transactions_, id, value.account))
-                    << "nothing unassigned in " << value.ref;
-            } else {
-                EXPECT_TRUE(ledger::assign_destination(chart_, &transactions_, t->id,
-                                                       chart_.ref_for_path(value.account)))
-                    << "nothing unassigned in " << value.ref;
-            }
+            EXPECT_TRUE(ledger::assign_destination(chart_, &transactions_, t->id,
+                                                   chart_.ref_for_path(value.account)))
+                << "nothing unassigned in " << value.ref;
         }
         rebuild_book();
     }
@@ -189,15 +206,8 @@ public:
             ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
             const ledger::Transaction* other = find_by_ref(value.otherref);
             ASSERT_NE(nullptr, other) << "no transaction " << value.otherref;
-            if (!t->postings.empty() || !other->postings.empty()) {
-                const std::string id = t->id.value();
-                const std::string other_id = other->id.value();
-                EXPECT_TRUE(reg::join_as_transfer(chart_, &transactions_, id, other_id))
-                    << value.ref << " could not be joined with " << value.otherref;
-            } else {
-                EXPECT_TRUE(ledger::match_destinations(&transactions_, t->id, other->id))
-                    << value.ref << " could not be joined with " << value.otherref;
-            }
+            EXPECT_TRUE(ledger::match_destinations(&transactions_, t->id, other->id))
+                << value.ref << " could not be joined with " << value.otherref;
         }
         rebuild_book();
     }
@@ -245,25 +255,26 @@ public:
         for (const auto& value : values) {
             const ledger::Transaction* t = find_by_ref(value.ref);
             ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
-            EXPECT_EQ(value, as_string(*t)) << value.ref;
+            TransactionString got = as_string(*t);
+            // Compared by value, not by text: in_register() adds a
+            // thousands separator a table cell may not have written.
+            if (value.amount != DNCString &&
+                Money(value.amount).cents() == Money(got.amount).cents())
+                got.amount = value.amount;
+            EXPECT_EQ(value, got) << value.ref;
         }
     }
 
     void then_transaction_is_a_transfer(const std::vector<TransferCheckString>& values) {
         ASSERT_FALSE(transactions_.empty());
         const ledger::Transaction& t = transactions_.back();
-        std::vector<types::AccountType> kinds;
-        for (const ledger::Posting& p : t.postings) {
-            const chart::Account* a = chart_.find_account_by_ref(p.account);
-            kinds.push_back(a == nullptr ? types::AccountType::Checking : a->type);
-        }
-        const bool is_transfer = ledger::is_transfer(kinds);
+        const bool is_transfer = ledger::is_transfer(chart_, t);
         std::string from, to;
         if (is_transfer) {
-            for (const ledger::Posting& p : t.postings) {
-                if (p.amount.cents() < 0) from = chart_.path_for_ref(p.account);
-                else if (p.amount.cents() > 0) to = chart_.path_for_ref(p.account);
-            }
+            if (t.amount.cents() < 0) from = chart_.path_for_ref(t.source_account);
+            else if (t.amount.cents() > 0) to = chart_.path_for_ref(t.source_account);
+            if (-t.amount.cents() < 0) from = chart_.path_for_ref(t.destination);
+            else if (-t.amount.cents() > 0) to = chart_.path_for_ref(t.destination);
         }
         for (const auto& value : values) {
             EXPECT_EQ(parse_bool_cell(value.istransfer), is_transfer) << "is a transfer";
@@ -448,28 +459,101 @@ private:
         return (s == "none" || s == DNCString) ? std::string() : s;
     }
 
+    // A PostingRow table groups rows into a transaction with a Ref column,
+    // the way these tables have always written one down -- it says nothing
+    // about how a transaction is stored. The first row of a group is the
+    // transaction's own SourceAccount; the second is its Destination, unless
+    // both are real accounts and neither is Unassigned, in which case it is
+    // a transfer and becomes a second transaction of its own (sharing the
+    // Ref, its own Id), mirroring reg::commit's pairing -- a transaction
+    // represents one account's own entry, so a transfer is two of them. A
+    // third row or later makes the first a split, with every row from the
+    // second on a line of it.
     void group_into(std::vector<ledger::Transaction>* into,
-                    const PostingRowString& value) {
-        ledger::Transaction* found = nullptr;
-        for (ledger::Transaction& t : *into)
-            if (t.ref.value() == value.ref) { found = &t; break; }
-        if (found == nullptr) {
+                    const PostingRowString& value, int total_for_ref) {
+        ledger::Transaction* first = nullptr;
+        for (ledger::Transaction& t : *into) {
+            if (t.ref.value() != value.ref) continue;
+            first = &t;
+            break;
+        }
+        const auto on = types::Date::from_iso(value.date);
+        const chart::Ref account_ref = chart_.ref_for_path(value.account);
+        const Money amount{value.amount};
+        const std::string memo = blank(value.memo);
+        types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
+        if (value.cleared != DNCString && !value.cleared.empty())
+            cleared = types::cleared_status_from_string(value.cleared);
+
+        if (first == nullptr) {
             ledger::Transaction made;
             made.id = ledger::new_id();
             made.ref = types::TransactionRef(value.ref);
-            const auto on = types::Date::from_iso(value.date);
             if (on) made.date = *on;
             made.payee = types::PayeeName(blank(value.payee));
+            made.memo = memo;
+            made.source_account = account_ref;
+            made.amount = amount;
+            made.cleared = cleared;
             into->push_back(made);
-            found = &into->back();
+            return;
         }
-        ledger::Posting p;
-        p.account = chart_.ref_for_path(value.account);
-        p.amount = Money(value.amount);
-        p.memo = blank(value.memo);
-        if (value.cleared != DNCString && !value.cleared.empty())
-            p.cleared = types::cleared_status_from_string(value.cleared);
-        found->postings.push_back(p);
+
+        // Which row this is for its transaction is read from the
+        // transaction's own state, not from how many rows have been seen:
+        // a third or later row collapses into the same one object as the
+        // second once its Destination is set, so counting objects sharing
+        // a Ref stops distinguishing a third row from a second.
+        ledger::Transaction& t = *first;
+        if (t.destination.is_none()) {
+            const bool transfer = total_for_ref == 2 && account_ref != t.source_account &&
+                                  chart_.is_real(t.source_account) &&
+                                  chart_.is_real(account_ref) &&
+                                  !ledger::is_unassigned(chart_, t.source_account) &&
+                                  !ledger::is_unassigned(chart_, account_ref);
+            if (transfer) {
+                ledger::Transaction made;
+                made.id = ledger::new_id();
+                made.ref = t.ref;
+                if (on) made.date = *on;
+                made.payee = types::PayeeName(blank(value.payee));
+                made.memo = memo;
+                made.source_account = account_ref;
+                made.destination = t.source_account;
+                made.amount = amount;
+                made.cleared = cleared;
+                // Set before push_back: the vector may reallocate, and t is a
+                // reference into it -- writing through it afterward would be
+                // a dangling write.
+                t.destination = account_ref;
+                into->push_back(made);
+            } else {
+                t.destination = account_ref;
+                second_row_amount_[t.id.value()] = {amount, memo};
+            }
+            return;
+        }
+
+        if (!chart::is_split(t.destination)) {
+            ledger::TransactionSplit promoted;
+            promoted.transaction_id = t.id;
+            promoted.destination = t.destination;
+            const auto at = second_row_amount_.find(t.id.value());
+            if (at != second_row_amount_.end()) {
+                promoted.amount = at->second.amount;
+                promoted.memo = at->second.memo;
+            } else {
+                promoted.amount = -t.amount;
+            }
+            splits_.push_back(promoted);
+            t.destination = chart::split_ref();
+        }
+        ledger::TransactionSplit s;
+        s.transaction_id = t.id;
+        s.destination = account_ref;
+        s.amount = amount;
+        s.memo = memo;
+        splits_.push_back(s);
     }
 
     static reg::BlankLine to_blank_line(const RegisterEntryString& value) {
@@ -539,26 +623,57 @@ private:
 
     void rebuild_book() {
         book_ = ledger::Ledger();
-        for (const ledger::Transaction& t : transactions_)
-            for (const ledger::Posting& p : t.postings)
-                book_.add({t.date, types::AccountPath(chart_.path_for_ref(p.account)),
-                          p.amount, t.ref.value()});
+        ledger::add_to_book(&book_, chart_, transactions_, splits_);
     }
 
     std::vector<PostingRowString> flatten() const {
         std::vector<PostingRowString> out;
         for (const ledger::Transaction& t : transactions_) {
-            for (const ledger::Posting& p : t.postings) {
-                PostingRowString row;
-                row.ref = t.ref.value();
-                row.date = t.date.iso();
-                row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = chart_.path_for_ref(p.account);
-                row.amount = p.amount.in_register();
-                row.memo = p.memo.empty() ? "none" : p.memo;
-                row.cleared = types::to_string(p.cleared);
-                out.push_back(row);
+            PostingRowString source_row;
+            source_row.ref = t.ref.value();
+            source_row.date = t.date.iso();
+            source_row.payee = t.payee.value().empty() ? "none" : t.payee.value();
+            source_row.account = chart_.path_for_ref(t.source_account);
+            source_row.amount = t.amount.in_register();
+            source_row.memo = t.memo.empty() ? "none" : t.memo;
+            source_row.cleared = types::to_string(t.cleared);
+            out.push_back(source_row);
+
+            if (chart::is_split(t.destination)) {
+                for (const ledger::TransactionSplit& s : ledger::split_lines_of(splits_, t.id)) {
+                    PostingRowString row;
+                    row.ref = t.ref.value();
+                    row.date = t.date.iso();
+                    row.payee = source_row.payee;
+                    row.account = chart_.path_for_ref(s.destination);
+                    row.amount = s.amount.in_register();
+                    row.memo = s.memo.empty() ? "none" : s.memo;
+                    row.cleared = types::to_string(types::ClearedStatus::Uncleared);
+                    out.push_back(row);
+                }
+                continue;
             }
+            if (t.destination.is_none()) continue;
+            // A real destination that is another transaction's own source is
+            // that transaction's row; showing it again here would duplicate
+            // one movement of money as two lines. See add_to_book's rule.
+            bool paired = false;
+            if (chart_.is_real(t.destination))
+                for (const ledger::Transaction& other : transactions_)
+                    if (other.id.value() != t.id.value() && other.source_account == t.destination) {
+                        paired = true;
+                        break;
+                    }
+            if (paired) continue;
+            PostingRowString dest_row;
+            dest_row.ref = t.ref.value();
+            dest_row.date = t.date.iso();
+            dest_row.payee = source_row.payee;
+            dest_row.account = chart_.path_for_ref(t.destination);
+            dest_row.amount = (-t.amount).in_register();
+            dest_row.memo = t.memo.empty() ? "none" : t.memo;
+            dest_row.cleared = types::to_string(types::ClearedStatus::Uncleared);
+            out.push_back(dest_row);
         }
         return out;
     }
@@ -580,6 +695,15 @@ private:
     std::vector<std::string> created_names_;
     std::vector<ledger::TransactionSplit> splits_;
     types::TransactionId last_entered_id_;
+    // The amount and memo a second row actually stated, by transaction id,
+    // kept in case a third row later promotes that destination to a split
+    // line -- -t.amount is only a safe stand-in for the amount while
+    // exactly two rows have been seen, and has no stand-in at all for the
+    // memo, so a group_into that assumed one for the promoted line would
+    // silently answer a different question than the one PostingRow asked.
+    // See the matching member in transactionregister_glue.h.
+    struct PendingSecondRow { Money amount; std::string memo; };
+    std::map<std::string, PendingSecondRow> second_row_amount_;
 public:
 
     void when_transaction_entered(const std::vector<TransactionString>& values) {

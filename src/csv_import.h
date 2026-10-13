@@ -665,21 +665,17 @@ inline std::vector<ledger::Transaction> transactions_for(
         t.check_no = types::CheckNumber(one.row.check_no);
         t.memo = one.row.memo;
 
-        ledger::Posting here;
-        here.account = accounts->ref_for_path(account);
-        here.amount = amount;
+        t.source_account = accounts->ref_for_path(account);
+        t.destination = accounts->ref_for_path(other);
+        t.amount = amount;
         // Left uncleared. A CSV file carries no statement and says nothing about
         // what the bank has settled, so nothing here can honestly say it has --
         // unlike an OFX file, whose rows are a statement and are cleared.
         // Named for the kind of file that gave it and by the line it came from,
         // which is the only name a CSV row has. It is not an OFX identifier and
         // is never compared with one: see the identifier-scope rule in ImportOfx.
-        ledger::stamp(&here, types::ImportSource::Csv, std::to_string(one.row.line));
+        ledger::stamp(&t, types::ImportSource::Csv, std::to_string(one.row.line));
 
-        ledger::Posting there;
-        there.account = accounts->ref_for_path(other);
-        there.amount = -amount;
-        t.postings = {here, there};
         out.push_back(t);
     }
     return out;

@@ -44,16 +44,9 @@ inline ledger::Transaction draw_transaction(chart::Chart* accounts, const types:
     t.id = ledger::new_id();
     t.ref = types::TransactionRef(ref);
     t.date = date;
-
-    ledger::Posting cash;
-    cash.account = accounts->ref_for_path(draw_cash_account().value());
-    cash.amount = signed_cash_amount;
-
-    ledger::Posting equity;
-    equity.account = accounts->ref_for_path(draw_equity_account().value());
-    equity.amount = -signed_cash_amount;
-
-    t.postings = {cash, equity};
+    t.source_account = accounts->ref_for_path(draw_cash_account().value());
+    t.destination = accounts->ref_for_path(draw_equity_account().value());
+    t.amount = signed_cash_amount;
     return t;
 }
 

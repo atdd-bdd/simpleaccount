@@ -131,10 +131,13 @@ struct Imported {
     bool refused = false;
     std::string refusal;
 
-    // Postings grouped into transactions, in the order the transactions were
-    // made. A transaction is identified by its index, written T1, T2 and so on,
-    // which is how the specification's tables refer to them.
+    // The transactions made, in the order they were made. A transaction is
+    // identified by its index, written T1, T2 and so on, which is how the
+    // specification's tables refer to them.
     std::vector<ledger::Transaction> transactions;
+    // A split's category lines, found by the transaction's id. Empty for an
+    // ordinary transaction, which names its one other side directly.
+    std::vector<ledger::TransactionSplit> splits;
 
     // The balance an account's statement carries, checked against what the
     // postings add up to as at that date. Empty where there is nothing to
@@ -167,14 +170,14 @@ struct Imported {
             else if (!a.placeholder) ++out.accounts_created;
         }
         out.transactions = static_cast<int>(transactions.size());
-        for (const ledger::Transaction& t : transactions)
-            out.postings += static_cast<int>(t.postings.size());
         out.transfers_paired = summary.duplicate;
         out.notes = static_cast<int>(notes.size());
         out.balanced = true;
         for (const ledger::Transaction& t : transactions) {
+            const std::vector<ledger::Side> sides = ledger::sides_of(t, splits);
+            out.postings += static_cast<int>(sides.size());
             std::vector<Money> amounts;
-            for (const ledger::Posting& p : t.postings) amounts.push_back(p.amount);
+            for (const ledger::Side& s : sides) amounts.push_back(s.amount);
             if (!ledger::balances(amounts)) { out.balanced = false; break; }
         }
         return out;
@@ -513,12 +516,12 @@ private:
             }
 
             // Splits, or a single category, or neither.
-            ledger::Posting own_posting;
+            Part own_posting;
             own_posting.account = result_.accounts.ref_for_path(real_posting_account(rec.account));
             own_posting.amount = rec.amount;
             own_posting.memo = rec.memo;
             own_posting.cleared = cleared_of(rec.cleared_text);
-            std::vector<ledger::Posting> postings{own_posting};
+            std::vector<Part> postings{own_posting};
             if (has_split_lines(raw)) {
                 const std::vector<std::string>& cats = raw.all('S');
                 const std::vector<std::string>& amounts = raw.all('$');
@@ -530,7 +533,7 @@ private:
                     const Money line = posting_amount_of_split_line(*dollar);
                     allocated += *dollar;
                     const std::string cat = k < cats.size() ? cats[k] : std::string();
-                    ledger::Posting p = posting(rec, side_account(cat, line), line);
+                    Part p = posting(rec, side_account(cat, line), line);
                     if (k < memos.size()) p.memo = memos[k];
                     postings.push_back(p);
                 }
@@ -836,9 +839,21 @@ private:
         for (const chart::Account& a : created) result_.accounts_created.push_back(a);
     }
 
-    ledger::Posting posting(const ReadRecord& rec, const std::string& account,
-                            const Money& amount) const {
-        ledger::Posting p;
+    // One side of a record being built, before it becomes either the whole
+    // of a transaction (exactly two parts) or its source plus a split's
+    // lines (more than two). Posting was the stored shape for this; it no
+    // longer is, but the record-reading code below still finds it out one
+    // side at a time, which is all this is for.
+    struct Part {
+        chart::Ref account;
+        Money amount;
+        std::string memo;
+        types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
+    };
+
+    Part posting(const ReadRecord& rec, const std::string& account,
+                const Money& amount) const {
+        Part p;
         p.account = result_.accounts.ref_for_path(account);
         p.amount = amount;
         p.memo = rec.memo;
@@ -849,7 +864,7 @@ private:
         return p;
     }
 
-    void commit(const std::vector<ledger::Posting>& postings, const ReadRecord& from,
+    void commit(const std::vector<Part>& parts, const ReadRecord& from,
                 const std::string& tag = {}) {
         ledger::Transaction t;
         t.id = ledger::new_id();
@@ -859,11 +874,27 @@ private:
         t.check_no = types::CheckNumber(from.check_no);
         t.memo = from.memo;
         t.tag = tag;
-        t.postings = postings;
+        t.source_account = parts.front().account;
+        t.amount = parts.front().amount;
+        t.cleared = parts.front().cleared;
+        if (parts.size() == 2) {
+            t.destination = parts[1].account;
+        } else {
+            t.destination = chart::split_ref();
+        }
         if (!tag.empty()) ++tags_kept_;
         result_.transactions.push_back(t);
         ++result_.summary.created;
-        for (const ledger::Posting& p : postings) {
+        if (parts.size() > 2)
+            for (std::size_t i = 1; i < parts.size(); ++i) {
+                ledger::TransactionSplit s;
+                s.transaction_id = t.id;
+                s.destination = parts[i].account;
+                s.amount = parts[i].amount;
+                s.memo = parts[i].memo;
+                result_.splits.push_back(s);
+            }
+        for (const Part& p : parts) {
             const ledger::DatedPosting dp{from.date, types::AccountPath(result_.accounts.path_for_ref(p.account)),
                                           p.amount, t.ref.value()};
             result_.postings.push_back(dp);

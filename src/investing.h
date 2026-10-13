@@ -63,6 +63,9 @@ inline ledger::Transaction new_transaction(const types::Date& date, const std::s
 
 struct BuyResult {
     ledger::Transaction transaction;
+    // A line per the holding and, where there was a fee, a second for it --
+    // present only when there is more than one, same as any other split.
+    std::vector<ledger::TransactionSplit> splits;
     double new_shares = 0;
     Money new_value;
     double new_price = 0;
@@ -81,26 +84,27 @@ inline BuyResult buy_shares(const chart::Chart& accounts, const types::AccountPa
     const Money bought_value = holdings::value_of(bought_shares, bought_price);
 
     ledger::Transaction t = new_transaction(date, ref);
-    ledger::Posting into;
-    into.account = accounts.ref_for_path(account.value());
-    into.amount = bought_value;
-    t.postings.push_back(into);
+    t.source_account = accounts.ref_for_path(account.value());
+    t.amount = bought_value;
 
     // A commission is an expense, not part of the holding: folding it into the
     // holding's value would make the invariant false, because the shares did
     // not cost more than their price.
-    Money cash_out = bought_value;
     if (fee.cents() != 0) {
-        ledger::Posting f;
-        f.account = accounts.ref_for_path(fees_account().value());
+        t.destination = chart::split_ref();
+        ledger::TransactionSplit cash;
+        cash.transaction_id = t.id;
+        cash.destination = accounts.ref_for_path(cash_account_for(account).value());
+        cash.amount = -(bought_value + fee);
+        out.splits.push_back(cash);
+        ledger::TransactionSplit f;
+        f.transaction_id = t.id;
+        f.destination = accounts.ref_for_path(fees_account().value());
         f.amount = fee;
-        t.postings.push_back(f);
-        cash_out += fee;
+        out.splits.push_back(f);
+    } else {
+        t.destination = accounts.ref_for_path(cash_account_for(account).value());
     }
-    ledger::Posting cash;
-    cash.account = accounts.ref_for_path(cash_account_for(account).value());
-    cash.amount = -cash_out;
-    t.postings.push_back(cash);
     out.transaction = t;
 
     const holdings::AveragedHolding after =
@@ -116,6 +120,9 @@ inline BuyResult buy_shares(const chart::Chart& accounts, const types::AccountPa
 struct SellResult {
     chart::Rejection rejection;
     ledger::Transaction transaction;
+    // A line for the holding and, where the sale was above or below the
+    // carried price, a second for the market-value change.
+    std::vector<ledger::TransactionSplit> splits;
     double new_shares = 0;
     Money new_value;
     double new_price = 0;
@@ -143,21 +150,24 @@ inline SellResult sell_shares(const chart::Chart& accounts, const types::Account
     const Money gain = proceeds - carried_value_sold;
 
     ledger::Transaction t = new_transaction(date, ref);
-    ledger::Posting cash;
-    cash.account = accounts.ref_for_path(cash_account_for(account).value());
-    cash.amount = proceeds;
-    t.postings.push_back(cash);
-    ledger::Posting held;
-    held.account = accounts.ref_for_path(account.value());
-    held.amount = -carried_value_sold;
-    t.postings.push_back(held);
-    // A sale at exactly the carried price needs no third posting: there is
-    // nothing to put to Equity.
+    t.source_account = accounts.ref_for_path(cash_account_for(account).value());
+    t.amount = proceeds;
+    // A sale at exactly the carried price needs no split: there is nothing to
+    // put to Equity.
     if (gain.cents() != 0) {
-        ledger::Posting equity;
-        equity.account = accounts.ref_for_path(market_value_changes_account().value());
+        t.destination = chart::split_ref();
+        ledger::TransactionSplit held;
+        held.transaction_id = t.id;
+        held.destination = accounts.ref_for_path(account.value());
+        held.amount = -carried_value_sold;
+        out.splits.push_back(held);
+        ledger::TransactionSplit equity;
+        equity.transaction_id = t.id;
+        equity.destination = accounts.ref_for_path(market_value_changes_account().value());
         equity.amount = -gain;
-        t.postings.push_back(equity);
+        out.splits.push_back(equity);
+    } else {
+        t.destination = accounts.ref_for_path(account.value());
     }
     out.transaction = t;
 
@@ -187,13 +197,9 @@ inline RevalueResult revalue(const chart::Chart& accounts, const types::AccountP
     const Money diff = new_value - held_value;
     if (diff.cents() == 0) return out;
     ledger::Transaction t = new_transaction(as_of, ref);
-    ledger::Posting held;
-    held.account = accounts.ref_for_path(account.value());
-    held.amount = diff;
-    ledger::Posting equity;
-    equity.account = accounts.ref_for_path(market_value_changes_account().value());
-    equity.amount = -diff;
-    t.postings = {held, equity};
+    t.source_account = accounts.ref_for_path(account.value());
+    t.destination = accounts.ref_for_path(market_value_changes_account().value());
+    t.amount = diff;
     out.transaction = t;
     out.posted = true;
     return out;
@@ -220,14 +226,10 @@ inline DividendResult record_dividend(const chart::Chart& accounts,
                                       const types::Date& date, const std::string& ref) {
     DividendResult out;
     ledger::Transaction t = new_transaction(date, ref);
-    ledger::Posting into;
-    into.account = accounts.ref_for_path(
+    t.source_account = accounts.ref_for_path(
         reinvest ? account.value() : cash_account_for(account).value());
-    into.amount = amount;
-    ledger::Posting cat;
-    cat.account = accounts.ref_for_path(category.value());
-    cat.amount = -amount;
-    t.postings = {into, cat};
+    t.destination = accounts.ref_for_path(category.value());
+    t.amount = amount;
     out.transaction = t;
 
     if (reinvest) {
@@ -266,13 +268,9 @@ inline ValueResult state_value(const chart::Chart& accounts, const types::Accoun
     }
     const Money diff = new_value - current_value;
     ledger::Transaction t = new_transaction(as_of, ref);
-    ledger::Posting held;
-    held.account = accounts.ref_for_path(account.value());
-    held.amount = diff;
-    ledger::Posting equity;
-    equity.account = accounts.ref_for_path(market_value_changes_account().value());
-    equity.amount = -diff;
-    t.postings = {held, equity};
+    t.source_account = accounts.ref_for_path(account.value());
+    t.destination = accounts.ref_for_path(market_value_changes_account().value());
+    t.amount = diff;
     out.transaction = t;
     return out;
 }

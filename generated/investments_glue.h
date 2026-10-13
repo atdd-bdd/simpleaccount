@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 #include <cstdio>
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
 #include "common/common.h"
@@ -86,31 +87,76 @@ public:
 
     void given_postings_are(const std::vector<PostingRowString>& values) {
         transactions_.clear();
+        splits_.clear();
+        second_row_amount_.clear();
+        for (const auto& value : values) group_into(&transactions_, value);
         ledger_ = ledger::Ledger();
-        for (const auto& value : values) {
-            ledger::Transaction* into = nullptr;
-            for (ledger::Transaction& t : transactions_)
-                if (t.ref.value() == value.ref) into = &t;
-            if (into == nullptr) {
-                ledger::Transaction made;
-                made.id = ledger::new_id();
-                made.ref = types::TransactionRef(value.ref);
-                const auto on = types::Date::from_iso(value.date);
-                ASSERT_TRUE(on.has_value()) << value.date;
-                made.date = *on;
-                made.payee = types::PayeeName(blank(value.payee));
-                transactions_.push_back(made);
-                into = &transactions_.back();
-            }
-            ledger::Posting posting;
-            posting.account = chart_.ref_for_path(value.account);
-            posting.amount = Money(value.amount);
-            posting.memo = blank(value.memo);
-            posting.cleared = types::cleared_status_from_string(value.cleared);
-            into->postings.push_back(posting);
-            ledger_.add({into->date, types::AccountPath(value.account), posting.amount,
-                        into->ref.value()});
+        ledger::add_to_book(&ledger_, chart_, transactions_, splits_);
+    }
+
+    void group_into(std::vector<ledger::Transaction>* into, const PostingRowString& value) {
+        ledger::Transaction* first = nullptr;
+        for (ledger::Transaction& t : *into) {
+            if (t.ref.value() != value.ref) continue;
+            first = &t;
+            break;
         }
+        const auto on = types::Date::from_iso(value.date);
+        ASSERT_TRUE(on.has_value()) << value.date;
+        const chart::Ref account_ref = chart_.ref_for_path(value.account);
+        const Money amount{value.amount};
+        const std::string memo = blank(value.memo);
+        types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
+        if (value.cleared != DNCString && !value.cleared.empty())
+            cleared = types::cleared_status_from_string(value.cleared);
+
+        if (first == nullptr) {
+            ledger::Transaction made;
+            made.id = ledger::new_id();
+            made.ref = types::TransactionRef(value.ref);
+            if (on) made.date = *on;
+            made.payee = types::PayeeName(blank(value.payee));
+            made.memo = memo;
+            made.source_account = account_ref;
+            made.amount = amount;
+            made.cleared = cleared;
+            into->push_back(made);
+            return;
+        }
+        // Which row this is for its transaction is read from the
+        // transaction's own state, not from how many rows have been seen:
+        // a third or later row collapses into the same one object as the
+        // second once its Destination is set, so counting objects sharing
+        // a Ref stops distinguishing a third row from a second.
+        if (first->destination.is_none()) {
+            first->destination = account_ref;
+            if (first->memo.empty() && !memo.empty()) first->memo = memo;
+            second_row_amount_[first->id.value()] = {amount, memo};
+            return;
+        }
+        ledger::Transaction& t = *first;
+        if (!chart::is_split(t.destination)) {
+            if (!t.destination.is_none()) {
+                ledger::TransactionSplit promoted;
+                promoted.transaction_id = t.id;
+                promoted.destination = t.destination;
+                const auto at = second_row_amount_.find(t.id.value());
+                if (at != second_row_amount_.end()) {
+                    promoted.amount = at->second.amount;
+                    promoted.memo = at->second.memo;
+                } else {
+                    promoted.amount = -t.amount;
+                }
+                splits_.push_back(promoted);
+            }
+            t.destination = chart::split_ref();
+        }
+        ledger::TransactionSplit s;
+        s.transaction_id = t.id;
+        s.destination = account_ref;
+        s.amount = amount;
+        s.memo = memo;
+        splits_.push_back(s);
     }
 
     void given_postings_are_as_previous() {}
@@ -141,7 +187,7 @@ public:
 
             const investing::BuyResult result = investing::buy_shares(
                 chart_, account, held_shares, held_value, shares, price, fee, *date, next_ref());
-            apply_transaction(result.transaction);
+            apply_transaction(result.transaction, result.splits);
 
             if (existing != nullptr) {
                 existing->shares = result.new_shares;
@@ -178,7 +224,7 @@ public:
                 shares, price, *date, next_ref());
             rejection_ = result.rejection;
             if (rejection_.refused) continue;
-            apply_transaction(result.transaction);
+            apply_transaction(result.transaction, result.splits);
             existing->shares = result.new_shares;
             existing->price = result.new_price;
             existing->price_as_of = *date;
@@ -435,9 +481,12 @@ public:
     }
 
 private:
+    struct PendingSecondRow { Money amount; std::string memo; };
+    std::map<std::string, PendingSecondRow> second_row_amount_;
     chart::Chart chart_;
     ledger::Ledger ledger_;
     std::vector<ledger::Transaction> transactions_;
+    std::vector<ledger::TransactionSplit> splits_;
     std::vector<holdings::Holding> holdings_;
     types::Date today_{2024, 1, 1};
 
@@ -473,19 +522,21 @@ private:
         return s;
     }
 
-    std::string next_ref() const { return "T" + std::to_string(transactions_.size() + 1); }
+    std::string next_ref() const { return "T" + std::to_string(ledger::transaction_count(transactions_) + 1); }
 
-    void apply_transaction(const ledger::Transaction& t) {
+    void apply_transaction(const ledger::Transaction& t,
+                           const std::vector<ledger::TransactionSplit>& splits = {}) {
         transactions_.push_back(t);
-        for (const ledger::Posting& p : t.postings) {
-            const std::string path = chart_.path_for_ref(p.account);
-            ledger_.add({t.date, types::AccountPath(path), p.amount, t.ref.value()});
+        for (const ledger::TransactionSplit& s : splits) splits_.push_back(s);
+        for (const ledger::Side& s : ledger::sides_of(t, splits)) {
+            const std::string path = chart_.path_for_ref(s.account);
+            ledger_.add({t.date, types::AccountPath(path), s.amount, t.ref.value()});
             PostingRowString row;
             row.ref = t.ref.value();
             row.date = t.date.iso();
             row.payee = "none";
             row.account = path;
-            row.amount = p.amount.in_register();
+            row.amount = s.amount.in_register();
             row.memo = "none";
             row.cleared = "Uncleared";
             last_created_.push_back(row);

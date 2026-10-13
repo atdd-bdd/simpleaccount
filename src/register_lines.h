@@ -64,10 +64,11 @@ inline std::string displayed(const chart::Chart& accounts, const std::string& pa
 }  // namespace detail
 
 // Selecting a placeholder shows everything beneath it: a placeholder takes no
-// postings of its own, so a register of only its own would be empty.
+// transactions of its own, so a register of only its own would be empty.
 inline std::vector<Line> lines_for(
         const chart::Chart& accounts,
         const std::vector<ledger::Transaction>& transactions,
+        const std::vector<ledger::TransactionSplit>& splits,
         const std::string& account) {
     const chart::Account* a = accounts.find(account);
     const int sign = a != nullptr ? types::display_sign(a->type) : 1;
@@ -86,14 +87,11 @@ inline std::vector<Line> lines_for(
     Money running;
     for (std::size_t index : order) {
         const ledger::Transaction& t = transactions[index];
+        const std::string source_path = accounts.path_for_ref(t.source_account);
 
-        // A transaction recorded the new way has no postings to walk: it
-        // already names its one line directly. See the section on naming
-        // both accounts directly in Transactions.spectable.
-        if (t.postings.empty() && !t.source_account.is_none()) {
-            const std::string source_path = accounts.path_for_ref(t.source_account);
-            if (!chart::Chart::is_descendant_or_self(source_path, account))
-                continue;
+        // This account is the one the transaction itself lives in: its own
+        // line, named the way the register has always named one.
+        if (chart::Chart::is_descendant_or_self(source_path, account)) {
             Line line;
             line.ref = t.ref.value();
             line.id = t.id.value();
@@ -107,6 +105,12 @@ inline std::vector<Line> lines_for(
 
             if (chart::is_split(t.destination)) {
                 line.category = "--Split--";
+                for (const ledger::TransactionSplit& s : ledger::split_lines_of(splits, t.id)) {
+                    if (!line.category_detail.empty()) line.category_detail += '\n';
+                    line.category_detail += accounts.path_for_ref(s.destination) + "   " +
+                                            s.amount.in_register();
+                    if (!s.memo.empty()) line.category_detail += "   " + s.memo;
+                }
             } else {
                 const std::string other = accounts.path_for_ref(t.destination);
                 line.category = other.empty() ? std::string() : detail::displayed(accounts, other);
@@ -118,67 +122,69 @@ inline std::vector<Line> lines_for(
             out.push_back(line);
             continue;
         }
+        // Otherwise this account is not where the transaction lives, but a
+        // split line may still be its own row here: the other legs of the
+        // split are not this account's business, so only the matching line
+        // is shown, with the source account named back as its category. See
+        // "A split seen from one of its category registers shows only its
+        // own line" in TransactionRegister.spectable.
+        if (chart::is_split(t.destination)) {
+            for (const ledger::TransactionSplit& s : ledger::split_lines_of(splits, t.id)) {
+                const std::string s_path = accounts.path_for_ref(s.destination);
+                if (!chart::Chart::is_descendant_or_self(s_path, account)) continue;
+                Line line;
+                line.ref = t.ref.value();
+                line.id = t.id.value();
+                line.date = t.date;
+                line.check_no = t.check_no.value();
+                line.payee = t.payee.value();
+                line.memo = s.memo.empty() ? t.memo : s.memo;
+                line.cleared = types::ClearedStatus::Uncleared;
+                if (s.amount.cents() < 0) line.payment = -s.amount;
+                else line.deposit = s.amount;
+                line.category = source_path.empty() ? std::string()
+                                                     : detail::displayed(accounts, source_path);
+                line.category_detail = source_path;
 
-        // Every posting of this transaction that lands in the register.
-        for (const ledger::Posting& p : t.postings) {
-            const std::string p_path = accounts.path_for_ref(p.account);
-            if (!chart::Chart::is_descendant_or_self(p_path, account)) continue;
-            Line line;
-            line.ref = t.ref.value();
-            line.id = t.id.value();
-            line.date = t.date;
-            line.check_no = t.check_no.value();
-            line.payee = t.payee.value();
-            line.memo = p.memo.empty() ? t.memo : p.memo;
-            line.cleared = p.cleared;
-            if (p.amount.cents() < 0) line.payment = -p.amount;
-            else line.deposit = p.amount;
-
-            // The other side: the one other account where there is exactly one,
-            // and otherwise that there are several.
-            std::vector<std::string> others;
-            for (const ledger::Posting& q : t.postings)
-                if (&q != &p) others.push_back(accounts.path_for_ref(q.account));
-            // The other side, as this register sees it. One other posting is
-            // simply that account. Where there are several, what to name depends
-            // on where you are standing: from the bank, a split across three
-            // categories is --Split--, because no one of them is the other side.
-            // From inside one of those categories, the other side is the bank --
-            // the rest of the split is not that category's business.
-            line.category = std::string("--Split--");
-            if (others.size() == 1) {
-                line.category = detail::displayed(accounts, others.front());
-            } else if (!others.empty()) {
-                std::vector<std::string> real;
-                for (const std::string& other : others) {
-                    const chart::Account* b = accounts.find(other);
-                    if (b != nullptr && types::class_of(b->type) == types::AccountClass::Real)
-                        real.push_back(other);
-                }
-                if (real.size() == 1) line.category = detail::displayed(accounts, real.front());
+                running += s.amount;
+                line.balance = sign < 0 ? -running : running;
+                out.push_back(line);
             }
-            if (others.empty()) line.category.clear();
-
-            // The literal path, for a reader -- or the dialog that asks for a
-            // new category -- who wants the account rather than its display
-            // text. Only meaningful where there is exactly one other posting;
-            // see the comment on the split branch below.
-            if (others.size() == 1) {
-                line.category_detail = others.front();
-            } else {
-                for (const ledger::Posting& q : t.postings) {
-                    if (&q == &p) continue;
-                    if (!line.category_detail.empty()) line.category_detail += '\n';
-                    line.category_detail += accounts.path_for_ref(q.account) + "   " +
-                                            q.amount.in_register();
-                    if (!q.memo.empty()) line.category_detail += "   " + q.memo;
-                }
-            }
-
-            running += p.amount;
-            line.balance = sign < 0 ? -running : running;
-            out.push_back(line);
+            continue;
         }
+        if (t.destination.is_none()) continue;
+        const std::string dest_path = accounts.path_for_ref(t.destination);
+        if (!chart::Chart::is_descendant_or_self(dest_path, account)) continue;
+
+        // A real destination that is itself another transaction's own
+        // SourceAccount is a matched transfer; that other transaction already
+        // shows this movement from its own side, so showing it again here
+        // would be the same line twice. See the two-rows-for-a-transfer rule
+        // in Transactions.spectable.
+        if (accounts.is_real(t.destination)) {
+            bool paired = false;
+            for (const ledger::Transaction& other : transactions)
+                if (&other != &t && other.source_account == t.destination) { paired = true; break; }
+            if (paired) continue;
+        }
+
+        Line line;
+        line.ref = t.ref.value();
+        line.id = t.id.value();
+        line.date = t.date;
+        line.check_no = t.check_no.value();
+        line.payee = t.payee.value();
+        line.memo = t.memo;
+        line.cleared = t.cleared;
+        const Money here_amount = -t.amount;
+        if (here_amount.cents() < 0) line.payment = -here_amount;
+        else line.deposit = here_amount;
+        line.category = source_path.empty() ? std::string() : detail::displayed(accounts, source_path);
+        line.category_detail = source_path;
+
+        running += here_amount;
+        line.balance = sign < 0 ? -running : running;
+        out.push_back(line);
     }
     return out;
 }
@@ -301,23 +307,22 @@ struct SplitLine {
     std::string memo;
 };
 
-// Expanding a split line: the other side, one line each. A split shows as
-// --Split-- in the category column, which says nothing on its own; this is what
-// it stands for.
+// Expanding a split line: its categories, one line each. A split shows as
+// --Split-- in the category column, which says nothing on its own; this is
+// what it stands for.
 inline std::vector<SplitLine> split_lines_of(
         const chart::Chart& accounts,
         const std::vector<ledger::Transaction>& transactions,
-        const std::string& ref, const std::string& account) {
+        const std::vector<ledger::TransactionSplit>& splits,
+        const std::string& ref) {
     std::vector<SplitLine> out;
     for (const ledger::Transaction& t : transactions) {
         if (t.ref.value() != ref) continue;
-        for (const ledger::Posting& p : t.postings) {
-            const std::string p_path = accounts.path_for_ref(p.account);
-            if (chart::Chart::is_descendant_or_self(p_path, account)) continue;
+        for (const ledger::TransactionSplit& s : ledger::split_lines_of(splits, t.id)) {
             SplitLine line;
-            line.category = p_path;
-            line.amount = p.amount;
-            line.memo = p.memo;
+            line.category = accounts.path_for_ref(s.destination);
+            line.amount = s.amount;
+            line.memo = s.memo;
             out.push_back(line);
         }
     }

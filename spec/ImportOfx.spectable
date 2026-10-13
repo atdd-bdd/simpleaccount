@@ -880,16 +880,16 @@ Description same payment again.
 Details So the two halves of a transfer do not have to arrive together, which
 Details the first version of this rule required and which no real month looks
 Details like. The side that arrives second brings two things: the account, which
-Details fills in the Unassigned side, and its own identifier, which is stamped
-Details on the posting it describes. Each side keeps the name its own file gave
-Details it, which is why an identifier belongs to a posting and not to a
-Details transaction.
+Details fills in the first side's Unassigned Destination, and a row of its
+Details own -- a transaction is one account's own download, so the second half
+Details is a transaction in its own right, not a rewrite of the first, and it
+Details carries its own identifier rather than a second one squeezed onto the
+Details first's.
 Details
-Details The payee is whatever the first side called it and the second never
-Details overwrites it. A bank calls it a payment to the card; a card calls it a
-Details payment received. The first is the useful one and it is also the one
-Details already on the screen, so changing it under the user would be a
-Details surprise with nothing to recommend it.
+Details Each side's payee is whatever its own file called it. A bank calls it
+Details a payment to the card; a card calls it a payment received. The first
+Details side's own payee is never touched by the second arriving -- there is
+Details nothing to overwrite, since each is its own transaction.
 Details
 Details Matching needs the amount equal and opposite and the dates within the
 Details transfer window. What it must not do is search every account in the
@@ -978,13 +978,15 @@ Then import summary is : ImportSummary Vertical
 | New     | 0 |
 | Matched | 1 |
 Then postings are : ImportedPostingRow
-| Ref | Date       | Payee     | Account                | Amount   | Cleared | FitId  |
-| T1  | 2026-04-10 | CHASEBANK | Assets:Checking        | -1200.00 | Cleared | BNK-77 |
-| T1  | 2026-04-10 | CHASEBANK | Liabilities:Chase Visa | 1200.00  | Cleared | CC-901 |
-# One transaction, not two. The payee is still CHASEBANK -- the bank's word for
-# it, kept because the card's "PAYMENT RECEIVED" says less and because it is
-# what is already on the screen. Each posting carries the identifier from the
-# file that described it, which is why an identifier belongs to a posting.
+| Ref | Date       | Payee            | Account                | Amount   | Cleared | FitId  |
+| T1  | 2026-04-10 | CHASEBANK        | Assets:Checking        | -1200.00 | Cleared | BNK-77 |
+| T2  | 2026-04-11 | PAYMENT RECEIVED | Liabilities:Chase Visa | 1200.00  | Cleared | CC-901 |
+# Two transactions, not one: a transaction is one account's own download, so
+# completing a payment adds the card's own row rather than rewriting the
+# bank's. T1's Destination is filled in with Liabilities:Chase Visa and T2 is
+# new, naming T1's account back -- each keeps its own payee, the word the
+# account it is in actually heard, and its own identifier, which is why an
+# identifier belongs to a transaction now rather than to a posting.
 
 Scenario Two cards from one bank are told apart by the amount
 Description Both cards say CHASEBANK, so the payee narrows the search to both and
@@ -1010,13 +1012,14 @@ Then import summary is : ImportSummary Vertical
 | New     | 0 |
 | Matched | 1 |
 Then postings are : ImportedPostingRow
-| Ref | Date       | Payee     | Account                  | Amount   | Cleared   | FitId  |
-| T1  | 2026-04-10 | CHASEBANK | Assets:Checking          | -1200.00 | Cleared   | BNK-77 |
-| T1  | 2026-04-10 | CHASEBANK | Unassigned               | 1200.00  | Uncleared | none   |
-| T2  | 2026-04-10 | CHASEBANK | Assets:Checking          | -340.00  | Cleared   | BNK-78 |
-| T2  | 2026-04-10 | CHASEBANK | Liabilities:Chase Amazon | 340.00   | Cleared   | CC-902 |
+| Ref | Date       | Payee            | Account                  | Amount   | Cleared   | FitId  |
+| T1  | 2026-04-10 | CHASEBANK        | Assets:Checking          | -1200.00 | Cleared   | BNK-77 |
+| T1  | 2026-04-10 | CHASEBANK        | Unassigned               | 1200.00  | Uncleared | none   |
+| T2  | 2026-04-10 | CHASEBANK        | Assets:Checking          | -340.00  | Cleared   | BNK-78 |
+| T3  | 2026-04-11 | PAYMENT RECEIVED | Liabilities:Chase Amazon | 340.00   | Cleared   | CC-902 |
 # The twelve hundred is still waiting for the Visa file. Nothing about reading
-# the Amazon card tells us anything about it.
+# the Amazon card tells us anything about it. T3 is the new row this import
+# added -- the card's own side of the payment it completed.
 
 Scenario A row whose payee matches no account is money leaving the book
 Description There is no account for it to be a transfer to, so it is not a
@@ -1095,16 +1098,16 @@ When candidate approved : TransferCandidate Vertical CompareOnly
 | Amount      | 3000.00               |
 Then postings are : ImportedPostingRow
 | Ref | Date       | Payee                      | Account               | Amount   | Cleared | FitId      |
-| T1  | 2026-07-31 | FROM PUGH K PRIME CHECKING | Assets:Checking       | -3000.00 | Cleared | 2026073102 |
-| T1  | 2026-07-31 | FROM PUGH K PRIME CHECKING | Assets:Checking Prime | 3000.00  | Cleared | 2026073101 |
+| T1  | 2026-07-31 | TO PUGH K CHECKING         | Assets:Checking       | -3000.00 | Cleared | 2026073102 |
+| T2  | 2026-07-31 | FROM PUGH K PRIME CHECKING | Assets:Checking Prime | 3000.00  | Cleared | 2026073101 |
 Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 0 |
 | Matched   | 0 |
 | Possible  | 0 |
-# One transaction, not two, and no Uncategorized posting on either side. Each
-# posting keeps the identifier of the file it came from, so re-importing
-# either file recognises its own half.
+# Two transactions, one per account, and no Uncategorized posting on either
+# side. Each keeps the identifier and the payee of the file it came from, so
+# re-importing either file recognises its own half.
 
 Attributes OfxImportFile
 Description Transactions from several files at once, each naming its account.
@@ -1145,11 +1148,12 @@ When candidate approved : TransferCandidate Vertical CompareOnly
 | ToAccount   | Liabilities:WF Card   |
 | Amount      | 3508.09               |
 Then postings are : ImportedPostingRow
-| Ref | Date       | Payee                   | Account               | Amount   | Cleared | FitId |
-| T1  | 2026-08-03 | WF Credit Card AUTO PAY | Assets:Checking Prime | -3508.09 | Cleared | C1    |
-| T1  | 2026-08-03 | WF Credit Card AUTO PAY | Liabilities:WF Card   | 3508.09  | Cleared | V1    |
-# The date is the one from the account the money left. The card posted it two
-# days earlier, and a register is kept by one date per transaction.
+| Ref | Date       | Payee                       | Account               | Amount   | Cleared | FitId |
+| T1  | 2026-08-03 | WF Credit Card AUTO PAY     | Assets:Checking Prime | -3508.09 | Cleared | C1    |
+| T2  | 2026-08-01 | AUTOMATIC PAYMENT THANK YOU | Liabilities:WF Card   | 3508.09  | Cleared | V1    |
+# Two transactions, one per account, each dated and named the way its own
+# file read it -- the card posted it two days earlier than the checking
+# account did, and each now keeps its own date rather than sharing one.
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2026-01-01 |
@@ -1467,9 +1471,9 @@ Then transfer candidates are : TransferCandidate
 | FromAccount           | FromDate   | ToAccount           | ToDate     | Amount  | DaysApart | State     |
 | Assets:Checking Prime | 2026-09-01 | Liabilities:WF Card | 2026-09-01 | 2026.95 | 0         | Automatic |
 Then postings are : ImportedPostingRow
-| Ref | Date       | Payee                   | Account               | Amount   | Cleared | FitId |
-| T1  | 2026-09-01 | WF Credit Card AUTO PAY | Assets:Checking Prime | -2026.95 | Cleared | C2    |
-| T1  | 2026-09-01 | WF Credit Card AUTO PAY | Liabilities:WF Card   | 2026.95  | Cleared | V2    |
+| Ref | Date       | Payee                       | Account               | Amount   | Cleared | FitId |
+| T1  | 2026-09-01 | WF Credit Card AUTO PAY     | Assets:Checking Prime | -2026.95 | Cleared | C2    |
+| T2  | 2026-09-01 | AUTOMATIC PAYMENT THANK YOU | Liabilities:WF Card   | 2026.95  | Cleared | V2    |
 
 Scenario A remembered rule still requires the amounts to be equal and opposite
 Description The rule says these two payees in these two accounts are worth

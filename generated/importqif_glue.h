@@ -192,7 +192,8 @@ public:
         int out_of_balance = 0;
         for (const ledger::Transaction& t : result_.transactions) {
             std::vector<Money> amounts;
-            for (const ledger::Posting& p : t.postings) amounts.push_back(p.amount);
+            for (const ledger::Side& s : ledger::sides_of(t, result_.splits))
+                amounts.push_back(s.amount);
             if (!ledger::balances(amounts)) ++out_of_balance;
         }
         for (const auto& value : values) {
@@ -348,15 +349,18 @@ private:
     std::vector<PostingRowString> flatten() const {
         std::vector<PostingRowString> out;
         for (const ledger::Transaction& t : result_.transactions) {
-            for (const ledger::Posting& p : t.postings) {
+            const std::vector<ledger::Side> sides = ledger::sides_of(t, result_.splits);
+            for (std::size_t i = 0; i < sides.size(); ++i) {
+                const ledger::Side& s = sides[i];
                 PostingRowString row;
                 row.ref = t.ref.value();
                 row.date = t.date.iso();
                 row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = result_.accounts.path_for_ref(p.account);
-                row.amount = p.amount.in_register();
-                row.memo = p.memo.empty() ? "none" : p.memo;
-                row.cleared = types::to_string(p.cleared);
+                row.account = result_.accounts.path_for_ref(s.account);
+                row.amount = s.amount.in_register();
+                row.memo = s.memo.empty() ? "none" : s.memo;
+                row.cleared = types::to_string(i == 0 ? t.cleared
+                                                      : types::ClearedStatus::Uncleared);
                 out.push_back(row);
             }
         }
@@ -639,9 +643,8 @@ public:
             ASSERT_FALSE(out.refused) << out.refusal;
             ASSERT_EQ(1u, out.transactions.size());
             const ledger::Transaction& made = out.transactions.front();
-            ASSERT_EQ(2u, made.postings.size());
-            const ledger::Posting& other = made.postings[1];
-            EXPECT_EQ(t.accountpath, out.accounts.path_for_ref(other.account)) << t.categorytext;
+            ASSERT_FALSE(chart::is_split(made.destination));
+            EXPECT_EQ(t.accountpath, out.accounts.path_for_ref(made.destination)) << t.categorytext;
             const bool guessed = std::any_of(
                 out.notes.begin(), out.notes.end(),
                 [](const qif::Note& n) { return n.kind == "CategoryGuessed"; });

@@ -23,33 +23,36 @@ struct Outcome {
     std::string reason;
 };
 
-namespace detail {
-
-inline bool is_a_category(const chart::Chart& accounts, const chart::Ref& ref) {
-    const chart::Account* a = accounts.find_account_by_ref(ref);
-    return a != nullptr && (a->type == types::AccountType::Income ||
-                            a->type == types::AccountType::Expense);
-}
-
-}  // namespace detail
-
-// Repoints the posting against one account at another. Naming the posting is
-// what makes this usable on a split, where there is more than one to choose
+// Repoints the side named by Account at another. Naming which side is what
+// makes this usable on a split, where there is more than one to choose
 // between.
 //
-// The account moved to may be a real one, and then the transaction has become a
-// transfer rather than an expense -- which is the whole of what makes a card
+// The account moved to may be a real one, and then the transaction has become
+// a transfer rather than an expense -- which is the whole of what makes a card
 // payment a transfer, and it needs no special case here.
 inline Outcome change_category(const chart::Chart& accounts, ledger::Transaction* t,
+                               std::vector<ledger::TransactionSplit>* splits,
                                const std::string& from, const std::string& to) {
     if (t == nullptr) return {false, "no transaction"};
     if (to.empty()) return {false, "a category is required"};
     const chart::Ref from_ref = accounts.ref_for_path(from);
-    for (ledger::Posting& p : t->postings) {
-        if (p.account != from_ref) continue;
-        p.account = accounts.ref_for_path(to);
+    const chart::Ref to_ref = accounts.ref_for_path(to);
+    if (t->source_account == from_ref) {
+        t->source_account = to_ref;
         return {true, std::string()};
     }
+    if (!chart::is_split(t->destination)) {
+        if (t->destination != from_ref) return {false, "nothing is posted to " + from};
+        t->destination = to_ref;
+        return {true, std::string()};
+    }
+    if (splits != nullptr)
+        for (ledger::TransactionSplit& s : *splits) {
+            if (s.transaction_id.value() != t->id.value() || s.destination != from_ref)
+                continue;
+            s.destination = to_ref;
+            return {true, std::string()};
+        }
     return {false, "nothing is posted to " + from};
 }
 
@@ -84,6 +87,7 @@ inline Money abs_of(const Money& m) { return m.cents() < 0 ? -m : m; }
 // section of Transactions.spectable.
 inline AmountOutcome change_amount(const chart::Chart& accounts,
                                    std::vector<ledger::Transaction>* transactions,
+                                   std::vector<ledger::TransactionSplit>* splits,
                                    const std::string& ref, const std::string& account,
                                    const Money& new_signed_amount) {
     AmountOutcome out;
@@ -93,50 +97,83 @@ inline AmountOutcome change_amount(const chart::Chart& accounts,
     if (t == nullptr) { out.reason = "no transaction named " + ref; return out; }
 
     const chart::Ref account_ref = accounts.ref_for_path(account);
-    ledger::Posting* named = nullptr;
-    for (ledger::Posting& p : t->postings)
-        if (p.account == account_ref) { named = &p; break; }
-    if (named == nullptr) { out.reason = "nothing is posted to " + account; return out; }
-
-    Money other_sum;
-    bool any_reconciled = named->cleared == types::ClearedStatus::Reconciled;
-    for (ledger::Posting& p : t->postings) {
-        if (&p == named) continue;
-        other_sum += p.amount;
-        if (p.cleared == types::ClearedStatus::Reconciled) any_reconciled = true;
-    }
+    const bool split = chart::is_split(t->destination);
     const Money needed = -new_signed_amount;
 
-    if (t->postings.size() > 2 && other_sum.cents() != needed.cents()) {
+    if (t->source_account == account_ref) {
+        const bool reconciled = t->cleared == types::ClearedStatus::Reconciled;
+        if (split) {
+            Money other_sum;
+            for (ledger::TransactionSplit& s : *splits)
+                if (s.transaction_id.value() == t->id.value()) other_sum += s.amount;
+            if (other_sum.cents() != needed.cents()) {
+                const Money shortfall = abs_of(needed - other_sum);
+                out.reason = ref + " is a split; the split is " + shortfall.in_register() +
+                             " short of " + abs_of(new_signed_amount).in_register();
+                return out;
+            }
+        }
+        if (reconciled)
+            out.warning = "This posting is reconciled; changing it will alter a "
+                          "reconciled balance";
+        t->amount = new_signed_amount;
+        out.changed = true;
+        return out;
+    }
+
+    if (!split) {
+        if (t->destination != account_ref) {
+            out.reason = "nothing is posted to " + account;
+            return out;
+        }
+        if (t->cleared == types::ClearedStatus::Reconciled)
+            out.warning = "This posting is reconciled; changing it will alter a "
+                          "reconciled balance";
+        t->amount = needed;
+        out.changed = true;
+        return out;
+    }
+
+    ledger::TransactionSplit* named = nullptr;
+    Money other_sum = t->amount;
+    for (ledger::TransactionSplit& s : *splits) {
+        if (s.transaction_id.value() != t->id.value()) continue;
+        if (s.destination == account_ref) { named = &s; continue; }
+        other_sum += s.amount;
+    }
+    if (named == nullptr) { out.reason = "nothing is posted to " + account; return out; }
+    if (other_sum.cents() != needed.cents()) {
         const Money shortfall = abs_of(needed - other_sum);
         out.reason = ref + " is a split; the split is " + shortfall.in_register() +
                      " short of " + abs_of(new_signed_amount).in_register();
         return out;
     }
-    if (any_reconciled)
-        out.warning = "This posting is reconciled; changing it will alter a "
-                      "reconciled balance";
-
     named->amount = new_signed_amount;
-    if (t->postings.size() == 2) {
-        for (ledger::Posting& p : t->postings)
-            if (&p != named) p.amount = needed;
-    }
     out.changed = true;
     return out;
 }
 
-// Removes a transaction from the book entirely: both of its postings, never
-// one side of it, because deleting one side would leave the book out of
-// balance. See the deleting section of Transactions.spectable.
+// Removes a transaction from the book entirely: both of its sides, never one
+// alone, because deleting one side would leave the book out of balance. Its
+// split lines, if it has any, go with it -- a line naming a deleted
+// transaction is not a line of anything. See the deleting section of
+// Transactions.spectable.
 inline Outcome delete_transaction(std::vector<ledger::Transaction>* transactions,
-                                  const std::string& ref) {
+                                  const std::string& ref,
+                                  std::vector<ledger::TransactionSplit>* splits = nullptr) {
     if (transactions == nullptr) return {false, "no book"};
     const auto it = std::find_if(
         transactions->begin(), transactions->end(),
         [&](const ledger::Transaction& t) { return t.ref.value() == ref; });
     if (it == transactions->end()) return {false, "no transaction named " + ref};
+    const types::TransactionId id = it->id;
     transactions->erase(it);
+    if (splits != nullptr)
+        splits->erase(std::remove_if(splits->begin(), splits->end(),
+                                     [&](const ledger::TransactionSplit& s) {
+                                         return s.transaction_id.value() == id.value();
+                                     }),
+                      splits->end());
     return {true, std::string()};
 }
 
@@ -150,14 +187,9 @@ inline Outcome assign_category(ledger::Transaction* t, const chart::Chart& accou
                                const std::string& to) {
     if (t == nullptr) return {false, "no transaction"};
     if (to.empty()) return {false, "a category is required"};
-    std::vector<std::size_t> found;
-    for (std::size_t i = 0; i < t->postings.size(); ++i)
-        if (detail::is_a_category(accounts, t->postings[i].account))
-            found.push_back(i);
-    if (found.empty()) return {false, "it has no category posting"};
-    if (found.size() > 1)
+    if (chart::is_split(t->destination))
         return {false, "it is a split; name the posting to change"};
-    t->postings[found.front()].account = accounts.ref_for_path(to);
+    t->destination = accounts.ref_for_path(to);
     return {true, std::string()};
 }
 

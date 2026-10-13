@@ -1,11 +1,12 @@
 Specification Transactions
 
-Description The transaction, its postings, and the rule that every transaction
-Description balances. Splits and transfers are not separate kinds of thing here:
-Description they are what a transaction looks like with three postings, or with
-Description two postings to real accounts.
+Description The transaction and the rule that every transaction balances.
+Description Splits and transfers are not separate kinds of thing here: a split
+Description is a transaction whose Destination is Split, with its lines in
+Description TransactionSplit; a transfer is a pair of transactions each naming
+Description the other as Destination.
 Details
-Details Tables in this file group postings into transactions with a Ref column.
+Details Tables in this file group rows into one transaction with a Ref column.
 Details Ref is how a table says that two rows belong together, and nothing more
 Details than that: a device of these tables, short enough to read. It is not
 Details shown anywhere in the program and it is not what a transaction is stored
@@ -26,21 +27,6 @@ Examples: ValidValues
 # The shape of a transaction
 # ---------------------------------------------------------------------------
 
-Entity Posting
-Description One side of a transaction: an amount against one account.
-Details Debits are positive and credits are negative, for every account type.
-Details See the display sign rule in Accounts for how this is read back out.
-| Attribute | Type          | Default   | Notes                            |
-| Account   | AccountPath   |           | Any account, real or nominal     |
-| Amount    | Money         | 0.00      | Positive is a debit              |
-| Memo      | Text          | none      | Per side, for a split line       |
-| Cleared   | ClearedStatus | Uncleared | Per side; a transfer clears twice |
-
-Collection Postings
-Description The sides of one transaction.
-| DataType | Minimum | Maximum | Notes                       |
-| Posting  | 2       | 200     | The amounts must sum to zero |
-
 DataType ImportSource
 Description Where an identifier came from. Two files describing one transaction
 Description do not agree on what to call it, so the name of the source travels
@@ -52,26 +38,25 @@ Examples: EnumerationValues
 | Qif   | From a QIF migration, where one is present |
 
 Entity ImportId
-Description An identifier a file gave to one posting, and which file gave it.
-Details Per posting rather than per transaction, because a download describes
-Details one side of it: the bank knows what left the chequing account and has
-Details never heard of the category it was spent on.
+Description An identifier a file gave to a transaction, and which file gave it.
+Details At most one per source: a transaction has exactly one home account --
+Details the one it was downloaded into or typed against -- so there is no
+Details second side with an identifier of its own.
 | Attribute | Type         | Default | Notes                                |
 | Source    | ImportSource | Ofx     | Which kind of file said so           |
 | Id        | Text         |         | As that file gave it, unchanged      |
 
 Collection ImportIds
-Description The identifiers one posting has collected. More than one, because a
-Description posting imported from a CSV and later recognised in a QFX has a name
-Description in each, and losing either would make that file import twice.
+Description The identifiers one transaction has collected. More than one,
+Description because a transaction imported from a CSV and later recognised in a
+Description QFX has a name in each, and losing either would make that file
+Description import twice.
 | DataType | Minimum | Maximum | Notes                        |
 | ImportId | 0       | 8       | One per source at most       |
 
 Entity Transaction
-Description What the two or more postings share.
-Details The three attributes below -- SourceAccount, Destination and Amount --
-Details are a second, newer way of saying what a transaction is; see the
-Details section on naming both accounts directly, further down this file.
+Description What a transaction is: the account it lives in, the other side,
+Description and the signed amount between them.
 | Attribute     | Type           | Default    | Notes                        |
 | Id            | TransactionId  | none       | Identity; given once, never changes. These tables never name one: it is given by whatever creates the transaction, so a table that stated one would be stating something no scenario controls |
 | Ref           | TransactionRef |            | A device of these tables; not stored |
@@ -82,8 +67,8 @@ Details section on naming both accounts directly, further down this file.
 | Tag           | Text           | none       | A Quicken class, kept on migration; see ImportQif |
 | SourceAccount | AccountPath    | none       | The account this entry lives in: downloaded into, or typed in its register. An id underneath, the same as every account reference; see the identity rule in Accounts |
 | Destination   | AccountPath    | none       | The other side: a category, a real account, or the literal Split when the parts are in TransactionSplit below |
-| Amount        | Money          | 0.00       | Signed against SourceAccount; Destination carries the opposite effect by construction, so nothing here needs to sum to zero the way Postings does |
-| Cleared       | ClearedStatus  | Uncleared  | Per entry: under this shape the transaction itself is already one side, the same thing Cleared on a Posting always meant |
+| Amount        | Money          | 0.00       | Signed against SourceAccount; Destination carries the opposite effect by construction |
+| Cleared       | ClearedStatus  | Uncleared  | Per entry: the transaction itself is already one side of the posting |
 
 Attributes PostingRow
 Description A posting with its transaction, which is how these tables are written.
@@ -266,10 +251,12 @@ Attributes AssignmentOutcome
 | TheOtherAccount | String |         |
 | WhatHappens     | String |         |
 
-Scenario Matching an entry in the other register joins two transactions into one
+Scenario Matching an entry in the other register points each transaction at the other
 Description The card was imported weeks ago and the payment never paired, because
 Description the dates were further apart than the window allows. Both sides are
-Description in the book as separate transactions. Matching them makes one.
+Description in the book as separate transactions, and stay that way: matching
+Description points each one's Destination at the other's account rather than
+Description folding them into one.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
 | Assets:Checking        | Checking   | false       |
@@ -285,16 +272,17 @@ When the other entry is matched : EntryMatch Vertical
 | Ref      | T1 |
 | OtherRef | T2 |
 Then postings are : PostingRow
-| Ref | Date       | Payee     | Account                | Amount   | Memo | Cleared |
-| T1  | 2026-04-10 | CHASEBANK | Assets:Checking        | -1200.00 | none | Cleared |
-| T1  | 2026-04-10 | CHASEBANK | Liabilities:Chase Visa | 1200.00  | none | Cleared |
+| Ref | Date       | Payee            | Account                | Amount   | Memo | Cleared |
+| T1  | 2026-04-10 | CHASEBANK        | Assets:Checking        | -1200.00 | none | Cleared |
+| T2  | 2026-04-25 | PAYMENT RECEIVED | Liabilities:Chase Visa | 1200.00  | none | Cleared |
 Then balances are : AccountBalance CompareOnly
 | Account    | RawBalance |
 | Unassigned | 0.00       |
-# One transaction where there were two. The date is the one the money left, the
-# payee is the bank's word for it, and both postings are cleared because both
-# banks reported them. The fifteen-day gap was the reason nothing paired it
-# automatically and is no reason not to pair it now.
+# Two transactions, each keeping its own date and its own payee -- the bank's
+# word for it on one side, the card's on the other -- and both already
+# cleared, because both banks reported them. The fifteen-day gap was the
+# reason nothing paired it automatically and is no reason not to point them
+# at each other now.
 
 Attributes EntryMatch
 Description Matching an Unassigned side against an entry the user picked from
@@ -548,11 +536,14 @@ When register entry committed : RegisterEntry Vertical
 | Category | Expenses:Home:Rates |
 | Payment  | 1250.00             |
 Then transaction is : Transaction Vertical
-| Ref     | T1                |
-| Date    | 2024-02-01        |
-| Payee   | County Tax Office |
-| CheckNo | 2041              |
-| Memo    | none              |
+| Ref           | T1                  |
+| Date          | 2024-02-01          |
+| Payee         | County Tax Office   |
+| CheckNo       | 2041                |
+| Memo          | none                |
+| SourceAccount | Assets:Checking     |
+| Destination   | Expenses:Home:Rates |
+| Amount        | -1250.00            |
 
 # ---------------------------------------------------------------------------
 # Transfers
@@ -779,17 +770,14 @@ Then postings are : PostingRow
 # A transaction can name both accounts directly
 # ---------------------------------------------------------------------------
 
-Description Everything above this point is written against Postings, and
-Description nothing about it changes: those scenarios keep meaning what they
-Description always meant. SourceAccount, Destination and Amount on Transaction
-Description are a second shape for the same facts, built so that a register
-Description line can be read from the transaction alone, with no join against
-Description Postings needed for the ordinary case. A future pass moves the
-Description scenarios above onto this shape, a file at a time; this section is
-Description that shape, specified ahead of it.
-Details A split keeps a table of its own, TransactionSplit, rather than
-Details folding its parts into the transaction the way Postings folds every
-Details side into one collection today. An ordinary transaction -- the
+Description PostingRow above groups rows into a transaction with a Ref column,
+Description the way these tables have always written one down; it says nothing
+Description about how a transaction is stored. SourceAccount, Destination and
+Description Amount are that storage: a two-row group becomes one of each, so a
+Description register line can be read from the transaction alone, with no second
+Description table to join for the ordinary case.
+Details A split keeps a table of its own, TransactionSplit, for rows after the
+Details first in a group of three or more. An ordinary transaction -- the
 Details common case -- needs no second table at all: SourceAccount and
 Details Destination are both already on it.
 Details

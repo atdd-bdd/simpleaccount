@@ -277,12 +277,15 @@ Description What one pane of the right-hand side is showing.
 
 DataType PaneContent
 Description What a pane can show.
+Details An import under review and a find's results used to be a second kind
+Details of pane, shown beside this one. They are a tab of the bottom panel
+Details now, so a pane is always exactly one per open tab; see the bottom-panel
+Details section below.
 Examples: EnumerationValues
-| Value        | Notes                                                  |
-| Register     | The transactions of one account                        |
-| Report       | A report, with its own period and its own settings     |
-| ImportReview | An import waiting to be looked over and accepted       |
-| Empty        | Nothing selected yet                                   |
+| Value    | Notes                                                  |
+| Register | The transactions of one account                        |
+| Report   | A report, with its own period and its own settings     |
+| Empty    | Nothing selected yet                                   |
 
 Scenario Selecting an account shows its register
 Given the chart of accounts is as previous
@@ -589,6 +592,7 @@ Then panes are : PaneState
 # step for a table with no rows yet -- finding 6 -- so for now that line is
 # documentation and the pane assertion is what carries the scenario.
 
+$WIP
 Scenario An import goes into the active tab
 Description The account is not asked for. Whichever register is in front of you
 Description is the one the statement is for, which is also how a transaction
@@ -609,9 +613,15 @@ Then open tabs are : OpenTab
 | 1        | Register | Assets:Checking  | Checking | false  |
 | 2        | Register | Liabilities:Visa | Visa     | true   |
 Then panes are : PaneState
-| Pane | Showing      | Account          | Active |
-| 1    | Register     | Liabilities:Visa | false  |
-| 2    | ImportReview | Liabilities:Visa | true   |
+| Pane | Showing  | Account          | Active |
+| 1    | Register | Liabilities:Visa | true   |
+Then bottom panel is : BottomPanel Vertical
+| Open      | true |
+| TabCount  | 1    |
+| ActiveTab | 1    |
+Then bottom panel tabs are : BottomPanelTabRow
+| Tab | Kind         | Active |
+| 1   | ImportReview | true   |
 # The card was the active tab, so the card is what the statement is read into,
 # and the review sits beside the register it is about to change. No tab is
 # opened and none is switched to: the answer was already on the screen.
@@ -635,50 +645,75 @@ Open the register this statement is for, then import into it.
 """
 
 # ---------------------------------------------------------------------------
-# The second pane, which belongs to an import
+# The bottom panel
 # ---------------------------------------------------------------------------
 
-Description One pane, showing the register of the selected account. A second
-Description pane exists only while an import is waiting to be accepted.
-Details That is the whole rule. An import is shown beside the register it is
-Details about to change, because that is what makes a proposed row judgeable:
-Details the question is always whether this row is already in that register.
-Details When the import is accepted or cancelled there is nothing left to
-Details compare, so the second pane goes and the register it was beside is
-Details what remains.
+Description One pane, showing the register or the report of the selected tab.
+Description An optional panel below it holds everything that is not the
+Description register itself -- an import waiting to be accepted, or the
+Description results of a find -- each in a tab of its own, so more than one can
+Description be open and read at once.
+Details The panel is open exactly when it has a tab in it, and closes itself
+Details when the last one does: accepting or cancelling an import closes that
+Details tab, closing a find's results closes that one, and the panel is gone
+Details once nothing is left. Opening a new one -- a second find, an import
+Details started from another register -- adds a tab rather than replacing
+Details what is already open, and the one just opened becomes active, the
+Details same rule a register tab already follows.
 Details
 Details There used to be a Split view on the menu, two registers side by side
-Details for reading two accounts at once. It is gone. A window that can be left
-Details in a two-register state shows two registers on the next launch with
-Details nothing to say why, and the state it is really for -- an import under
-Details review -- is the one case that can say why for itself. Reading two
-Details accounts at once is worth having again one day as two windows, not as
-Details a mode this one can be left in.
+Details for reading two accounts at once, and before that an import was shown
+Details the same way -- as a second pane beside the register, rather than in
+Details this panel. Both are gone. A window that can be left in a two-register
+Details state shows two registers on the next launch with nothing to say why;
+Details the panel's tabs say why for themselves, and more than one thing can
+Details wait to be judged at once, which a single second pane could not do
+Details either. Reading two registers at once is worth having again one day as
+Details two windows, not as a mode this one can be left in.
 
-Scenario There is one pane until an import opens a second
+$WIP
+Scenario The bottom panel is closed until something opens it
 Given the chart of accounts is as previous
 Given postings are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-Then split state is : SplitState Vertical
-| Open       | false |
-| PaneCount  | 1     |
-| ActivePane | 1     |
+Then bottom panel is : BottomPanel Vertical
+| Open      | false |
+| TabCount  | 0     |
+| ActiveTab | 0     |
 
-Attributes SplitState
-| Attribute  | Type    | Default |
-| Open       | Boolean | false   |
-| PaneCount  | Integer | 1       |
-| ActivePane | Integer | 1       |
+Attributes BottomPanel
+Description Whether the panel below the register is open, and how many tabs
+Description are in it.
+| Attribute | Type    | Default |
+| Open      | Boolean | false   |
+| TabCount  | Integer | 0       |
+| ActiveTab | Integer | 0       |
+
+$WIP
+DataType BottomPanelTabKind
+Description What one tab of the bottom panel is showing.
+Examples: EnumerationValues
+| Value        | Notes                                             |
+| ImportReview | An import waiting to be looked over and accepted  |
+| FindResults  | The transactions a find matched                   |
+
+Attributes BottomPanelTabRow
+Description One tab of the bottom panel, in the order it was opened.
+| Attribute | Type               | Default      |
+| Tab       | Integer            | 0            |
+| Kind      | BottomPanelTabKind | ImportReview |
+| Active    | Boolean            | false        |
 
 # ---------------------------------------------------------------------------
-# Reviewing an import in the second pane
+# Reviewing an import in the bottom panel
 # ---------------------------------------------------------------------------
 
-Description An import is shown in the split pane rather than in a dialog of its
-Description own, so that the register it is about to change is beside it while it
-Description is read. Nothing reaches the book until it is accepted.
+Description An import is shown in a tab of the bottom panel rather than in a
+Description dialog of its own, so that the register it is about to change stays
+Description in view while it is read. Nothing reaches the book until it is
+Description accepted.
 
 Attributes ImportReviewRow
 Description One row of an import waiting to be reviewed. Account is where the
@@ -708,9 +743,10 @@ Description alone, so the rows are named here and asked for by name.
 | 2    | 2026-02-03 | Unknown Shop  | Assets:Checking | Expenses:Uncategorized | -23.75  | New         |
 | 3    | 2026-01-15 | Harris Teeter | Assets:Checking | Expenses:Groceries     | -45.00  | Duplicate   |
 
-Scenario An import opens in the second pane with every row proposed
-Description Splitting happens by itself if the view was not split: the point of
-Description showing an import here is to have the register beside it.
+$WIP
+Scenario An import opens a tab in the bottom panel with every row proposed
+Description The panel opens by itself if it was not open: the point of
+Description showing an import here is to have the register still in view.
 Given the chart of accounts is as previous
 Given postings are as previous
 When account selected : AccountSelect
@@ -718,14 +754,16 @@ When account selected : AccountSelect
 | Assets:Checking |
 When import reviewed : ImportReviewRow
 =AnImportOfThree
-Then split state is : SplitState Vertical
-| Open       | true |
-| PaneCount  | 2    |
-| ActivePane | 2    |
 Then panes are : PaneState
-| Pane | Showing      | Account         | Active |
-| 1    | Register     | Assets:Checking | false  |
-| 2    | ImportReview | Assets:Checking | true   |
+| Pane | Showing  | Account         | Active |
+| 1    | Register | Assets:Checking | true   |
+Then bottom panel is : BottomPanel Vertical
+| Open      | true |
+| TabCount  | 1    |
+| ActiveTab | 1    |
+Then bottom panel tabs are : BottomPanelTabRow
+| Tab | Kind         | Active |
+| 1   | ImportReview | true   |
 Then import review summary is : ImportReviewSummary Vertical
 | Rows       | 3     |
 | NewRows    | 2     |
@@ -775,10 +813,10 @@ Then register lines are : RegisterLine CompareOnly
 | T2  | 2026-01-15 | Harris Teeter | 2955.00 |
 | T4  | 2026-01-25 | Transfer      | 2455.00 |
 
+$WIP
 Scenario Accepting the import adds the ticked rows and closes the review
-Description The two new rows arrive, the duplicate does not, and the pane goes
-Description back to being a register of the same account so that the result can
-Description be read where the import was.
+Description The two new rows arrive, the duplicate does not, and the panel
+Description closes so that the result can be read in the register it changed.
 Given the chart of accounts is as previous
 Given postings are as previous
 When account selected : AccountSelect
@@ -800,16 +838,15 @@ Then register lines are : RegisterLine CompareOnly
 | T4  | 2026-01-25 | Transfer      | 2455.00 |
 | T5  | 2026-02-02 | Harris Teeter | 2402.90 |
 | T6  | 2026-02-03 | Unknown Shop  | 2379.15 |
-Then split state is : SplitState Vertical
-| Open       | false |
-| PaneCount  | 1     |
-| ActivePane | 1     |
+Then bottom panel is : BottomPanel Vertical
+| Open      | false |
+| TabCount  | 0     |
+| ActiveTab | 0     |
 Then panes are : PaneState
 | Pane | Showing  | Account         | Active |
 | 1    | Register | Assets:Checking | true   |
-# One pane again, showing the register the import was beside, with the two new
-# lines in it. There is nothing left to compare the import against, so there is
-# nothing for a second pane to hold.
+# The register the import was beside now holds the two new lines, and the
+# panel that held the import is gone -- there is nothing left in it.
 
 Scenario Unticking a row leaves it out
 Given the chart of accounts is as previous
@@ -861,6 +898,7 @@ Then import review summary is : ImportReviewSummary Vertical
 | Accepted   | 3    |
 | Committed  | true |
 
+$WIP
 Scenario Cancelling the import changes nothing
 Given the chart of accounts is as previous
 Given postings are as previous
@@ -875,14 +913,278 @@ Then register lines are : RegisterLine CompareOnly
 | T1  | 2026-01-05 | Acme Payroll  | 3000.00 |
 | T2  | 2026-01-15 | Harris Teeter | 2955.00 |
 | T4  | 2026-01-25 | Transfer      | 2455.00 |
-Then split state is : SplitState Vertical
-| Open       | false |
-| PaneCount  | 1     |
-| ActivePane | 1     |
+Then bottom panel is : BottomPanel Vertical
+| Open      | false |
+| TabCount  | 0     |
+| ActiveTab | 0     |
 Then panes are : PaneState
 | Pane | Showing  | Account         | Active |
 | 1    | Register | Assets:Checking | true   |
-# The same as accepting, as far as the panes go: the import is over either way.
+# The same as accepting, as far as the panel goes: the import is over either way.
+
+# ---------------------------------------------------------------------------
+# More than one tab in the bottom panel
+# ---------------------------------------------------------------------------
+
+Description An import and a find's results can be open at once, each in its
+Description own tab. Closing one leaves the other; the panel itself only
+Description closes once nothing is left in it.
+
+$WIP
+Scenario A find opens its own tab in the bottom panel
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| Text | Harris |
+Then bottom panel is : BottomPanel Vertical
+| Open      | true |
+| TabCount  | 1    |
+| ActiveTab | 1    |
+Then bottom panel tabs are : BottomPanelTabRow
+| Tab | Kind        | Active |
+| 1   | FindResults | true   |
+
+$WIP
+Scenario An import and a find are open in the bottom panel together
+Description Opening the second does not close the first: a find started while
+Description an import is still waiting adds a tab rather than taking its place.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import reviewed : ImportReviewRow
+=AnImportOfThree
+When find performed : FindCriteria Vertical
+| Text | Harris |
+Then bottom panel is : BottomPanel Vertical
+| Open      | true |
+| TabCount  | 2    |
+| ActiveTab | 2    |
+Then bottom panel tabs are : BottomPanelTabRow
+| Tab | Kind         | Active |
+| 1   | ImportReview | false  |
+| 2   | FindResults  | true   |
+
+$WIP
+Scenario Closing one tab of the bottom panel leaves the other open
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import reviewed : ImportReviewRow
+=AnImportOfThree
+When find performed : FindCriteria Vertical
+| Text | Harris |
+When import cancelled
+Then bottom panel is : BottomPanel Vertical
+| Open      | true |
+| TabCount  | 1    |
+| ActiveTab | 1    |
+Then bottom panel tabs are : BottomPanelTabRow
+| Tab | Kind        | Active |
+| 1   | FindResults | true   |
+
+$WIP
+Scenario Switching the active tab of the bottom panel changes nothing else
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import reviewed : ImportReviewRow
+=AnImportOfThree
+When find performed : FindCriteria Vertical
+| Text | Harris |
+When bottom panel tab selected : BottomPanelTabSelect
+| Tab | 1 |
+Then bottom panel is : BottomPanel Vertical
+| Open      | true |
+| TabCount  | 2    |
+| ActiveTab | 1    |
+Then bottom panel tabs are : BottomPanelTabRow
+| Tab | Kind         | Active |
+| 1   | ImportReview | true   |
+| 2   | FindResults  | false  |
+Then import review summary is : ImportReviewSummary Vertical
+| Rows       | 3     |
+| NewRows    | 2     |
+| Duplicates | 1     |
+| Accepted   | 2     |
+| Committed  | false |
+# Both tabs' own content is unaffected by which one is in front; the import's
+# rows are still exactly what they were, just not what is showing right now.
+
+Attributes BottomPanelTabSelect
+| Attribute | Type    | Default |
+| Tab       | Integer | 0       |
+
+# ---------------------------------------------------------------------------
+# Find
+# ---------------------------------------------------------------------------
+
+Description Find looks across transactions for ones matching what was typed,
+Description and shows the matches in a tab of the bottom panel, beside the
+Description register, the same as an import. There is one Find dialog, so
+Description performing a find again replaces that tab's results rather than
+Description opening a second one.
+Details A blank field in FindCriteria is not a filter: Text blank matches
+Details every payee and memo, a blank date or amount bound is open-ended, and
+Details a blank Account matches every account. AmountFrom and AmountTo bound
+Details the amount's absolute value, so a search for 80.00 to 100.00 finds
+Details both a payment of -89.99 and a deposit of 89.99 -- a person recalling
+Details a transaction rarely remembers which side of it they are thinking of.
+Details Account matches a category the same way a real account's, and
+Details matches a transaction if either side of it is the named account or
+Details anything beneath it.
+Details
+Details FindResultRow names the transaction the way a register names the
+Details other side of a transfer: Account is the side the result is read
+Details under, and Category is the other side of it. Scoped to one register,
+Details that is always the register searched. Scoped to every register, a
+Details transaction that matches on both sides of a transfer is a row under
+Details each, because there is no one register it belongs to more than the
+Details other.
+
+$WIP
+DataType FindScope
+Description Which registers a find looks through.
+Examples: EnumerationValues
+| Value          | Notes                                    |
+| CurrentRegister | Only the register open in the active tab |
+| AllRegisters   | Every account in the book                 |
+
+Attributes FindCriteria
+| Attribute  | Type        | Default         |
+| Text       | Text        | none            |
+| DateFrom   | Text        | none            |
+| DateTo     | Text        | none            |
+| AmountFrom | Money       | none            |
+| AmountTo   | Money       | none            |
+| Account    | AccountPath | none            |
+| Scope      | FindScope   | CurrentRegister |
+
+Attributes FindResultRow
+| Attribute | Type           | Default    |
+| Ref       | TransactionRef |            |
+| Date      | Date           | 2024-01-01 |
+| Payee     | PayeeName      | none       |
+| Account   | AccountPath    |            |
+| Category  | Text           | none       |
+| Amount    | Money          | 0.00       |
+
+$WIP
+Scenario A find by text matches the payee
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| Text | Harris |
+Then find results are : FindResultRow
+| Ref | Date       | Payee         | Account         | Category           | Amount |
+| T2  | 2026-01-15 | Harris Teeter | Assets:Checking | Expenses:Groceries | -45.00 |
+
+$WIP
+Scenario A find by text matches the memo when the payee does not
+Given the chart of accounts is as previous
+Given postings are : PostingRow
+| Ref | Date       | Payee  | Account         | Amount | Memo             |
+| T1  | 2026-02-01 | Costco | Assets:Checking | -60.00 | Birthday~present |
+| T1  | 2026-02-01 | Costco | Expenses:Shopping | 60.00 | Birthday~present |
+| T2  | 2026-02-02 | Costco | Assets:Checking | -40.00 | Groceries        |
+| T2  | 2026-02-02 | Costco | Expenses:Groceries | 40.00 | Groceries        |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| Text | Birthday |
+Then find results are : FindResultRow
+| Ref | Date       | Payee  | Account         | Category          | Amount |
+| T1  | 2026-02-01 | Costco | Assets:Checking | Expenses:Shopping | -60.00 |
+
+$WIP
+Scenario A find with a date range leaves out what is outside it
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| DateFrom | 2026-01-14 |
+| DateTo   | 2026-01-16 |
+Then find results are : FindResultRow
+| Ref | Date       | Payee         | Account         | Category           | Amount |
+| T2  | 2026-01-15 | Harris Teeter | Assets:Checking | Expenses:Groceries | -45.00 |
+
+$WIP
+Scenario A find with an amount range matches either sign
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| AmountFrom | 80.00  |
+| AmountTo   | 100.00 |
+Then find results are : FindResultRow
+| Ref | Date       | Payee  | Account          | Category           | Amount |
+| T3  | 2026-01-20 | Amazon | Liabilities:Visa | Expenses:Groceries | -89.99 |
+# Scope defaults to the active tab's register, which is Checking; the Visa
+# posting is found because Groceries, Amazon's other side, is not where the
+# result is read under -- Visa is, because that is where Amazon's own side
+# of the transaction posts. See the Account/Category note above.
+
+$WIP
+Scenario A find by account matches a category the same as a real account
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| Account | Expenses:Groceries |
+| Scope   | AllRegisters       |
+Then find results are : FindResultRow
+| Ref | Date       | Payee         | Account          | Category           | Amount |
+| T2  | 2026-01-15 | Harris Teeter | Assets:Checking  | Expenses:Groceries | -45.00 |
+| T3  | 2026-01-20 | Amazon        | Liabilities:Visa | Expenses:Groceries | -89.99 |
+
+$WIP
+Scenario A find scoped to the current register does not look beyond it
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| Text  | Transfer         |
+| Scope | CurrentRegister |
+Then find results are : FindResultRow
+| Ref | Date       | Payee    | Account         | Category       | Amount  |
+| T4  | 2026-01-25 | Transfer | Assets:Checking | Assets:Savings | -500.00 |
+
+$WIP
+Scenario A find scoped to all registers matches a transfer under both sides of it
+Description Transfer has no side that is more the transaction's register than
+Description the other, so a transfer matched this way is a row under each.
+Given the chart of accounts is as previous
+Given postings are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| Text  | Transfer     |
+| Scope | AllRegisters |
+Then find results are : FindResultRow
+| Ref | Date       | Payee    | Account         | Category        | Amount  |
+| T4  | 2026-01-25 | Transfer | Assets:Checking | Assets:Savings  | -500.00 |
+| T4  | 2026-01-25 | Transfer | Assets:Savings  | Assets:Checking | 500.00  |
 
 # ---------------------------------------------------------------------------
 # What accepting an import keeps

@@ -661,9 +661,12 @@ Then applying the rules reported is : RuleApplication Vertical
 Then postings are : PostingRow
 | Ref | Date       | Payee              | Account                | Amount | Cleared    |
 | T1  | 2024-01-15 | HARRIS TEETER #231 | Assets:Checking        | -45.00 | Reconciled |
-| T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  | Reconciled |
-# Reconciled, still -- the whole point of the scenario is that nothing about
-# this transaction moved, cleared status included.
+| T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  | Uncleared  |
+# Reconciled, still, on the transaction's own side -- the whole point of the
+# scenario is that nothing about it moved, cleared status included. The
+# other side's Cleared is always Uncleared in this display now: there is
+# nowhere left to store a second cleared status, which is also why the
+# category it is left in, Uncategorized, is untouched rather than guessed at.
 
 # ---------------------------------------------------------------------------
 # The payee list
