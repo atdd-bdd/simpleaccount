@@ -161,9 +161,13 @@ private:
     QTabWidget* tabs_ = nullptr;
     std::vector<TabWidgets> tabWidgets_;
 
-    // The review panel, beside the active tab while an import is waiting. One
-    // of these, not one per tab: see the second-pane section of
+    // The panel below the register, one tab per thing waiting to be judged.
+    // Hidden until it has a tab in it. See the bottom-panel section of
     // UserInterface.spectable.
+    QTabWidget* bottomTabs_ = nullptr;
+
+    // The import review, which is one of that panel's tabs. One of these, not
+    // one per register tab: an import is read against the register above it.
     QWidget* reviewPanel_ = nullptr;
     QLabel* reviewHeading_ = nullptr;
     QTableWidget* reviewTable_ = nullptr;

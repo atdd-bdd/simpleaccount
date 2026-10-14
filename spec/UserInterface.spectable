@@ -595,7 +595,6 @@ Then panes are : PaneState
 # step for a table with no rows yet -- finding 6 -- so for now that line is
 # documentation and the pane assertion is what carries the scenario.
 
-$WIP
 Scenario An import goes into the active tab
 Description The account is not asked for. Whichever register is in front of you
 Description is the one the statement is for, which is also how a transaction
@@ -626,7 +625,7 @@ Then bottom panel tabs are : BottomPanelTabRow
 | Tab | Kind         | Active |
 | 1   | ImportReview | true   |
 # The card was the active tab, so the card is what the statement is read into,
-# and the review sits beside the register it is about to change. No tab is
+# and the review opens below the register it is about to change. No tab is
 # opened and none is switched to: the answer was already on the screen.
 
 Scenario An import with a report in front is refused
@@ -674,7 +673,6 @@ Details wait to be judged at once, which a single second pane could not do
 Details either. Reading two registers at once is worth having again one day as
 Details two windows, not as a mode this one can be left in.
 
-$WIP
 Scenario The bottom panel is closed until something opens it
 Given the chart of accounts is as previous
 Given transactions are as previous
@@ -694,7 +692,6 @@ Description are in it.
 | TabCount  | Integer | 0       |
 | ActiveTab | Integer | 0       |
 
-$WIP
 DataType BottomPanelTabKind
 Description What one tab of the bottom panel is showing.
 Examples: EnumerationValues
@@ -746,7 +743,6 @@ Description alone, so the rows are named here and asked for by name.
 | 2    | 2026-02-03 | Unknown Shop  | Assets:Checking | Expenses:Uncategorized | -23.75  | New         |
 | 3    | 2026-01-15 | Harris Teeter | Assets:Checking | Expenses:Groceries     | -45.00  | Duplicate   |
 
-$WIP
 Scenario An import opens a tab in the bottom panel with every row proposed
 Description The panel opens by itself if it was not open: the point of
 Description showing an import here is to have the register still in view.
@@ -816,7 +812,6 @@ Then register lines are : RegisterLine CompareOnly
 | T2  | 2026-01-15 | Harris Teeter | 2955.00 |
 | T4  | 2026-01-25 | Transfer      | 2455.00 |
 
-$WIP
 Scenario Accepting the import adds the ticked rows and closes the review
 Description The two new rows arrive, the duplicate does not, and the panel
 Description closes so that the result can be read in the register it changed.
@@ -901,7 +896,6 @@ Then import review summary is : ImportReviewSummary Vertical
 | Accepted   | 3    |
 | Committed  | true |
 
-$WIP
 Scenario Cancelling the import changes nothing
 Given the chart of accounts is as previous
 Given transactions are as previous

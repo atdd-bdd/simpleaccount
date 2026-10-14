@@ -291,9 +291,9 @@ MainWindow::MainWindow() {
     connect(tabs_, &QTabWidget::tabCloseRequested, this, &MainWindow::tabClosed);
     connect(tabs_, &QTabWidget::currentChanged, this, &MainWindow::tabChanged);
 
-    // The review panel, beside the active tab only while an import is
-    // waiting -- one of these, not one per tab. See the second-pane section
-    // of UserInterface.spectable.
+    // The import review, shown in the panel below the register only while an
+    // import is waiting -- one of these, not one per tab. See the
+    // bottom-panel section of UserInterface.spectable.
     reviewPanel_ = new QWidget;
     auto* reviewLayout = new QVBoxLayout(reviewPanel_);
     reviewHeading_ = new QLabel;
@@ -324,12 +324,21 @@ MainWindow::MainWindow() {
                 else workspace_->untick(line);
                 refreshReviewPanel();
             });
-    reviewPanel_->setVisible(false);
+    // The panel below the register. The import review is a tab of it, so that
+    // the register it is about to change stays in view above, and so that more
+    // than one thing can wait to be judged at once. Closing the tab is
+    // cancelling the import: there is nothing else it could mean.
+    bottomTabs_ = new QTabWidget;
+    bottomTabs_->setTabsClosable(true);
+    bottomTabs_->addTab(reviewPanel_, "Import review");
+    connect(bottomTabs_, &QTabWidget::tabCloseRequested, this,
+            [this](int) { cancelImport(); });
+    bottomTabs_->setVisible(false);
 
-    rightSplit_ = new QSplitter(Qt::Horizontal);
+    rightSplit_ = new QSplitter(Qt::Vertical);
     rightSplit_->addWidget(tabs_);
-    rightSplit_->addWidget(reviewPanel_);
-    rightSplit_->setStretchFactor(0, 1);
+    rightSplit_->addWidget(bottomTabs_);
+    rightSplit_->setStretchFactor(0, 2);
     rightSplit_->setStretchFactor(1, 1);
 
     outer_ = new QSplitter(Qt::Horizontal);
@@ -1639,7 +1648,7 @@ void MainWindow::syncTabs() {
             tabs_->setCurrentIndex(static_cast<int>(i));
         }
 
-    reviewPanel_->setVisible(workspace_->split_open());
+    bottomTabs_->setVisible(workspace_->bottom_panel().open);
 }
 
 void MainWindow::refreshAccounts() {
@@ -1778,14 +1787,12 @@ void MainWindow::refreshPane(int tabPosition) {
 // The import review, beside the active tab only while one is waiting. There
 // is one of these, not one per tab.
 void MainWindow::refreshReviewPanel() {
-    const std::vector<ui::Pane> rows = workspace_->panes();
-    if (rows.size() < 2) return;
-    const ui::Pane& state = rows[1];
+    if (!workspace_->review_showing()) return;
     const bool was = refreshing_;
     refreshing_ = true;
     const std::vector<ui::ReviewRow>& reviewRows = workspace_->review();
     reviewHeading_->setText(QString("Import into %1  --  %2 rows, %3 ticked")
-                                .arg(QString::fromStdString(state.account))
+                                .arg(QString::fromStdString(workspace_->review_account()))
                                 .arg(reviewRows.size())
                                 .arg(workspace_->accepted_count()));
     reviewTable_->setRowCount(static_cast<int>(reviewRows.size()));

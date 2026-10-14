@@ -158,13 +158,12 @@ inline int depth_within_group(const chart::Account& a,
 // Panes
 // ---------------------------------------------------------------------------
 
-enum class PaneContent { Register, Report, ImportReview, Empty };
+enum class PaneContent { Register, Report, Empty };
 
 inline std::string to_string(PaneContent c) {
     switch (c) {
         case PaneContent::Register:     return "Register";
         case PaneContent::Report:       return "Report";
-        case PaneContent::ImportReview: return "ImportReview";
         case PaneContent::Empty:        return "Empty";
     }
     return "Empty";
@@ -231,6 +230,30 @@ struct ReviewRow {
 struct Pane {
     PaneContent showing = PaneContent::Empty;
     std::string account;
+};
+
+// What one tab of the bottom panel is showing. See the bottom-panel section
+// of UserInterface.spectable.
+enum class BottomTabKind { ImportReview, FindResults };
+
+inline std::string to_string(BottomTabKind k) {
+    return k == BottomTabKind::ImportReview ? "ImportReview" : "FindResults";
+}
+
+// Whether the panel below the register is open, and how many tabs are in it.
+// Open is not a thing to set: the panel is open exactly when it has a tab,
+// and ActiveTab is 0 when it has none.
+struct BottomPanelState {
+    bool open = false;
+    int tab_count = 0;
+    int active_tab = 0;
+};
+
+// One tab of the bottom panel, in the order it was opened.
+struct BottomTabRow {
+    int tab = 0;
+    BottomTabKind kind = BottomTabKind::ImportReview;
+    bool active = false;
 };
 
 // One item of the menu offered on a selection of register lines.
@@ -371,6 +394,7 @@ public:
         for (ReviewRow& r : review_)
             if (r.disposition != "New") r.accepted = false;
         committed_ = false;
+        if (!review_open_) open_bottom_tab(BottomTabKind::ImportReview);
         review_open_ = true;
         review_account_ = into;
         select(into);
@@ -414,10 +438,11 @@ public:
             book_.add({r.date, types::AccountPath(r.category), other_amount});
         }
         committed_ = true;
-        // The second pane existed to compare the import against the register
-        // beside it. There is nothing left to compare, so it goes, and the
-        // register it was beside is what remains -- which is where the result
-        // wants reading. See the second-pane section of UserInterface.spectable.
+        // The review was there to compare the import against the register
+        // above it. There is nothing left to compare, so its tab closes, and
+        // the panel with it if that was the only tab -- which leaves the
+        // register, where the result wants reading. See the bottom-panel
+        // section of UserInterface.spectable.
         close_review();
     }
 
@@ -579,14 +604,11 @@ public:
 
     // ---------------------------------------------------------------- asking
 
-    // Pane 1 is the tab area, and its account is the active tab's; pane 2,
-    // when it exists, is the import review sitting beside it -- and is the
-    // active pane whenever it is there, because reviewing it is the reason it
-    // opened. There is no "make a pane active" any more: a register's own
-    // selection (for the menu, for recategorising) always targets pane 1,
-    // because the review has its own tick/untick and is never where that
-    // happens.
-    bool split_open() const { return panes().size() > 1; }
+    // There is one pane. It is the tab area, and its account is the active
+    // tab's. An import used to be a second pane beside it and is now a tab of
+    // the panel below, which is a different thing entirely -- so a register's
+    // own selection (for the menu, for recategorising) always targets pane 1,
+    // and the review has its own tick and untick.
     int pane_count() const { return static_cast<int>(panes().size()); }
     int active_pane() const { return pane_count() == 2 ? 2 : 1; }
 
@@ -602,16 +624,44 @@ public:
             first.showing = PaneContent::Report;
         }
         out.push_back(first);
-        if (review_open_ && !tabs_.empty() &&
-            tabs_[active_tab_].kind == TabKind::Register &&
-            tabs_[active_tab_].account == review_account_) {
-            Pane second;
-            second.showing = PaneContent::ImportReview;
-            second.account = review_account_;
-            out.push_back(second);
+        return out;
+    }
+
+    // ------------------------------------------------- the bottom panel
+
+    // The panel below the register, open exactly when it has a tab in it.
+    BottomPanelState bottom_panel() const {
+        BottomPanelState state;
+        state.open = !bottom_.empty();
+        state.tab_count = static_cast<int>(bottom_.size());
+        state.active_tab = bottom_.empty() ? 0 : static_cast<int>(active_bottom_) + 1;
+        return state;
+    }
+
+    std::vector<BottomTabRow> bottom_panel_tabs() const {
+        std::vector<BottomTabRow> out;
+        for (std::size_t i = 0; i < bottom_.size(); ++i) {
+            BottomTabRow row;
+            row.tab = static_cast<int>(i) + 1;
+            row.kind = bottom_[i];
+            row.active = (i == active_bottom_);
+            out.push_back(row);
         }
         return out;
     }
+
+    // Switching which tab of the panel is in front changes nothing else: the
+    // register above it is not touched, and neither is what is ticked in the
+    // import, because a tab is a thing to look at rather than a mode.
+    void select_bottom_tab(int position_one_based) {
+        const std::size_t index = static_cast<std::size_t>(position_one_based - 1);
+        if (index < bottom_.size()) active_bottom_ = index;
+    }
+
+    // Whether an import is waiting in the panel, and which account it is for.
+    // The window needs both to label the review; see refreshReviewPanel.
+    bool review_showing() const { return review_open_; }
+    const std::string& review_account() const { return review_account_; }
 
     const std::vector<ReviewRow>& review() const { return review_; }
     bool committed() const { return committed_; }
@@ -649,6 +699,29 @@ private:
     void close_review() {
         review_open_ = false;
         review_account_.clear();
+        close_bottom_tab(BottomTabKind::ImportReview);
+    }
+
+    // A new tab goes at the end and becomes active, the same rule a register
+    // tab follows: what was just opened is what wanted looking at.
+    void open_bottom_tab(BottomTabKind kind) {
+        bottom_.push_back(kind);
+        active_bottom_ = bottom_.size() - 1;
+    }
+
+    // Closes the panel's tab of this kind, and the panel itself if it was the
+    // last one. The tab to its right takes over, or the one to its left if it
+    // was last -- the rule the tab bar above already follows.
+    void close_bottom_tab(BottomTabKind kind) {
+        for (std::size_t i = 0; i < bottom_.size(); ++i) {
+            if (bottom_[i] != kind) continue;
+            const bool was_active = (i == active_bottom_);
+            bottom_.erase(bottom_.begin() + static_cast<long>(i));
+            if (bottom_.empty()) { active_bottom_ = 0; return; }
+            if (was_active) active_bottom_ = i < bottom_.size() ? i : bottom_.size() - 1;
+            else if (i < active_bottom_) --active_bottom_;
+            return;
+        }
     }
 
     // What a line of the register is a transaction of. The line carries the ref,
@@ -720,6 +793,8 @@ private:
     std::size_t active_tab_ = 0;
     bool review_open_ = false;
     std::string review_account_;
+    std::vector<BottomTabKind> bottom_;
+    std::size_t active_bottom_ = 0;
     std::vector<ReviewRow> review_;
     std::vector<ledger::Transaction> accepted_;
     std::vector<int> selected_;

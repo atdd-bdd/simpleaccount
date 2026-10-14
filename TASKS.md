@@ -10,9 +10,10 @@ before any production code.
 
 Selected order: **4, then 5, then 10, 11 and 13.**
 
-Done so far: **4** (the specification speaks in transactions, suite green),
-and the spec tables for **5**, **10** and **13**, which are written and
-verified and are waiting for code. **11** is in hand.
+Done so far: **4** (the specification speaks in transactions) and **11** (the
+import is in the panel below the register), both green; and the spec tables for
+**5**, **10** and **13**, which are written and verified and are waiting for
+code.
 
 Two traps found while writing those tables, worth knowing before adding to
 them:
@@ -132,16 +133,20 @@ there, is the author's call.
       greyed rather than absent when the account has entries, and a group
       heading offers only New account because a heading is not a thing in the
       book. *Medium-large.*
-- [ ] **11. The import moves to the bottom panel** rather than beside the
-      register. *Specified; implementation in hand.* Note that "implementation
-      only" understated it: there was no bottom panel anywhere. `ui_model.h`
-      showed the review as pane 2, and `MainWindow` put `reviewPanel_` in a
-      horizontal splitter beside the tabs. So it is the panel in the model
-      (tabs, active tab, open exactly when it has a tab), `panes()` reduced to
-      the one pane, three glue steps connected, and the splitter turned
-      vertical with a closable tab widget below. The four bottom-panel
-      scenarios that do not need Find come off `$WIP`; the Find ones stay for
-      item 12.
+- [x] **11. The import moves to the bottom panel** rather than beside the
+      register. Done; the suite is 432 tests and green, and the app builds.
+      Note that "implementation only" understated it: there was no bottom panel
+      anywhere. `ui_model.h` showed the review as pane 2, and `MainWindow` put
+      `reviewPanel_` in a horizontal splitter beside the tabs. What was
+      written: the panel in the model (its tabs, the active one, open exactly
+      when it has a tab), `panes()` reduced to the one pane, three glue steps
+      connected plus the tab-kind enumeration by hand, and the splitter turned
+      vertical with a closable tab widget below -- closing that tab is
+      cancelling the import, there being nothing else it could mean.
+      `PaneContent::ImportReview` and `split_open()` went with the second pane:
+      the specification's enumeration no longer lists the one, and the other
+      could only return false. Six blocks came off `$WIP`; the four Find ones
+      stay for item 12, which is what the panel's second tab is for.
 - [ ] **12. Find.** Modeless dialog, results as a tab in the same bottom panel.
       *Already specified: nine scenarios. Implementation only. Large.*
 - [ ] **13. Column resize, widths shared across registers and stored with the

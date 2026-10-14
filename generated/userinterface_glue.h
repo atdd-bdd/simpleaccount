@@ -308,7 +308,7 @@ public:
             const EnumerationValuesTyped v = EnumerationValuesTyped::from_string_struct(value);
             bool known = false;
             for (ui::PaneContent c : {ui::PaneContent::Register, ui::PaneContent::Report,
-                                      ui::PaneContent::ImportReview, ui::PaneContent::Empty})
+                                      ui::PaneContent::Empty})
                 if (ui::to_string(c) == v.value) known = true;
             EXPECT_TRUE(known) << "unknown pane content: " << v.value;
         }
@@ -683,13 +683,25 @@ public:
 public:
 
     void then_bottom_panel_is(const std::vector<BottomPanelString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_bottom_panel_is";
+        const ui::BottomPanelState got = workspace().bottom_panel();
+        for (const BottomPanelString& want : values) {
+            EXPECT_EQ(parse_bool_cell(want.open), got.open) << "bottom panel open";
+            EXPECT_EQ(std::stoi(want.tabcount), got.tab_count) << "bottom panel tab count";
+            EXPECT_EQ(std::stoi(want.activetab), got.active_tab) << "bottom panel active tab";
+        }
     }
 
     void then_bottom_panel_tabs_are(const std::vector<BottomPanelTabRowString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_bottom_panel_tabs_are";
+        const std::vector<ui::BottomTabRow> got = workspace().bottom_panel_tabs();
+        ASSERT_EQ(values.size(), got.size()) << "number of bottom panel tabs";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const int tab = std::stoi(values[i].tab);
+            ASSERT_EQ(static_cast<int>(i) + 1, tab) << "tabs are listed in the order opened";
+            EXPECT_EQ(tab, got[i].tab) << "tab " << tab;
+            EXPECT_EQ(values[i].kind, ui::to_string(got[i].kind)) << "tab " << tab << " kind";
+            EXPECT_EQ(parse_bool_cell(values[i].active), got[i].active)
+                << "tab " << tab << " active";
+        }
     }
 
     void when_find_performed(const std::vector<FindCriteriaString>& values) {
@@ -698,8 +710,8 @@ public:
     }
 
     void when_bottom_panel_tab_selected(const std::vector<BottomPanelTabSelectString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_bottom_panel_tab_selected";
+        for (const BottomPanelTabSelectString& value : values)
+            workspace().select_bottom_tab(std::stoi(value.tab));
     }
 
     void then_find_results_are(const std::vector<FindResultRowString>& values) {
@@ -708,8 +720,14 @@ public:
     }
 
     void examples_datatype_bottompaneltabkind(const std::vector<EnumerationValuesString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_datatype_bottompaneltabkind";
+        for (const auto& value : values) {
+            const EnumerationValuesTyped v = EnumerationValuesTyped::from_string_struct(value);
+            bool known = false;
+            for (ui::BottomTabKind k :
+                 {ui::BottomTabKind::ImportReview, ui::BottomTabKind::FindResults})
+                if (ui::to_string(k) == v.value) known = true;
+            EXPECT_TRUE(known) << "unknown bottom panel tab kind: " << v.value;
+        }
     }
 
     void examples_datatype_findscope(const std::vector<EnumerationValuesString>& values) {
