@@ -965,9 +965,9 @@ Then import summary is : ImportSummary Vertical
 | New     | 0 |
 | Matched | 1 |
 Then transactions are : ImportedTransaction
-| Ref | SourceAccount          | Date       | Payee            | Destination | Amount   | Cleared | FitId  |
-| T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | none        | -1200.00 | Cleared | BNK-77 |
-| T2  | Liabilities:Chase Visa | 2026-04-11 | PAYMENT RECEIVED | none        | 1200.00  | Cleared | CC-901 |
+| Ref | SourceAccount          | Date       | Payee            | Destination            | Amount   | Cleared | FitId  |
+| T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | Liabilities:Chase Visa | -1200.00 | Cleared | BNK-77 |
+| T2  | Liabilities:Chase Visa | 2026-04-11 | PAYMENT RECEIVED | Assets:Checking        | 1200.00  | Cleared | CC-901 |
 # Two transactions, not one: a transaction is one account's own download, so
 # completing a payment adds the card's own row rather than rewriting the
 # bank's. T1's Destination is filled in with Liabilities:Chase Visa and T2 is
@@ -997,10 +997,10 @@ Then import summary is : ImportSummary Vertical
 | New     | 0 |
 | Matched | 1 |
 Then transactions are : ImportedTransaction
-| Ref | SourceAccount            | Date       | Payee            | Destination | Amount   | Cleared | FitId  |
-| T1  | Assets:Checking          | 2026-04-10 | CHASEBANK        | Unassigned  | -1200.00 | Cleared | BNK-77 |
-| T2  | Assets:Checking          | 2026-04-10 | CHASEBANK        | none        | -340.00  | Cleared | BNK-78 |
-| T3  | Liabilities:Chase Amazon | 2026-04-11 | PAYMENT RECEIVED | none        | 340.00   | Cleared | CC-902 |
+| Ref | SourceAccount            | Date       | Payee            | Destination              | Amount   | Cleared | FitId  |
+| T1  | Assets:Checking          | 2026-04-10 | CHASEBANK        | Unassigned               | -1200.00 | Cleared | BNK-77 |
+| T2  | Assets:Checking          | 2026-04-10 | CHASEBANK        | Liabilities:Chase Amazon | -340.00  | Cleared | BNK-78 |
+| T3  | Liabilities:Chase Amazon | 2026-04-11 | PAYMENT RECEIVED | Assets:Checking          | 340.00   | Cleared | CC-902 |
 # The twelve hundred is still waiting for the Visa file. Nothing about reading
 # the Amazon card tells us anything about it. T3 is the new row this import
 # added -- the card's own side of the payment it completed.
@@ -1080,9 +1080,9 @@ When candidate approved : TransferCandidate Vertical CompareOnly
 | ToAccount   | Assets:Checking Prime |
 | Amount      | 3000.00               |
 Then transactions are : ImportedTransaction
-| Ref | SourceAccount         | Date       | Payee                      | Destination | Amount   | Cleared | FitId      |
-| T1  | Assets:Checking       | 2026-07-31 | TO PUGH K CHECKING         | none        | -3000.00 | Cleared | 2026073102 |
-| T2  | Assets:Checking Prime | 2026-07-31 | FROM PUGH K PRIME CHECKING | none        | 3000.00  | Cleared | 2026073101 |
+| Ref | SourceAccount         | Date       | Payee                      | Destination           | Amount   | Cleared | FitId      |
+| T1  | Assets:Checking       | 2026-07-31 | TO PUGH K CHECKING         | Assets:Checking Prime | -3000.00 | Cleared | 2026073102 |
+| T2  | Assets:Checking Prime | 2026-07-31 | FROM PUGH K PRIME CHECKING | Assets:Checking       | 3000.00  | Cleared | 2026073101 |
 Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 0 |
@@ -1131,9 +1131,9 @@ When candidate approved : TransferCandidate Vertical CompareOnly
 | ToAccount   | Liabilities:WF Card   |
 | Amount      | 3508.09               |
 Then transactions are : ImportedTransaction
-| Ref | SourceAccount         | Date       | Payee                       | Destination | Amount   | Cleared | FitId |
-| T1  | Assets:Checking Prime | 2026-08-03 | WF Credit Card AUTO PAY     | none        | -3508.09 | Cleared | C1    |
-| T2  | Liabilities:WF Card   | 2026-08-01 | AUTOMATIC PAYMENT THANK YOU | none        | 3508.09  | Cleared | V1    |
+| Ref | SourceAccount         | Date       | Payee                       | Destination           | Amount   | Cleared | FitId |
+| T1  | Assets:Checking Prime | 2026-08-03 | WF Credit Card AUTO PAY     | Liabilities:WF Card   | -3508.09 | Cleared | C1    |
+| T2  | Liabilities:WF Card   | 2026-08-01 | AUTOMATIC PAYMENT THANK YOU | Assets:Checking Prime | 3508.09  | Cleared | V1    |
 # Two transactions, one per account, each dated and named the way its own
 # file read it -- the card posted it two days earlier than the checking
 # account did, and each now keeps its own date rather than sharing one.
@@ -1451,9 +1451,9 @@ Then transfer candidates are : TransferCandidate
 | FromAccount           | FromDate   | ToAccount           | ToDate     | Amount  | DaysApart | State     |
 | Assets:Checking Prime | 2026-09-01 | Liabilities:WF Card | 2026-09-01 | 2026.95 | 0         | Automatic |
 Then transactions are : ImportedTransaction
-| Ref | SourceAccount         | Date       | Payee                       | Destination | Amount   | Cleared | FitId |
-| T1  | Assets:Checking Prime | 2026-09-01 | WF Credit Card AUTO PAY     | none        | -2026.95 | Cleared | C2    |
-| T2  | Liabilities:WF Card   | 2026-09-01 | AUTOMATIC PAYMENT THANK YOU | none        | 2026.95  | Cleared | V2    |
+| Ref | SourceAccount         | Date       | Payee                       | Destination           | Amount   | Cleared | FitId |
+| T1  | Assets:Checking Prime | 2026-09-01 | WF Credit Card AUTO PAY     | Liabilities:WF Card   | -2026.95 | Cleared | C2    |
+| T2  | Liabilities:WF Card   | 2026-09-01 | AUTOMATIC PAYMENT THANK YOU | Assets:Checking Prime | 2026.95  | Cleared | V2    |
 
 Scenario A remembered rule still requires the amounts to be equal and opposite
 Description The rule says these two payees in these two accounts are worth

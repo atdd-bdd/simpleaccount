@@ -1784,7 +1784,7 @@ Then the registers offered are : RegisterOffer
 Then panes are : PaneState
 | Pane | Showing | Account | Active |
 | 1    | Empty   | none    | true   |
-# In the order the transaction's transactions name them, which is the order the
+# In the order the transaction's own sides name them, which is the order the
 # import or the entry put them in. The pane is still empty: offering is not
 # opening.
 
@@ -1798,8 +1798,12 @@ Given transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee        | Destination        | Amount  |
 | T1  | Liabilities:Visa | 2026-02-05 | Amazon       | Expenses:Groceries | -60.00  |
 | T2  | Assets:Checking  | 2026-02-25 | Visa Payment | Liabilities:Visa   | -200.00 |
+| T3  | Liabilities:Visa | 2026-02-25 | Visa Payment | Assets:Checking    | 200.00  |
+# The payment is two transactions, one in each account, the way every transfer
+# is -- see the transfer scenario in Transactions. T3 is the card's own entry,
+# which is what its register holds and what opening it there finds.
 When the transaction is opened in : RegisterChoice Vertical
-| Ref     | T2               |
+| Ref     | T3               |
 | Account | Liabilities:Visa |
 Then panes are : PaneState
 | Pane | Showing  | Account          | Active |

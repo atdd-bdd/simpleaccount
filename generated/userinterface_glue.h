@@ -657,8 +657,12 @@ public:
     void when_the_transaction_is_opened_in(const std::vector<RegisterChoiceString>& values) {
         ASSERT_FALSE(values.empty());
         opened_ = values.front().ref;
+        std::string offered;
+        for (const std::string& one : workspace().registers_offered(opened_))
+            offered += (offered.empty() ? "" : ", ") + one;
         EXPECT_TRUE(workspace().go_to_transaction_in(opened_, values.front().account))
-            << values.front().account << " does not hold " << opened_;
+            << values.front().account << " does not hold " << opened_
+            << "; offered: " << (offered.empty() ? "nothing" : offered);
     }
 
 public:
@@ -737,6 +741,8 @@ public:
                 t.cleared = types::cleared_status_from_string(value.cleared);
             transactions_.push_back(t);
         }
+        rebuild_book();
+        workspace_.reset();
     }
 
     // Which transaction a table of split lines belongs to: the one that says
@@ -759,6 +765,8 @@ public:
             s.memo = blank(value.memo);
             splits_.push_back(s);
         }
+        rebuild_book();
+        workspace_.reset();
     }
 
 public:

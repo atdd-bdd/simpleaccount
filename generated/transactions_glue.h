@@ -607,10 +607,21 @@ public:
 
     void then_transactions_are(const std::vector<TransactionString>& values) {
         ASSERT_EQ(values.size(), transactions_.size()) << "number of transactions";
-        for (const auto& value : values) {
-            const ledger::Transaction* t = find_by_ref(value.ref);
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const TransactionString& value = values[i];
+            // A table that names no Ref is read in order, which is the only
+            // thing it can mean: a Ref is this specification's way of saying
+            // two rows belong together, and a register entry is committed
+            // without the scenario naming one.
+            const ledger::Transaction* t =
+                value.ref == DNCString ? &transactions_[i] : find_by_ref(value.ref);
             ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
-            EXPECT_EQ(value, as_string(*t)) << value.ref;
+            TransactionString got = as_string(*t);
+            if (value.amount != DNCString &&
+                Money(value.amount).cents() == Money(got.amount).cents())
+                got.amount = value.amount;
+            EXPECT_EQ(value, got) << "wanted " << value.to_string()
+                                  << " got " << got.to_string();
         }
     }
 
