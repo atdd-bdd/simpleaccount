@@ -14,14 +14,14 @@ Details under. That is its Id, given once when the transaction is created and
 Details never changed afterwards. See the rule on naming a transaction.
 
 DataType TransactionRef
-Description How a table in this specification says which postings belong to one
+Description How a table in this specification says which rows belong to one
 Description transaction. Not the stored identity, which is the Id.
 Uses Text
 Examples: ValidValues
 | Value | IsValid | Notes                               |
 | T1    | true    | Short names are used in these tables |
 | 4091  | true    | The program assigns numbers         |
-|       | false   | A posting always belongs to one     |
+|       | false   | A row always belongs to one         |
 
 # ---------------------------------------------------------------------------
 # The shape of a transaction
@@ -68,18 +68,7 @@ Description and the signed amount between them.
 | SourceAccount | AccountPath    | none       | The account this entry lives in: downloaded into, or typed in its register. An id underneath, the same as every account reference; see the identity rule in Accounts |
 | Destination   | AccountPath    | none       | The other side: a category, a real account, or the literal Split when the parts are in TransactionSplit below |
 | Amount        | Money          | 0.00       | Signed against SourceAccount; Destination carries the opposite effect by construction |
-| Cleared       | ClearedStatus  | Uncleared  | Per entry: the transaction itself is already one side of the posting |
-
-Attributes PostingRow
-Description A posting with its transaction, which is how these tables are written.
-| Attribute | Type           | Default   |
-| Ref       | TransactionRef |           |
-| Date      | Date           | 2024-01-01 |
-| Payee     | PayeeName      | none      |
-| Account   | AccountPath    |           |
-| Amount    | Money          | 0.00      |
-| Memo      | Text           | none      |
-| Cleared   | ClearedStatus  | Uncleared |
+| Cleared       | ClearedStatus  | Uncleared  | Per entry: the transaction is one account's own side, and clearing is that account's bank reporting it |
 
 # ---------------------------------------------------------------------------
 # The two kinds of unknown
@@ -118,33 +107,6 @@ Attributes TwoUnknowns
 | TheQuestion | String |         |
 | WhereItLives | Text  |         |
 | ClearedBy   | String |         |
-
-Scenario Assigning the other account in the register empties Unassigned
-Description The last resort, and the one that always works. A payment nothing
-Description matched is sitting with its other side in Unassigned; the user picks
-Description the account in the register and the suspense balance goes to zero.
-Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type       | Placeholder |
-| Assets:Checking        | Checking   | false       |
-| Liabilities:Chase Visa | CreditCard | false       |
-| Unassigned             | OtherAsset | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee     | Account         | Amount   | Memo | Cleared   |
-| T1  | 2026-04-10 | CHASEBANK | Assets:Checking | -1200.00 | none | Cleared   |
-| T1  | 2026-04-10 | CHASEBANK | Unassigned      | 1200.00  | none | Uncleared |
-When the other account is assigned : AccountAssignment Vertical
-| Ref     | T1                     |
-| Account | Liabilities:Chase Visa |
-Then postings are : PostingRow
-| Ref | Date       | Payee     | Account                | Amount   | Memo | Cleared   |
-| T1  | 2026-04-10 | CHASEBANK | Assets:Checking        | -1200.00 | none | Cleared   |
-| T1  | 2026-04-10 | CHASEBANK | Liabilities:Chase Visa | 1200.00  | none | Uncleared |
-Then balances are : AccountBalance CompareOnly
-| Account    | RawBalance |
-| Unassigned | 0.00       |
-# The posting was not added and nothing was deleted: the one posting that said
-# Unassigned now says which account, which is the whole of the change. It stays
-# uncleared, because the card has still not reported it.
 
 Attributes AccountAssignment
 Description Assigning the other account of a transfer by hand, in the register.
@@ -205,10 +167,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking      | Checking | false       |
 | Income:Uncategorized | Income | false       |
 | Unassigned           | OtherAsset | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee        | Account              | Amount   | Memo | Cleared   |
-| T1  | 2026-04-15 | ACME PAYROLL | Assets:Checking      | 3000.00  | none | Cleared   |
-| T1  | 2026-04-15 | ACME PAYROLL | Income:Uncategorized | -3000.00 | none | Uncleared |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination          | Amount  | Cleared |
+| T1  | Assets:Checking | 2026-04-15 | ACME PAYROLL | Income:Uncategorized | 3000.00 | Cleared |
 Then balances are : AccountBalance CompareOnly
 | Account    | RawBalance |
 | Unassigned | 0.00       |
@@ -227,8 +188,8 @@ Description Both are possible and they are different outcomes, so the program
 Description asks rather than choosing.
 Details Making a new entry is right when the other account has no row for this
 Details money -- usually because it has not been imported yet. The transfer
-Details becomes one transaction with two real postings and the second account
-Details will recognise its own row when its file is read.
+Details is one transaction naming the other account, shown in both registers,
+Details and the second account will recognise its own row when its file is read.
 Details
 Details Matching an existing entry is right when the other account already has
 Details the row, entered by hand or imported too long ago or too far out for the
@@ -242,47 +203,14 @@ Details always available, because a user who cannot find it is better served by 
 Details new row than by being made to choose wrongly.
 Examples: AssignmentOutcome
 | TheOtherAccount                | WhatHappens                                        |
-| Has no row for this money      | A new entry is made there; one transaction, two postings |
-| Has the row, found by the user | The two become one transaction; nothing is doubled  |
+| Has no row for this money      | One transaction names it, and shows in both registers    |
+| Has the row, found by the user | Each points at the other's account; neither is deleted |
 | Has the row, not found         | A new entry is made; the duplicate is left to be seen later |
 
 Attributes AssignmentOutcome
 | Attribute       | Type   | Default |
 | TheOtherAccount | String |         |
 | WhatHappens     | String |         |
-
-Scenario Matching an entry in the other register points each transaction at the other
-Description The card was imported weeks ago and the payment never paired, because
-Description the dates were further apart than the window allows. Both sides are
-Description in the book as separate transactions, and stay that way: matching
-Description points each one's Destination at the other's account rather than
-Description folding them into one.
-Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type       | Placeholder |
-| Assets:Checking        | Checking   | false       |
-| Liabilities:Chase Visa | CreditCard | false       |
-| Unassigned             | OtherAsset | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee            | Account                | Amount   | Memo | Cleared   |
-| T1  | 2026-04-10 | CHASEBANK        | Assets:Checking        | -1200.00 | none | Cleared   |
-| T1  | 2026-04-10 | CHASEBANK        | Unassigned             | 1200.00  | none | Uncleared |
-| T2  | 2026-04-25 | PAYMENT RECEIVED | Liabilities:Chase Visa | 1200.00  | none | Cleared   |
-| T2  | 2026-04-25 | PAYMENT RECEIVED | Unassigned             | -1200.00 | none | Uncleared |
-When the other entry is matched : EntryMatch Vertical
-| Ref      | T1 |
-| OtherRef | T2 |
-Then postings are : PostingRow
-| Ref | Date       | Payee            | Account                | Amount   | Memo | Cleared |
-| T1  | 2026-04-10 | CHASEBANK        | Assets:Checking        | -1200.00 | none | Cleared |
-| T2  | 2026-04-25 | PAYMENT RECEIVED | Liabilities:Chase Visa | 1200.00  | none | Cleared |
-Then balances are : AccountBalance CompareOnly
-| Account    | RawBalance |
-| Unassigned | 0.00       |
-# Two transactions, each keeping its own date and its own payee -- the bank's
-# word for it on one side, the card's on the other -- and both already
-# cleared, because both banks reported them. The fifteen-day gap was the
-# reason nothing paired it automatically and is no reason not to point them
-# at each other now.
 
 Attributes EntryMatch
 Description Matching an Unassigned side against an entry the user picked from
@@ -301,14 +229,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Chase Visa | CreditCard | false       |
 | Unassigned             | OtherAsset | false       |
 | Expenses:Uncategorized | Expense    | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee            | Account                | Amount   | Memo | Cleared   |
-| T1  | 2026-04-10 | CHASEBANK        | Assets:Checking        | -1200.00 | none | Cleared   |
-| T1  | 2026-04-10 | CHASEBANK        | Unassigned             | 1200.00  | none | Uncleared |
-| T2  | 2026-04-25 | PAYMENT RECEIVED | Liabilities:Chase Visa | 1200.00  | none | Cleared   |
-| T2  | 2026-04-25 | PAYMENT RECEIVED | Unassigned             | -1200.00 | none | Uncleared |
-| T3  | 2026-04-26 | SOME SHOP        | Liabilities:Chase Visa | -45.00   | none | Cleared   |
-| T3  | 2026-04-26 | SOME SHOP        | Expenses:Uncategorized | 45.00    | none | Uncleared |
+Given transactions are : Transaction
+| Ref | SourceAccount          | Date       | Payee            | Destination            | Amount   | Cleared |
+| T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | Unassigned             | -1200.00 | Cleared |
+| T2  | Liabilities:Chase Visa | 2026-04-25 | PAYMENT RECEIVED | Unassigned             | 1200.00  | Cleared |
+| T3  | Liabilities:Chase Visa | 2026-04-26 | SOME SHOP        | Expenses:Uncategorized | -45.00   | Cleared |
 When entries offered for : AccountAssignment Vertical
 | Ref     | T1                     |
 | Account | Liabilities:Chase Visa |
@@ -342,8 +267,8 @@ Details changes. That is the whole of the rule, and the reason for it is that
 Details the alternatives cannot promise it. A name taken from where a
 Details transaction came from -- a FITID, a CSV row -- is a fact about a file,
 Details and a transaction can collect one of those from every kind of file it is
-Details ever recognised in. A posting imported from a CSV and later matched in a
-Details QFX has a name in each, which is why ImportIds is a collection.
+Details ever recognised in. A transaction imported from a CSV and later matched
+Details in a QFX has a name in each, which is why ImportIds is a collection.
 Details Identity cannot be one of several, and it cannot change when a later
 Details import learns something, so it is kept apart from all of them.
 Details
@@ -403,55 +328,37 @@ Examples: ValidValues
 # ---------------------------------------------------------------------------
 
 BusinessRule Every transaction balances
-Description The amounts of the postings of one transaction sum to zero.
-Details This is the whole of double entry. It is checked on every commit, on
-Details every import, and when a file is opened, because a book that does not
-Details balance cannot be trusted to report anything.
-Details Amounts below are in cents, and a blank column is a posting that is not
-Details there.
-Examples: BalanceCheck
-| A1    | A2    | A3    | A4   | Total | Balanced | Notes                        |
-| 4500  | -4500 |       |      | 0     | true     | An ordinary payment          |
-| -4500 | 1000  | 2000  | 1500 | 0     | true     | A split of three categories  |
-| 4500  | -4000 |       |      | 500   | false    | Off by five dollars          |
-| 4500  |       |       |      | 4500  | false    | One posting is never balanced |
-| 0     | 0     |       |      | 0     | true     | A zero transaction balances  |
-| -4500 | 4500  | 1000  | -1000 | 0    | true     | Four postings, still zero    |
+Description A transaction names one signed amount against one source account, and
+Description its destination carries the opposite effect by construction. There is
+Description no second figure to disagree with the first, so an ordinary
+Description transaction cannot be out of balance -- it is the shape that makes
+Description double entry hold, not a check run over a list of transactions.
+Details What can still fail to add up is a split, because a split is the one
+Details place with more than one figure that is supposed to agree with
+Details another: its lines against its transaction's amount. That check, and
+Details the refusal when it fails, are the split rule and the shortfall
+Details scenario further down this file.
+Details
+Details The old shape made the same guarantee by summing the amounts of the
+Details postings of one transaction to zero. Two postings that summed to five
+Details dollars, or a lone transaction that summed to itself, were the two ways
+Details that could fail; neither is expressible now. A transaction has one
+Details amount, and the entry in the other account -- when there is one, as
+Details for a transfer -- is a transaction in its own right with its own.
+Examples: BalanceByConstruction
+| Amount   | DestinationEffect | WhatCanDisagree | Notes                                          |
+| -45.00   | 45.00             | Nothing         | An ordinary payment                            |
+| 1000.00  | -1000.00          | Nothing         | A deposit                                      |
+| -1200.00 | 1200.00           | Nothing         | A transfer; the other side is its own transaction |
+| 0.00     | 0.00              | Nothing         | A zero transaction balances                    |
+| -184.50  | 184.50            | The split lines | Only a split has a second figure to disagree   |
 
-Attributes BalanceCheck
-| Attribute | Type    | Default |
-| A1        | Integer | 0       |
-| A2        | Integer | 0       |
-| A3        | Integer | 0       |
-| A4        | Integer | 0       |
-| Total     | Integer | 0       |
-| Balanced  | Boolean | true    |
-| Notes     | String  | none    |
-
-Scenario A transaction with one posting is refused
-Given the chart of accounts is : ChartOfAccounts
-| Path               | Type    | Placeholder |
-| Assets:Checking    | Checking | false       |
-| Expenses:Groceries | Expense | false       |
-When postings committed : PostingRow
-| Ref | Date       | Account         | Amount |
-| T1  | 2024-01-15 | Assets:Checking | -45.00 |
-Then rejected because : Rejection
-| Reason                                        |
-| A transaction needs at least two postings     |
-
-Scenario An unbalanced transaction is refused
-Given the chart of accounts is : ChartOfAccounts
-| Path               | Type    | Placeholder |
-| Assets:Checking    | Checking | false       |
-| Expenses:Groceries | Expense | false       |
-When postings committed : PostingRow
-| Ref | Date       | Account            | Amount |
-| T1  | 2024-01-15 | Assets:Checking    | -45.00 |
-| T1  | 2024-01-15 | Expenses:Groceries | 40.00  |
-Then rejected because : Rejection
-| Reason                                      |
-| T1 is out of balance by 5.00                |
+Attributes BalanceByConstruction
+| Attribute         | Type   | Default |
+| Amount            | Money  | 0.00    |
+| DestinationEffect | Money  | 0.00    |
+| WhatCanDisagree   | Text   | none    |
+| Notes             | String | none    |
 
 # ---------------------------------------------------------------------------
 # Entering a transaction the way the register does
@@ -472,24 +379,26 @@ Details only one of them is filled in. See TransactionRegister.
 | Deposit   | Money       | 0.00       |
 | Memo      | Text        | none       |
 
-BusinessRule A register entry becomes two postings
-Description How the Payment and Deposit columns turn into signed amounts.
-Details The amount on the register account is the deposit less the payment, and
-Details the category takes the opposite amount, so the two sum to zero.
-Examples: RegisterEntryToPostings
-| Payment | Deposit | AccountAmount | CategoryAmount | Notes            |
-| 45.00   | 0.00    | -45.00        | 45.00          | Money out        |
-| 0.00    | 1000.00 | 1000.00       | -1000.00       | Money in         |
-| 0.00    | 0.00    | 0.00          | 0.00           | An empty line    |
-| 45.00   | 10.00   | -35.00        | 35.00          | Both filled: net |
+BusinessRule A register entry becomes one transaction
+Description How the Payment and Deposit columns turn into one signed amount.
+Details The amount on the register account is the deposit less the payment.
+Details The register is always opened on one account, so that account is the
+Details transaction's SourceAccount and the Category column is its
+Details Destination. The destination carries the opposite effect by
+Details construction; it is not a second figure for the register to fill in.
+Examples: RegisterEntryToTransaction
+| Payment | Deposit | Amount  | Notes            |
+| 45.00   | 0.00    | -45.00  | Money out        |
+| 0.00    | 1000.00 | 1000.00 | Money in         |
+| 0.00    | 0.00    | 0.00    | An empty line    |
+| 45.00   | 10.00   | -35.00  | Both filled: net |
 
-Attributes RegisterEntryToPostings
-| Attribute      | Type   | Default |
-| Payment        | Money  | 0.00    |
-| Deposit        | Money  | 0.00    |
-| AccountAmount  | Money  | 0.00    |
-| CategoryAmount | Money  | 0.00    |
-| Notes          | String | none    |
+Attributes RegisterEntryToTransaction
+| Attribute | Type   | Default |
+| Payment   | Money  | 0.00    |
+| Deposit   | Money  | 0.00    |
+| Amount    | Money  | 0.00    |
+| Notes     | String | none    |
 
 Scenario A payment entered in a register
 Given the chart of accounts is : ChartOfAccounts
@@ -502,10 +411,13 @@ When register entry committed : RegisterEntry Vertical
 | Payee    | Harris Teeter      |
 | Category | Expenses:Groceries |
 | Payment  | 45.00              |
-Then postings are : PostingRow
-| Ref | Date       | Payee         | Account            | Amount | Cleared   |
-| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 | Uncleared |
-| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00  | Uncleared |
+Then transaction is : Transaction Vertical CompareOnly
+| Date          | 2024-01-15         |
+| Payee         | Harris Teeter      |
+| SourceAccount | Assets:Checking    |
+| Destination   | Expenses:Groceries |
+| Amount        | -45.00             |
+| Cleared       | Uncleared          |
 
 Scenario A deposit entered in a register
 Given the chart of accounts is : ChartOfAccounts
@@ -518,10 +430,13 @@ When register entry committed : RegisterEntry Vertical
 | Payee    | Acme Payroll    |
 | Category | Income:Salary   |
 | Deposit  | 3000.00         |
-Then postings are : PostingRow
-| Ref | Date       | Payee        | Account         | Amount   | Cleared   |
-| T1  | 2024-01-31 | Acme Payroll | Assets:Checking | 3000.00  | Uncleared |
-| T1  | 2024-01-31 | Acme Payroll | Income:Salary   | -3000.00 | Uncleared |
+Then transaction is : Transaction Vertical CompareOnly
+| Date          | 2024-01-31      |
+| Payee         | Acme Payroll    |
+| SourceAccount | Assets:Checking |
+| Destination   | Income:Salary   |
+| Amount        | 3000.00         |
+| Cleared       | Uncleared       |
 
 Scenario A check records its number
 Given the chart of accounts is : ChartOfAccounts
@@ -550,13 +465,18 @@ Then transaction is : Transaction Vertical
 # ---------------------------------------------------------------------------
 
 DomainTerm Transfer : Transaction
-Description A transaction both of whose postings are to real accounts. It is
-Description not a separate kind of record: it is recognised by its shape, and
-Description that is why it needs no special handling anywhere else.
+Description A transaction whose SourceAccount and Destination are both real
+Description accounts. It is not a separate kind of record: it is recognised by
+Description its shape, and that is why it needs no special handling anywhere
+Description else.
 
 Scenario A transfer between two accounts
-Description The category column of the register holds the other account. One
-Description transaction is created, and it appears in both registers.
+Description The category column of the register holds the other account. Two
+Description transactions are created, one for each account, each naming the
+Description other. A transaction is one account's own entry, so a movement
+Description between two accounts is an entry in each -- which is also what a
+Description download of the same movement from both banks would leave, and why
+Description each side can clear on its own statement.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
 | Assets:Checking | Checking | false       |
@@ -566,10 +486,10 @@ When register entry committed : RegisterEntry Vertical
 | Date     | 2024-03-01      |
 | Category | Assets:Savings  |
 | Payment  | 500.00          |
-Then postings are : PostingRow
-| Ref | Date       | Account         | Amount  | Cleared   |
-| T1  | 2024-03-01 | Assets:Checking | -500.00 | Uncleared |
-| T1  | 2024-03-01 | Assets:Savings  | 500.00  | Uncleared |
+Then transactions are : Transaction CompareOnly
+| Date       | SourceAccount   | Destination     | Amount  | Cleared   |
+| 2024-03-01 | Assets:Checking | Assets:Savings  | -500.00 | Uncleared |
+| 2024-03-01 | Assets:Savings  | Assets:Checking | 500.00  | Uncleared |
 Then transaction is a transfer : TransferCheck Vertical
 | IsTransfer | true           |
 | FromAccount | Assets:Checking |
@@ -608,33 +528,35 @@ When register entry committed : RegisterEntry Vertical
 | Payee    | Visa             |
 | Category | Liabilities:Visa |
 | Payment  | 300.00           |
-Then postings are : PostingRow
-| Ref | Date       | Payee | Account          | Amount  | Cleared   |
-| T1  | 2024-03-05 | Visa  | Assets:Checking  | -300.00 | Uncleared |
-| T1  | 2024-03-05 | Visa  | Liabilities:Visa | 300.00  | Uncleared |
+Then transactions are : Transaction CompareOnly
+| Date       | Payee | SourceAccount    | Destination      | Amount  | Cleared   |
+| 2024-03-05 | Visa  | Assets:Checking  | Liabilities:Visa | -300.00 | Uncleared |
+| 2024-03-05 | Visa  | Liabilities:Visa | Assets:Checking  | 300.00  | Uncleared |
 Then balances are : AccountBalance
 | Account          | RawBalance | DisplayBalance | Notes                |
 | Assets:Checking  | -300.00    | -300.00        | Paid out             |
 | Liabilities:Visa | 300.00     | -300.00        | Owed by 300.00 less  |
 
-Scenario A transaction may not post to the same account twice
-Description Two postings to one account with opposite amounts would change
-Description nothing and clear nothing; it is always a mistake.
+Scenario A transaction may not name the same account on both sides
+Description An account transferring to itself would change nothing and clear
+Description nothing; it is always a mistake.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
 | Assets:Checking | Checking | false       |
-When postings committed : PostingRow
-| Ref | Date       | Account         | Amount  |
-| T1  | 2024-03-01 | Assets:Checking | -500.00 |
-| T1  | 2024-03-01 | Assets:Checking | 500.00  |
+When transaction entered : Transaction Vertical
+| Ref           | T1              |
+| Date          | 2024-03-01      |
+| SourceAccount | Assets:Checking |
+| Destination   | Assets:Checking |
+| Amount        | -500.00         |
 Then rejected because : Rejection
 | Reason                                                  |
 | A transfer must name two different accounts             |
 
-Scenario A posting to a placeholder account is refused
-Description A placeholder exists to group its children in a report. Posting to
-Description it makes its own balance differ from the total of its children,
-Description which is the one thing a tree of accounts must not do.
+Scenario A transaction to a placeholder account is refused
+Description A placeholder exists to group its children in a report. Entering
+Description against it makes its own balance differ from the total of its
+Description children, which is the one thing a tree of accounts must not do.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -663,8 +585,9 @@ Details leaving the account being reconciled.
 | Memo      | Text        | none    |
 
 Scenario A split across three categories
-Description One trip to the hardware store, charged three ways. The register
-Description account takes one posting for the total; each category takes its own.
+Description One trip to the hardware store, charged three ways. The transaction
+Description carries the total against the register's account; each category is a
+Description line of its split.
 Given the chart of accounts is : ChartOfAccounts
 | Path                       | Type    | Placeholder |
 | Assets:Checking            | Checking | false       |
@@ -681,12 +604,17 @@ When split lines are : SplitLine
 | Expenses:Home:Maintenance | 100.00 | Paint         |
 | Expenses:Home:Garden      | 54.50  | Compost       |
 | Expenses:Auto:Repairs     | 30.00  | Wiper blades  |
-Then postings are : PostingRow
-| Ref | Date       | Payee      | Account                   | Amount  | Memo         |
-| T1  | 2024-04-02 | Home Depot | Assets:Checking           | -184.50 | none         |
-| T1  | 2024-04-02 | Home Depot | Expenses:Home:Maintenance | 100.00  | Paint        |
-| T1  | 2024-04-02 | Home Depot | Expenses:Home:Garden      | 54.50   | Compost      |
-| T1  | 2024-04-02 | Home Depot | Expenses:Auto:Repairs     | 30.00   | Wiper blades |
+Then transaction is : Transaction Vertical CompareOnly
+| Date          | 2024-04-02      |
+| Payee         | Home Depot      |
+| SourceAccount | Assets:Checking |
+| Destination   | Split           |
+| Amount        | -184.50         |
+Then split lines are : TransactionSplit
+| Destination               | Amount | Memo         |
+| Expenses:Home:Maintenance | 100.00 | Paint        |
+| Expenses:Home:Garden      | 54.50  | Compost      |
+| Expenses:Auto:Repairs     | 30.00  | Wiper blades |
 
 Scenario Split lines that do not add up to the total are refused
 Description The split window shows the shortfall as it is typed; this is what
@@ -729,12 +657,17 @@ When split lines are : SplitLine
 | Income:Salary          | -5000.00 | Gross pay  |
 | Expenses:Taxes:Federal | 1200.00  | Withheld   |
 | Expenses:Insurance     | 250.00   | Premium    |
-Then postings are : PostingRow
-| Ref | Date       | Payee        | Account                | Amount   | Memo      |
-| T1  | 2024-04-15 | Acme Payroll | Assets:Checking        | 3550.00  | none      |
-| T1  | 2024-04-15 | Acme Payroll | Income:Salary          | -5000.00 | Gross pay |
-| T1  | 2024-04-15 | Acme Payroll | Expenses:Taxes:Federal | 1200.00  | Withheld  |
-| T1  | 2024-04-15 | Acme Payroll | Expenses:Insurance     | 250.00   | Premium   |
+Then transaction is : Transaction Vertical CompareOnly
+| Date          | 2024-04-15      |
+| Payee         | Acme Payroll    |
+| SourceAccount | Assets:Checking |
+| Destination   | Split           |
+| Amount        | 3550.00         |
+Then split lines are : TransactionSplit
+| Destination            | Amount   | Memo      |
+| Income:Salary          | -5000.00 | Gross pay |
+| Expenses:Taxes:Federal | 1200.00  | Withheld  |
+| Expenses:Insurance     | 250.00   | Premium   |
 Then balances are : AccountBalance
 | Account                | RawBalance | DisplayBalance | Notes            |
 | Assets:Checking        | 3550.00    | 3550.00        | Net pay          |
@@ -745,7 +678,7 @@ Then balances are : AccountBalance
 Scenario A split line may transfer to a real account
 Description Part of the paycheque going straight to savings is a split line
 Description naming an account rather than a category. Nothing special is needed:
-Description a posting does not care which kind of account it names.
+Description a split line does not care which kind of account it names.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type   | Placeholder |
 | Assets:Checking | Checking | false       |
@@ -760,26 +693,29 @@ When split lines are : SplitLine
 | Category       | Amount   | Memo            |
 | Income:Salary  | -3000.00 | Gross pay       |
 | Assets:Savings | 200.00   | Direct to saver |
-Then postings are : PostingRow
-| Ref | Date       | Payee        | Account         | Amount   | Memo            |
-| T1  | 2024-04-15 | Acme Payroll | Assets:Checking | 2800.00  | none            |
-| T1  | 2024-04-15 | Acme Payroll | Income:Salary   | -3000.00 | Gross pay       |
-| T1  | 2024-04-15 | Acme Payroll | Assets:Savings  | 200.00   | Direct to saver |
+Then transaction is : Transaction Vertical CompareOnly
+| Date          | 2024-04-15      |
+| Payee         | Acme Payroll    |
+| SourceAccount | Assets:Checking |
+| Destination   | Split           |
+| Amount        | 2800.00         |
+Then split lines are : TransactionSplit
+| Destination    | Amount   | Memo            |
+| Income:Salary  | -3000.00 | Gross pay       |
+| Assets:Savings | 200.00   | Direct to saver |
 
 # ---------------------------------------------------------------------------
 # A transaction can name both accounts directly
 # ---------------------------------------------------------------------------
 
-Description PostingRow above groups rows into a transaction with a Ref column,
-Description the way these tables have always written one down; it says nothing
-Description about how a transaction is stored. SourceAccount, Destination and
-Description Amount are that storage: a two-row group becomes one of each, so a
-Description register line can be read from the transaction alone, with no second
-Description table to join for the ordinary case.
-Details A split keeps a table of its own, TransactionSplit, for rows after the
-Details first in a group of three or more. An ordinary transaction -- the
-Details common case -- needs no second table at all: SourceAccount and
-Details Destination are both already on it.
+Description SourceAccount, Destination and Amount are how a transaction is
+Description stored: the account it lives in, the other side, and the signed
+Description amount between them. A register line can therefore be read from the
+Description transaction alone, with no second table to join for the ordinary
+Description case.
+Details A split keeps a table of its own, TransactionSplit, for its lines. An
+Details ordinary transaction -- the common case -- needs no second table at
+Details all: SourceAccount and Destination are both already on it.
 Details
 Details Every reference below -- SourceAccount, Destination, and a split
 Details line's own Destination -- is an id underneath, the same as every
@@ -787,7 +723,7 @@ Details account or category reference elsewhere; AccountPath is this
 Details specification's reading of it, not what is stored. See the identity
 Details rule in Accounts.
 
-Scenario An ordinary transaction names both accounts directly, with no posting at all
+Scenario An ordinary transaction names both accounts directly
 Description The register's category column becomes Destination; nothing is
 Description created that has to sum to anything, because there is only one row.
 Given the chart of accounts is : ChartOfAccounts
@@ -873,11 +809,11 @@ Attributes TransactionCount
 | Account   | AccountPath |         |
 | Count     | Integer     | 0       |
 
-Scenario Assigning the other account updates Destination, not a second posting
+Scenario Assigning the other account updates Destination
 Description The last resort, and the one that always works, done the new way:
 Description there is one row for this entry, and assigning the other account is
 Description changing what its Destination says, not creating or editing a
-Description second posting to Unassigned.
+Description second transaction to Unassigned.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
 | Assets:Checking        | Checking   | false       |
@@ -892,6 +828,12 @@ When the other account is assigned : AccountAssignment Vertical
 Then transaction is : Transaction Vertical CompareOnly
 | Ref         | T1                     |
 | Destination | Liabilities:Chase Visa |
+Then balances are : AccountBalance CompareOnly
+| Account    | RawBalance |
+| Unassigned | 0.00       |
+# Nothing was added and nothing was deleted: the transaction that said
+# Unassigned now says which account, which is the whole of the change. The
+# suspense balance goes to zero because that transaction no longer names it.
 
 Scenario Matching an entry in another register updates both transactions' Destination
 Description The card was imported weeks ago and the payment never paired. Both
@@ -915,6 +857,13 @@ Then transactions are : Transaction CompareOnly
 | Ref | SourceAccount          | Destination            |
 | T1  | Assets:Checking        | Liabilities:Chase Visa |
 | T2  | Liabilities:Chase Visa | Assets:Checking         |
+Then balances are : AccountBalance CompareOnly
+| Account    | RawBalance |
+| Unassigned | 0.00       |
+# Each keeps its own date and its own payee -- the bank's word for it on one
+# side, the card's on the other. The fifteen-day gap was the reason nothing
+# paired them automatically and is no reason not to point them at each other
+# now. Neither row names Unassigned any more, so the suspense balance is zero.
 
 Entity TransactionSplit
 Description One category line of a split, kept apart from the transaction that
@@ -971,10 +920,12 @@ When register entry committed : RegisterEntry Vertical
 | Date    | 2024-05-01      |
 | Payee   | Unknown Shop    |
 | Payment | 23.75           |
-Then postings are : PostingRow
-| Ref | Date       | Payee        | Account                  | Amount |
-| T1  | 2024-05-01 | Unknown Shop | Assets:Checking          | -23.75 |
-| T1  | 2024-05-01 | Unknown Shop | Expenses:Uncategorized   | 23.75  |
+Then transaction is : Transaction Vertical CompareOnly
+| Date          | 2024-05-01             |
+| Payee         | Unknown Shop           |
+| SourceAccount | Assets:Checking        |
+| Destination   | Expenses:Uncategorized |
+| Amount        | -23.75                 |
 
 Scenario An uncategorised deposit posts to income
 Given the chart of accounts is : ChartOfAccounts
@@ -985,14 +936,16 @@ When register entry committed : RegisterEntry Vertical
 | Date    | 2024-05-02      |
 | Payee   | Unknown Source  |
 | Deposit | 500.00          |
-Then postings are : PostingRow
-| Ref | Date       | Payee          | Account              | Amount  |
-| T1  | 2024-05-02 | Unknown Source | Assets:Checking      | 500.00  |
-| T1  | 2024-05-02 | Unknown Source | Income:Uncategorized | -500.00 |
+Then transaction is : Transaction Vertical CompareOnly
+| Date          | 2024-05-02           |
+| Payee         | Unknown Source       |
+| SourceAccount | Assets:Checking      |
+| Destination   | Income:Uncategorized |
+| Amount        | 500.00               |
 
 BusinessRule Which Uncategorized account the other side takes
-Description Chosen by the sign of the known posting, so an expense never shows
-Description as negative income.
+Description Chosen by the sign of the transaction's own amount, so an expense
+Description never shows as negative income.
 Examples: UncategorizedChoice
 | KnownAmount | OtherAccount           | Notes                    |
 | -23.75      | Expenses:Uncategorized | Money left the account   |
@@ -1009,26 +962,26 @@ Attributes UncategorizedChoice
 # Changing and removing
 # ---------------------------------------------------------------------------
 
-Scenario Changing the amount of a two-posting transaction moves both sides
-Description With exactly two postings the other side is unambiguous, so editing
-Description the amount in the register keeps the transaction balanced without
-Description asking anything.
+Scenario Changing the amount of an ordinary transaction moves both sides
+Description An ordinary transaction carries one amount and its destination takes
+Description the opposite by construction, so editing the amount in the register
+Description moves both sides at once without asking anything.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee         | Account            | Amount |
-| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 |
-| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
 When amount changed : AmountChange Vertical
 | Ref     | T1    |
 | Account | Assets:Checking |
 | Payment | 52.10 |
-Then postings are : PostingRow
-| Ref | Date       | Payee         | Account            | Amount |
-| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -52.10 |
-| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 52.10  |
+Then transaction is : Transaction Vertical CompareOnly
+| Ref           | T1                 |
+| SourceAccount | Assets:Checking    |
+| Destination   | Expenses:Groceries |
+| Amount        | -52.10             |
 
 Attributes AmountChange
 | Attribute | Type           | Default |
@@ -1038,18 +991,21 @@ Attributes AmountChange
 | Deposit   | Money          | 0.00    |
 
 Scenario Changing the amount of a split does not guess which line to adjust
-Description With three or more postings there is no one other side, so the
-Description shortfall is reported and the split window is opened instead.
+Description A split has more than one line, so there is no one other side to
+Description move, and the shortfall is reported and the split window is opened
+Description instead.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
 | Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Account                   | Amount  |
-| T1  | 2024-04-02 | Assets:Checking           | -154.50 |
-| T1  | 2024-04-02 | Expenses:Home:Maintenance | 100.00  |
-| T1  | 2024-04-02 | Expenses:Home:Garden      | 54.50   |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Destination | Amount  |
+| T1  | Assets:Checking | 2024-04-02 | Split       | -154.50 |
+Given split lines are : TransactionSplit
+| Destination               | Amount |
+| Expenses:Home:Maintenance | 100.00 |
+| Expenses:Home:Garden      | 54.50  |
 When amount changed : AmountChange Vertical
 | Ref     | T1              |
 | Account | Assets:Checking |
@@ -1058,24 +1014,24 @@ Then rejected because : Rejection
 | Reason                                                  |
 | T1 is a split; the split is 45.50 short of 200.00       |
 
-Scenario Changing the category of one side
+Scenario Changing the category changes the destination
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Dining    | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Account            | Amount |
-| T1  | 2024-01-15 | Assets:Checking    | -45.00 |
-| T1  | 2024-01-15 | Expenses:Groceries | 45.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Destination        | Amount |
+| T1  | Assets:Checking | 2024-01-15 | Expenses:Groceries | -45.00 |
 When category changed : CategoryChange Vertical
 | Ref         | T1                 |
 | FromAccount | Expenses:Groceries |
 | ToAccount   | Expenses:Dining    |
-Then postings are : PostingRow
-| Ref | Date       | Account         | Amount |
-| T1  | 2024-01-15 | Assets:Checking | -45.00 |
-| T1  | 2024-01-15 | Expenses:Dining | 45.00  |
+Then transaction is : Transaction Vertical CompareOnly
+| Ref           | T1              |
+| SourceAccount | Assets:Checking |
+| Destination   | Expenses:Dining |
+| Amount        | -45.00          |
 
 Attributes CategoryChange
 | Attribute   | Type           | Default |
@@ -1083,39 +1039,36 @@ Attributes CategoryChange
 | FromAccount | AccountPath    |         |
 | ToAccount   | AccountPath    |         |
 
-Scenario Deleting a transaction removes every posting of it
-Description Removing one side would leave the book out of balance, so a delete
-Description is always of the whole transaction, from whichever register it is
-Description asked for.
+Scenario Deleting a transaction removes it from both registers at once
+Description A transaction is one record naming both sides, so a delete is always
+Description of the whole of it, from whichever register it is asked for. There
+Description is no half of it that could be left behind.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Account            | Amount |
-| T1  | 2024-01-15 | Assets:Checking    | -45.00 |
-| T1  | 2024-01-15 | Expenses:Groceries | 45.00  |
-| T2  | 2024-01-16 | Assets:Checking    | -12.00 |
-| T2  | 2024-01-16 | Expenses:Groceries | 12.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Destination        | Amount |
+| T1  | Assets:Checking | 2024-01-15 | Expenses:Groceries | -45.00 |
+| T2  | Assets:Checking | 2024-01-16 | Expenses:Groceries | -12.00 |
 When transaction deleted : TransactionSelect
 | Ref |
 | T1  |
-Then postings are : PostingRow
-| Ref | Date       | Account            | Amount |
-| T2  | 2024-01-16 | Assets:Checking    | -12.00 |
-| T2  | 2024-01-16 | Expenses:Groceries | 12.00  |
+Then transactions are : Transaction CompareOnly
+| Ref | SourceAccount   | Date       | Destination        | Amount |
+| T2  | Assets:Checking | 2024-01-16 | Expenses:Groceries | -12.00 |
 
-Scenario A reconciled posting warns before it is changed
-Description A finished reconciliation agreed with a statement. Changing a posting
-Description inside it breaks that agreement, so it is allowed but not quietly.
+Scenario A reconciled transaction warns before it is changed
+Description A finished reconciliation agreed with a statement. Changing a
+Description transaction inside it breaks that agreement, so it is allowed but
+Description not quietly.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Account            | Amount | Cleared    |
-| T1  | 2024-01-15 | Assets:Checking    | -45.00 | Reconciled |
-| T1  | 2024-01-15 | Expenses:Groceries | 45.00  | Uncleared  |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Destination        | Amount | Cleared    |
+| T1  | Assets:Checking | 2024-01-15 | Expenses:Groceries | -45.00 | Reconciled |
 When amount changed : AmountChange Vertical
 | Ref     | T1              |
 | Account | Assets:Checking |
@@ -1132,27 +1085,29 @@ Attributes Warning
 # Clearing
 # ---------------------------------------------------------------------------
 
-Scenario The two sides of a transfer clear separately
+Scenario The two sides of a downloaded transfer clear separately
 Description Money leaves checking on one statement and arrives in savings on
-Description another, often days apart. One posting may be cleared while the
-Description other is not, which is why the status is on the posting.
+Description another, often days apart. Each account downloaded its own entry,
+Description so each side is a transaction in its own right carrying its own
+Description Cleared, and one can be cleared while the other is not.
+Details This is why the status is on the transaction rather than anywhere
+Details else: the transaction is one account's own entry, and clearing is
+Details one account's bank reporting one row of its own statement.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
 | Assets:Checking | Checking | false       |
 | Assets:Savings  | Checking | false       |
-Given postings are : PostingRow
-| Ref | Date       | Account         | Amount  | Cleared   |
-| T1  | 2024-03-01 | Assets:Checking | -500.00 | Uncleared |
-| T1  | 2024-03-01 | Assets:Savings  | 500.00  | Uncleared |
-When posting cleared : PostingSelect Vertical
-| Ref     | T1              |
-| Account | Assets:Checking |
-Then postings are : PostingRow
-| Ref | Date       | Account         | Amount  | Cleared   |
-| T1  | 2024-03-01 | Assets:Checking | -500.00 | Cleared   |
-| T1  | 2024-03-01 | Assets:Savings  | 500.00  | Uncleared |
-
-Attributes PostingSelect
-| Attribute | Type           | Default |
-| Ref       | TransactionRef |         |
-| Account   | AccountPath    |         |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Destination     | Amount  | Cleared   |
+| T1  | Assets:Checking | 2024-03-01 | Assets:Savings  | -500.00 | Uncleared |
+| T2  | Assets:Savings  | 2024-03-03 | Assets:Checking | 500.00  | Uncleared |
+When transaction cleared : TransactionSelect
+| Ref |
+| T1  |
+Then transactions are : Transaction CompareOnly
+| Ref | SourceAccount   | Cleared   |
+| T1  | Assets:Checking | Cleared   |
+| T2  | Assets:Savings  | Uncleared |
+# A transfer entered by hand is two transactions as well -- see the transfer
+# scenario above -- so this is the same shape whether the two sides were
+# downloaded separately or typed once, and each clears on its own statement.

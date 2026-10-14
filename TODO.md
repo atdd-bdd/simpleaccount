@@ -4,7 +4,49 @@ Decisions that are the author's to make. Each is a question about what the
 program should do, not a defect, and each is reachable from a test that passes
 today — so nothing here is urgent and nothing here is lost.
 
-## 1. A CSV import leaves postings uncleared; an OFX import clears them
+
+
+## Here are some things to be sure are done (in order of importance)
+
+
+
+- Every account / category has an id which is unique - simply record last id used in the book and increment it by one.   
+
+- There is an account listing (from the menu) and a category listing (from the menu) which shows accounts and categories.   Clicking on one allows editing of the account/category. 
+  
+  The context menu for the account listing on the left side allows for editing the accounts 
+  
+  Accounts settings should have the starting balance, the date of that starting balance
+  
+  A "in progress " modeless dialog box should appear when things are being imported or recalculated. 
+
+- The import window should be below the other window, not to the side of it.    
+  
+  If an import says "Possible", then a context menu on the item should show the possible current matches.  
+  
+  Possible bug:  I imported the same file twice.  It showed Matched on a couple of items the second time.  There shouldn't be any matches, they should be duplicates, as the transaction was already matched.  Isn't that correct?
+  
+  Every thing that has columns (e.g. registers and reports) should allow shrinking/expanding of the columns by moving the border of the column header.  If the total width is less than the width of the window, that is okay. These column widths should be the same for all registers and should be stored with the book.  
+  
+  Every transaction has a memo, which could be read from a CSV or a QFX file.   
+  
+  There should be a tag field on transactions.    Any words in this field are considered tags.   Tags should be kept in a table.  A list of all tags should be available from a menu.  When entering a tag in the field, after the first character, a list of matching tags, with a selection button (or using a click) should select that tag.   This is the same way entering the letters of a category / account work in finding the destination for a transaction.  
+  
+  There should be a find in the menu.  Two options - find a value (or range of values) looks for that value in all registers and in the split table.  Matching finds are shown in the bottom window.     The other option is a more detailed find - it shows all fields in a register and the user can enter values to be matched for that field.  There should be a field that says, "All registers or just current register"
+  
+  Registers should allow sorting by any column.   
+  
+  Registers should have a option that allows "Only show this years,  only show past two years" of transactions.  
+  
+  Books should have option - "Hide transactions before this date".  All registers will only show transactions after that date.   
+  
+  
+  
+     
+  
+  
+  
+  ## 1. A CSV import leaves postings uncleared; an OFX import clears them
 
 `csv::transactions_for` leaves the posting in the statement's account
 `Uncleared`. `ofx::transactions_for` marks the equivalent posting `Cleared`.
@@ -23,6 +65,10 @@ reconcile against nothing until someone cleared the rows by hand.
 **If it should clear:** add `Cleared` to those tables in `ImportCsv.spectable`
 and set it in `csv::transactions_for`.
 
+My note:  CSV import should be treated as an OFX import - it sets the cleared flag.  There can be a configuration option that says "do not set cleared flag on CSV import". 
+
+
+
 ## 2. `Entity CsvProfile` cannot name a balance column
 
 `CsvProfile` in `ImportCsv.spectable` names `DateColumn`, `PayeeColumn`,
@@ -37,6 +83,10 @@ checked, which is the strongest check a CSV file offers.
 `csv::Profile` in `src/csv_import.h` already has a `balance_column` field, and
 the signature and `columns_of` both use it. Only the specification's entity and
 the storage rule in `Books.spectable` need the column added.
+
+
+
+My note: add the column.   But if the column is not present or does not contain any data, then don't use it for checking.  
 
 ## 3. Two specification files were edited to make scenarios pass
 
@@ -61,6 +111,10 @@ It also bears on question 1 above: these tables settle what an OFX import does,
 which strengthens the case that the CSV tables leaving the column out was an
 oversight. The CSV behaviour has deliberately not been changed on that inference.
 
+My note: there is no need for a cleared on a category.   Postings should be gone by now.  Is it not?  
+
+
+
 ### TransactionRegister.spectable: one table marked CompareOnly
 
 In `TransactionRegister.spectable`, `Scenario Two transactions on one date keep
@@ -75,6 +129,8 @@ only what it names is the smaller change.
 
 The alternative is to list `Category` in that table instead. This is the only
 `.spectable` edit made to turn a test green, which is why it is written down.
+
+My note: I think the default for a transaction destination should be "uncategorized" (I think that's the correct one).   But I think CompareOnly is fine here.
 
 ## 4. A matched or completing row does nothing when accepted in the window
 
@@ -102,6 +158,10 @@ rather than adding, and `MainWindow::acceptImport` would ask `ofx::apply_matches
 It was left out rather than half-done, because a window that silently cleared
 rows nobody ticked would be worse than one that clears nothing.
 
+
+
+My note:  I think this is fine.  Now when a transaction destination is changed to an account, then potential matching transactions in the other register that currently do no have a destination should be shown.   The user should be allowed to select one to match (or select none), in which case a new transaction - uncleared - will appear in the destination register. 
+
 ## 5. Redoing a report or a register after one change may be re-reading more than it needs to
 
 Raised by the author, not yet investigated: editing a single transaction
@@ -123,6 +183,8 @@ an add or edit, rather than a thing re-read on every change. `MainWindow`
 already holds `transactions_` and `chart_` in memory, so this may be partly in
 place already -- the open question is which paths bypass it.
 
+My note:   Do this at the end as an optimization  
+
 ## 6. CLAUDE.md names a helper this project does not have
 
 CLAUDE.md says a cell holding a leading or trailing blank is wrapped in double
@@ -133,6 +195,8 @@ in the AlignThree example tests.
 `generated/payees_glue.h` now defines a local `unquoted()` for the two refusal
 scenarios that need an empty pattern and an empty payee. If AlignThree does
 provide one, the glue should use that instead and the local copy should go.
+
+My note: already have said to use ~ as a space.  There is no need for quotes in spectable cells.  (There is an exception, but that does not apply here)
 
 ## 7. A future, optional split window at the bottom of the register, shared by imports and a not-yet-specified Find
 
@@ -158,6 +222,8 @@ used, with:
 Nothing here has a spec table yet -- per CLAUDE.md, that comes first, and
 specifically the Find feature itself has not been designed, only sketched.
 
+My note: Find has been specified at the beginning.
+
 ## 8. Reports, and every other window, should have a scroll bar on the right
 
 Raised by the author for later, not yet specified or started.
@@ -165,3 +231,5 @@ Raised by the author for later, not yet specified or started.
 A report with more rows than fit on screen, and any other window in the same
 position, should show a scroll bar on its right-hand side rather than clip or
 require resizing the window.
+
+My note:  this should be added.   

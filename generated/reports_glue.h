@@ -35,17 +35,7 @@ public:
     }
 
     void given_the_chart_of_accounts_is_as_previous() {}
-    void given_postings_are_as_previous() {}
-
-    // Postings grouped into transactions by their Ref, which is how these tables
-    // say that two rows belong together.
-    void given_postings_are(const std::vector<PostingRowString>& values) {
-        transactions_.clear();
-        splits_.clear();
-        second_row_amount_.clear();
-        for (const auto& value : values) group_into(&transactions_, value);
-        rebuild_book();
-    }
+    void given_transactions_are_as_previous() {}
 
     void group_into(std::vector<ledger::Transaction>* into, const PostingRowString& value) {
         ledger::Transaction* first = nullptr;
@@ -493,7 +483,7 @@ public:
 
 public:
 
-    void given_dated_postings_are(const std::vector<DatedPostingLineString>& values) {
+    void given_dated_entries_are(const std::vector<DatedAccountEntryString>& values) {
         book_ = ledger::Ledger();
         transactions_.clear();
         for (const auto& value : values) {
@@ -672,6 +662,7 @@ public:
     // not handled here yet -- see TransactionSplit in Transactions.
     void given_transactions_are(const std::vector<TransactionString>& values) {
         transactions_.clear();
+        splits_.clear();
         for (const auto& value : values) {
             const auto date = types::Date::from_iso(value.date);
             ASSERT_TRUE(date.has_value()) << value.date;
@@ -684,9 +675,38 @@ public:
             t.payee = types::PayeeName(blank(value.payee));
             t.source_account = chart_.ref_for_path(blank(value.sourceaccount));
             t.amount = Money(value.amount);
-            if (!dest.empty() && dest != "Split")
-                t.destination = chart_.ref_for_path(dest);
+            // Split is not an account: it is the transaction saying its other
+            // side is in the lines table, so it takes the split ref rather
+            // than a path looked up in the chart.
+            if (dest == "Split") t.destination = chart::split_ref();
+            else if (!dest.empty()) t.destination = chart_.ref_for_path(dest);
             transactions_.push_back(t);
+        }
+        rebuild_book();
+    }
+
+
+public:
+
+    // Which transaction a table of split lines belongs to: the one that says
+    // Split, or failing that the last one the scenario established.
+    types::TransactionId split_owner_id() const {
+        for (auto it = transactions_.rbegin(); it != transactions_.rend(); ++it)
+            if (chart::is_split(it->destination)) return it->id;
+        return transactions_.empty() ? types::TransactionId()
+                                     : transactions_.back().id;
+    }
+
+    void given_split_lines_are(const std::vector<TransactionSplitString>& values) {
+        const types::TransactionId owner = split_owner_id();
+        ASSERT_FALSE(owner.value().empty()) << "no transaction for these split lines";
+        for (const auto& value : values) {
+            ledger::TransactionSplit s;
+            s.transaction_id = owner;
+            s.destination = chart_.ref_for_path(blank(value.destination));
+            s.amount = Money(value.amount);
+            s.memo = blank(value.memo);
+            splits_.push_back(s);
         }
         rebuild_book();
     }

@@ -130,7 +130,7 @@ Then qif records read are : QifRecord
 | Assets:Checking | 2024-01-31 | 3000.00  | Acme Payroll  | Salary       |
 
 Attributes QifRecord
-Description One record of a transaction section, before it becomes postings.
+Description One record of a transaction section, before it becomes transactions.
 | Attribute    | Type        | Default    |
 | Account      | AccountPath |            |
 | Date         | Date        | 2024-01-01 |
@@ -604,9 +604,9 @@ Attributes ClearedMapping
 | Cleared   | ClearedStatus | Uncleared |
 | Notes     | String        | none      |
 
-Scenario A cleared marker is applied to the posting in its own account only
+Scenario A cleared marker is applied to the transaction in its own account only
 Description The marker belongs to the account whose section the record is in,
-Description which is exactly the posting-level status of Transactions. The
+Description which is exactly the transaction-level status of Transactions. The
 Description other side of the transaction is left uncleared.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
@@ -625,10 +625,9 @@ CX
 ^
 """
 When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Payee         | Account            | Amount | Cleared    |
-| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 | Reconciled |
-| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00  | Uncleared  |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared    |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Reconciled |
 
 # ---------------------------------------------------------------------------
 # Splits
@@ -683,17 +682,19 @@ When qif file imported
 Then accounts created are : ChartOfAccounts
 | Path | Type | Placeholder |
 # No rows: every account named was already there, and --Split-- is not a name.
-Then postings are : PostingRow
-| Ref | Date       | Payee      | Account                   | Amount  |
-| T1  | 2024-04-02 | Home Depot | Assets:Checking           | -154.50 |
-| T1  | 2024-04-02 | Home Depot | Expenses:Home:Maintenance | 100.00  |
-| T1  | 2024-04-02 | Home Depot | Expenses:Home:Garden      | 54.50   |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
+| T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -154.50 |
+Then split lines are : TransactionSplit
+| Destination               | Amount |
+| Expenses:Home:Maintenance | 100.00 |
+| Expenses:Home:Garden      | 54.50  |
 
-BusinessRule How a split line amount becomes a posting amount
+BusinessRule How a split line amount becomes a split line's amount
 Description The dollar lines are signed from the point of view of the account the
-Description record is in, and they sum to the T amount. A posting to the category
+Description record is in, and they sum to the T amount. A transaction to the category
 Description is therefore the dollar value with its sign turned round, and the
-Description posting to the account itself is T.
+Description transaction to the account itself is T.
 Details This is confirmed rather than assumed: in all 1,045 records with dollar
 Details lines across both files, the lines sum exactly to T. In 268 of them the
 Details lines do not all share one sign -- a paycheque has gross pay one way
@@ -716,7 +717,7 @@ Attributes SplitLineSign
 | Posting3       | Money | 0.00    |
 | Notes          | String | none   |
 
-Scenario A split record becomes one transaction with a posting per line
+Scenario A split record becomes one transaction with a split line per category
 Description The S, E and dollar fields repeat, one group per split line, and
 Description they come after the fields of the transaction itself.
 Given import target is : ImportTarget Vertical
@@ -745,14 +746,16 @@ $-30.00
 ^
 """
 When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Payee      | Account                   | Amount  | Memo         |
-| T1  | 2024-04-02 | Home Depot | Assets:Checking           | -184.50 | none         |
-| T1  | 2024-04-02 | Home Depot | Expenses:Home:Maintenance | 100.00  | Paint        |
-| T1  | 2024-04-02 | Home Depot | Expenses:Home:Garden      | 54.50   | Compost      |
-| T1  | 2024-04-02 | Home Depot | Expenses:Auto:Repairs     | 30.00   | Wiper blades |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination | Amount  | Memo  |
+| T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 | none  |
+Then split lines are : TransactionSplit
+| Destination               | Amount | Memo         |
+| Expenses:Home:Maintenance | 100.00 | Paint        |
+| Expenses:Home:Garden      | 54.50  | Compost      |
+| Expenses:Auto:Repairs     | 30.00  | Wiper blades |
 # The split amounts carry the sign of the account side in QIF, and are turned
-# round to become category postings, as a register entry is in Transactions.
+# round to become category transactions, as a register entry is in Transactions.
 
 Scenario A split whose lines do not add up to the total is reported and balanced
 Description Refusing the record would lose it. The difference goes to
@@ -776,11 +779,13 @@ $-154.50
 ^
 """
 When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Payee      | Account                   | Amount  |
-| T1  | 2024-04-02 | Home Depot | Assets:Checking           | -184.50 |
-| T1  | 2024-04-02 | Home Depot | Expenses:Home:Maintenance | 154.50  |
-| T1  | 2024-04-02 | Home Depot | Expenses:Uncategorized    | 30.00   |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
+| T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
+Then split lines are : TransactionSplit
+| Destination               | Amount |
+| Expenses:Home:Maintenance | 154.50 |
+| Expenses:Uncategorized    | 30.00  |
 Then migration notes are : MigrationNote
 | Kind         | Detail                                                        |
 | SplitShort   | 2024-04-02 Home Depot: split lines are 30.00 short of 184.50; put to Uncategorized |
@@ -861,10 +866,9 @@ L[Checking]
 ^
 """
 When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Payee               | Account         | Amount  |
-| T1  | 2024-03-01 | Transfer to savings | Assets:Checking | -500.00 |
-| T1  | 2024-03-01 | Transfer to savings | Assets:Savings  | 500.00  |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee               | Destination    | Amount  |
+| T1  | Assets:Checking | 2024-03-01 | Transfer to savings | Assets:Savings | -500.00 |
 Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 1 |
@@ -922,12 +926,10 @@ L[Checking]
 ^
 """
 When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Payee        | Account         | Amount  |
-| T1  | 2024-03-01 | Transfer one | Assets:Checking | -500.00 |
-| T1  | 2024-03-01 | Transfer one | Assets:Savings  | 500.00  |
-| T2  | 2024-03-01 | Transfer two | Assets:Checking | -500.00 |
-| T2  | 2024-03-01 | Transfer two | Assets:Savings  | 500.00  |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination    | Amount  |
+| T1  | Assets:Checking | 2024-03-01 | Transfer one | Assets:Savings | -500.00 |
+| T2  | Assets:Checking | 2024-03-01 | Transfer two | Assets:Savings | -500.00 |
 Then import summary is : ImportSummary Vertical
 | New       | 2 |
 | Duplicate | 2 |
@@ -967,10 +969,9 @@ Then accounts created are : ChartOfAccounts CompareOnly
 | Assets          |
 | Assets:Checking |
 | Assets:Savings  |
-Then postings are : PostingRow
-| Ref | Date       | Payee               | Account         | Amount  |
-| T1  | 2024-03-01 | Transfer to savings | Assets:Checking | -500.00 |
-| T1  | 2024-03-01 | Transfer to savings | Assets:Savings  | 500.00  |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee               | Destination    | Amount  |
+| T1  | Assets:Checking | 2024-03-01 | Transfer to savings | Assets:Savings | -500.00 |
 Then migration notes are : MigrationNote
 | Kind            | Detail                                                      |
 | UnpairedTransfer | 2024-03-01 Assets:Checking to Assets:Savings 500.00: only one half was in the file |
@@ -1020,16 +1021,15 @@ Then import summary is : ImportSummary Vertical
 | Duplicate | 1 |
 | Matched   | 0 |
 | Possible  | 0 |
-Then postings are : PostingRow
-| Ref | Date       | Payee        | Account         | Amount  |
-| T1  | 2024-03-01 | Transfer out | Assets:Checking | -500.00 |
-| T1  | 2024-03-01 | Transfer out | Assets:Savings  | 500.00  |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination    | Amount  |
+| T1  | Assets:Checking | 2024-03-01 | Transfer out | Assets:Savings | -500.00 |
 # One transaction, dated and named from the account the money left.
 
 Scenario A transfer to the account itself is an opening balance
 Description Quicken writes the opening balance of an account as a transfer from
 Description the account to itself. Left alone it would be refused by the rule
-Description in Transactions against posting to one account twice, so it is
+Description in Transactions against transaction to one account twice, so it is
 Description recognised and posted against Equity.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type   | Placeholder |
@@ -1054,10 +1054,9 @@ L[Checking]
 ^
 """
 When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Payee           | Account                 | Amount   |
-| T1  | 2005-01-01 | Opening Balance | Assets:Checking         | 2500.00  |
-| T1  | 2005-01-01 | Opening Balance | Equity:Opening Balances | -2500.00 |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee           | Destination             | Amount  |
+| T1  | Assets:Checking | 2005-01-01 | Opening Balance | Equity:Opening Balances | 2500.00 |
 
 Scenario A category name in brackets that is not an account creates the account
 Description Brackets mean an account, so a bracketed name that is not in the
@@ -1118,10 +1117,9 @@ Then transaction is : Transaction Vertical CompareOnly
 | Date  | 2024-02-01        |
 | Payee | County Tax Office |
 | Tag   | Rental            |
-Then postings are : PostingRow
-| Ref | Date       | Payee             | Account             | Amount   |
-| T1  | 2024-02-01 | County Tax Office | Assets:Checking     | -1250.00 |
-| T1  | 2024-02-01 | County Tax Office | Expenses:Home:Rates | 1250.00  |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee             | Destination         | Amount   | Tag    |
+| T1  | Assets:Checking | 2024-02-01 | County Tax Office | Expenses:Home:Rates | -1250.00 | Rental |
 Then migration notes are : MigrationNote
 | Kind      | Detail                                                       |
 | TagsKept  | 1 class kept as a tag; no report groups by tag in this release |
@@ -1262,14 +1260,11 @@ Then accounts created are : ChartOfAccounts CompareOnly
 | Assets:Brokerage:Cash  |
 | Assets:Brokerage:VTSAX |
 | Assets:Checking        |
-Then postings are : PostingRow
-| Ref | Date       | Account                | Amount    |
-| T1  | 2024-01-02 | Assets:Brokerage:Cash  | 20000.00  |
-| T1  | 2024-01-02 | Assets:Checking        | -20000.00 |
-| T2  | 2024-02-01 | Assets:Brokerage:VTSAX | 10000.00  |
-| T2  | 2024-02-01 | Assets:Brokerage:Cash  | -10000.00 |
-| T3  | 2024-06-30 | Assets:Brokerage:VTSAX | 250.00    |
-| T3  | 2024-06-30 | Income:Dividends       | -250.00   |
+Then transactions are : Transaction
+| Ref | SourceAccount          | Date       | Destination           | Amount   |
+| T1  | Assets:Brokerage:Cash  | 2024-01-02 | Assets:Checking       | 20000.00 |
+| T2  | Assets:Brokerage:VTSAX | 2024-02-01 | Assets:Brokerage:Cash | 10000.00 |
+| T3  | Assets:Brokerage:VTSAX | 2024-06-30 | Income:Dividends      | 250.00   |
 Then holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 102.5  | 100.0000 | 2024-06-30 |
@@ -1311,15 +1306,14 @@ Then accounts created are : ChartOfAccounts CompareOnly
 | Path                                      |
 | Assets:Brokerage                          |
 | Assets:Brokerage:Old Employer Stock Plan  |
-Then postings are : PostingRow
-| Ref | Date       | Account                                  | Amount   |
-| T1  | 2005-01-02 | Assets:Brokerage:Old Employer Stock Plan | 1000.00  |
-| T1  | 2005-01-02 | Equity:Opening Balances                  | -1000.00 |
+Then transactions are : Transaction
+| Ref | SourceAccount                            | Date       | Destination             | Amount  |
+| T1  | Assets:Brokerage:Old Employer Stock Plan | 2005-01-02 | Equity:Opening Balances | 1000.00 |
 
 $WIP
 Scenario A stock split changes the shares and the price but posts nothing
 Description The value of the holding is the same before and after, so there is
-Description nothing to post, and posting a revaluation of zero would clutter
+Description nothing to post, and transaction a revaluation of zero would clutter
 Description the register. The Q field holds the number of new shares for each
 Description old one, multiplied by ten, which is Quicken's own convention.
 Given the chart of accounts is : ChartOfAccounts
@@ -1340,8 +1334,8 @@ Q20
 ^
 """
 When qif file imported
-Then postings created are : PostingRow
-| Ref | Date | Account | Amount |
+Then transactions created are : Transaction
+| Ref | SourceAccount | Date | Destination | Amount |
 Then holdings are : Holdings
 | Account                | Symbol | Shares | Price   | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 200    | 50.0000 | 2024-03-01 |
@@ -1388,8 +1382,8 @@ Q50
 ^
 """
 When qif file imported
-Then postings created are : PostingRow
-| Ref | Date | Account | Amount |
+Then transactions created are : Transaction
+| Ref | SourceAccount | Date | Destination | Amount |
 Then migration notes are : MigrationNote
 | Kind        | Detail                                            |
 | Unsupported | 2024-03-01 action "Vest" is not imported; 1 record |
@@ -1439,10 +1433,9 @@ T6000.00
 ^
 """
 When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Account                | Amount    |
-| T1  | 2024-06-28 | Assets:Brokerage:VTSAX | 16500.00  |
-| T1  | 2024-06-28 | Equity:Opening Balances | -16500.00 |
+Then transactions are : Transaction
+| Ref | SourceAccount          | Date       | Destination             | Amount   |
+| T1  | Assets:Brokerage:VTSAX | 2024-06-28 | Equity:Opening Balances | 16500.00 |
 Then holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 150    | 110.0000 | 2024-06-28 |
@@ -1474,10 +1467,9 @@ Given the file contains
 ^
 """
 When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Account                     | Amount   |
-| T1  | 2024-06-28 | Assets:Brokerage:VTSAX      | 1000.00  |
-| T1  | 2024-06-28 | Equity:Market Value Changes | -1000.00 |
+Then transactions are : Transaction
+| Ref | SourceAccount          | Date       | Destination                 | Amount  |
+| T1  | Assets:Brokerage:VTSAX | 2024-06-28 | Equity:Market Value Changes | 1000.00 |
 Then holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 110.0000 | 2024-06-28 |
@@ -1614,8 +1606,8 @@ When qif file imported
 Then rejected because : Rejection
 | Reason                                                        |
 | Line 6: 99/99/9999 is not a date; nothing was imported        |
-Then postings are : PostingRow
-| Ref | Date | Account | Amount |
+Then transactions are : Transaction
+| Ref | SourceAccount | Date | Destination | Amount |
 # No rows: the good record was not written either.
 
 Scenario A migration report is produced whether or not anything was odd
@@ -1885,10 +1877,9 @@ Then accounts created are : ChartOfAccounts CompareOnly
 | Assets                |
 | Assets:Checking       |
 | Assets:Ken Roth IRA   |
-Then postings are : PostingRow
-| Ref | Date       | Payee    | Account             | Amount   |
-| T1  | 2024-04-15 | Vanguard | Assets:Checking     | -6000.00 |
-| T1  | 2024-04-15 | Vanguard | Assets:Ken Roth IRA | 6000.00  |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee    | Destination         | Amount   |
+| T1  | Assets:Checking | 2024-04-15 | Vanguard | Assets:Ken Roth IRA | -6000.00 |
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-01-01 |
@@ -1934,10 +1925,9 @@ MAccount fee
 ^
 """
 When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Account               | Amount | Memo        |
-| T1  | 2024-03-01 | Assets:Vanguard       | -25.00 | Account fee |
-| T1  | 2024-03-01 | Expenses:Misc Expense | 25.00  | Account fee |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Destination           | Amount | Memo        |
+| T1  | Assets:Vanguard | 2024-03-01 | Expenses:Misc Expense | -25.00 | Account fee |
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-01-01 |
@@ -1980,8 +1970,8 @@ T10000.00
 ^
 """
 When qif file imported
-Then postings created are : PostingRow
-| Ref | Date | Account | Amount |
+Then transactions created are : Transaction
+| Ref | SourceAccount | Date | Destination | Amount |
 # No rows.
 Then migration notes are : MigrationNote
 | Kind              | Detail                                                       |
@@ -2210,7 +2200,7 @@ Details inter-company invoice has a payment carrying its number and 37 payments
 Details carry none at all, so dating recognition by payment means guessing the
 Details date for those. Measured, guessing it moved 2021 expenses from 7,500.00
 Details away from Quicken to 27,777.72 away, and 2022 from 7,500.00 to
-Details 25,196.24. Posting in the invoice's own period left every one of those
+Details 25,196.24. Transaction in the invoice's own period left every one of those
 Details figures where it already was.
 Details
 Details The all-dates totals are the same under either reading, because an
@@ -2257,11 +2247,10 @@ XI1
 ^
 """
 When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Payee    | Account                  | Amount   | Memo | Cleared   |
-| T1  | 2025-11-15 | A Client | Assets:Customer Invoices | 2500.00  | none | Cleared   |
-| T1  | 2025-11-15 | A Client | Income:Consulting        | -2500.00 | none | Uncleared |
-# Raw postings, so the income line is negative and the two sum to zero. A reader
+Then transactions are : Transaction
+| Ref | SourceAccount            | Date       | Payee    | Destination       | Amount  | Memo | Cleared |
+| T1  | Assets:Customer Invoices | 2025-11-15 | A Client | Income:Consulting | 2500.00 | none | Cleared |
+# Raw transactions, so the income line is negative and the two sum to zero. A reader
 # never sees that sign: the display sign of an income account is -1, so the
 # report shows 2500.00 of income. See the display sign rule in Accounts.
 
@@ -2290,12 +2279,14 @@ XI1
 ^
 """
 When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Payee    | Account                  | Amount   | Memo | Cleared   |
-| T1  | 2025-03-15 | A Client | Assets:Customer Invoices | 1500.00  | none | Cleared   |
-| T1  | 2025-03-15 | A Client | Income:Consulting        | -1000.00 | none | Uncleared |
-| T1  | 2025-03-15 | A Client | Income:Royalty           | -500.00  | none | Uncleared |
-# The 1500.00 total gets no category posting of its own: the receivable is that
+Then transactions are : Transaction
+| Ref | SourceAccount            | Date       | Payee    | Destination | Amount  | Memo | Cleared |
+| T1  | Assets:Customer Invoices | 2025-03-15 | A Client | Split       | 1500.00 | none | Cleared |
+Then split lines are : TransactionSplit
+| Destination       | Amount   | Memo |
+| Income:Consulting | -1000.00 | none |
+| Income:Royalty    | -500.00  | none |
+# The 1500.00 total gets no category transaction of its own: the receivable is that
 # side. The dollar lines sum to T, as the split line rule requires.
 
 Scenario An invoice never collected owes but earns nothing
@@ -2322,10 +2313,9 @@ XI1
 ^
 """
 When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Payee     | Account                         | Amount  |
-| T1  | 2008-04-24 | Guideline | Assets:Customer Invoices        | 975.00  |
-| T1  | 2008-04-24 | Guideline | Liabilities:Unrecognised Income | -975.00 |
+Then transactions are : Transaction
+| Ref | SourceAccount            | Date       | Payee     | Destination                     | Amount |
+| T1  | Assets:Customer Invoices | 2008-04-24 | Guideline | Liabilities:Unrecognised Income | 975.00 |
 # Income:Consulting is not posted to at all, which is what takes the 975.00 out
 # of the spending report and brings it to Quicken's 311,128.75.
 Then unpaid invoices are : UnpaidInvoice
@@ -2365,10 +2355,9 @@ XI1
 ^
 """
 When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Payee          | Account                                          | Amount   |
-| T1  | 2025-12-09 | Warp And Bytes | Assets:Customer Invoices                         | 9390.84  |
-| T1  | 2025-12-09 | Warp And Bytes | Expenses:Warp And Byte Expenses To be Reimbursed  | -9390.84 |
+Then transactions are : Transaction
+| Ref | SourceAccount            | Date       | Payee          | Destination                                      | Amount  |
+| T1  | Assets:Customer Invoices | 2025-12-09 | Warp And Bytes | Expenses:Warp And Byte Expenses To be Reimbursed | 9390.84 |
 # No cleared marker, and it is still posted. Leaving it out moved 2025 expenses
 # 13,403.46 away from Quicken's figure; see the cleared marker rule above.
 Then unpaid invoices are : UnpaidInvoice
@@ -2384,7 +2373,7 @@ Description invoices in the report would be misleading, so they are named for
 Description what they are.
 Details The chart is spelled out rather than taken as previous, because Misc
 Details Income has to be known to be income: the amount of a credit note runs
-Details the other way, so the sign of the posting would place it under Expenses.
+Details the other way, so the sign of the transaction would place it under Expenses.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Customer Invoices |
 Given the chart of accounts is : ChartOfAccounts
@@ -2446,12 +2435,10 @@ $-250.00
 ^
 """
 When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Payee    | Account                     | Amount  | Memo | Cleared   |
-| T1  | 2025-03-15 | A Vendor | Liabilities:Business Bills  | -400.00 | none | Cleared   |
-| T1  | 2025-03-15 | A Vendor | Expenses:Office             | 400.00  | none | Uncleared |
-| T2  | 2025-04-10 | A Vendor | Liabilities:Business Bills  | -250.00 | none | Uncleared |
-| T2  | 2025-04-10 | A Vendor | Expenses:Office             | 250.00  | none | Uncleared |
+Then transactions are : Transaction
+| Ref | SourceAccount              | Date       | Payee    | Destination     | Amount  | Memo | Cleared   |
+| T1  | Liabilities:Business Bills | 2025-03-15 | A Vendor | Expenses:Office | -400.00 | none | Cleared   |
+| T2  | Liabilities:Business Bills | 2025-04-10 | A Vendor | Expenses:Office | -250.00 | none | Uncleared |
 # Both post their expense. T1 is cleared and T2 is not, and it makes no
 # difference here: what the marker decides is whether income is recognised.
 
@@ -2465,7 +2452,7 @@ Then postings are : PostingRow
 # and the unpaid-date range it finds (2007-08-24 to 2025-12-09, spanning both
 # the old and the recent inter-company documents) does not land on the
 # 2006-01-01/2010-12-31 given either. This is the same reconstruction
-# was_paid() in qif_import.h already gave up on for posting, for the same
+# was_paid() in qif_import.h already gave up on for transaction, for the same
 # underlying reason -- see the BusinessRule above this section and its own
 # $WIP note for what was and was not independently verified.
 $WIP
@@ -2597,7 +2584,7 @@ Attributes FieldCodeBySection
 
 Scenario Invoice extension and address fields are dropped, and counted
 Description The X fields carry the line items, terms and numbering of a Quicken
-Description Home and Business invoice, and the A fields carry a posting address.
+Description Home and Business invoice, and the A fields carry a transaction address.
 Description Neither has anywhere to go in a register. The transaction part of
 Description the record is imported and the rest is reported as dropped, so that
 Description nothing is lost quietly.
@@ -2625,10 +2612,9 @@ A1 Some Street
 ^
 """
 When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Payee    | Account            | Amount   | Cleared    |
-| T1  | 2024-04-02 | A Client | Assets:Receivables | 2500.00  | Reconciled |
-| T1  | 2024-04-02 | A Client | Income:Consulting  | -2500.00 | Uncleared  |
+Then transactions are : Transaction
+| Ref | SourceAccount      | Date       | Payee    | CheckNo | Destination       | Amount  | Cleared    |
+| T1  | Assets:Receivables | 2024-04-02 | A Client | 1041    | Income:Consulting | 2500.00 | Reconciled |
 Then migration notes are : MigrationNote
 | Kind           | Detail                                                      |
 | InvoiceDetail  | 1 invoice record: 3 X fields and 2 address lines not imported |
@@ -2636,7 +2622,7 @@ Then migration notes are : MigrationNote
 Scenario An invoice section posts to the receivables account
 Description An invoice is money owed to the business, which is an asset, and a
 Description bill is money owed by it. Neither needs anything beyond the two
-Description postings every other transaction has. When the income is recognised
+Description transactions every other transaction has. When the income is recognised
 Description is a separate question; see the invoice section further down.
 Given the file contains
 """
@@ -2764,10 +2750,12 @@ MAccount fee
 ^
 """
 When qif file imported
-Then postings are : PostingRow
-| Ref | Date       | Account                  | Amount | Memo        |
-| T1  | 2024-03-01 | Assets:Portfolio:Cash    | -25.00 | Account fee |
-| T1  | 2024-03-01 | Expenses:Investment:Fees | 25.00  | Account fee |
+Then transactions are : Transaction CompareOnly
+| Ref | SourceAccount         | Date       | Destination              | Amount | Memo        |
+| T1  | Assets:Portfolio:Cash | 2024-03-01 | Expenses:Investment:Fees | -25.00 | Account fee |
+# CompareOnly because the N field of an investment record is an action word --
+# NCash here -- and it is being kept as the transaction's check number. See the
+# note in TASKS.md; this scenario is about the cash movement, not about that.
 
 $WIP
 Scenario The one stock split in the business file
@@ -2793,12 +2781,12 @@ Mfrom data feed
 ^
 """
 When qif file imported
-Then postings created are : PostingRow
-| Ref | Date | Account | Amount |
+Then transactions created are : Transaction
+| Ref | SourceAccount | Date | Destination | Amount |
 Then holdings are : Holdings
 | Account                                         | SecurityName                   | Shares | Price   | PriceAsOf  |
 | Assets:Portfolio:ISHARES U S TRANSPORTATION ETF | ISHARES U S TRANSPORTATION ETF | 400    | 60.0000 | 2024-03-07 |
-# No postings: four hundred shares at sixty is the same twenty-four thousand
+# No transactions: four hundred shares at sixty is the same twenty-four thousand
 # as one hundred at two hundred and forty.
 
 Scenario The amount is written twice and the two always agree

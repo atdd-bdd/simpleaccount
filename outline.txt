@@ -1,0 +1,69 @@
+
+Accounts 
+	Ability to add account 
+	Ability to change name, add institution, add account number, change starting balance, change start date for that balance  
+	Abiltiy to hide account 
+	Ability to delete account (if there are no transactions in it) 
+	Account Types:   
+		Banking - Checking / Savings / Cash 
+		Credit - Credit Card / Line of Credit 
+		Investments - Brokerage / IRA  / HSA / 401K
+		Loan & Debt - Mortgage / Auto / Personal / Other
+		Property & Asset - Real Estate / Vehicle / Other 
+		Business - Account Receivable / Account Payable 
+		Transfer - Transfer In (Asset) / Transfer Out (Liability) 
+		Accounts should be listed under these types (do need asset or liability) 
+	Now these account types are either Assets or Liabilities 
+		That is only important when reporting the balance sheet 
+
+Categories
+	Ability to add category 
+	Ability to hide category 
+	Ability to delete category and assign all transactions to another category 
+	Abilty to change name of category, abbreviation for category  
+	Income - Salary / Interest / Dividends / etc.
+	Expense - Groceries / Utility / Rent / etc. 
+
+Now Quicken has these separate - Accounts show up in [].  You have combined the type and the name.  I want you to switch it to Quicken's convention.  Just the name (or entire path) without either Expense or Income.  That can be shown on the category lookup.  I also want the ability to add an abbreviation for categories and have that found
+
+
+Registers 
+	There is an outline of all accounts on the left hand side - that is good, just change it per accounts above.    
+	Context menu on account goes to settings for that account.    
+	Clicking on account opens up the register for that account in a tab.   
+
+	For each entry in a register, context menu has Change category, Delete (with a warning), Split - dialog for splitting, Add payee rule (use current category or ask for one if none).   
+	
+Transaction and posting 
+	Every transaction has an ID - date/time (in ms) first created 
+	Posting for each transaction shows the category for the transaction 
+		Multiple postings for a split transaction. 
+	Posting for a transaction whose category is another account has this result:
+		If the matching transaction in another account already exists, 
+			do not create a new transaction.  Add a posting under this one. 
+		Matches are within two days 
+	A user can manually add a transaction to a register.  There will be an indication that this has been done
+	
+	
+Downloads 
+	Downloads in QFX or CSV.  When a download is imported, the bank and account id will be read from the QFX file or from the name of the CSV file.  This information will be display in a dialog box and potentially edited before the download begins.  
+	A progress dialog should show up while the download is being imported.  
+	Downloads may contain new or duplicated transactions.   
+	A duplicate is an entry that 
+		a. matches the QFX id of an existing entry 
+			(if the amounts don't match, a dialog should come up) 
+		b. matches the payee, amount, and date of an existing entry 
+		More detailed rules have been provided . 
+	Once the import is compete, the user has the opportunity to review it, before accepting it.  Duplicates should be marked in the list.  The user can ask that they be hiden.  If there are payee matches, the categories will be assigned to those transactions automatically. 
+
+ 	
+
+Specific Operations 
+	Checking - the program will not create checks.  Checks will be downloaded in a QFX or CSV file
+	Investments - these are the least important.  
+
+  
+
+	
+		 
+

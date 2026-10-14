@@ -58,29 +58,26 @@ public:
     void given_postings_in_entry_order_are_as_previous() {}
     void given_today_is_as_previous() {}
 
-    void given_postings_are(const std::vector<PostingRowString>& values) {
-        transactions_.clear();
-        splits_.clear();
-        second_row_amount_.clear();
-        std::map<std::string, int> counts;
-        for (const auto& value : values) ++counts[value.ref];
-        for (const auto& value : values) add_posting(value.ref, value.date, value.payee,
-                                                     value.account, value.amount,
-                                                     value.memo, value.cleared,
-                                                     counts[value.ref]);
-    }
-
     // The order they were entered in, which is what the register falls back on
-    // when two transactions share a date.
-    void given_postings_in_entry_order_are(const std::vector<SequencedPostingRowString>& values) {
+    // when two transactions share a date. EntrySeq is not stored: the order of
+    // the rows is the order they were entered in, which is what the vector
+    // already holds.
+    void given_transactions_in_entry_order_are(
+            const std::vector<SequencedTransactionString>& values) {
         transactions_.clear();
         splits_.clear();
-        second_row_amount_.clear();
-        std::map<std::string, int> counts;
-        for (const auto& value : values) ++counts[value.ref];
-        for (const auto& value : values)
-            add_posting(value.ref, value.date, value.payee, value.account, value.amount,
-                        std::string("none"), std::string("Uncleared"), counts[value.ref]);
+        for (const auto& value : values) {
+            ledger::Transaction t;
+            t.id = ledger::new_id();
+            t.ref = types::TransactionRef(value.ref);
+            const auto on = types::Date::from_iso(value.date);
+            if (on) t.date = *on;
+            t.payee = types::PayeeName(blank(value.payee));
+            t.source_account = chart_.ref_for_path(blank(value.sourceaccount));
+            t.destination = chart_.ref_for_path(blank(value.destination));
+            t.amount = Money(value.amount);
+            transactions_.push_back(t);
+        }
     }
 
     void given_today_is(const std::vector<TodayString>& values) {
@@ -319,6 +316,23 @@ public:
         }
     }
 
+    // A fixture transaction, named and dated, against the checking account.
+    // One call where the old shape needed a pair, because a transaction names
+    // both of its sides itself.
+    void add_fixture(const std::string& ref, const std::string& date,
+                     const std::string& payee, const std::string& amount) {
+        ledger::Transaction t;
+        t.id = ledger::new_id();
+        t.ref = types::TransactionRef(ref);
+        const auto on = types::Date::from_iso(date);
+        if (on) t.date = *on;
+        t.payee = types::PayeeName(payee);
+        t.source_account = chart_.ref_for_path("Assets:Checking");
+        t.destination = chart_.ref_for_path("Expenses:Groceries");
+        t.amount = Money(amount);
+        transactions_.push_back(t);
+    }
+
     // The order is date, then the order things were entered. Driven by building a
     // register whose dates tie and whose entry order is known, because the claim
     // is about what happens when the dates cannot decide.
@@ -347,10 +361,7 @@ public:
             const std::string want = std::to_string(one.first);
             for (const auto& value : values) {
                 if (value.entryseq != want) continue;
-                add_posting(one.second, value.date, "Shop " + one.second,
-                            "Assets:Checking", "-10.00", "none", "Uncleared", 2);
-                add_posting(one.second, value.date, "Shop " + one.second,
-                            "Expenses:Groceries", "10.00", "none", "Uncleared", 2);
+                add_fixture(one.second, value.date, "Shop " + one.second, "-10.00");
                 break;
             }
         }
@@ -430,100 +441,6 @@ private:
         return (s == "none" || s == DNCString) ? std::string() : s;
     }
 
-    // Groups rows into a transaction with a Ref column, the way these tables
-    // have always written one down -- it says nothing about how a
-    // transaction is stored. See the matching comment on group_into in
-    // transactions_glue.h, which this mirrors.
-    void add_posting(const std::string& ref, const std::string& date,
-                     const std::string& payee, const std::string& account,
-                     const std::string& amount, const std::string& memo,
-                     const std::string& cleared, int total_for_ref) {
-        ledger::Transaction* first = nullptr;
-        for (ledger::Transaction& t : transactions_) {
-            if (t.ref.value() != ref) continue;
-            first = &t;
-            break;
-        }
-        const auto on = types::Date::from_iso(date);
-        ASSERT_TRUE(on.has_value()) << date;
-        const chart::Ref account_ref = chart_.ref_for_path(account);
-        const Money money{amount};
-        const std::string memo_text = blank(memo);
-        types::ClearedStatus cleared_status = types::ClearedStatus::Uncleared;
-        if (cleared != DNCString && !cleared.empty())
-            cleared_status = types::cleared_status_from_string(cleared);
-
-        if (first == nullptr) {
-            ledger::Transaction made;
-            made.id = ledger::new_id();
-            made.ref = types::TransactionRef(ref);
-            made.date = *on;
-            made.payee = types::PayeeName(blank(payee));
-            made.memo = memo_text;
-            made.source_account = account_ref;
-            made.amount = money;
-            made.cleared = cleared_status;
-            transactions_.push_back(made);
-            return;
-        }
-
-        // Which row this is for its transaction is read from the
-        // transaction's own state, not from how many rows have been seen:
-        // a third or later row collapses into the same one object as the
-        // second once its Destination is set, so counting objects sharing
-        // a Ref stops distinguishing a third row from a second.
-        ledger::Transaction& t = *first;
-        if (t.destination.is_none()) {
-            const bool transfer = total_for_ref == 2 && account_ref != t.source_account &&
-                                  chart_.is_real(t.source_account) &&
-                                  chart_.is_real(account_ref) &&
-                                  !ledger::is_unassigned(chart_, t.source_account) &&
-                                  !ledger::is_unassigned(chart_, account_ref);
-            if (transfer) {
-                ledger::Transaction made;
-                made.id = ledger::new_id();
-                made.ref = t.ref;
-                made.date = *on;
-                made.payee = types::PayeeName(blank(payee));
-                made.memo = memo_text;
-                made.source_account = account_ref;
-                made.destination = t.source_account;
-                made.amount = money;
-                made.cleared = cleared_status;
-                // Set before push_back: the vector may reallocate, and t is a
-                // reference into it -- writing through it afterward would be
-                // a dangling write.
-                t.destination = account_ref;
-                transactions_.push_back(made);
-            } else {
-                t.destination = account_ref;
-                second_row_amount_[t.id.value()] = {money, memo_text};
-            }
-            return;
-        }
-
-        if (!chart::is_split(t.destination)) {
-            ledger::TransactionSplit promoted;
-            promoted.transaction_id = t.id;
-            promoted.destination = t.destination;
-            const auto at = second_row_amount_.find(t.id.value());
-            if (at != second_row_amount_.end()) {
-                promoted.amount = at->second.amount;
-                promoted.memo = at->second.memo;
-            } else {
-                promoted.amount = -t.amount;
-            }
-            splits_.push_back(promoted);
-            t.destination = chart::split_ref();
-        }
-        ledger::TransactionSplit s;
-        s.transaction_id = t.id;
-        s.destination = account_ref;
-        s.amount = money;
-        s.memo = memo_text;
-        splits_.push_back(s);
-    }
-
     std::string listing() const {
         std::string out;
         for (const reg::Line& line : lines_)
@@ -551,12 +468,8 @@ private:
         const char* refs[] = {"T1", "T2", "T3"};
         const char* dates[] = {"2024-01-20", "2024-01-15", "2024-01-20"};
         const char* amounts[] = {"-10.00", "-20.00", "-30.00"};
-        const char* others[] = {"10.00", "20.00", "30.00"};
         for (int i = 0; i < 3; ++i) {
-            add_posting(refs[i], dates[i], std::string("Shop ") + refs[i],
-                        "Assets:Checking", amounts[i], "none", "Uncleared", 2);
-            add_posting(refs[i], dates[i], std::string("Shop ") + refs[i],
-                        "Expenses:Groceries", others[i], "none", "Uncleared", 2);
+            add_fixture(refs[i], dates[i], std::string("Shop ") + refs[i], amounts[i]);
         }
         account_ = "Assets:Checking";
         lines_ = reg::lines_for(chart_, transactions_, splits_, account_);
@@ -581,6 +494,31 @@ public:
             if (value.cleared != DNCString && !value.cleared.empty())
                 t.cleared = types::cleared_status_from_string(value.cleared);
             transactions_.push_back(t);
+        }
+    }
+
+
+public:
+
+    // Which transaction a table of split lines belongs to: the one that says
+    // Split, or failing that the last one the scenario established.
+    types::TransactionId split_owner_id() const {
+        for (auto it = transactions_.rbegin(); it != transactions_.rend(); ++it)
+            if (chart::is_split(it->destination)) return it->id;
+        return transactions_.empty() ? types::TransactionId()
+                                     : transactions_.back().id;
+    }
+
+    void given_split_lines_are(const std::vector<TransactionSplitString>& values) {
+        const types::TransactionId owner = split_owner_id();
+        ASSERT_FALSE(owner.value().empty()) << "no transaction for these split lines";
+        for (const auto& value : values) {
+            ledger::TransactionSplit s;
+            s.transaction_id = owner;
+            s.destination = chart_.ref_for_path(blank(value.destination));
+            s.amount = Money(value.amount);
+            s.memo = blank(value.memo);
+            splits_.push_back(s);
         }
     }
 

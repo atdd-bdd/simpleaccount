@@ -39,17 +39,6 @@ public:
         workspace_.reset();
     }
 
-    void given_postings_are(const std::vector<PostingRowString>& values) {
-        transactions_.clear();
-        splits_.clear();
-        second_row_amount_.clear();
-        std::map<std::string, int> counts;
-        for (const auto& value : values) ++counts[value.ref];
-        for (const auto& value : values) group_into(&transactions_, value, counts[value.ref]);
-        rebuild_book();
-        workspace_.reset();
-    }
-
     void group_into(std::vector<ledger::Transaction>* into, const PostingRowString& value,
                     int total_for_ref) {
         ledger::Transaction* first = nullptr;
@@ -139,7 +128,7 @@ public:
     }
 
     void given_the_chart_of_accounts_is_as_previous() {}
-    void given_postings_are_as_previous() {}
+    void given_transactions_are_as_previous() {}
 
     // ----------------------------------------------------------------- whens
 
@@ -412,52 +401,6 @@ private:
         return {};
     }
 public:
-
-    // The sides of the transactions the accept just added, in order, with the
-    // identifier each was stored under. Only those: what the book already held
-    // is not an outcome of the import.
-    void then_accepted_postings_are(const std::vector<AcceptedPostingString>& values) {
-        std::vector<AcceptedPostingString> got;
-        for (const ledger::Transaction& t : workspace().accepted()) {
-            const std::vector<ledger::Side> sides = ledger::sides_of(t, {});
-            for (std::size_t i = 0; i < sides.size(); ++i) {
-                const ledger::Side& s = sides[i];
-                AcceptedPostingString row;
-                row.account = workspace().accounts().path_for_ref(s.account);
-                row.amount = s.amount.in_register();
-                // At most one identifier per source, and an imported row has
-                // one source, so the first is the one. Carried only on the
-                // side the statement is for: the category side is never
-                // stamped, the same as a posting once was.
-                const bool is_source = (i == 0);
-                row.identifier = (is_source && !t.import_ids.empty())
-                                     ? t.import_ids.front().id : "none";
-                row.source = types::to_string((is_source && !t.import_ids.empty())
-                                                  ? t.import_ids.front().source
-                                                  : types::ImportSource::Ofx);
-                row.rawname = t.raw_name.empty() ? "none" : t.raw_name;
-                row.memo = t.memo.empty() ? "none" : t.memo;
-                row.checkno = t.check_no.value().empty() ? "none" : t.check_no.value();
-                row.cleared = types::to_string(is_source ? t.cleared
-                                                         : types::ClearedStatus::Uncleared);
-                got.push_back(row);
-            }
-        }
-        ASSERT_EQ(values.size(), got.size()) << "accepted postings:\n" << listing(got);
-        for (std::size_t i = 0; i < values.size(); ++i) {
-            AcceptedPostingString back = got[i];
-            if (values[i].amount != DNCString)
-                EXPECT_EQ(Money(values[i].amount), Money(got[i].amount))
-                    << "accepted posting " << i << " amount";
-            back.amount = values[i].amount;
-            // A posting carrying no identifier has no source to report either,
-            // so the source of such a row is not compared.
-            if (got[i].identifier == "none") back.source = values[i].source;
-            EXPECT_EQ(values[i], back)
-                << "accepted posting " << i << ": wanted " << values[i].to_string()
-                << " got " << got[i].to_string();
-        }
-    }
 
 private:
     static std::string listing(const std::vector<AcceptedPostingString>& rows) {
@@ -768,6 +711,95 @@ public:
     void examples_datatype_findscope(const std::vector<EnumerationValuesString>& values) {
         for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
         ADD_FAILURE() << "Not implemented: examples_datatype_findscope";
+    }
+
+
+public:
+
+    // The book as the scenario found it, written the way a transaction is
+    // stored: one row is one transaction, naming both its sides.
+    void given_transactions_are(const std::vector<TransactionString>& values) {
+        transactions_.clear();
+        splits_.clear();
+        for (const auto& value : values) {
+            ledger::Transaction t;
+            t.id = ledger::new_id();
+            t.ref = types::TransactionRef(value.ref);
+            const auto on = types::Date::from_iso(value.date);
+            if (on) t.date = *on;
+            t.payee = types::PayeeName(blank(value.payee));
+            t.check_no = types::CheckNumber(blank(value.checkno));
+            t.memo = blank(value.memo);
+            t.source_account = chart_.ref_for_path(blank(value.sourceaccount));
+            t.destination = chart_.ref_for_path(blank(value.destination));
+            t.amount = Money(value.amount);
+            if (value.cleared != DNCString && !value.cleared.empty())
+                t.cleared = types::cleared_status_from_string(value.cleared);
+            transactions_.push_back(t);
+        }
+    }
+
+    // Which transaction a table of split lines belongs to: the one that says
+    // Split, or failing that the last one the scenario established.
+    types::TransactionId split_owner_id() const {
+        for (auto it = transactions_.rbegin(); it != transactions_.rend(); ++it)
+            if (chart::is_split(it->destination)) return it->id;
+        return transactions_.empty() ? types::TransactionId()
+                                     : transactions_.back().id;
+    }
+
+    void given_split_lines_are(const std::vector<TransactionSplitString>& values) {
+        const types::TransactionId owner = split_owner_id();
+        ASSERT_FALSE(owner.value().empty()) << "no transaction for these split lines";
+        for (const auto& value : values) {
+            ledger::TransactionSplit s;
+            s.transaction_id = owner;
+            s.destination = chart_.ref_for_path(blank(value.destination));
+            s.amount = Money(value.amount);
+            s.memo = blank(value.memo);
+            splits_.push_back(s);
+        }
+    }
+
+public:
+
+    // What accepting the review added, one row per transaction. The identifier
+    // is the one the file gave it: at most one per source, and an imported row
+    // has one source, so the first is the one.
+    void then_accepted_transactions_are(const std::vector<AcceptedTransactionString>& values) {
+        const std::vector<ledger::Transaction>& got = workspace().accepted();
+        ASSERT_EQ(values.size(), got.size()) << "accepted transactions";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const ledger::Transaction& made = got[i];
+            const AcceptedTransactionString& want = values[i];
+            const std::string where = "accepted transaction " + std::to_string(i + 1);
+            if (want.sourceaccount != DNCString)
+                EXPECT_EQ(blank(want.sourceaccount),
+                          workspace().accounts().path_for_ref(made.source_account))
+                    << where << " source account";
+            if (want.destination != DNCString)
+                EXPECT_EQ(blank(want.destination),
+                          workspace().accounts().path_for_ref(made.destination))
+                    << where << " destination";
+            if (want.amount != DNCString)
+                EXPECT_EQ(Money(want.amount).cents(), made.amount.cents()) << where << " amount";
+            if (want.identifier != DNCString)
+                EXPECT_EQ(blank(want.identifier),
+                          made.import_ids.empty() ? std::string()
+                                                  : made.import_ids.front().id)
+                    << where << " identifier";
+            if (want.source != DNCString && !made.import_ids.empty())
+                EXPECT_EQ(want.source, types::to_string(made.import_ids.front().source))
+                    << where << " source";
+            if (want.rawname != DNCString)
+                EXPECT_EQ(blank(want.rawname), made.raw_name) << where << " raw name";
+            if (want.memo != DNCString)
+                EXPECT_EQ(blank(want.memo), made.memo) << where << " memo";
+            if (want.checkno != DNCString)
+                EXPECT_EQ(blank(want.checkno), made.check_no.value()) << where << " check number";
+            if (want.cleared != DNCString && !want.cleared.empty())
+                EXPECT_EQ(want.cleared, types::to_string(made.cleared)) << where << " cleared";
+        }
     }
 
 };

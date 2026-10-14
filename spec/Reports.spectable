@@ -3,7 +3,7 @@ Specification Reports
 Description Reporting by category and by payee, over a date range or over many
 Description years side by side.
 Details
-Details Every figure in a report is a total of postings. A report never reads a
+Details Every figure in a report is a total of transactions. A report never reads a
 Details stored total, so it cannot disagree with the register, and a correction
 Details made in 2007 shows in a report run today without anything being
 Details rebuilt.
@@ -88,26 +88,17 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto:Fuel     | Expense | false       |
 | Expenses:Auto:Repairs  | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee         | Account                | Amount    |
-| T1  | 2023-06-30 | Acme Payroll  | Assets:Checking        | 40000.00  |
-| T1  | 2023-06-30 | Acme Payroll  | Income:Salary          | -40000.00 |
-| T2  | 2023-07-15 | Harris Teeter | Assets:Checking        | -400.00   |
-| T2  | 2023-07-15 | Harris Teeter | Expenses:Groceries     | 400.00    |
-| T3  | 2023-08-10 | Shell         | Assets:Checking        | -120.00   |
-| T3  | 2023-08-10 | Shell         | Expenses:Auto:Fuel     | 120.00    |
-| T4  | 2024-02-28 | Acme Payroll  | Assets:Checking        | 42000.00  |
-| T4  | 2024-02-28 | Acme Payroll  | Income:Salary          | -42000.00 |
-| T5  | 2024-03-15 | Harris Teeter | Assets:Checking        | -500.00   |
-| T5  | 2024-03-15 | Harris Teeter | Expenses:Groceries     | 500.00    |
-| T6  | 2024-04-10 | Shell         | Assets:Checking        | -150.00   |
-| T6  | 2024-04-10 | Shell         | Expenses:Auto:Fuel     | 150.00    |
-| T7  | 2024-05-05 | Quick Fit     | Assets:Checking        | -300.00   |
-| T7  | 2024-05-05 | Quick Fit     | Expenses:Auto:Repairs  | 300.00    |
-| T8  | 2024-06-30 | First Bank    | Assets:Checking        | 25.00     |
-| T8  | 2024-06-30 | First Bank    | Income:Interest        | -25.00    |
-| T9  | 2024-07-01 | Unknown       | Assets:Checking        | -10.00    |
-| T9  | 2024-07-01 | Unknown       | Expenses:Uncategorized | 10.00     |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination            | Amount   |
+| T1  | Assets:Checking | 2023-06-30 | Acme Payroll  | Income:Salary          | 40000.00 |
+| T2  | Assets:Checking | 2023-07-15 | Harris Teeter | Expenses:Groceries     | -400.00  |
+| T3  | Assets:Checking | 2023-08-10 | Shell         | Expenses:Auto:Fuel     | -120.00  |
+| T4  | Assets:Checking | 2024-02-28 | Acme Payroll  | Income:Salary          | 42000.00 |
+| T5  | Assets:Checking | 2024-03-15 | Harris Teeter | Expenses:Groceries     | -500.00  |
+| T6  | Assets:Checking | 2024-04-10 | Shell         | Expenses:Auto:Fuel     | -150.00  |
+| T7  | Assets:Checking | 2024-05-05 | Quick Fit     | Expenses:Auto:Repairs  | -300.00  |
+| T8  | Assets:Checking | 2024-06-30 | First Bank    | Income:Interest        | 25.00    |
+| T9  | Assets:Checking | 2024-07-01 | Unknown       | Expenses:Uncategorized | -10.00   |
 
 # ---------------------------------------------------------------------------
 # By category
@@ -117,7 +108,7 @@ Scenario A category report for one year
 Description The tree is kept, with a subtotal on every placeholder, and income
 Description and expenses both read as positive figures.
 Given the chart of accounts is as previous
-Given postings are as previous
+Given transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-01-01 |
@@ -162,11 +153,11 @@ Details in the other, and both come to the same number.
 Details
 Details Income is untouched because the two conventions already agree on it.
 Details Payee reports keep the other convention whatever this is set to: a
-Details payee report sums a payee's income and expense postings into one
+Details payee report sums a payee's income and expense transactions into one
 Details figure, so a payee with both has no sensible sign here, and flipping it
 Details would make the number meaningless rather than differently signed.
 Given the chart of accounts is as previous
-Given postings are as previous
+Given transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy      | Category   |
 | From         | 2024-01-01 |
@@ -202,14 +193,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Zoo   | Expense | false       |
 | Expenses:Apples | Expense | false      |
 | Expenses:Milk  | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee  | Account         | Amount  |
-| T1  | 2024-01-10 | Shop A | Assets:Checking | -300.00 |
-| T1  | 2024-01-10 | Shop A | Expenses:Zoo    | 300.00  |
-| T2  | 2024-01-11 | Shop B | Assets:Checking | -10.00  |
-| T2  | 2024-01-11 | Shop B | Expenses:Apples | 10.00   |
-| T3  | 2024-01-12 | Shop C | Assets:Checking | -200.00 |
-| T3  | 2024-01-12 | Shop C | Expenses:Milk   | 200.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination     | Amount  |
+| T1  | Assets:Checking | 2024-01-10 | Shop A | Expenses:Zoo    | -300.00 |
+| T2  | Assets:Checking | 2024-01-11 | Shop B | Expenses:Apples | -10.00  |
+| T3  | Assets:Checking | 2024-01-12 | Shop C | Expenses:Milk   | -200.00 |
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-01-01 |
@@ -223,7 +211,7 @@ Then report rows are : ReportRow
 | Expenses:Zoo    | 1     | 300.00 | false      |
 # Entered largest first, reported alphabetically.
 
-Scenario A transaction recorded the new way reports the same as one through postings
+Scenario A transaction reports under the category its destination names
 Description A category report reads the book's balances and does not care which
 Description shape put them there. See the section on naming both accounts
 Description directly in Transactions.spectable.
@@ -245,9 +233,9 @@ Then report rows are : ReportRow
 | Expenses           | 0     | 45.00  | true       |
 | Expenses:Groceries | 1     | 45.00  | false      |
 
-Scenario A date range takes only the postings inside it
+Scenario A date range takes only the transactions inside it
 Given the chart of accounts is as previous
-Given postings are as previous
+Given transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-03-01 |
@@ -267,7 +255,7 @@ Scenario Asking for zero rows keeps every category in the report
 Description Useful when the report is a form to be filled in, or compared with
 Description the same report from another year.
 Given the chart of accounts is as previous
-Given postings are as previous
+Given transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-03-01 |
@@ -290,7 +278,7 @@ Scenario A depth limit rolls the detail up into its parent
 Description Twenty years of history grows a deep tree. A report to depth one is
 Description the summary; the figures still add to the same total.
 Given the chart of accounts is as previous
-Given postings are as previous
+Given transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-01-01 |
@@ -318,7 +306,7 @@ Description The summary: Auto reads 450.00 with nothing under it, and the figure
 Description still adds to the same total as the full tree. The section lines stay,
 Description because the totals have to be somewhere.
 Given the chart of accounts is as previous
-Given postings are as previous
+Given transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category    |
 | From     | 2024-01-01  |
@@ -348,7 +336,7 @@ Description parent, so that Fuel reads as part of Auto without the path having t
 Description be written out on the line. The indent is Level: one step per level,
 Description and a transaction line later takes its indent the same way.
 Given the chart of accounts is as previous
-Given postings are as previous
+Given transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category      |
 | From     | 2024-01-01    |
@@ -408,7 +396,7 @@ Description The figures are the ones the full tree already shows; what is added 
 Description a line for each transaction behind them, in date order, one step
 Description further over than the category it belongs to.
 Given the chart of accounts is as previous
-Given postings are as previous
+Given transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category     |
 | From     | 2024-01-01   |
@@ -454,12 +442,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses:Auto      | Expense | false       |
 | Expenses:Auto:Fuel | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee    | Account            | Amount |
-| T1  | 2026-03-01 | Shell    | Assets:Checking    | -40.00 |
-| T1  | 2026-03-01 | Shell    | Expenses:Auto:Fuel | 40.00  |
-| T2  | 2026-03-02 | Car Wash | Assets:Checking    | -10.00 |
-| T2  | 2026-03-02 | Car Wash | Expenses:Auto      | 10.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee    | Destination        | Amount |
+| T1  | Assets:Checking | 2026-03-01 | Shell    | Expenses:Auto:Fuel | -40.00 |
+| T2  | Assets:Checking | 2026-03-02 | Car Wash | Expenses:Auto      | -10.00 |
 When report run : ReportSpec Vertical
 | GroupBy  | Category     |
 | From     | 2026-01-01   |
@@ -493,14 +479,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Visa   | CreditCard | false       |
 | Expenses           | Expense    | true        |
 | Expenses:Shopping  | Expense    | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee    | Account           | Amount  |
-| T1  | 2024-03-02 | Amazon   | Liabilities:Visa  | -89.99  |
-| T1  | 2024-03-02 | Amazon   | Expenses:Shopping | 89.99   |
-| T2  | 2024-03-25 | Visa     | Liabilities:Visa  | 300.00  |
-| T2  | 2024-03-25 | Visa     | Assets:Checking   | -300.00 |
-| T3  | 2024-03-28 | Transfer | Assets:Checking   | -500.00 |
-| T3  | 2024-03-28 | Transfer | Assets:Savings    | 500.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee    | Destination       | Amount  |
+| T1  | Liabilities:Visa | 2024-03-02 | Amazon   | Expenses:Shopping | -89.99  |
+| T2  | Liabilities:Visa | 2024-03-25 | Visa     | Assets:Checking   | 300.00  |
+| T3  | Assets:Checking  | 2024-03-28 | Transfer | Assets:Savings    | -500.00 |
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-01-01 |
@@ -523,10 +506,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       | false  |
 | Expenses           | Expense | true        | false  |
 | Expenses:Groceries | Expense | false       | true   |
-Given postings are : PostingRow
-| Ref | Date       | Payee         | Account            | Amount |
-| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 |
-| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-01-01 |
@@ -590,7 +572,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Auto          | Expense | false       |
 | Expenses:Auto:Fuel     | Expense | false       |
-Given dated postings are : DatedPostingLine
+Given dated entries are : DatedAccountEntry
 | Date       | Account            | Amount |
 | 2026-03-01 | Assets:Checking    | -40.00 |
 | 2026-03-01 | Expenses:Auto:Fuel | 40.00  |
@@ -618,7 +600,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given dated postings are : DatedPostingLine
+Given dated entries are : DatedAccountEntry
 | Date       | Account            | Amount |
 | 2026-03-01 | Assets:Checking    | -25.00 |
 | 2026-03-01 | Expenses:Groceries | 25.00  |
@@ -641,7 +623,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto           | Expense | true        |
 | Expenses:Auto:Fuel      | Expense | false       |
 | Expenses:Auto:Insurance | Expense | false       |
-Given dated postings are : DatedPostingLine
+Given dated entries are : DatedAccountEntry
 | Date       | Account                 | Amount |
 | 2026-03-01 | Assets:Checking         | -40.00 |
 | 2026-03-01 | Expenses:Auto:Fuel      | 40.00  |
@@ -671,7 +653,7 @@ Description reached the household, and the figure is reported on a 1099
 Description rather than budgeted against.
 Details
 Details So the test is not which category was used but where the money was.
-Details A category posting counts when the transaction it belongs to touches
+Details A category transaction counts when the transaction it belongs to touches
 Details no investment account, and is left out when it touches one. The same
 Details category can do both -- Invest Inc is real income when the dividend
 Details lands in a bank account and is not when it stays in the brokerage --
@@ -711,18 +693,13 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Salary     | Income     | false       |
 | Expenses          | Expense    | true        |
 | Expenses:Fees     | Expense    | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee        | Account           | Amount   |
-| T1  | 2024-03-01 | Acme Payroll | Assets:Checking   | 5000.00  |
-| T1  | 2024-03-01 | Acme Payroll | Income:Salary     | -5000.00 |
-| T2  | 2024-03-02 | Vanguard     | Assets:Ken IRA    | 1200.00  |
-| T2  | 2024-03-02 | Vanguard     | Income:Invest Inc | -1200.00 |
-| T3  | 2024-03-03 | First Bank   | Assets:Checking   | 40.00    |
-| T3  | 2024-03-03 | First Bank   | Income:Invest Inc | -40.00   |
-| T4  | 2024-03-04 | Vanguard     | Assets:Ken IRA    | -25.00   |
-| T4  | 2024-03-04 | Vanguard     | Expenses:Fees     | 25.00    |
-| T5  | 2024-03-05 | Vanguard     | Assets:Ken IRA    | -3000.00 |
-| T5  | 2024-03-05 | Vanguard     | Assets:Checking   | 3000.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination       | Amount   |
+| T1  | Assets:Checking | 2024-03-01 | Acme Payroll | Income:Salary     | 5000.00  |
+| T2  | Assets:Ken IRA  | 2024-03-02 | Vanguard     | Income:Invest Inc | 1200.00  |
+| T3  | Assets:Checking | 2024-03-03 | First Bank   | Income:Invest Inc | 40.00    |
+| T4  | Assets:Ken IRA  | 2024-03-04 | Vanguard     | Expenses:Fees     | -25.00   |
+| T5  | Assets:Ken IRA  | 2024-03-05 | Vanguard     | Assets:Checking   | -3000.00 |
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-01-01 |
@@ -752,18 +729,13 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Salary     | Income     | false       |
 | Expenses          | Expense    | true        |
 | Expenses:Fees     | Expense    | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee        | Account           | Amount   |
-| T1  | 2024-03-01 | Acme Payroll | Assets:Checking   | 5000.00  |
-| T1  | 2024-03-01 | Acme Payroll | Income:Salary     | -5000.00 |
-| T2  | 2024-03-02 | Vanguard     | Assets:Ken IRA    | 1200.00  |
-| T2  | 2024-03-02 | Vanguard     | Income:Invest Inc | -1200.00 |
-| T3  | 2024-03-03 | First Bank   | Assets:Checking   | 40.00    |
-| T3  | 2024-03-03 | First Bank   | Income:Invest Inc | -40.00   |
-| T4  | 2024-03-04 | Vanguard     | Assets:Ken IRA    | -25.00   |
-| T4  | 2024-03-04 | Vanguard     | Expenses:Fees     | 25.00    |
-| T5  | 2024-03-05 | Vanguard     | Assets:Ken IRA    | -3000.00 |
-| T5  | 2024-03-05 | Vanguard     | Assets:Checking   | 3000.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination       | Amount   |
+| T1  | Assets:Checking | 2024-03-01 | Acme Payroll | Income:Salary     | 5000.00  |
+| T2  | Assets:Ken IRA  | 2024-03-02 | Vanguard     | Income:Invest Inc | 1200.00  |
+| T3  | Assets:Checking | 2024-03-03 | First Bank   | Income:Invest Inc | 40.00    |
+| T4  | Assets:Ken IRA  | 2024-03-04 | Vanguard     | Expenses:Fees     | -25.00   |
+| T5  | Assets:Ken IRA  | 2024-03-05 | Vanguard     | Assets:Checking   | -3000.00 |
 When report run : ReportSpec Vertical
 | GroupBy                   | Category   |
 | From                      | 2024-01-01 |
@@ -786,7 +758,7 @@ Scenario A transaction touching both a brokerage and a bank is left out
 Description A sale inside the brokerage that sweeps the proceeds to checking
 Description and books a gain in one transaction. The gain belongs to the
 Description brokerage, so the whole of it is left out rather than apportioned:
-Description guessing which posting the investment account is responsible for
+Description guessing which transaction the investment account is responsible for
 Description would be a worse answer than the one on the 1099.
 Given the chart of accounts is : ChartOfAccounts
 | Path              | Type       | Placeholder |
@@ -794,11 +766,13 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Ken IRA    | Brokerage  | false       |
 | Income            | Income     | true        |
 | Income:Invest Inc | Income     | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee    | Account           | Amount   |
-| T1  | 2024-06-01 | Vanguard | Assets:Ken IRA    | -9000.00 |
-| T1  | 2024-06-01 | Vanguard | Assets:Checking   | 10000.00 |
-| T1  | 2024-06-01 | Vanguard | Income:Invest Inc | -1000.00 |
+Given transactions are : Transaction
+| Ref | SourceAccount  | Date       | Payee    | Destination | Amount   |
+| T1  | Assets:Ken IRA | 2024-06-01 | Vanguard | Split       | -9000.00 |
+Given split lines are : TransactionSplit
+| Destination       | Amount   |
+| Assets:Checking   | 10000.00 |
+| Income:Invest Inc | -1000.00 |
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-01-01 |
@@ -820,12 +794,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Ken IRA    | Brokerage  | false       |
 | Income:Invest Inc | Income     | false       |
 | Income:Salary     | Income     | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee        | Account           | Amount   |
-| T1  | 2024-03-01 | Acme Payroll | Assets:Checking   | 5000.00  |
-| T1  | 2024-03-01 | Acme Payroll | Income:Salary     | -5000.00 |
-| T2  | 2024-03-02 | Vanguard     | Assets:Ken IRA    | 1200.00  |
-| T2  | 2024-03-02 | Vanguard     | Income:Invest Inc | -1200.00 |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination       | Amount  |
+| T1  | Assets:Checking | 2024-03-01 | Acme Payroll | Income:Salary     | 5000.00 |
+| T2  | Assets:Ken IRA  | 2024-03-02 | Vanguard     | Income:Invest Inc | 1200.00 |
 When report run : ReportSpec Vertical
 | GroupBy  | Payee      |
 | From     | 2024-01-01 |
@@ -834,7 +806,7 @@ When report run : ReportSpec Vertical
 Then payee report rows are : PayeeReportRow
 | Payee        | Amount  | Count |
 | Acme Payroll | 5000.00 | 1     |
-# Vanguard is absent: it had no posting that counts, so it is not a row with
+# Vanguard is absent: it had no transaction that counts, so it is not a row with
 # zero against it.
 
 Scenario A draw from another book does not reach the spending report
@@ -848,7 +820,7 @@ Details
 Details The convention, rather than a mechanism. A draw is entered as this
 Details transfer when it happens; nothing rewrites a category on import, and
 Details the import stays a faithful mirror of its source. Twenty years of
-Details history hold two such postings -- 27,500.00 drawn in December 2021
+Details history hold two such transactions -- 27,500.00 drawn in December 2021
 Details and 10,815.00 returned in August 2022 -- so a mapping in the importer
 Details would be machinery for two lines, and a rule that applied only after
 Details some cutover date would put a step in the middle of the multi-year
@@ -858,7 +830,7 @@ Details The reimbursement trees that carry the same two names are a different
 Details thing and need nothing: a business expense paid personally debits a
 Details subcategory and the reimbursement credits the parent, so the subtree
 Details cancels itself. Over 2010 to 2026 the Warp And Byte tree nets 230.94
-Details across 3,540 postings. What is left in such a net is a real personal
+Details across 3,540 transactions. What is left in such a net is a real personal
 Details expense that was never reimbursed, so excluding it would be wrong.
 Given the chart of accounts is : ChartOfAccounts
 | Path                         | Type   | Placeholder |
@@ -866,12 +838,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Due~from~Ken~Pugh~Inc | OtherAsset | false       |
 | Income                       | Income | true        |
 | Income:Salary~Ken            | Income | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee                      | Account                      | Amount    |
-| T1  | 2021-03-15 | Transfer from Ken Pugh Inc | Assets:Ken~Checking          | 27500.00  |
-| T1  | 2021-03-15 | Transfer from Ken Pugh Inc | Assets:Due~from~Ken~Pugh~Inc | -27500.00 |
-| T2  | 2021-03-31 | Acme Payroll               | Assets:Ken~Checking          | 1800.00   |
-| T2  | 2021-03-31 | Acme Payroll               | Income:Salary~Ken            | -1800.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount       | Date       | Payee                      | Destination                  | Amount   |
+| T1  | Assets:Ken~Checking | 2021-03-15 | Transfer from Ken Pugh Inc | Assets:Due~from~Ken~Pugh~Inc | 27500.00 |
+| T2  | Assets:Ken~Checking | 2021-03-31 | Acme Payroll               | Income:Salary~Ken            | 1800.00  |
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2021-01-01 |
@@ -896,7 +866,7 @@ Scenario A payee report over one year
 Description Flat, because payees have no tree, and ordered by amount because
 Description the question being asked is usually which is the largest.
 Given the chart of accounts is as previous
-Given postings are as previous
+Given transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Payee      |
 | From     | 2024-01-01 |
@@ -917,22 +887,24 @@ Attributes PayeeReportRow
 | Amount    | Money     | 0.00    |
 | Count     | Integer   | 0       |
 
-Scenario A payee report counts the transactions, not the postings
-Description A split with four postings is one visit to the hardware store. The
-Description amount is the total of its category postings, which is the total of
-Description the transaction and not twice it.
+Scenario A payee report counts each transaction once
+Description A split with three lines is one visit to the hardware store. The
+Description amount is the total of those lines, which is the transaction's own
+Description amount and not twice it.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
 | Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
 | Expenses:Auto:Repairs     | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee      | Account                   | Amount  |
-| T1  | 2024-04-02 | Home Depot | Assets:Checking           | -184.50 |
-| T1  | 2024-04-02 | Home Depot | Expenses:Home:Maintenance | 100.00  |
-| T1  | 2024-04-02 | Home Depot | Expenses:Home:Garden      | 54.50   |
-| T1  | 2024-04-02 | Home Depot | Expenses:Auto:Repairs     | 30.00   |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
+| T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
+Given split lines are : TransactionSplit
+| Destination               | Amount |
+| Expenses:Home:Maintenance | 100.00 |
+| Expenses:Home:Garden      | 54.50  |
+| Expenses:Auto:Repairs     | 30.00  |
 When report run : ReportSpec Vertical
 | GroupBy  | Payee      |
 | From     | 2024-01-01 |
@@ -947,7 +919,7 @@ Scenario A payee report for one category only
 Description What was spent at the hardware store on the garden, rather than
 Description what was spent there altogether.
 Given the chart of accounts is as previous
-Given postings are as previous
+Given transactions are as previous
 When report run for category : CategoryFilter Vertical
 | Category | Expenses:Home:Garden |
 | From     | 2024-01-01           |
@@ -978,11 +950,11 @@ Description the real report has as many columns as the range covers.
 | Total     | Money       | 0.00    |
 
 Scenario A category report by year
-Description This is the multi-year history, and it is the reason the postings
+Description This is the multi-year history, and it is the reason the transactions
 Description are never summarised into a stored total: a column for 2007 is the
 Description same calculation as a column for this year.
 Given the chart of accounts is as previous
-Given postings are as previous
+Given transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2023-01-01 |
@@ -1000,12 +972,12 @@ Then year column rows are : YearColumnRow
 | Expenses:Groceries     | 1     | 400.00   | 500.00   | 0.00  | 900.00   |
 | Expenses:Uncategorized | 1     | 0.00     | 10.00    | 0.00  | 10.00    |
 
-Scenario A year with no postings still has a column
+Scenario A year with no transactions still has a column
 Description An empty column is information: it says nothing happened that year,
 Description which is a different statement from the year being absent from the
 Description report altogether. Nothing was posted in 2025, and 2025 is a column.
 Given the chart of accounts is as previous
-Given postings are as previous
+Given transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2023-01-01 |
@@ -1028,7 +1000,7 @@ Scenario A range that stops inside a year gives a short last column
 Description The column is labelled with the part of the year it covers, so that
 Description a figure covering five months is not read as a whole year.
 Given the chart of accounts is as previous
-Given postings are as previous
+Given transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2023-01-01 |
@@ -1044,7 +1016,7 @@ Description The average is over the columns in the report, not over the years in
 Description which something happened, so a category used twice in three years
 Description averages over three.
 Given the chart of accounts is as previous
-Given postings are as previous
+Given transactions are as previous
 When report run with average : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2023-01-01 |
@@ -1121,7 +1093,7 @@ Description Any figure, including a subtotal. A report that cannot be taken
 Description apart is a report that cannot be checked, and over twenty years
 Description every odd-looking number is worth checking.
 Given the chart of accounts is as previous
-Given postings are as previous
+Given transactions are as previous
 When report figure opened : ReportCell Vertical
 | Account | Expenses:Auto |
 | From    | 2024-01-01    |
@@ -1130,7 +1102,7 @@ Then transactions behind it are : DrillDownRow
 | Ref | Date       | Payee     | Account               | Amount |
 | T6  | 2024-04-10 | Shell     | Expenses:Auto:Fuel    | 150.00 |
 | T7  | 2024-05-05 | Quick Fit | Expenses:Auto:Repairs | 300.00 |
-# The subtotal was 450.00 and these two postings are what made it. Opening a
+# The subtotal was 450.00 and these two transactions are what made it. Opening a
 # subtotal reaches through the placeholder to the leaves beneath it.
 
 Attributes ReportCell
@@ -1215,23 +1187,19 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Salary           | Income     | false       |
 | Expenses:Groceries      | Expense    | false       |
 | Equity:Opening Balances | Equity     | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee         | Account                 | Amount     |
-| T1  | 2026-01-01 | Opening       | Assets:Checking         | 5000.00    |
-| T1  | 2026-01-01 | Opening       | Equity:Opening Balances | -5000.00   |
-| T2  | 2026-01-01 | Opening       | Assets:House            | 200000.00  |
-| T2  | 2026-01-01 | Opening       | Liabilities:Mortgage    | -150000.00 |
-| T2  | 2026-01-01 | Opening       | Equity:Opening Balances | -50000.00  |
-| T3  | 2026-01-05 | Acme Payroll  | Assets:Checking         | 3000.00    |
-| T3  | 2026-01-05 | Acme Payroll  | Income:Salary           | -3000.00   |
-| T4  | 2026-01-15 | Harris Teeter | Assets:Checking         | -45.00     |
-| T4  | 2026-01-15 | Harris Teeter | Expenses:Groceries      | 45.00      |
-| T5  | 2026-01-20 | Amazon        | Liabilities:Visa        | -89.99     |
-| T5  | 2026-01-20 | Amazon        | Expenses:Groceries      | 89.99      |
-| T6  | 2026-01-25 | Transfer      | Assets:Checking         | -500.00    |
-| T6  | 2026-01-25 | Transfer      | Assets:Savings          | 500.00     |
-| T7  | 2026-03-10 | Acme Payroll  | Assets:Checking         | 1000.00    |
-| T7  | 2026-03-10 | Acme Payroll  | Income:Salary           | -1000.00   |
+Given transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee         | Destination             | Amount    |
+| T1  | Assets:Checking  | 2026-01-01 | Opening       | Equity:Opening Balances | 5000.00   |
+| T2  | Assets:House     | 2026-01-01 | Opening       | Split                   | 200000.00 |
+| T3  | Assets:Checking  | 2026-01-05 | Acme Payroll  | Income:Salary           | 3000.00   |
+| T4  | Assets:Checking  | 2026-01-15 | Harris Teeter | Expenses:Groceries      | -45.00    |
+| T5  | Liabilities:Visa | 2026-01-20 | Amazon        | Expenses:Groceries      | -89.99    |
+| T6  | Assets:Checking  | 2026-01-25 | Transfer      | Assets:Savings          | -500.00   |
+| T7  | Assets:Checking  | 2026-03-10 | Acme Payroll  | Income:Salary           | 1000.00   |
+Given split lines are : TransactionSplit
+| Destination             | Amount     |
+| Liabilities:Mortgage    | -150000.00 |
+| Equity:Opening Balances | -50000.00  |
 When balance sheet run : ReportSpec Vertical
 | GroupBy  | Account    |
 | Interval | Whole      |
@@ -1268,14 +1236,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Visa        | CreditCard | false       |
 | Expenses:Groceries      | Expense    | false       |
 | Equity:Opening Balances | Equity     | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee   | Account                 | Amount   |
-| T1  | 2026-01-05 | Opening | Assets:Checking         | 1000.00  |
-| T1  | 2026-01-05 | Opening | Equity:Opening Balances | -1000.00 |
-| T2  | 2026-01-10 | Amazon  | Liabilities:Visa        | -50.00   |
-| T2  | 2026-01-10 | Amazon  | Expenses:Groceries      | 50.00    |
-| T3  | 2026-01-20 | Payment | Liabilities:Visa        | 50.00    |
-| T3  | 2026-01-20 | Payment | Assets:Checking         | -50.00   |
+Given transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee   | Destination             | Amount  |
+| T1  | Assets:Checking  | 2026-01-05 | Opening | Equity:Opening Balances | 1000.00 |
+| T2  | Liabilities:Visa | 2026-01-10 | Amazon  | Expenses:Groceries      | -50.00  |
+| T3  | Liabilities:Visa | 2026-01-20 | Payment | Assets:Checking         | 50.00   |
 When balance sheet run : ReportSpec Vertical
 | GroupBy  | Account    |
 | Interval | Whole      |
@@ -1288,7 +1253,7 @@ Then balance sheet total is : NetWorth Vertical
 | Assets      | 950.00 |
 | Liabilities | 0.00   |
 | NetWorth    | 950.00 |
-# The wallet has no postings at all and the card is back to nothing, so the
+# The wallet has no transactions at all and the card is back to nothing, so the
 # CreditCards heading goes with its only account. The account list down the
 # side of the window still shows all three, because that is how an account is
 # reached; this is a report, and a report is read rather than navigated.
@@ -1304,14 +1269,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Visa        | CreditCard | false       |
 | Expenses:Groceries      | Expense    | false       |
 | Equity:Opening Balances | Equity     | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee   | Account                 | Amount   |
-| T1  | 2026-01-05 | Opening | Assets:Checking         | 1000.00  |
-| T1  | 2026-01-05 | Opening | Equity:Opening Balances | -1000.00 |
-| T2  | 2026-01-10 | Amazon  | Liabilities:Visa        | -50.00   |
-| T2  | 2026-01-10 | Amazon  | Expenses:Groceries      | 50.00    |
-| T3  | 2026-01-20 | Payment | Liabilities:Visa        | 50.00    |
-| T3  | 2026-01-20 | Payment | Assets:Checking         | -50.00   |
+Given transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee   | Destination             | Amount  |
+| T1  | Assets:Checking  | 2026-01-05 | Opening | Equity:Opening Balances | 1000.00 |
+| T2  | Liabilities:Visa | 2026-01-10 | Amazon  | Expenses:Groceries      | -50.00  |
+| T3  | Liabilities:Visa | 2026-01-20 | Payment | Assets:Checking         | 50.00   |
 When balance sheet run : ReportSpec Vertical
 | GroupBy  | Account    |
 | Interval | Whole      |
@@ -1341,12 +1303,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Brokerage:Cash   | Brokerage  | false       |
 | Assets:Brokerage:VTSAX  | Brokerage  | false       |
 | Equity:Opening Balances | Equity     | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee   | Account                 | Amount    |
-| T1  | 2026-01-05 | Opening | Assets:Brokerage:Cash   | 13500.00  |
-| T1  | 2026-01-05 | Opening | Equity:Opening Balances | -13500.00 |
-| T2  | 2026-01-06 | Buy     | Assets:Brokerage:VTSAX  | 11000.00  |
-| T2  | 2026-01-06 | Buy     | Assets:Brokerage:Cash   | -11000.00 |
+Given transactions are : Transaction
+| Ref | SourceAccount          | Date       | Payee   | Destination             | Amount   |
+| T1  | Assets:Brokerage:Cash  | 2026-01-05 | Opening | Equity:Opening Balances | 13500.00 |
+| T2  | Assets:Brokerage:VTSAX | 2026-01-06 | Buy     | Assets:Brokerage:Cash   | 11000.00 |
 When balance sheet run : ReportSpec Vertical
 | GroupBy  | Account    |
 | Interval | Whole      |
@@ -1363,7 +1323,7 @@ Then balance sheet total is : NetWorth Vertical
 | NetWorth    | 13500.00 |
 # The group heading and the placeholder carry the same 13500.00 here because
 # the group holds one top-level account; the heading totals the accounts under
-# it and counts each posting once.
+# it and counts each transaction once.
 #
 # A price that has not been updated makes this figure stale without anything on
 # the page saying so, which is what the staleness rule in Investments is for.
@@ -1380,14 +1340,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:In Transit       | TransferIn  | false       |
 | Liabilities:Owed Out    | TransferOut | false       |
 | Equity:Opening Balances | Equity      | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee   | Account                 | Amount   |
-| T1  | 2026-01-05 | Opening | Assets:Checking         | 1000.00  |
-| T1  | 2026-01-05 | Opening | Equity:Opening Balances | -1000.00 |
-| T2  | 2026-01-06 | Moving  | Assets:In Transit       | 250.00   |
-| T2  | 2026-01-06 | Moving  | Assets:Checking         | -250.00  |
-| T3  | 2026-01-07 | Moving  | Liabilities:Owed Out    | -75.00   |
-| T3  | 2026-01-07 | Moving  | Assets:Checking         | 75.00    |
+Given transactions are : Transaction
+| Ref | SourceAccount        | Date       | Payee   | Destination             | Amount  |
+| T1  | Assets:Checking      | 2026-01-05 | Opening | Equity:Opening Balances | 1000.00 |
+| T2  | Assets:In Transit    | 2026-01-06 | Moving  | Assets:Checking         | 250.00  |
+| T3  | Liabilities:Owed Out | 2026-01-07 | Moving  | Assets:Checking         | -75.00  |
 When balance sheet run : ReportSpec Vertical
 | GroupBy  | Account    |
 | Interval | Whole      |
@@ -1415,12 +1372,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking         | Checking | false       | false  |
 | Assets:Old Savings      | Checking | false       | true   |
 | Equity:Opening Balances | Equity | false       | false  |
-Given postings are : PostingRow
-| Ref | Date       | Payee   | Account                 | Amount   |
-| T1  | 2026-01-05 | Opening | Assets:Checking         | 1000.00  |
-| T1  | 2026-01-05 | Opening | Equity:Opening Balances | -1000.00 |
-| T2  | 2026-01-06 | Opening | Assets:Old Savings      | 250.00   |
-| T2  | 2026-01-06 | Opening | Equity:Opening Balances | -250.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount      | Date       | Payee   | Destination             | Amount  |
+| T1  | Assets:Checking    | 2026-01-05 | Opening | Equity:Opening Balances | 1000.00 |
+| T2  | Assets:Old Savings | 2026-01-06 | Opening | Equity:Opening Balances | 250.00  |
 When balance sheet run : ReportSpec Vertical
 | GroupBy  | Account    |
 | Interval | Whole      |
@@ -1453,7 +1408,7 @@ Description from the other side. Every transaction balances, so what is owned
 Description less what is owed must equal what was put into the book plus what
 Description it has earned and less what it has spent. The two figures agreeing
 Description is what says the sheet is right, and it is worth showing on the
-Description page: a difference means a posting has gone somewhere nobody
+Description page: a difference means a transaction has gone somewhere nobody
 Description intended, and that is otherwise very hard to see.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type       | Placeholder |
@@ -1465,23 +1420,19 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Salary           | Income     | false       |
 | Expenses:Groceries      | Expense    | false       |
 | Equity:Opening Balances | Equity     | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee         | Account                 | Amount     |
-| T1  | 2026-01-01 | Opening       | Assets:Checking         | 5000.00    |
-| T1  | 2026-01-01 | Opening       | Equity:Opening Balances | -5000.00   |
-| T2  | 2026-01-01 | Opening       | Assets:House            | 200000.00  |
-| T2  | 2026-01-01 | Opening       | Liabilities:Mortgage    | -150000.00 |
-| T2  | 2026-01-01 | Opening       | Equity:Opening Balances | -50000.00  |
-| T3  | 2026-01-05 | Acme Payroll  | Assets:Checking         | 3000.00    |
-| T3  | 2026-01-05 | Acme Payroll  | Income:Salary           | -3000.00   |
-| T4  | 2026-01-15 | Harris Teeter | Assets:Checking         | -45.00     |
-| T4  | 2026-01-15 | Harris Teeter | Expenses:Groceries      | 45.00      |
-| T5  | 2026-01-20 | Amazon        | Liabilities:Visa        | -89.99     |
-| T5  | 2026-01-20 | Amazon        | Expenses:Groceries      | 89.99      |
-| T6  | 2026-01-25 | Transfer      | Assets:Checking         | -500.00    |
-| T6  | 2026-01-25 | Transfer      | Assets:Savings          | 500.00     |
-| T7  | 2026-03-10 | Acme Payroll  | Assets:Checking         | 1000.00    |
-| T7  | 2026-03-10 | Acme Payroll  | Income:Salary           | -1000.00   |
+Given transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee         | Destination             | Amount    |
+| T1  | Assets:Checking  | 2026-01-01 | Opening       | Equity:Opening Balances | 5000.00   |
+| T2  | Assets:House     | 2026-01-01 | Opening       | Split                   | 200000.00 |
+| T3  | Assets:Checking  | 2026-01-05 | Acme Payroll  | Income:Salary           | 3000.00   |
+| T4  | Assets:Checking  | 2026-01-15 | Harris Teeter | Expenses:Groceries      | -45.00    |
+| T5  | Liabilities:Visa | 2026-01-20 | Amazon        | Expenses:Groceries      | -89.99    |
+| T6  | Assets:Checking  | 2026-01-25 | Transfer      | Assets:Savings          | -500.00   |
+| T7  | Assets:Checking  | 2026-03-10 | Acme Payroll  | Income:Salary           | 1000.00   |
+Given split lines are : TransactionSplit
+| Destination             | Amount     |
+| Liabilities:Mortgage    | -150000.00 |
+| Equity:Opening Balances | -50000.00  |
 When balance sheet run : ReportSpec Vertical
 | GroupBy  | Account    |
 | Interval | Whole      |
@@ -1511,14 +1462,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Visa | CreditCard | false       |
 | Income:Salary    | Income     | false       |
 | Expenses:Shopping | Expense   | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee        | Account           | Amount    |
-| T1  | 2023-06-30 | Acme Payroll | Assets:Checking   | 40000.00  |
-| T1  | 2023-06-30 | Acme Payroll | Income:Salary     | -40000.00 |
-| T2  | 2023-12-01 | Amazon       | Liabilities:Visa  | -500.00   |
-| T2  | 2023-12-01 | Amazon       | Expenses:Shopping | 500.00    |
-| T3  | 2024-06-30 | Acme Payroll | Assets:Checking   | 42000.00  |
-| T3  | 2024-06-30 | Acme Payroll | Income:Salary     | -42000.00 |
+Given transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee        | Destination       | Amount   |
+| T1  | Assets:Checking  | 2023-06-30 | Acme Payroll | Income:Salary     | 40000.00 |
+| T2  | Liabilities:Visa | 2023-12-01 | Amazon       | Expenses:Shopping | -500.00  |
+| T3  | Assets:Checking  | 2024-06-30 | Acme Payroll | Income:Salary     | 42000.00 |
 When net worth report run : ReportSpec Vertical
 | GroupBy  | Account    |
 | From     | 2023-01-01 |
@@ -1545,7 +1493,7 @@ Description The file is for a spreadsheet, so the grouping separators and the
 Description parentheses of the displayed report are left out and the sign is
 Description written as a minus.
 Given the chart of accounts is as previous
-Given postings are as previous
+Given transactions are as previous
 When report exported as csv : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-01-01 |

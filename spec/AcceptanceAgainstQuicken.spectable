@@ -332,14 +332,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Visa  | CreditCard | false       |
 | Expenses          | Expense    | true        |
 | Expenses:Shopping | Expense    | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee    | Account           | Amount  |
-| T1  | 2025-03-02 | A Shop   | Liabilities:Visa  | -89.99  |
-| T1  | 2025-03-02 | A Shop   | Expenses:Shopping | 89.99   |
-| T2  | 2025-03-25 | Card     | Liabilities:Visa  | 300.00  |
-| T2  | 2025-03-25 | Card     | Assets:Checking   | -300.00 |
-| T3  | 2025-03-28 | Transfer | Assets:Checking   | -500.00 |
-| T3  | 2025-03-28 | Transfer | Assets:Savings    | 500.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee    | Destination       | Amount  |
+| T1  | Liabilities:Visa | 2025-03-02 | A Shop   | Expenses:Shopping | -89.99  |
+| T2  | Liabilities:Visa | 2025-03-25 | Card     | Assets:Checking   | 300.00  |
+| T3  | Assets:Checking  | 2025-03-28 | Transfer | Assets:Savings    | -500.00 |
 Given the quicken report states : QuickenFigure
 | QuickenLine    | QuickenAmount |
 | Shopping       | 89.99         |
@@ -386,12 +383,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Income                      | Income     | true        |
 | Income:Dividends            | Income     | false       |
 | Equity:Market Value Changes | Equity     | false       |
-Given postings are : PostingRow
-| Ref | Date       | Account                     | Amount   |
-| T1  | 2025-06-30 | Assets:Portfolio:Cash       | 250.00   |
-| T1  | 2025-06-30 | Income:Dividends            | -250.00  |
-| T2  | 2025-06-28 | Assets:Portfolio:A Fund     | 1000.00  |
-| T2  | 2025-06-28 | Equity:Market Value Changes | -1000.00 |
+Given transactions are : Transaction
+| Ref | SourceAccount           | Date       | Destination                 | Amount  |
+| T1  | Assets:Portfolio:Cash   | 2025-06-30 | Income:Dividends            | 250.00  |
+| T2  | Assets:Portfolio:A Fund | 2025-06-28 | Equity:Market Value Changes | 1000.00 |
 Given the quicken report states : QuickenFigure
 | QuickenLine   | QuickenAmount |
 | Dividends     | 250.00        |
@@ -423,10 +418,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses           | Expense | true        |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Auto      | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee  | Account            | Amount  |
-| T1  | 2025-01-15 | Shop A | Assets:Checking    | -400.00 |
-| T1  | 2025-01-15 | Shop A | Expenses:Groceries | 400.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
+| T1  | Assets:Checking | 2025-01-15 | Shop A | Expenses:Groceries | -400.00 |
 Given the quicken report states : QuickenFigure
 | QuickenLine | QuickenAmount |
 | Groceries   | 450.00        |
@@ -462,10 +456,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses           | Expense | true        |
 | Expenses:Groceries | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee  | Account            | Amount  |
-| T1  | 2025-01-15 | Shop A | Assets:Checking    | -400.00 |
-| T1  | 2025-01-15 | Shop A | Expenses:Groceries | 400.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
+| T1  | Assets:Checking | 2025-01-15 | Shop A | Expenses:Groceries | -400.00 |
 Given the quicken report states : QuickenFigure
 | QuickenLine | QuickenAmount |
 | Groceries   | 400.00        |
@@ -500,12 +493,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses           | Expense | true        |
 | Expenses:Groceries | Expense | false       |
 | Expenses:--Split-- | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee  | Account            | Amount  |
-| T1  | 2025-01-15 | Shop A | Assets:Checking    | -400.00 |
-| T1  | 2025-01-15 | Shop A | Expenses:Groceries | 400.00  |
-| T2  | 2025-01-16 | Shop B | Assets:Checking    | -100.00 |
-| T2  | 2025-01-16 | Shop B | Expenses:--Split-- | 100.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
+| T1  | Assets:Checking | 2025-01-15 | Shop A | Expenses:Groceries | -400.00 |
+| T2  | Assets:Checking | 2025-01-16 | Shop B | Expenses:--Split-- | -100.00 |
 Given the quicken report states : QuickenFigure
 | QuickenLine | QuickenAmount |
 | Groceries   | 400.00        |
@@ -653,12 +644,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Groceries | Expense | false       |
 Given today is : Today Vertical
 | Date | 2026-10-03 |
-Given postings are : PostingRow
-| Ref | Date       | Payee  | Account            | Amount  |
-| T1  | 2026-09-15 | Shop A | Assets:Checking    | -100.00 |
-| T1  | 2026-09-15 | Shop A | Expenses:Groceries | 100.00  |
-| T2  | 2026-11-20 | Shop B | Assets:Checking    | -50.00  |
-| T2  | 2026-11-20 | Shop B | Expenses:Groceries | 50.00   |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
+| T1  | Assets:Checking | 2026-09-15 | Shop A | Expenses:Groceries | -100.00 |
+| T2  | Assets:Checking | 2026-11-20 | Shop B | Expenses:Groceries | -50.00  |
 Then current year figures are : PeriodBoundary
 | Bound     | To         | Groceries | Notes                                  |
 | ToToday   | 2026-10-03 | 100.00    | What Quicken does, so what we do       |
@@ -929,10 +918,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses               | Expense | true        |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given imported postings are : ImportedPostingRow
-| Ref | Date       | Payee  | Account            | Amount  | Cleared   | FitId |
-| T1  | 2026-09-15 | Shop A | Assets:Checking    | -100.00 | Uncleared | none  |
-| T1  | 2026-09-15 | Shop A | Expenses:Groceries | 100.00  | Uncleared | none  |
+Given imported transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  | Cleared   | FitId |
+| T1  | Assets:Checking | 2026-09-15 | Shop A | Expenses:Groceries | -100.00 | Uncleared | none  |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -981,12 +969,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Dividends         | Income     | false       |
 | Expenses                 | Expense    | true        |
 | Expenses:Investment:Fees | Expense    | false       |
-Given postings are : PostingRow
-| Ref | Date       | Account                  | Amount  |
-| T1  | 2025-06-30 | Assets:Portfolio:Cash    | 250.00  |
-| T1  | 2025-06-30 | Income:Dividends         | -250.00 |
-| T2  | 2025-07-01 | Assets:Portfolio:Cash    | -25.00  |
-| T2  | 2025-07-01 | Expenses:Investment:Fees | 25.00   |
+Given transactions are : Transaction
+| Ref | SourceAccount         | Date       | Destination              | Amount |
+| T1  | Assets:Portfolio:Cash | 2025-06-30 | Income:Dividends         | 250.00 |
+| T2  | Assets:Portfolio:Cash | 2025-07-01 | Expenses:Investment:Fees | -25.00 |
 Given the quicken report states : QuickenFigure
 | QuickenLine     | QuickenAmount |
 | Dividends       | 250.00        |

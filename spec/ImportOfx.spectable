@@ -172,9 +172,9 @@ Attributes OfxDateParse
 | Date      | Date   | 2024-01-01 |
 | Notes     | String | none       |
 
-BusinessRule The amount in an OFX file is used as the posting amount
+BusinessRule The amount in an OFX file is used as the transaction amount
 Description TRNAMT is signed from the point of view of the account the statement
-Description is for, which is the same convention the postings use. No account
+Description is for, which is the same convention the transactions use. No account
 Description type needs a sign flip, including a credit card: a charge is
 Description negative in the file and a credit to the card in the book.
 Examples: OfxAmountToPosting
@@ -267,7 +267,7 @@ BusinessRule An identifier is only an identifier to the file that gave it
 Description A CSV and a QFX describing the same transaction do not agree on what
 Description to call it. So an identifier is stored with the name of the source
 Description that gave it, and the identifier test applies only where the source
-Description matches the import being done. Against any other source the posting
+Description matches the import being done. Against any other source the transaction
 Description counts as having no identifier at all, and the weaker tests decide.
 Details Without this, importing a QFX after a CSV finds no FITID anywhere and
 Details calls the whole statement new, duplicating a month of transactions.
@@ -275,7 +275,7 @@ Details With a single identifier field instead of one per source it is no
 Details better the other way round: stamping the FITID over the CSV reference
 Details would make the next CSV import offer every row again.
 Details
-Details So a posting collects identifiers rather than having one. A posting
+Details So a transaction collects identifiers rather than having one. A transaction
 Details imported from a CSV and later recognised in a QFX carries both, and
 Details re-importing either file does nothing.
 Examples: IdentifierScope
@@ -309,10 +309,10 @@ Details to claim again. Test one needs none of that, because a FITID is unique
 Details within the account and cannot be claimed twice.
 Examples: DispositionRule
 | Test | Condition                                                             | Disposition |
-| 1    | A posting in this account carries this FITID, from an Ofx import       | Duplicate   |
-| 2    | An uncleared posting in this account has the same amount and check number, within the book's check-number window | Matched |
-| 3    | An uncleared posting in this account has the same amount within five days | Matched  |
-| 4    | A cleared posting in this account has the same amount and date, no FITID | Possible |
+| 1    | A transaction in this account carries this FITID, from an Ofx import   | Duplicate   |
+| 2    | An uncleared transaction in this account has the same amount and check number, within the book's check-number window | Matched |
+| 3    | An uncleared transaction in this account has the same amount within five days | Matched |
+| 4    | A cleared transaction in this account has the same amount and date, no FITID | Possible |
 | 5    | Nothing above applies                                                 | New         |
 
 Attributes DispositionRule
@@ -322,7 +322,7 @@ Attributes DispositionRule
 | Disposition | ImportDisposition | New     |
 
 Scenario Importing the same file twice imports nothing the second time
-Description The FITID is stored on the posting in the statement account, which
+Description The FITID is stored on the transaction in the statement account, which
 Description is what makes this test possible at all.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
@@ -370,9 +370,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking   | false       |
 | Liabilities:Visa       | CreditCard | false       |
 | Expenses:Uncategorized | Expense    | false       |
-Given postings are : ImportedPostingRow
-| Ref | Date       | Account         | Amount | FitId |
-| T1  | 2024-01-15 | Assets:Checking | -45.00 | 00001 |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Destination | Amount | FitId |
+| T1  | Assets:Checking | 2024-01-15 | none        | -45.00 | 00001 |
 Given import target is : ImportTarget Vertical
 | AccountPath | Liabilities:Visa |
 When transactions imported : OfxTransactions
@@ -384,17 +384,21 @@ Then import summary is : ImportSummary Vertical
 | Matched   | 0 |
 | Possible  | 0 |
 
-Attributes ImportedPostingRow
-Description A posting row that also carries the identifier it was imported with.
-| Attribute | Type           | Default    |
-| Ref       | TransactionRef |            |
-| Date      | Date           | 2024-01-01 |
-| Payee     | PayeeName      | none       |
-| Account   | AccountPath    |            |
-| Amount    | Money          | 0.00       |
-| Cleared   | ClearedStatus  | Uncleared  |
-| CheckNo   | CheckNumber    | none       |
-| FitId     | FitId          | none       |
+Attributes ImportedTransaction
+Description A transaction that also carries the identifier it was imported with.
+Description Everything but FitId reads as it does on Transaction itself; the
+Description identifier is a fact about the file the row came from, which is why
+Description it is here and not on the transaction.
+| Attribute     | Type           | Default    |
+| Ref           | TransactionRef |            |
+| Date          | Date           | 2024-01-01 |
+| Payee         | PayeeName      | none       |
+| SourceAccount | AccountPath    |            |
+| Destination   | AccountPath    | none       |
+| Amount        | Money          | 0.00       |
+| Cleared       | ClearedStatus  | Uncleared  |
+| CheckNo       | CheckNumber    | none       |
+| FitId         | FitId          | none       |
 
 Scenario A check entered by hand is matched when it clears
 Description The check was written on the second and reached the bank on the
@@ -408,10 +412,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Home:Rates    | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given postings are : ImportedPostingRow
-| Ref | Date       | Payee             | Account             | Amount   | Cleared   | CheckNo | FitId |
-| T1  | 2024-01-02 | County Tax Office | Assets:Checking     | -1250.00 | Uncleared | 2041    | none  |
-| T1  | 2024-01-02 | County Tax Office | Expenses:Home:Rates | 1250.00  | Uncleared | 2041    | none  |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee             | CheckNo | Destination         | Amount   | Cleared   | FitId |
+| T1  | Assets:Checking | 2024-01-02 | County Tax Office | 2041    | Expenses:Home:Rates | -1250.00 | Uncleared | none  |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -422,10 +425,9 @@ Then import summary is : ImportSummary Vertical
 | Duplicate | 0 |
 | Matched   | 1 |
 | Possible  | 0 |
-Then postings are : ImportedPostingRow
-| Ref | Date       | Payee             | Account             | Amount   | Cleared   | CheckNo | FitId       |
-| T1  | 2024-01-02 | County Tax Office | Assets:Checking     | -1250.00 | Cleared   | 2041    | 20240103002 |
-| T1  | 2024-01-02 | County Tax Office | Expenses:Home:Rates | 1250.00  | Uncleared | 2041    | none        |
+Then transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee             | CheckNo | Destination         | Amount   | Cleared | FitId       |
+| T1  | Assets:Checking | 2024-01-02 | County Tax Office | 2041    | Expenses:Home:Rates | -1250.00 | Cleared | 20240103002 |
 # The date entered by hand is kept. It is the date the check was written, which
 # is what the register is ordered by; the clearing date belongs to the bank.
 
@@ -435,10 +437,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given postings are : ImportedPostingRow
-| Ref | Date       | Payee         | Account            | Amount | Cleared   | FitId |
-| T1  | 2024-01-14 | Harris Teeter | Assets:Checking    | -45.00 | Uncleared | none  |
-| T1  | 2024-01-14 | Harris Teeter | Expenses:Groceries | 45.00  | Uncleared | none  |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared   | FitId |
+| T1  | Assets:Checking | 2024-01-14 | Harris Teeter | Expenses:Groceries | -45.00 | Uncleared | none  |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -459,10 +460,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given postings are : ImportedPostingRow
-| Ref | Date       | Payee         | Account            | Amount | Cleared   | FitId |
-| T1  | 2024-01-14 | Harris Teeter | Assets:Checking    | -45.00 | Uncleared | none  |
-| T1  | 2024-01-14 | Harris Teeter | Expenses:Groceries | 45.00  | Uncleared | none  |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared   | FitId |
+| T1  | Assets:Checking | 2024-01-14 | Harris Teeter | Expenses:Groceries | -45.00 | Uncleared | none  |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -507,10 +507,9 @@ Given import target is : ImportTarget Vertical
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name               | Memo     | CheckNum |
 | DEBIT   | 2024-01-15 | -45.00 | 20240115001 | HARRIS TEETER #231 | PURCHASE | none     |
-Then postings are : ImportedPostingRow
-| Ref | Date       | Payee              | Account                | Amount | Cleared   | FitId       |
-| T1  | 2024-01-15 | HARRIS TEETER #231 | Assets:Checking        | -45.00 | Cleared   | 20240115001 |
-| T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  | Uncleared | none        |
+Then transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee              | Destination            | Amount | Cleared | FitId       |
+| T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | -45.00 | Cleared | 20240115001 |
 # The payee is the raw NAME from the file. Tidying it is the business of
 # Payees, so that this file has one job.
 
@@ -592,10 +591,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Home:Rates    | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given postings are : ImportedPostingRow
-| Ref | Date       | Payee             | Account             | Amount   | Cleared   | CheckNo | FitId |
-| T1  | 2024-01-02 | County Tax Office | Assets:Checking     | -1250.00 | Uncleared | 2041    | none  |
-| T1  | 2024-01-02 | County Tax Office | Expenses:Home:Rates | 1250.00  | Uncleared | 2041    | none  |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee             | CheckNo | Destination         | Amount   | Cleared   | FitId |
+| T1  | Assets:Checking | 2024-01-02 | County Tax Office | 2041    | Expenses:Home:Rates | -1250.00 | Uncleared | none  |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -632,10 +630,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Home:Rates    | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given postings are : ImportedPostingRow
-| Ref | Date       | Payee             | Account             | Amount   | Cleared   | CheckNo | FitId |
-| T1  | 2024-01-02 | County Tax Office | Assets:Checking     | -1250.00 | Uncleared | 2041    | none  |
-| T1  | 2024-01-02 | County Tax Office | Expenses:Home:Rates | 1250.00  | Uncleared | 2041    | none  |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee             | CheckNo | Destination         | Amount   | Cleared   | FitId |
+| T1  | Assets:Checking | 2024-01-02 | County Tax Office | 2041    | Expenses:Home:Rates | -1250.00 | Uncleared | none  |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -664,10 +661,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given postings are : ImportedPostingRow
-| Ref | Date       | Payee     | Account                | Amount  | Cleared   | CheckNo | FitId |
-| T1  | 2024-03-01 | Plumber   | Assets:Checking        | -420.00 | Uncleared | 3100    | none  |
-| T1  | 2024-03-01 | Plumber   | Expenses:Uncategorized | 420.00  | Uncleared | 3100    | none  |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee   | CheckNo | Destination            | Amount  | Cleared   | FitId |
+| T1  | Assets:Checking | 2024-03-01 | Plumber | 3100    | Expenses:Uncategorized | -420.00 | Uncleared | none  |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -724,10 +720,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given postings are : ImportedPostingRow
-| Ref | Date       | Payee         | Account            | Amount | Cleared   | FitId |
-| T1  | 2026-02-05 | Harris Teeter | Assets:Checking    | -88.20 | Cleared   | none  |
-| T1  | 2026-02-05 | Harris Teeter | Expenses:Groceries | 88.20  | Uncleared | none  |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared | FitId |
+| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Cleared | none  |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -736,11 +731,10 @@ When transactions imported : OfxTransactions
 When the possible duplicate is answered : PossibleResolution Vertical
 | FitId  | F003    |
 | Answer | TheSame |
-Then postings are : ImportedPostingRow
-| Ref | Date       | Payee         | Account            | Amount | Cleared   | FitId |
-| T1  | 2026-02-05 | Harris Teeter | Assets:Checking    | -88.20 | Cleared   | F003  |
-| T1  | 2026-02-05 | Harris Teeter | Expenses:Groceries | 88.20  | Uncleared | none  |
-# No transaction was created. T1 now carries F003 on the posting in the account
+Then transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared | FitId |
+| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Cleared | F003  |
+# No transaction was created. T1 now carries F003 on the transaction in the account
 # the statement was for, so reading the same file again reports a duplicate and
 # asks nothing. The other side carries none: the bank has never heard of the
 # category.
@@ -759,10 +753,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given postings are : ImportedPostingRow
-| Ref | Date       | Payee         | Account            | Amount | Cleared   | FitId |
-| T1  | 2026-02-05 | Harris Teeter | Assets:Checking    | -88.20 | Cleared   | none  |
-| T1  | 2026-02-05 | Harris Teeter | Expenses:Groceries | 88.20  | Uncleared | none  |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared | FitId |
+| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Cleared | none  |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -771,12 +764,10 @@ When transactions imported : OfxTransactions
 When the possible duplicate is answered : PossibleResolution Vertical
 | FitId  | F003      |
 | Answer | Different |
-Then postings are : ImportedPostingRow
-| Ref | Date       | Payee         | Account                | Amount | Cleared   | FitId |
-| T1  | 2026-02-05 | Harris Teeter | Assets:Checking        | -88.20 | Cleared   | none  |
-| T1  | 2026-02-05 | Harris Teeter | Expenses:Groceries     | 88.20  | Uncleared | none  |
-| T2  | 2026-02-05 | HARRIS TEETER | Assets:Checking        | -88.20 | Cleared   | F003  |
-| T2  | 2026-02-05 | HARRIS TEETER | Expenses:Uncategorized | 88.20  | Uncleared | none  |
+Then transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee         | Destination            | Amount | Cleared | FitId |
+| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries     | -88.20 | Cleared | none  |
+| T2  | Assets:Checking | 2026-02-05 | HARRIS TEETER | Expenses:Uncategorized | -88.20 | Cleared | F003  |
 # The second is created like any new row, its category unknown until a payee
 # rule or the user says otherwise. F003 is on the new one and not on T1, so a
 # later file naming F003 is a duplicate of the second visit only.
@@ -790,10 +781,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given postings are : ImportedPostingRow
-| Ref | Date       | Payee         | Account            | Amount | Cleared   | FitId |
-| T1  | 2026-02-05 | Harris Teeter | Assets:Checking    | -88.20 | Cleared   | none  |
-| T1  | 2026-02-05 | Harris Teeter | Expenses:Groceries | 88.20  | Uncleared | none  |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared | FitId |
+| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Cleared | none  |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -801,10 +791,9 @@ When transactions imported : OfxTransactions
 | DEBIT   | 2026-02-05 | -88.20 | F003  | HARRIS TEETER | none | none     |
 Then import summary is : ImportSummary Vertical
 | Possible | 1 |
-Then postings are : ImportedPostingRow
-| Ref | Date       | Payee         | Account            | Amount | Cleared   | FitId |
-| T1  | 2026-02-05 | Harris Teeter | Assets:Checking    | -88.20 | Cleared   | none  |
-| T1  | 2026-02-05 | Harris Teeter | Expenses:Groceries | 88.20  | Uncleared | none  |
+Then transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared | FitId |
+| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Cleared | none  |
 # Unchanged, and F003 is nowhere, so the same file asks the same question. An
 # import that was not answered is not a decision.
 
@@ -949,10 +938,9 @@ Given import target is : ImportTarget Vertical
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount   | FitId  | Name      | Memo | CheckNum |
 | XFER    | 2026-04-10 | -1200.00 | BNK-77 | CHASEBANK | none | none     |
-Then postings are : ImportedPostingRow
-| Ref | Date       | Payee     | Account         | Amount   | Cleared   | FitId  |
-| T1  | 2026-04-10 | CHASEBANK | Assets:Checking | -1200.00 | Cleared   | BNK-77 |
-| T1  | 2026-04-10 | CHASEBANK | Unassigned      | 1200.00  | Uncleared | none   |
+Then transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee     | Destination | Amount   | Cleared | FitId  |
+| T1  | Assets:Checking | 2026-04-10 | CHASEBANK | Unassigned  | -1200.00 | Cleared | BNK-77 |
 # Unassigned rather than Uncategorized: this is not a question about which
 # expense it was, it is a question about which account the money went to.
 
@@ -965,10 +953,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking   | false       | none         |
 | Liabilities:Chase Visa | CreditCard | false       | CHASEBANK    |
 | Unassigned             | OtherAsset | false       | none         |
-Given postings are : ImportedPostingRow
-| Ref | Date       | Payee     | Account         | Amount   | Cleared   | FitId  |
-| T1  | 2026-04-10 | CHASEBANK | Assets:Checking | -1200.00 | Cleared   | BNK-77 |
-| T1  | 2026-04-10 | CHASEBANK | Unassigned      | 1200.00  | Uncleared | none   |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee     | Destination | Amount   | Cleared | FitId  |
+| T1  | Assets:Checking | 2026-04-10 | CHASEBANK | Unassigned  | -1200.00 | Cleared | BNK-77 |
 Given import target is : ImportTarget Vertical
 | AccountPath | Liabilities:Chase Visa |
 When transactions imported : OfxTransactions
@@ -977,16 +964,16 @@ When transactions imported : OfxTransactions
 Then import summary is : ImportSummary Vertical
 | New     | 0 |
 | Matched | 1 |
-Then postings are : ImportedPostingRow
-| Ref | Date       | Payee            | Account                | Amount   | Cleared | FitId  |
-| T1  | 2026-04-10 | CHASEBANK        | Assets:Checking        | -1200.00 | Cleared | BNK-77 |
-| T2  | 2026-04-11 | PAYMENT RECEIVED | Liabilities:Chase Visa | 1200.00  | Cleared | CC-901 |
+Then transactions are : ImportedTransaction
+| Ref | SourceAccount          | Date       | Payee            | Destination | Amount   | Cleared | FitId  |
+| T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | none        | -1200.00 | Cleared | BNK-77 |
+| T2  | Liabilities:Chase Visa | 2026-04-11 | PAYMENT RECEIVED | none        | 1200.00  | Cleared | CC-901 |
 # Two transactions, not one: a transaction is one account's own download, so
 # completing a payment adds the card's own row rather than rewriting the
 # bank's. T1's Destination is filled in with Liabilities:Chase Visa and T2 is
 # new, naming T1's account back -- each keeps its own payee, the word the
 # account it is in actually heard, and its own identifier, which is why an
-# identifier belongs to a transaction now rather than to a posting.
+# identifier belongs to a transaction now rather than to a transaction.
 
 Scenario Two cards from one bank are told apart by the amount
 Description Both cards say CHASEBANK, so the payee narrows the search to both and
@@ -997,12 +984,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Chase Visa  | CreditCard | false       | CHASEBANK    |
 | Liabilities:Chase Amazon | CreditCard | false      | CHASEBANK    |
 | Unassigned              | OtherAsset | false       | none         |
-Given postings are : ImportedPostingRow
-| Ref | Date       | Payee     | Account         | Amount   | Cleared   | FitId  |
-| T1  | 2026-04-10 | CHASEBANK | Assets:Checking | -1200.00 | Cleared   | BNK-77 |
-| T1  | 2026-04-10 | CHASEBANK | Unassigned      | 1200.00  | Uncleared | none   |
-| T2  | 2026-04-10 | CHASEBANK | Assets:Checking | -340.00  | Cleared   | BNK-78 |
-| T2  | 2026-04-10 | CHASEBANK | Unassigned      | 340.00   | Uncleared | none   |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee     | Destination | Amount   | Cleared | FitId  |
+| T1  | Assets:Checking | 2026-04-10 | CHASEBANK | Unassigned  | -1200.00 | Cleared | BNK-77 |
+| T2  | Assets:Checking | 2026-04-10 | CHASEBANK | Unassigned  | -340.00  | Cleared | BNK-78 |
 Given import target is : ImportTarget Vertical
 | AccountPath | Liabilities:Chase Amazon |
 When transactions imported : OfxTransactions
@@ -1011,12 +996,11 @@ When transactions imported : OfxTransactions
 Then import summary is : ImportSummary Vertical
 | New     | 0 |
 | Matched | 1 |
-Then postings are : ImportedPostingRow
-| Ref | Date       | Payee            | Account                  | Amount   | Cleared   | FitId  |
-| T1  | 2026-04-10 | CHASEBANK        | Assets:Checking          | -1200.00 | Cleared   | BNK-77 |
-| T1  | 2026-04-10 | CHASEBANK        | Unassigned               | 1200.00  | Uncleared | none   |
-| T2  | 2026-04-10 | CHASEBANK        | Assets:Checking          | -340.00  | Cleared   | BNK-78 |
-| T3  | 2026-04-11 | PAYMENT RECEIVED | Liabilities:Chase Amazon | 340.00   | Cleared   | CC-902 |
+Then transactions are : ImportedTransaction
+| Ref | SourceAccount            | Date       | Payee            | Destination | Amount   | Cleared | FitId  |
+| T1  | Assets:Checking          | 2026-04-10 | CHASEBANK        | Unassigned  | -1200.00 | Cleared | BNK-77 |
+| T2  | Assets:Checking          | 2026-04-10 | CHASEBANK        | none        | -340.00  | Cleared | BNK-78 |
+| T3  | Liabilities:Chase Amazon | 2026-04-11 | PAYMENT RECEIVED | none        | 340.00   | Cleared | CC-902 |
 # The twelve hundred is still waiting for the Visa file. Nothing about reading
 # the Amazon card tells us anything about it. T3 is the new row this import
 # added -- the card's own side of the payment it completed.
@@ -1040,10 +1024,9 @@ Given import target is : ImportTarget Vertical
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount  | FitId  | Name          | Memo | CheckNum |
 | XFER    | 2026-04-10 | -500.00 | BNK-79 | SOME OTHER CO | none | none     |
-Then postings are : ImportedPostingRow
-| Ref | Date       | Payee         | Account                | Amount  | Cleared   | FitId  |
-| T1  | 2026-04-10 | SOME OTHER CO | Assets:Checking        | -500.00 | Cleared   | BNK-79 |
-| T1  | 2026-04-10 | SOME OTHER CO | Expenses:Uncategorized | 500.00  | Uncleared | none   |
+Then transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee         | Destination            | Amount  | Cleared | FitId  |
+| T1  | Assets:Checking | 2026-04-10 | SOME OTHER CO | Expenses:Uncategorized | -500.00 | Cleared | BNK-79 |
 Then balances are : AccountBalance CompareOnly
 | Account    | RawBalance |
 | Unassigned | 0.00       |
@@ -1096,16 +1079,16 @@ When candidate approved : TransferCandidate Vertical CompareOnly
 | FromAccount | Assets:Checking       |
 | ToAccount   | Assets:Checking Prime |
 | Amount      | 3000.00               |
-Then postings are : ImportedPostingRow
-| Ref | Date       | Payee                      | Account               | Amount   | Cleared | FitId      |
-| T1  | 2026-07-31 | TO PUGH K CHECKING         | Assets:Checking       | -3000.00 | Cleared | 2026073102 |
-| T2  | 2026-07-31 | FROM PUGH K PRIME CHECKING | Assets:Checking Prime | 3000.00  | Cleared | 2026073101 |
+Then transactions are : ImportedTransaction
+| Ref | SourceAccount         | Date       | Payee                      | Destination | Amount   | Cleared | FitId      |
+| T1  | Assets:Checking       | 2026-07-31 | TO PUGH K CHECKING         | none        | -3000.00 | Cleared | 2026073102 |
+| T2  | Assets:Checking Prime | 2026-07-31 | FROM PUGH K PRIME CHECKING | none        | 3000.00  | Cleared | 2026073101 |
 Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 0 |
 | Matched   | 0 |
 | Possible  | 0 |
-# Two transactions, one per account, and no Uncategorized posting on either
+# Two transactions, one per account, and no Uncategorized transaction on either
 # side. Each keeps the identifier and the payee of the file it came from, so
 # re-importing either file recognises its own half.
 
@@ -1147,10 +1130,10 @@ When candidate approved : TransferCandidate Vertical CompareOnly
 | FromAccount | Assets:Checking Prime |
 | ToAccount   | Liabilities:WF Card   |
 | Amount      | 3508.09               |
-Then postings are : ImportedPostingRow
-| Ref | Date       | Payee                       | Account               | Amount   | Cleared | FitId |
-| T1  | 2026-08-03 | WF Credit Card AUTO PAY     | Assets:Checking Prime | -3508.09 | Cleared | C1    |
-| T2  | 2026-08-01 | AUTOMATIC PAYMENT THANK YOU | Liabilities:WF Card   | 3508.09  | Cleared | V1    |
+Then transactions are : ImportedTransaction
+| Ref | SourceAccount         | Date       | Payee                       | Destination | Amount   | Cleared | FitId |
+| T1  | Assets:Checking Prime | 2026-08-03 | WF Credit Card AUTO PAY     | none        | -3508.09 | Cleared | C1    |
+| T2  | Liabilities:WF Card   | 2026-08-01 | AUTOMATIC PAYMENT THANK YOU | none        | 3508.09  | Cleared | V1    |
 # Two transactions, one per account, each dated and named the way its own
 # file read it -- the card posted it two days earlier than the checking
 # account did, and each now keeps its own date rather than sharing one.
@@ -1276,12 +1259,10 @@ When candidate rejected : TransferCandidate Vertical CompareOnly
 | FromAccount | Assets:Checking Prime |
 | ToAccount   | Liabilities:WF Card   |
 | Amount      | 500.00                |
-Then postings are : ImportedPostingRow
-| Ref | Date       | Payee           | Account                | Amount  | Cleared   | FitId |
-| T1  | 2026-08-03 | PAYMENT TO SHOP | Assets:Checking Prime  | -500.00 | Cleared   | C9    |
-| T1  | 2026-08-03 | PAYMENT TO SHOP | Expenses:Uncategorized | 500.00  | Uncleared | none  |
-| T2  | 2026-08-03 | REFUND          | Liabilities:WF Card    | 500.00  | Cleared   | V9    |
-| T2  | 2026-08-03 | REFUND          | Income:Uncategorized   | -500.00 | Uncleared | none  |
+Then transactions are : ImportedTransaction
+| Ref | SourceAccount         | Date       | Payee           | Destination            | Amount  | Cleared | FitId |
+| T1  | Assets:Checking Prime | 2026-08-03 | PAYMENT TO SHOP | Expenses:Uncategorized | -500.00 | Cleared | C9    |
+| T2  | Liabilities:WF Card   | 2026-08-03 | REFUND          | Income:Uncategorized   | 500.00  | Cleared | V9    |
 Then import summary is : ImportSummary Vertical
 | New       | 2 |
 | Duplicate | 0 |
@@ -1340,7 +1321,7 @@ Attributes CandidatePriority
 Scenario A candidate is never proposed within one account
 Description Two transactions in one account with opposite amounts is a payment
 Description and a refund, or a mistake, and either way it is not a transfer.
-Description The rule in Transactions refuses a transaction posting twice to one
+Description The rule in Transactions refuses a transaction transaction twice to one
 Description account, and this is where that is kept from arising.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
@@ -1383,10 +1364,9 @@ Given account mappings are : AccountMapping
 | BankId    | OfxAccountId  | AccountPath           |
 | 053000219 | 1023711843105 | Assets:Checking Prime |
 | 053000219 | 1023711843112 | Assets:Checking       |
-Given postings are : ImportedPostingRow
-| Ref | Date       | Payee     | Account                | Amount  | Cleared   | FitId |
-| T0  | 2026-08-02 | A Payment | Assets:Checking Prime  | -750.00 | Uncleared | none  |
-| T0  | 2026-08-02 | A Payment | Expenses:Uncategorized | 750.00  | Uncleared | none  |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount         | Date       | Payee     | Destination            | Amount  | Cleared   | FitId |
+| T0  | Assets:Checking Prime | 2026-08-02 | A Payment | Expenses:Uncategorized | -750.00 | Uncleared | none  |
 When statements imported : OfxImportFile
 | OfxAccountId     | TrnType | DatePosted | Amount  | FitId | Name       |
 | 1023711843105    | DEBIT   | 2026-08-03 | -750.00 | P1    | A PAYMENT  |
@@ -1470,10 +1450,10 @@ When statements imported : OfxImportFile
 Then transfer candidates are : TransferCandidate
 | FromAccount           | FromDate   | ToAccount           | ToDate     | Amount  | DaysApart | State     |
 | Assets:Checking Prime | 2026-09-01 | Liabilities:WF Card | 2026-09-01 | 2026.95 | 0         | Automatic |
-Then postings are : ImportedPostingRow
-| Ref | Date       | Payee                       | Account               | Amount   | Cleared | FitId |
-| T1  | 2026-09-01 | WF Credit Card AUTO PAY     | Assets:Checking Prime | -2026.95 | Cleared | C2    |
-| T2  | 2026-09-01 | AUTOMATIC PAYMENT THANK YOU | Liabilities:WF Card   | 2026.95  | Cleared | V2    |
+Then transactions are : ImportedTransaction
+| Ref | SourceAccount         | Date       | Payee                       | Destination | Amount   | Cleared | FitId |
+| T1  | Assets:Checking Prime | 2026-09-01 | WF Credit Card AUTO PAY     | none        | -2026.95 | Cleared | C2    |
+| T2  | Liabilities:WF Card   | 2026-09-01 | AUTOMATIC PAYMENT THANK YOU | none        | 2026.95  | Cleared | V2    |
 
 Scenario A remembered rule still requires the amounts to be equal and opposite
 Description The rule says these two payees in these two accounts are worth
@@ -1545,9 +1525,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given postings are : ImportedPostingRow
-| Ref | Date       | Account         | Amount  | Cleared | FitId |
-| T0  | 2024-01-01 | Assets:Checking | 1750.00 | Cleared | none  |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Destination | Amount  | Cleared | FitId |
+| T0  | Assets:Checking | 2024-01-01 | none        | 1750.00 | Cleared | none  |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -1584,10 +1564,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given postings are : ImportedPostingRow
-| Ref | Date       | Account         | Amount  | Cleared | FitId |
-| T0  | 2024-01-01 | Assets:Checking | 1750.00 | Cleared | none  |
-| T9  | 2024-01-20 | Assets:Checking | -100.00 | Cleared | none  |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Destination | Amount  | Cleared | FitId |
+| T0  | Assets:Checking | 2024-01-01 | none        | 1750.00 | Cleared | none  |
+| T9  | Assets:Checking | 2024-01-20 | none        | -100.00 | Cleared | none  |
 When ledger balance checked : LedgerBalanceCheck Vertical
 | Account     | Assets:Checking |
 | StatedBal   | 1750.00         |
@@ -1598,17 +1578,17 @@ Then balance check is : LedgerBalanceResult Vertical
 | Difference     | -100.00 |
 | Agrees         | false   |
 
-Scenario Only cleared postings count towards the stated balance
+Scenario Only cleared transactions count towards the stated balance
 Description A check written but not yet presented is in the register and not at
 Description the bank. Counting it would make every import look wrong.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given postings are : ImportedPostingRow
-| Ref | Date       | Account         | Amount  | Cleared   | FitId |
-| T0  | 2024-01-01 | Assets:Checking | 1750.00 | Cleared   | none  |
-| T9  | 2024-01-29 | Assets:Checking | -250.00 | Uncleared | none  |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Destination | Amount  | Cleared   | FitId |
+| T0  | Assets:Checking | 2024-01-01 | none        | 1750.00 | Cleared   | none  |
+| T9  | Assets:Checking | 2024-01-29 | none        | -250.00 | Uncleared | none  |
 When ledger balance checked : LedgerBalanceCheck Vertical
 | Account     | Assets:Checking |
 | StatedBal   | 1750.00         |

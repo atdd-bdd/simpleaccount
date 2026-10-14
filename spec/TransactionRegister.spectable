@@ -4,8 +4,8 @@ Description The transaction register of one account: what each line shows, what
 Description order the lines are in, and what the running balance means.
 Details
 Details A register is always a view of one account. Every line of it is one
-Details posting to that account, with the other side of the transaction
-Details summarised in the Category column. A transaction with four postings
+Details transaction to that account, with the other side of the transaction
+Details summarised in the Category column. A transaction with four transactions
 Details appears once in each of the four registers, showing a different
 Details amount and a different category each time, and it is the same
 Details transaction.
@@ -40,14 +40,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Salary      | Income  | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Auto:Fuel | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee         | Account            | Amount   |
-| T1  | 2024-01-01 | Acme Payroll  | Assets:Checking    | 3000.00  |
-| T1  | 2024-01-01 | Acme Payroll  | Income:Salary      | -3000.00 |
-| T2  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00   |
-| T2  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00    |
-| T3  | 2024-01-20 | Shell         | Assets:Checking    | -52.00   |
-| T3  | 2024-01-20 | Shell         | Expenses:Auto:Fuel | 52.00    |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount  |
+| T1  | Assets:Checking | 2024-01-01 | Acme Payroll  | Income:Salary      | 3000.00 |
+| T2  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00  |
+| T3  | Assets:Checking | 2024-01-20 | Shell         | Expenses:Auto:Fuel | -52.00  |
 When register opened on : AccountSelect
 | Path            |
 | Assets:Checking |
@@ -67,14 +64,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Salary      | Income  | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Auto:Fuel | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee         | Account            | Amount   |
-| T1  | 2024-01-01 | Acme Payroll  | Assets:Checking    | 3000.00  |
-| T1  | 2024-01-01 | Acme Payroll  | Income:Salary      | -3000.00 |
-| T2  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00   |
-| T2  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00    |
-| T3  | 2024-01-20 | Shell         | Assets:Checking    | -52.00   |
-| T3  | 2024-01-20 | Shell         | Expenses:Auto:Fuel | 52.00    |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount  |
+| T1  | Assets:Checking | 2024-01-01 | Acme Payroll  | Income:Salary      | 3000.00 |
+| T2  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00  |
+| T3  | Assets:Checking | 2024-01-20 | Shell         | Expenses:Auto:Fuel | -52.00  |
 When register opened on : AccountSelect
 | Path               |
 | Expenses:Groceries |
@@ -139,14 +133,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking   | Checking   | false       |
 | Expenses:Shopping | Expense    | false       |
 | Expenses:Dining   | Expense    | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee     | Account           | Amount  |
-| T1  | 2024-03-02 | Amazon    | Liabilities:Visa  | -89.99  |
-| T1  | 2024-03-02 | Amazon    | Expenses:Shopping | 89.99   |
-| T2  | 2024-03-09 | The Cafe  | Liabilities:Visa  | -18.50  |
-| T2  | 2024-03-09 | The Cafe  | Expenses:Dining   | 18.50   |
-| T3  | 2024-03-25 | Visa      | Liabilities:Visa  | 100.00  |
-| T3  | 2024-03-25 | Visa      | Assets:Checking   | -100.00 |
+Given transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee    | Destination       | Amount |
+| T1  | Liabilities:Visa | 2024-03-02 | Amazon   | Expenses:Shopping | -89.99 |
+| T2  | Liabilities:Visa | 2024-03-09 | The Cafe | Expenses:Dining   | -18.50 |
+| T3  | Liabilities:Visa | 2024-03-25 | Visa     | Assets:Checking   | 100.00 |
 When register opened on : AccountSelect
 | Path             |
 | Liabilities:Visa |
@@ -184,14 +175,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given postings in entry order are : SequencedPostingRow
-| EntrySeq | Ref | Date       | Payee | Account            | Amount |
-| 1        | T1  | 2024-01-20 | Shop A | Assets:Checking   | -10.00 |
-| 1        | T1  | 2024-01-20 | Shop A | Expenses:Groceries | 10.00 |
-| 2        | T2  | 2024-01-15 | Shop B | Assets:Checking   | -20.00 |
-| 2        | T2  | 2024-01-15 | Shop B | Expenses:Groceries | 20.00 |
-| 3        | T3  | 2024-01-20 | Shop C | Assets:Checking   | -30.00 |
-| 3        | T3  | 2024-01-20 | Shop C | Expenses:Groceries | 30.00 |
+Given transactions in entry order are : SequencedTransaction
+| EntrySeq | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount |
+| 1        | T1  | Assets:Checking | 2024-01-20 | Shop A | Expenses:Groceries | -10.00 |
+| 2        | T2  | Assets:Checking | 2024-01-15 | Shop B | Expenses:Groceries | -20.00 |
+| 3        | T3  | Assets:Checking | 2024-01-20 | Shop C | Expenses:Groceries | -30.00 |
 When register opened on : AccountSelect
 | Path            |
 | Assets:Checking |
@@ -204,14 +192,17 @@ Then register lines are : RegisterLine CompareOnly
 # the columns it does not name are asserted to be their defaults, and Category
 # would have to be empty -- which it is not, and should not be.
 
-Attributes SequencedPostingRow
-| Attribute | Type           | Default    |
-| EntrySeq  | Integer        | 0          |
-| Ref       | TransactionRef |            |
-| Date      | Date           | 2024-01-01 |
-| Payee     | PayeeName      | none       |
-| Account   | AccountPath    |            |
-| Amount    | Money          | 0.00       |
+Attributes SequencedTransaction
+Description A transaction with the order it was entered in, so that a scenario
+Description about ordering can say what that order was.
+| Attribute     | Type           | Default    |
+| EntrySeq      | Integer        | 0          |
+| Ref           | TransactionRef |            |
+| Date          | Date           | 2024-01-01 |
+| Payee         | PayeeName      | none       |
+| SourceAccount | AccountPath    |            |
+| Destination   | AccountPath    | none       |
+| Amount        | Money          | 0.00       |
 
 Scenario Sorting the register by another column hides the running balance
 Description A running balance down a list that is not in date order is a column
@@ -222,14 +213,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given postings in entry order are : SequencedPostingRow
-| EntrySeq | Ref | Date       | Payee | Account            | Amount |
-| 1        | T1  | 2024-01-20 | Shop A | Assets:Checking   | -10.00 |
-| 1        | T1  | 2024-01-20 | Shop A | Expenses:Groceries | 10.00 |
-| 2        | T2  | 2024-01-15 | Shop B | Assets:Checking   | -20.00 |
-| 2        | T2  | 2024-01-15 | Shop B | Expenses:Groceries | 20.00 |
-| 3        | T3  | 2024-01-20 | Shop C | Assets:Checking   | -30.00 |
-| 3        | T3  | 2024-01-20 | Shop C | Expenses:Groceries | 30.00 |
+Given transactions in entry order are : SequencedTransaction
+| EntrySeq | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount |
+| 1        | T1  | Assets:Checking | 2024-01-20 | Shop A | Expenses:Groceries | -10.00 |
+| 2        | T2  | Assets:Checking | 2024-01-15 | Shop B | Expenses:Groceries | -20.00 |
+| 3        | T3  | Assets:Checking | 2024-01-20 | Shop C | Expenses:Groceries | -30.00 |
 When register sorted by : SortBy
 | Column |
 | Payee  |
@@ -271,12 +259,14 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
 | Expenses:Auto:Repairs     | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee      | Account                   | Amount  | Memo         |
-| T1  | 2024-04-02 | Home Depot | Assets:Checking           | -184.50 | none         |
-| T1  | 2024-04-02 | Home Depot | Expenses:Home:Maintenance | 100.00  | Paint        |
-| T1  | 2024-04-02 | Home Depot | Expenses:Home:Garden      | 54.50   | Compost      |
-| T1  | 2024-04-02 | Home Depot | Expenses:Auto:Repairs     | 30.00   | Wiper blades |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination | Amount  | Memo  |
+| T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 | none  |
+Given split lines are : TransactionSplit
+| Destination               | Amount | Memo         |
+| Expenses:Home:Maintenance | 100.00 | Paint        |
+| Expenses:Home:Garden      | 54.50  | Compost      |
+| Expenses:Auto:Repairs     | 30.00  | Wiper blades |
 When register opened on : AccountSelect
 | Path            |
 | Assets:Checking |
@@ -291,12 +281,14 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
 | Expenses:Auto:Repairs     | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee      | Account                   | Amount  | Memo         |
-| T1  | 2024-04-02 | Home Depot | Assets:Checking           | -184.50 | none         |
-| T1  | 2024-04-02 | Home Depot | Expenses:Home:Maintenance | 100.00  | Paint        |
-| T1  | 2024-04-02 | Home Depot | Expenses:Home:Garden      | 54.50   | Compost      |
-| T1  | 2024-04-02 | Home Depot | Expenses:Auto:Repairs     | 30.00   | Wiper blades |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination | Amount  | Memo  |
+| T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 | none  |
+Given split lines are : TransactionSplit
+| Destination               | Amount | Memo         |
+| Expenses:Home:Maintenance | 100.00 | Paint        |
+| Expenses:Home:Garden      | 54.50  | Compost      |
+| Expenses:Auto:Repairs     | 30.00  | Wiper blades |
 When register opened on : AccountSelect
 | Path            |
 | Assets:Checking |
@@ -325,12 +317,14 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
 | Expenses:Auto:Repairs     | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee      | Account                   | Amount  | Memo         |
-| T1  | 2024-04-02 | Home Depot | Assets:Checking           | -184.50 | none         |
-| T1  | 2024-04-02 | Home Depot | Expenses:Home:Maintenance | 100.00  | Paint        |
-| T1  | 2024-04-02 | Home Depot | Expenses:Home:Garden      | 54.50   | Compost      |
-| T1  | 2024-04-02 | Home Depot | Expenses:Auto:Repairs     | 30.00   | Wiper blades |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination | Amount  | Memo  |
+| T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 | none  |
+Given split lines are : TransactionSplit
+| Destination               | Amount | Memo         |
+| Expenses:Home:Maintenance | 100.00 | Paint        |
+| Expenses:Home:Garden      | 54.50  | Compost      |
+| Expenses:Auto:Repairs     | 30.00  | Wiper blades |
 When register opened on : AccountSelect
 | Path                 |
 | Expenses:Home:Garden |
@@ -352,14 +346,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Groceries | Expense | false       |
 Given today is : Today Vertical
 | Date | 2024-05-15 |
-Given postings are : PostingRow
-| Ref | Date       | Payee  | Account            | Amount  |
-| T1  | 2024-05-01 | Shop A | Assets:Checking    | 1000.00 |
-| T1  | 2024-05-01 | Shop A | Expenses:Groceries | -1000.00 |
-| T2  | 2024-05-10 | Shop B | Assets:Checking    | -40.00  |
-| T2  | 2024-05-10 | Shop B | Expenses:Groceries | 40.00   |
-| T3  | 2024-06-01 | Shop C | Assets:Checking    | -60.00  |
-| T3  | 2024-06-01 | Shop C | Expenses:Groceries | 60.00   |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
+| T1  | Assets:Checking | 2024-05-01 | Shop A | Expenses:Groceries | 1000.00 |
+| T2  | Assets:Checking | 2024-05-10 | Shop B | Expenses:Groceries | -40.00  |
+| T3  | Assets:Checking | 2024-06-01 | Shop C | Expenses:Groceries | -60.00  |
 When register opened on : AccountSelect
 | Path            |
 | Assets:Checking |
@@ -424,14 +415,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee  | Account            | Amount  |
-| T1  | 2023-12-20 | Shop A | Assets:Checking    | 1000.00 |
-| T1  | 2023-12-20 | Shop A | Expenses:Groceries | -1000.00 |
-| T2  | 2024-01-15 | Shop B | Assets:Checking    | -45.00  |
-| T2  | 2024-01-15 | Shop B | Expenses:Groceries | 45.00   |
-| T3  | 2024-02-20 | Shop C | Assets:Checking    | -52.00  |
-| T3  | 2024-02-20 | Shop C | Expenses:Groceries | 52.00   |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
+| T1  | Assets:Checking | 2023-12-20 | Shop A | Expenses:Groceries | 1000.00 |
+| T2  | Assets:Checking | 2024-01-15 | Shop B | Expenses:Groceries | -45.00  |
+| T3  | Assets:Checking | 2024-02-20 | Shop C | Expenses:Groceries | -52.00  |
 When register filtered to dates : DateRange Vertical
 | From | 2024-01-01 |
 | To   | 2024-01-31 |
@@ -464,12 +452,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Auto:Fuel | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee         | Account            | Amount | Memo          |
-| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 | weekly shop   |
-| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00  | none          |
-| T2  | 2024-01-20 | Shell         | Assets:Checking    | -52.00 | shop on route |
-| T2  | 2024-01-20 | Shell         | Expenses:Auto:Fuel | 52.00  | none          |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo          |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | weekly shop   |
+| T2  | Assets:Checking | 2024-01-20 | Shell         | Expenses:Auto:Fuel | -52.00 | shop on route |
 When register searched for : SearchTerm
 | Term |
 | shop |
@@ -495,12 +481,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Auto:Fuel | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee         | Account            | Amount | Memo          |
-| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 | weekly shop   |
-| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00  | none          |
-| T2  | 2024-01-20 | Shell         | Assets:Checking    | -52.00 | shop on route |
-| T2  | 2024-01-20 | Shell         | Expenses:Auto:Fuel | 52.00  | none          |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo          |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | weekly shop   |
+| T2  | Assets:Checking | 2024-01-20 | Shell         | Expenses:Auto:Fuel | -52.00 | shop on route |
 When register searched for : SearchTerm
 | Term  |
 | 52.00 |
@@ -549,7 +533,7 @@ Then register lines are : RegisterLine CompareOnly
 # ---------------------------------------------------------------------------
 
 Description A transaction recorded through SourceAccount/Destination/Amount
-Description needs no join against Postings for its line: it already names its
+Description needs no join against Transactions for its line: it already names its
 Description one line directly. See the section on naming both accounts
 Description directly in Transactions.spectable.
 

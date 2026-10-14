@@ -111,103 +111,6 @@ public:
         }
     }
 
-    void given_postings_are(const std::vector<PostingRowString>& values) {
-        transactions_.clear();
-        splits_.clear();
-        second_row_amount_.clear();
-        std::map<std::string, int> counts;
-        for (const auto& value : values) ++counts[value.ref];
-        for (const auto& value : values) group_into(&transactions_, value, counts[value.ref]);
-    }
-
-    void group_into(std::vector<ledger::Transaction>* into, const PostingRowString& value,
-                    int total_for_ref) {
-        ledger::Transaction* first = nullptr;
-        for (ledger::Transaction& t : *into) {
-            if (t.ref.value() != value.ref) continue;
-            first = &t;
-            break;
-        }
-        const auto on = types::Date::from_iso(value.date);
-        const chart::Ref account_ref = chart_.ref_for_path(value.account);
-        const Money amount{value.amount};
-        const std::string memo = blank(value.memo);
-        types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
-        if (value.cleared != DNCString && !value.cleared.empty())
-            cleared = types::cleared_status_from_string(value.cleared);
-
-        if (first == nullptr) {
-            ledger::Transaction made;
-            made.id = ledger::new_id();
-            made.ref = types::TransactionRef(value.ref);
-            if (on) made.date = *on;
-            made.payee = types::PayeeName(blank(value.payee));
-            made.memo = memo;
-            made.source_account = account_ref;
-            made.amount = amount;
-            made.cleared = cleared;
-            into->push_back(made);
-            return;
-        }
-
-        // Which row this is for its transaction is read from the
-        // transaction's own state, not from how many rows have been seen:
-        // a third or later row collapses into the same one object as the
-        // second once its Destination is set, so counting objects sharing
-        // a Ref stops distinguishing a third row from a second.
-        if (first->destination.is_none()) {
-            ledger::Transaction& t = *first;
-            const bool transfer = total_for_ref == 2 && account_ref != t.source_account &&
-                                  chart_.is_real(t.source_account) &&
-                                  chart_.is_real(account_ref) &&
-                                  !ledger::is_unassigned(chart_, t.source_account) &&
-                                  !ledger::is_unassigned(chart_, account_ref);
-            if (transfer) {
-                ledger::Transaction made;
-                made.id = ledger::new_id();
-                made.ref = t.ref;
-                if (on) made.date = *on;
-                made.payee = types::PayeeName(blank(value.payee));
-                made.memo = memo;
-                made.source_account = account_ref;
-                made.destination = t.source_account;
-                made.amount = amount;
-                made.cleared = cleared;
-                t.destination = account_ref;
-                into->push_back(made);
-            } else {
-                t.destination = account_ref;
-                if (t.memo.empty() && !memo.empty()) t.memo = memo;
-                second_row_amount_[t.id.value()] = {amount, memo};
-            }
-            return;
-        }
-
-        ledger::Transaction& t = *first;
-        if (!chart::is_split(t.destination)) {
-            if (!t.destination.is_none()) {
-                ledger::TransactionSplit promoted;
-                promoted.transaction_id = t.id;
-                promoted.destination = t.destination;
-                const auto at = second_row_amount_.find(t.id.value());
-                if (at != second_row_amount_.end()) {
-                    promoted.amount = at->second.amount;
-                    promoted.memo = at->second.memo;
-                } else {
-                    promoted.amount = -t.amount;
-                }
-                splits_.push_back(promoted);
-            }
-            t.destination = chart::split_ref();
-        }
-        ledger::TransactionSplit s;
-        s.transaction_id = t.id;
-        s.destination = account_ref;
-        s.amount = amount;
-        s.memo = memo;
-        splits_.push_back(s);
-    }
-
     void given_import_target_is(const std::vector<ImportTargetString>& values) {
         ASSERT_FALSE(values.empty());
         target_ = values.front().accountpath;
@@ -419,22 +322,6 @@ public:
                 << "check " << i << " computed balance";
             EXPECT_EQ(parse_bool_cell(values[i].agrees), checks_[i].agrees)
                 << "check " << i << " agrees";
-        }
-    }
-
-    void then_postings_are(const std::vector<PostingRowString>& values) {
-        const std::vector<PostingRowString> got = flatten();
-        ASSERT_EQ(values.size(), got.size()) << "postings in the book:\n" << listing(got);
-        for (std::size_t i = 0; i < values.size(); ++i) {
-            EXPECT_EQ(values[i].ref, got[i].ref) << "posting " << i << " ref";
-            EXPECT_EQ(values[i].date, got[i].date) << "posting " << i << " date";
-            EXPECT_EQ(blank(values[i].payee), blank(got[i].payee)) << "posting " << i << " payee";
-            EXPECT_EQ(values[i].account, got[i].account) << "posting " << i << " account";
-            EXPECT_EQ(Money(values[i].amount), Money(got[i].amount))
-                << "posting " << i << " amount";
-            EXPECT_EQ(blank(values[i].memo), blank(got[i].memo)) << "posting " << i << " memo";
-            if (values[i].cleared != DNCString)
-                EXPECT_EQ(values[i].cleared, got[i].cleared) << "posting " << i << " cleared";
         }
     }
 
@@ -829,34 +716,6 @@ private:
         return out;
     }
 
-    std::vector<PostingRowString> flatten() const {
-        std::vector<PostingRowString> out;
-        for (const ledger::Transaction& t : transactions_) {
-            const std::vector<ledger::Side> sides =
-                ledger::sides_of_display(chart_, t, transactions_, splits_);
-            for (std::size_t i = 0; i < sides.size(); ++i) {
-                const ledger::Side& s = sides[i];
-                PostingRowString row;
-                row.ref = t.ref.value();
-                row.date = t.date.iso();
-                row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = chart_.path_for_ref(s.account);
-                row.amount = s.amount.in_register();
-                row.memo = s.memo.empty() ? "none" : s.memo;
-                row.cleared = types::to_string(i == 0 ? t.cleared
-                                                      : types::ClearedStatus::Uncleared);
-                out.push_back(row);
-            }
-        }
-        return out;
-    }
-
-    static std::string listing(const std::vector<PostingRowString>& rows) {
-        std::string out;
-        for (const auto& row : rows) out += "  " + row.to_string() + "\n";
-        return out;
-    }
-
     // --- the rule tables ---------------------------------------------------
 
     static csv::RowRead one_identical_row() {
@@ -937,4 +796,62 @@ private:
         return got.decided.empty() ? ofx::Disposition::New
                                    : got.decided.front().disposition;
     }
+
+public:
+
+    // The book as the scenario found it, written the way a transaction is
+    // stored: one row is one transaction, naming both its sides.
+    void given_transactions_are(const std::vector<TransactionString>& values) {
+        transactions_.clear();
+        splits_.clear();
+        for (const auto& value : values) {
+            ledger::Transaction t;
+            t.id = ledger::new_id();
+            t.ref = types::TransactionRef(value.ref);
+            const auto on = types::Date::from_iso(value.date);
+            if (on) t.date = *on;
+            t.payee = types::PayeeName(blank(value.payee));
+            t.check_no = types::CheckNumber(blank(value.checkno));
+            t.memo = blank(value.memo);
+            t.source_account = chart_.ref_for_path(blank(value.sourceaccount));
+            t.destination = chart_.ref_for_path(blank(value.destination));
+            t.amount = Money(value.amount);
+            if (value.cleared != DNCString && !value.cleared.empty())
+                t.cleared = types::cleared_status_from_string(value.cleared);
+            transactions_.push_back(t);
+        }
+    }
+
+    // The whole list, in order. Every column the table names is compared; the
+    // ones it leaves out are its defaults, which the string struct has already
+    // filled in, so they are compared too.
+    void then_transactions_are(const std::vector<TransactionString>& values) {
+        ASSERT_EQ(values.size(), transactions_.size()) << "number of transactions";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const ledger::Transaction& got = transactions_[i];
+            const TransactionString& want = values[i];
+            const std::string where = "transaction " + std::to_string(i + 1);
+            if (want.ref != DNCString)
+                EXPECT_EQ(want.ref, got.ref.value()) << where << " ref";
+            if (want.date != DNCString)
+                EXPECT_EQ(want.date, got.date.iso()) << where << " date";
+            if (want.payee != DNCString)
+                EXPECT_EQ(blank(want.payee), got.payee.value()) << where << " payee";
+            if (want.checkno != DNCString)
+                EXPECT_EQ(blank(want.checkno), got.check_no.value()) << where << " check number";
+            if (want.memo != DNCString)
+                EXPECT_EQ(blank(want.memo), got.memo) << where << " memo";
+            if (want.sourceaccount != DNCString)
+                EXPECT_EQ(blank(want.sourceaccount), chart_.path_for_ref(got.source_account))
+                    << where << " source account";
+            if (want.destination != DNCString)
+                EXPECT_EQ(blank(want.destination), chart_.path_for_ref(got.destination))
+                    << where << " destination";
+            if (want.amount != DNCString)
+                EXPECT_EQ(Money(want.amount).cents(), got.amount.cents()) << where << " amount";
+            if (want.cleared != DNCString && !want.cleared.empty())
+                EXPECT_EQ(want.cleared, types::to_string(got.cleared)) << where << " cleared";
+        }
+    }
+
 };

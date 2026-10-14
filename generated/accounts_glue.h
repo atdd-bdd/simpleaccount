@@ -52,33 +52,6 @@ public:
     // again", so there is nothing to do.
     void given_the_chart_of_accounts_is_as_previous() {}
 
-    void given_expenses_groceries_has_postings(const std::vector<PostingCountString>& v) {
-        set_count("Expenses:Groceries", v);
-    }
-    void given_expenses_auto_repairs_has_postings(const std::vector<PostingCountString>& v) {
-        set_count("Expenses:Auto:Repairs", v);
-    }
-    void given_assets_savings_has_postings(const std::vector<PostingCountString>& v) {
-        set_count("Assets:Savings", v);
-    }
-
-    // Postings without a date: these scenarios are about balances, not ordering.
-    void given_postings_are(const std::vector<PostingLineString>& values) {
-        ledger_ = ledger::Ledger();
-        for (const auto& value : values)
-            ledger_.add({types::Date(2024, 1, 1), types::AccountPath(value.account),
-                         Money(value.amount)});
-    }
-
-    void given_dated_postings_are(const std::vector<DatedPostingLineString>& values) {
-        ledger_ = ledger::Ledger();
-        for (const auto& value : values) {
-            const auto date = types::Date::from_iso(value.date);
-            ASSERT_TRUE(date.has_value()) << value.date;
-            ledger_.add({*date, types::AccountPath(value.account), Money(value.amount)});
-        }
-    }
-
     // ----------------------------------------------------------------- whens
 
     void when_account_added(const std::vector<AccountString>& values) {
@@ -233,17 +206,6 @@ public:
             EXPECT_EQ(Money(value.balance).cents(),
                       ledger_.balance_as_at(value.account, *as_at).cents())
                 << value.account << " as at " << value.asat << " -- " << value.notes;
-        }
-    }
-
-    void then_postings_created_are(const std::vector<DatedPostingLineString>& values) {
-        ASSERT_EQ(values.size(), created_postings_.size()) << "number of postings created";
-        for (std::size_t i = 0; i < values.size(); ++i) {
-            EXPECT_EQ(values[i].date, created_postings_[i].date.iso()) << "posting " << i;
-            EXPECT_EQ(values[i].account, created_postings_[i].account.value())
-                << "posting " << i;
-            EXPECT_EQ(Money(values[i].amount).cents(), created_postings_[i].amount.cents())
-                << "posting " << i;
         }
     }
 
@@ -662,4 +624,85 @@ public:
 private:
     std::vector<chart::CategoryRawRow> raw_category_rows_;
     std::vector<chart::Category> categories_from_raw_;
+public:
+
+    void given_expenses_groceries_has_entries(const std::vector<EntryCountString>& values) {
+        set_count("Expenses:Groceries", values);
+    }
+
+    void given_expenses_auto_repairs_has_entries(const std::vector<EntryCountString>& values) {
+        set_count("Expenses:Auto:Repairs", values);
+    }
+
+    void given_assets_savings_has_entries(const std::vector<EntryCountString>& values) {
+        set_count("Assets:Savings", values);
+    }
+
+    void set_count(const std::string& path, const std::vector<EntryCountString>& values) {
+        for (const auto& value : values) counts_[path] = std::stoi(value.count);
+        apply_counts();
+    }
+
+    // Amounts against accounts, with no date: these scenarios are about what an
+    // account holds, not about when.
+    void given_entries_are(const std::vector<AccountEntryString>& values) {
+        ledger_ = ledger::Ledger();
+        for (const auto& value : values)
+            ledger_.add({types::Date(2024, 1, 1), types::AccountPath(value.account),
+                         Money(value.amount)});
+    }
+
+    void given_dated_entries_are(const std::vector<DatedAccountEntryString>& values) {
+        ledger_ = ledger::Ledger();
+        for (const auto& value : values) {
+            const auto date = types::Date::from_iso(value.date);
+            ASSERT_TRUE(date.has_value()) << value.date;
+            ledger_.add({*date, types::AccountPath(value.account), Money(value.amount)});
+        }
+    }
+
+    // A transaction puts its amount against its source account and the opposite
+    // against its destination. The ledger here is a set of amounts per account,
+    // so both sides of the one transaction are added to it.
+    void given_transactions_are(const std::vector<TransactionString>& values) {
+        ledger_ = ledger::Ledger();
+        for (const auto& value : values) {
+            types::Date on(2024, 1, 1);
+            const auto parsed = types::Date::from_iso(value.date);
+            if (parsed) on = *parsed;
+            const Money amount{value.amount};
+            const std::string source = blank(value.sourceaccount);
+            const std::string destination = blank(value.destination);
+            if (!source.empty())
+                ledger_.add({on, types::AccountPath(source), amount});
+            if (!destination.empty())
+                ledger_.add({on, types::AccountPath(destination), -amount});
+        }
+    }
+
+    // Opening an account makes one transaction: the account against opening
+    // equity. It reaches here as the pair of amounts the ledger was given, so
+    // the first is the transaction's own side and the second its destination.
+    void then_transactions_created_are(const std::vector<TransactionString>& values) {
+        ASSERT_EQ(values.size() * 2, created_postings_.size())
+            << "number of entries created";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const ledger::DatedPosting& own = created_postings_[i * 2];
+            const ledger::DatedPosting& other = created_postings_[i * 2 + 1];
+            const TransactionString& want = values[i];
+            const std::string where = "transaction " + std::to_string(i + 1);
+            if (want.date != DNCString)
+                EXPECT_EQ(want.date, own.date.iso()) << where << " date";
+            if (want.sourceaccount != DNCString)
+                EXPECT_EQ(blank(want.sourceaccount), own.account.value())
+                    << where << " source account";
+            if (want.destination != DNCString)
+                EXPECT_EQ(blank(want.destination), other.account.value())
+                    << where << " destination";
+            if (want.amount != DNCString)
+                EXPECT_EQ(Money(want.amount).cents(), own.amount.cents())
+                    << where << " amount";
+        }
+    }
+
 };

@@ -85,80 +85,6 @@ public:
 
     void given_holdings_are_as_previous() {}
 
-    void given_postings_are(const std::vector<PostingRowString>& values) {
-        transactions_.clear();
-        splits_.clear();
-        second_row_amount_.clear();
-        for (const auto& value : values) group_into(&transactions_, value);
-        ledger_ = ledger::Ledger();
-        ledger::add_to_book(&ledger_, chart_, transactions_, splits_);
-    }
-
-    void group_into(std::vector<ledger::Transaction>* into, const PostingRowString& value) {
-        ledger::Transaction* first = nullptr;
-        for (ledger::Transaction& t : *into) {
-            if (t.ref.value() != value.ref) continue;
-            first = &t;
-            break;
-        }
-        const auto on = types::Date::from_iso(value.date);
-        ASSERT_TRUE(on.has_value()) << value.date;
-        const chart::Ref account_ref = chart_.ref_for_path(value.account);
-        const Money amount{value.amount};
-        const std::string memo = blank(value.memo);
-        types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
-        if (value.cleared != DNCString && !value.cleared.empty())
-            cleared = types::cleared_status_from_string(value.cleared);
-
-        if (first == nullptr) {
-            ledger::Transaction made;
-            made.id = ledger::new_id();
-            made.ref = types::TransactionRef(value.ref);
-            if (on) made.date = *on;
-            made.payee = types::PayeeName(blank(value.payee));
-            made.memo = memo;
-            made.source_account = account_ref;
-            made.amount = amount;
-            made.cleared = cleared;
-            into->push_back(made);
-            return;
-        }
-        // Which row this is for its transaction is read from the
-        // transaction's own state, not from how many rows have been seen:
-        // a third or later row collapses into the same one object as the
-        // second once its Destination is set, so counting objects sharing
-        // a Ref stops distinguishing a third row from a second.
-        if (first->destination.is_none()) {
-            first->destination = account_ref;
-            if (first->memo.empty() && !memo.empty()) first->memo = memo;
-            second_row_amount_[first->id.value()] = {amount, memo};
-            return;
-        }
-        ledger::Transaction& t = *first;
-        if (!chart::is_split(t.destination)) {
-            if (!t.destination.is_none()) {
-                ledger::TransactionSplit promoted;
-                promoted.transaction_id = t.id;
-                promoted.destination = t.destination;
-                const auto at = second_row_amount_.find(t.id.value());
-                if (at != second_row_amount_.end()) {
-                    promoted.amount = at->second.amount;
-                    promoted.memo = at->second.memo;
-                } else {
-                    promoted.amount = -t.amount;
-                }
-                splits_.push_back(promoted);
-            }
-            t.destination = chart::split_ref();
-        }
-        ledger::TransactionSplit s;
-        s.transaction_id = t.id;
-        s.destination = account_ref;
-        s.amount = amount;
-        s.memo = memo;
-        splits_.push_back(s);
-    }
-
     void given_postings_are_as_previous() {}
 
     void given_today_is(const std::vector<TodayString>& values) {
@@ -172,6 +98,7 @@ public:
 
     void when_shares_bought(const std::vector<TradeEntryString>& values) {
         last_created_.clear();
+        last_made_.clear();
         for (const auto& value : values) {
             const types::AccountPath account(value.account);
             const auto date = types::Date::from_iso(value.date);
@@ -207,6 +134,7 @@ public:
 
     void when_shares_sold(const std::vector<TradeEntryString>& values) {
         last_created_.clear();
+        last_made_.clear();
         rejection_ = chart::Rejection();
         for (const auto& value : values) {
             const types::AccountPath account(value.account);
@@ -233,6 +161,7 @@ public:
 
     void when_price_recorded(const std::vector<PriceEntryString>& values) {
         last_created_.clear();
+        last_made_.clear();
         for (const auto& value : values) {
             const types::Symbol symbol(blank(value.symbol));
             const double new_price = std::stod(value.price);
@@ -257,6 +186,7 @@ public:
 
     void when_dividend_recorded(const std::vector<IncomeEntryString>& values) {
         last_created_.clear();
+        last_made_.clear();
         for (const auto& value : values) {
             const types::AccountPath account(value.account);
             const types::AccountPath category(value.category);
@@ -286,6 +216,7 @@ public:
 
     void when_value_stated(const std::vector<ValueEntryString>& values) {
         last_created_.clear();
+        last_made_.clear();
         rejection_ = chart::Rejection();
         for (const auto& value : values) {
             const types::AccountPath account(value.account);
@@ -361,16 +292,6 @@ public:
                           ledger_.display_balance(value.account, a->type).cents())
                     << value.account << " display -- " << value.notes;
         }
-    }
-
-    // "Then postings are" and "Then postings created are" ask the same
-    // question in this file: what did the last "When" create.
-    void then_postings_are(const std::vector<PostingRowString>& values) {
-        check_created_postings(values);
-    }
-
-    void then_postings_created_are(const std::vector<PostingRowString>& values) {
-        check_created_postings(values);
     }
 
     void then_holdings_are(const std::vector<HoldingString>& values) {
@@ -492,6 +413,10 @@ private:
 
     chart::Rejection rejection_;
     std::vector<PostingRowString> last_created_;
+    // The transactions a When has just made, which is what a
+    // "Then transactions are" in this file is asking about: the book
+    // also holds whatever the Given put there.
+    std::vector<ledger::Transaction> last_made_;
     std::string notice_;
     reports::CategoryReport report_;
 
@@ -527,6 +452,7 @@ private:
     void apply_transaction(const ledger::Transaction& t,
                            const std::vector<ledger::TransactionSplit>& splits = {}) {
         transactions_.push_back(t);
+        last_made_.push_back(t);
         for (const ledger::TransactionSplit& s : splits) splits_.push_back(s);
         for (const ledger::Side& s : ledger::sides_of(t, splits)) {
             const std::string path = chart_.path_for_ref(s.account);
@@ -543,14 +469,92 @@ private:
         }
     }
 
-    void check_created_postings(const std::vector<PostingRowString>& values) {
-        ASSERT_EQ(values.size(), last_created_.size()) << "postings created";
-        for (std::size_t i = 0; i < values.size(); ++i) {
-            EXPECT_EQ(values[i].ref, last_created_[i].ref) << "posting " << i << " ref";
-            EXPECT_EQ(values[i].date, last_created_[i].date) << "posting " << i << " date";
-            EXPECT_EQ(values[i].account, last_created_[i].account) << "posting " << i << " account";
-            EXPECT_EQ(Money(values[i].amount).cents(), Money(last_created_[i].amount).cents())
-                << "posting " << i << " amount";
+public:
+
+    // The book as the scenario found it, written the way a transaction is
+    // stored: one row is one transaction, naming both its sides.
+    void given_transactions_are(const std::vector<TransactionString>& values) {
+        transactions_.clear();
+        splits_.clear();
+        ledger_ = ledger::Ledger();
+        for (const auto& value : values) {
+            ledger::Transaction t;
+            t.id = ledger::new_id();
+            t.ref = types::TransactionRef(value.ref);
+            const auto on = types::Date::from_iso(value.date);
+            if (on) t.date = *on;
+            t.payee = types::PayeeName(blank(value.payee));
+            t.check_no = types::CheckNumber(blank(value.checkno));
+            t.memo = blank(value.memo);
+            t.source_account = chart_.ref_for_path(blank(value.sourceaccount));
+            t.destination = chart_.ref_for_path(blank(value.destination));
+            t.amount = Money(value.amount);
+            if (value.cleared != DNCString && !value.cleared.empty())
+                t.cleared = types::cleared_status_from_string(value.cleared);
+            transactions_.push_back(t);
+            // The balances in this file are read from the ledger, so both
+            // sides of the transaction go into it, the same way
+            // apply_transaction does for the ones a When makes.
+            for (const ledger::Side& side : ledger::sides_of(t, splits_))
+                ledger_.add({t.date, types::AccountPath(chart_.path_for_ref(side.account)),
+                             side.amount, t.ref.value()});
         }
     }
+
+    // What the When just made, in the order it made them.
+    void then_transactions_are(const std::vector<TransactionString>& values) {
+        ASSERT_EQ(values.size(), last_made_.size()) << "number of transactions made";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const ledger::Transaction& got = last_made_[i];
+            const TransactionString& want = values[i];
+            const std::string where = "transaction " + std::to_string(i + 1);
+            if (want.ref != DNCString)
+                EXPECT_EQ(want.ref, got.ref.value()) << where << " ref";
+            if (want.date != DNCString)
+                EXPECT_EQ(want.date, got.date.iso()) << where << " date";
+            if (want.sourceaccount != DNCString)
+                EXPECT_EQ(blank(want.sourceaccount), chart_.path_for_ref(got.source_account))
+                    << where << " source account";
+            if (want.destination != DNCString)
+                EXPECT_EQ(blank(want.destination), chart_.path_for_ref(got.destination))
+                    << where << " destination";
+            if (want.amount != DNCString)
+                EXPECT_EQ(Money(want.amount).cents(), got.amount.cents()) << where << " amount";
+        }
+    }
+
+    void then_transactions_created_are(const std::vector<TransactionString>& values) {
+        then_transactions_are(values);
+    }
+
+    // Which transaction a table of split lines belongs to: the one that says
+    // Split, or failing that the last one the scenario established.
+    types::TransactionId split_owner_id() const {
+        for (auto it = transactions_.rbegin(); it != transactions_.rend(); ++it)
+            if (chart::is_split(it->destination)) return it->id;
+        return transactions_.empty() ? types::TransactionId()
+                                     : transactions_.back().id;
+    }
+
+    void then_split_lines_are(const std::vector<TransactionSplitString>& values) {
+        const std::vector<ledger::TransactionSplit> got =
+            ledger::split_lines_of(splits_, split_owner_id());
+        ASSERT_EQ(values.size(), got.size()) << "number of split lines";
+        for (std::size_t k = 0; k < values.size(); ++k) {
+            const std::string where = "split line " + std::to_string(k + 1);
+            EXPECT_EQ(blank(values[k].destination), chart_.path_for_ref(got[k].destination))
+                << where << " destination";
+            EXPECT_EQ(Money(values[k].amount).cents(), got[k].amount.cents())
+                << where << " amount";
+            if (values[k].memo != DNCString)
+                EXPECT_EQ(blank(values[k].memo), got[k].memo) << where << " memo";
+        }
+    }
+
+public:
+
+    // The Background's transactions were passed in full by the step before this
+    // one, so "the same again" has nothing left to do.
+    void given_transactions_are_as_previous() {}
+
 };

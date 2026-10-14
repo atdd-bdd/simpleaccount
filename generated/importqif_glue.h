@@ -158,16 +158,6 @@ public:
         }
     }
 
-    void then_postings_are(const std::vector<PostingRowString>& values) {
-        const std::vector<PostingRowString> got = flatten();
-        ASSERT_EQ(values.size(), got.size()) << "number of postings";
-        for (std::size_t i = 0; i < values.size(); ++i) compare_posting(values[i], got[i], i);
-    }
-
-    void then_postings_created_are(const std::vector<PostingRowString>& values) {
-        then_postings_are(values);
-    }
-
     void then_import_summary_is(const std::vector<ImportSummaryString>& values) {
         for (const auto& value : values) {
             EXPECT_EQ(std::stoi(value.new_), result_.summary.created) << "new";
@@ -275,7 +265,7 @@ public:
         }
     }
 
-    void examples_businessrule_how_a_split_line_amount_becomes_a_posting_amount(
+    void examples_businessrule_how_a_split_line_amount_becomes_a_split_line_s_amount(
             const std::vector<SplitLineSignString>& values) {
         for (const auto& value : values) {
             const SplitLineSignTyped t = SplitLineSignTyped::from_string_struct(value);
@@ -344,40 +334,6 @@ private:
         std::string out;
         for (const qif::Note& n : result_.notes) out += "[" + n.kind + "] " + n.detail + "; ";
         return out;
-    }
-
-    std::vector<PostingRowString> flatten() const {
-        std::vector<PostingRowString> out;
-        for (const ledger::Transaction& t : result_.transactions) {
-            const std::vector<ledger::Side> sides = ledger::sides_of(t, result_.splits);
-            for (std::size_t i = 0; i < sides.size(); ++i) {
-                const ledger::Side& s = sides[i];
-                PostingRowString row;
-                row.ref = t.ref.value();
-                row.date = t.date.iso();
-                row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = result_.accounts.path_for_ref(s.account);
-                row.amount = s.amount.in_register();
-                row.memo = s.memo.empty() ? "none" : s.memo;
-                row.cleared = types::to_string(i == 0 ? t.cleared
-                                                      : types::ClearedStatus::Uncleared);
-                out.push_back(row);
-            }
-        }
-        return out;
-    }
-
-    static void compare_posting(const PostingRowString& want, const PostingRowString& got,
-                                std::size_t i) {
-        EXPECT_EQ(want.ref, got.ref) << "posting " << i << " ref";
-        EXPECT_EQ(want.date, got.date) << "posting " << i << " date";
-        EXPECT_EQ(blank(want.payee), blank(got.payee)) << "posting " << i << " payee";
-        EXPECT_EQ(want.account, got.account) << "posting " << i << " account";
-        EXPECT_EQ(Money(want.amount).cents(), Money(got.amount).cents())
-            << "posting " << i << " on " << got.account;
-        EXPECT_EQ(blank(want.memo), blank(got.memo)) << "posting " << i << " memo";
-        if (want.cleared != DNCString && !want.cleared.empty())
-            EXPECT_EQ(want.cleared, got.cleared) << "posting " << i << " cleared";
     }
 
     // What the file's own dates prove about their order.
@@ -985,6 +941,70 @@ public:
                 EXPECT_EQ(-50000, ever.cents()) << value.case_;
             }
         }
+    }
+
+public:
+
+    // What the migration made, in the order it made it.
+    void then_transactions_are(const std::vector<TransactionString>& values) {
+        ASSERT_EQ(values.size(), result_.transactions.size())
+            << "transactions the file became: " << first_note();
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const ledger::Transaction& got = result_.transactions[i];
+            const TransactionString& want = values[i];
+            const std::string where = "transaction " + std::to_string(i + 1);
+            if (want.ref != DNCString)
+                EXPECT_EQ(want.ref, got.ref.value()) << where << " ref";
+            if (want.date != DNCString)
+                EXPECT_EQ(want.date, got.date.iso()) << where << " date";
+            if (want.payee != DNCString)
+                EXPECT_EQ(blank(want.payee), got.payee.value()) << where << " payee";
+            if (want.checkno != DNCString)
+                EXPECT_EQ(blank(want.checkno), got.check_no.value()) << where << " check number";
+            if (want.memo != DNCString)
+                EXPECT_EQ(blank(want.memo), got.memo) << where << " memo";
+            if (want.tag != DNCString)
+                EXPECT_EQ(blank(want.tag), got.tag) << where << " tag";
+            if (want.sourceaccount != DNCString)
+                EXPECT_EQ(blank(want.sourceaccount),
+                          result_.accounts.path_for_ref(got.source_account))
+                    << where << " source account";
+            if (want.destination != DNCString)
+                EXPECT_EQ(blank(want.destination),
+                          result_.accounts.path_for_ref(got.destination))
+                    << where << " destination";
+            if (want.amount != DNCString)
+                EXPECT_EQ(Money(want.amount).cents(), got.amount.cents()) << where << " amount";
+            if (want.cleared != DNCString && !want.cleared.empty())
+                EXPECT_EQ(want.cleared, types::to_string(got.cleared)) << where << " cleared";
+        }
+    }
+
+    // The lines of the one split the file became. A scenario with more than one
+    // split in it would have no way to say which lines were whose, so there is
+    // never more than one.
+    void then_split_lines_are(const std::vector<TransactionSplitString>& values) {
+        const ledger::Transaction* owner = nullptr;
+        for (const ledger::Transaction& t : result_.transactions)
+            if (chart::is_split(t.destination)) owner = &t;
+        ASSERT_NE(nullptr, owner) << "no split was made: " << first_note();
+        const std::vector<ledger::TransactionSplit> got =
+            ledger::split_lines_of(result_.splits, owner->id);
+        ASSERT_EQ(values.size(), got.size()) << "number of split lines";
+        for (std::size_t k = 0; k < values.size(); ++k) {
+            const std::string where = "split line " + std::to_string(k + 1);
+            EXPECT_EQ(blank(values[k].destination),
+                      result_.accounts.path_for_ref(got[k].destination))
+                << where << " destination";
+            EXPECT_EQ(Money(values[k].amount).cents(), got[k].amount.cents())
+                << where << " amount";
+            if (values[k].memo != DNCString)
+                EXPECT_EQ(blank(values[k].memo), got[k].memo) << where << " memo";
+        }
+    }
+
+    void then_transactions_created_are(const std::vector<TransactionString>& values) {
+        then_transactions_are(values);
     }
 
 };

@@ -119,14 +119,11 @@ Given holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 110.0000 | 2024-06-28 |
 | Assets:Brokerage:BRK.B | BRK.B  | 10     | 405.0000 | 2024-06-28 |
-Given postings are : PostingRow
-| Ref | Date       | Account                | Amount   |
-| T1  | 2024-01-02 | Assets:Brokerage:Cash  | 2500.00  |
-| T1  | 2024-01-02 | Equity:Opening Balances | -2500.00 |
-| T2  | 2024-01-03 | Assets:Brokerage:VTSAX | 11000.00 |
-| T2  | 2024-01-03 | Equity:Opening Balances | -11000.00 |
-| T3  | 2024-01-03 | Assets:Brokerage:BRK.B | 4050.00  |
-| T3  | 2024-01-03 | Equity:Opening Balances | -4050.00 |
+Given transactions are : Transaction
+| Ref | SourceAccount          | Date       | Destination             | Amount   |
+| T1  | Assets:Brokerage:Cash  | 2024-01-02 | Equity:Opening Balances | 2500.00  |
+| T2  | Assets:Brokerage:VTSAX | 2024-01-03 | Equity:Opening Balances | 11000.00 |
+| T3  | Assets:Brokerage:BRK.B | 2024-01-03 | Equity:Opening Balances | 4050.00  |
 Then rolled up balances are : RolledUpBalance
 | Account                | OwnBalance | TotalBalance | Notes            |
 | Assets:Brokerage:Cash  | 2500.00    | 2500.00      | Uninvested cash  |
@@ -150,39 +147,37 @@ Description What is typed to record a trade.
 | Proceeds  | Money       | 0.00       |
 
 Scenario Buying shares moves cash into the holding
-Description Two postings, and no gain to compute. The holding is carried at
+Description Two transactions, and no gain to compute. The holding is carried at
 Description what was paid for it until a price is recorded.
 Given the chart of accounts is as previous
 Given holdings are : Holdings
 | Account                | Symbol | Shares | Price | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 0      | 0     | 2024-01-01 |
-Given postings are : PostingRow
-| Ref | Date       | Account                 | Amount    |
-| T1  | 2024-01-02 | Assets:Brokerage:Cash   | 20000.00  |
-| T1  | 2024-01-02 | Equity:Opening Balances | -20000.00 |
+Given transactions are : Transaction
+| Ref | SourceAccount         | Date       | Destination             | Amount   |
+| T1  | Assets:Brokerage:Cash | 2024-01-02 | Equity:Opening Balances | 20000.00 |
 When shares bought : TradeEntry Vertical
 | Account | Assets:Brokerage:VTSAX |
 | Date    | 2024-02-01             |
 | Symbol  | VTSAX                  |
 | Shares  | 100                    |
 | Price   | 100.0000               |
-Then postings are : PostingRow
-| Ref | Date       | Account                | Amount    |
-| T2  | 2024-02-01 | Assets:Brokerage:VTSAX | 10000.00  |
-| T2  | 2024-02-01 | Assets:Brokerage:Cash  | -10000.00 |
+Then transactions are : Transaction
+| Ref | SourceAccount          | Date       | Destination           | Amount   |
+| T2  | Assets:Brokerage:VTSAX | 2024-02-01 | Assets:Brokerage:Cash | 10000.00 |
 Then holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-02-01 |
 
-# Left $WIP: "Given postings are as previous" establishes nothing -- this
+# Left $WIP: "Given transactions are as previous" establishes nothing -- this
 # file's Background only inlines a real chart of accounts, never a real
-# postings table, and no earlier step in this scenario gives one either. So
+# transactions table, and no earlier step in this scenario gives one either. So
 # the ledger holds zero transactions when "shares bought" runs, and the new
 # purchase becomes T1, not the T2 the Then table below expects. The Then
-# table reads as if it continues the postings of "Buying shares moves cash
+# table reads as if it continues the transactions of "Buying shares moves cash
 # into the holding" (which does have a real T1), but "as previous" does not
 # reach across scenarios -- see the "Never write 'as previous'" rule in
-# CLAUDE.md. Either this scenario needs its own explicit "Given postings
+# CLAUDE.md. Either this scenario needs its own explicit "Given transactions
 # are" table (most likely with a T1 opening balance, as the sibling
 # scenarios all have), or the Then table's Ref needs to read T1; that is a
 # decision for the spec's author, not a glue fix.
@@ -190,12 +185,12 @@ $WIP
 Scenario A commission is an expense, not part of the holding
 Description Folding the fee into the value of the holding would make the
 Description invariant false, because the shares did not cost more than their
-Description price. It is a three-posting transaction.
+Description price. It is a three-transaction transaction.
 Given the chart of accounts is as previous
 Given holdings are : Holdings
 | Account                | Symbol | Shares | Price | PriceAsOf  |
 | Assets:Brokerage:BRK.B | BRK.B  | 0      | 0     | 2024-01-01 |
-Given postings are as previous
+Given transactions are as previous
 When shares bought : TradeEntry Vertical
 | Account | Assets:Brokerage:BRK.B |
 | Date    | 2024-02-01             |
@@ -203,11 +198,13 @@ When shares bought : TradeEntry Vertical
 | Shares  | 10                     |
 | Price   | 400.0000               |
 | Fee     | 6.95                   |
-Then postings are : PostingRow
-| Ref | Date       | Account                  | Amount   |
-| T2  | 2024-02-01 | Assets:Brokerage:BRK.B   | 4000.00  |
-| T2  | 2024-02-01 | Expenses:Investment:Fees | 6.95     |
-| T2  | 2024-02-01 | Assets:Brokerage:Cash    | -4006.95 |
+Then transactions are : Transaction
+| Ref | SourceAccount          | Date       | Destination | Amount  |
+| T2  | Assets:Brokerage:BRK.B | 2024-02-01 | Split       | 4000.00 |
+Then split lines are : TransactionSplit
+| Destination              | Amount   |
+| Expenses:Investment:Fees | 6.95     |
+| Assets:Brokerage:Cash    | -4006.95 |
 
 Scenario Buying more shares averages the price, because no lots are kept
 Description This is the simplification. Two purchases at different prices leave
@@ -218,12 +215,10 @@ Given the chart of accounts is as previous
 Given holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-02-01 |
-Given postings are : PostingRow
-| Ref | Date       | Account                 | Amount    |
-| T1  | 2024-01-02 | Assets:Brokerage:Cash   | 20000.00  |
-| T1  | 2024-01-02 | Equity:Opening Balances | -20000.00 |
-| T2  | 2024-02-01 | Assets:Brokerage:VTSAX  | 10000.00  |
-| T2  | 2024-02-01 | Assets:Brokerage:Cash   | -10000.00 |
+Given transactions are : Transaction
+| Ref | SourceAccount          | Date       | Destination             | Amount   |
+| T1  | Assets:Brokerage:Cash  | 2024-01-02 | Equity:Opening Balances | 20000.00 |
+| T2  | Assets:Brokerage:VTSAX | 2024-02-01 | Assets:Brokerage:Cash   | 10000.00 |
 When shares bought : TradeEntry Vertical
 | Account | Assets:Brokerage:VTSAX |
 | Date    | 2024-03-01             |
@@ -266,20 +261,18 @@ Given the chart of accounts is as previous
 Given holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 150    | 106.6667 | 2024-03-01 |
-Given postings are : PostingRow
-| Ref | Date       | Account                 | Amount    |
-| T1  | 2024-03-01 | Assets:Brokerage:VTSAX  | 16000.00  |
-| T1  | 2024-03-01 | Equity:Opening Balances | -16000.00 |
+Given transactions are : Transaction
+| Ref | SourceAccount          | Date       | Destination             | Amount   |
+| T1  | Assets:Brokerage:VTSAX | 2024-03-01 | Equity:Opening Balances | 16000.00 |
 When shares sold : TradeEntry Vertical
 | Account | Assets:Brokerage:VTSAX |
 | Date    | 2024-04-01             |
 | Symbol  | VTSAX                  |
 | Shares  | 50                     |
 | Price   | 106.6667               |
-Then postings are : PostingRow
-| Ref | Date       | Account                | Amount    |
-| T2  | 2024-04-01 | Assets:Brokerage:Cash  | 5333.34   |
-| T2  | 2024-04-01 | Assets:Brokerage:VTSAX | -5333.34  |
+Then transactions are : Transaction
+| Ref | SourceAccount         | Date       | Destination            | Amount  |
+| T2  | Assets:Brokerage:Cash | 2024-04-01 | Assets:Brokerage:VTSAX | 5333.34 |
 Then holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 106.6666 | 2024-04-01 |
@@ -294,21 +287,22 @@ Given the chart of accounts is as previous
 Given holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-03-01 |
-Given postings are : PostingRow
-| Ref | Date       | Account                 | Amount    |
-| T1  | 2024-03-01 | Assets:Brokerage:VTSAX  | 10000.00  |
-| T1  | 2024-03-01 | Equity:Opening Balances | -10000.00 |
+Given transactions are : Transaction
+| Ref | SourceAccount          | Date       | Destination             | Amount   |
+| T1  | Assets:Brokerage:VTSAX | 2024-03-01 | Equity:Opening Balances | 10000.00 |
 When shares sold : TradeEntry Vertical
 | Account | Assets:Brokerage:VTSAX |
 | Date    | 2024-04-01             |
 | Symbol  | VTSAX                  |
 | Shares  | 100                    |
 | Price   | 130.0000               |
-Then postings are : PostingRow
-| Ref | Date       | Account                     | Amount    |
-| T2  | 2024-04-01 | Assets:Brokerage:Cash       | 13000.00  |
-| T2  | 2024-04-01 | Assets:Brokerage:VTSAX      | -10000.00 |
-| T2  | 2024-04-01 | Equity:Market Value Changes | -3000.00  |
+Then transactions are : Transaction
+| Ref | SourceAccount         | Date       | Destination | Amount   |
+| T2  | Assets:Brokerage:Cash | 2024-04-01 | Split       | 13000.00 |
+Then split lines are : TransactionSplit
+| Destination                 | Amount    |
+| Assets:Brokerage:VTSAX      | -10000.00 |
+| Equity:Market Value Changes | -3000.00  |
 Then holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 0      | 130.0000 | 2024-04-01 |
@@ -341,18 +335,16 @@ Given the chart of accounts is as previous
 Given holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-03-01 |
-Given postings are : PostingRow
-| Ref | Date       | Account                 | Amount    |
-| T1  | 2024-03-01 | Assets:Brokerage:VTSAX  | 10000.00  |
-| T1  | 2024-03-01 | Equity:Opening Balances | -10000.00 |
+Given transactions are : Transaction
+| Ref | SourceAccount          | Date       | Destination             | Amount   |
+| T1  | Assets:Brokerage:VTSAX | 2024-03-01 | Equity:Opening Balances | 10000.00 |
 When price recorded : PriceEntry Vertical
 | Symbol | VTSAX      |
 | Price  | 110.0000   |
 | AsOf   | 2024-06-28 |
-Then postings are : PostingRow
-| Ref | Date       | Account                     | Amount   |
-| T2  | 2024-06-28 | Assets:Brokerage:VTSAX      | 1000.00  |
-| T2  | 2024-06-28 | Equity:Market Value Changes | -1000.00 |
+Then transactions are : Transaction
+| Ref | SourceAccount          | Date       | Destination                 | Amount  |
+| T2  | Assets:Brokerage:VTSAX | 2024-06-28 | Equity:Market Value Changes | 1000.00 |
 Then holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 110.0000 | 2024-06-28 |
@@ -366,31 +358,30 @@ Attributes PriceEntry
 | Price     | Price  | 0          |
 | AsOf      | Date   | 2024-01-01 |
 
-# Left $WIP: both "Given holdings are as previous" and "Given postings are
+# Left $WIP: both "Given holdings are as previous" and "Given transactions are
 # as previous" establish nothing -- this file's Background inlines only a
 # real chart of accounts, and nothing earlier in this scenario gives a real
-# holdings or postings table either. So when "price recorded" runs there is
+# holdings or transactions table either. So when "price recorded" runs there is
 # no VTSAX holding to look up at all, and the -1000.00 / 1000.00 in the Then
 # table below has nothing to be computed from. The scenario reads as if it
 # continues "Recording a new price revalues the holding" just above it (100
 # shares at 100.0000, a T1 of 10000.00), but "as previous" does not reach
 # across scenarios -- see the "Never write 'as previous'" rule in CLAUDE.md.
-# Spelling out the real holdings and postings tables (and the Then Ref,
+# Spelling out the real holdings and transactions tables (and the Then Ref,
 # which would then be T2) is a decision for the spec's author, not a glue
 # fix.
 $WIP
 Scenario A price that falls revalues downwards
 Given the chart of accounts is as previous
 Given holdings are as previous
-Given postings are as previous
+Given transactions are as previous
 When price recorded : PriceEntry Vertical
 | Symbol | VTSAX      |
 | Price  | 90.0000    |
 | AsOf   | 2024-06-28 |
-Then postings are : PostingRow
-| Ref | Date       | Account                     | Amount   |
-| T2  | 2024-06-28 | Assets:Brokerage:VTSAX      | -1000.00 |
-| T2  | 2024-06-28 | Equity:Market Value Changes | 1000.00  |
+Then transactions are : Transaction
+| Ref | SourceAccount          | Date       | Destination                 | Amount   |
+| T2  | Assets:Brokerage:VTSAX | 2024-06-28 | Equity:Market Value Changes | -1000.00 |
 
 # Left $WIP for the same reason as "A price that falls revalues downwards"
 # just above: "Given holdings are as previous" establishes nothing (this
@@ -404,13 +395,13 @@ Description A revaluation of zero is not worth a transaction, and a register
 Description full of them would hide the ones that matter.
 Given the chart of accounts is as previous
 Given holdings are as previous
-Given postings are as previous
+Given transactions are as previous
 When price recorded : PriceEntry Vertical
 | Symbol | VTSAX      |
 | Price  | 100.0000   |
 | AsOf   | 2024-06-28 |
-Then postings created are : PostingRow
-| Ref | Date | Account | Amount |
+Then transactions created are : Transaction
+| Ref | SourceAccount | Date | Destination | Amount |
 Then holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-06-28 |
@@ -419,7 +410,7 @@ Then holdings are : Holdings
 Scenario A price applies to every account holding that symbol
 Description The same fund held in two accounts is priced once. The revaluation
 Description is one transaction per holding, because each holding is its own
-Description account and a posting belongs to one.
+Description account and a transaction belongs to one.
 Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type       | Placeholder |
 | Assets:Brokerage            | Brokerage  | true        |
@@ -432,28 +423,24 @@ Given holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-03-01 |
 | Assets:IRA:VTSAX       | VTSAX  | 50     | 100.0000 | 2024-03-01 |
-Given postings are : PostingRow
-| Ref | Date       | Account                 | Amount    |
-| T1  | 2024-03-01 | Assets:Brokerage:VTSAX  | 10000.00  |
-| T1  | 2024-03-01 | Equity:Opening Balances | -10000.00 |
-| T2  | 2024-03-01 | Assets:IRA:VTSAX        | 5000.00   |
-| T2  | 2024-03-01 | Equity:Opening Balances | -5000.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount          | Date       | Destination             | Amount   |
+| T1  | Assets:Brokerage:VTSAX | 2024-03-01 | Equity:Opening Balances | 10000.00 |
+| T2  | Assets:IRA:VTSAX       | 2024-03-01 | Equity:Opening Balances | 5000.00  |
 When price recorded : PriceEntry Vertical
 | Symbol | VTSAX      |
 | Price  | 110.0000   |
 | AsOf   | 2024-06-28 |
-Then postings created are : PostingRow
-| Ref | Date       | Account                     | Amount   |
-| T3  | 2024-06-28 | Assets:Brokerage:VTSAX      | 1000.00  |
-| T3  | 2024-06-28 | Equity:Market Value Changes | -1000.00 |
-| T4  | 2024-06-28 | Assets:IRA:VTSAX            | 500.00   |
-| T4  | 2024-06-28 | Equity:Market Value Changes | -500.00  |
+Then transactions created are : Transaction
+| Ref | SourceAccount          | Date       | Destination                 | Amount  |
+| T3  | Assets:Brokerage:VTSAX | 2024-06-28 | Equity:Market Value Changes | 1000.00 |
+| T4  | Assets:IRA:VTSAX       | 2024-06-28 | Equity:Market Value Changes | 500.00  |
 
 # ---------------------------------------------------------------------------
 # Income from investments
 # ---------------------------------------------------------------------------
 
-# Left $WIP: there is no "Given postings are" of any kind in this scenario
+# Left $WIP: there is no "Given transactions are" of any kind in this scenario
 # (neither a real table nor "as previous"), so the ledger holds zero
 # transactions when "dividend recorded" runs and the new transaction becomes
 # T1 -- but the Then table below names it T5, which only makes sense if four
@@ -478,10 +465,9 @@ When dividend recorded : IncomeEntry Vertical
 | Amount   | 250.00                 |
 | Category | Income:Dividends       |
 | Reinvest | false                  |
-Then postings are : PostingRow
-| Ref | Date       | Account               | Amount  |
-| T5  | 2024-06-30 | Assets:Brokerage:Cash | 250.00  |
-| T5  | 2024-06-30 | Income:Dividends      | -250.00 |
+Then transactions are : Transaction
+| Ref | SourceAccount         | Date       | Destination      | Amount |
+| T5  | Assets:Brokerage:Cash | 2024-06-30 | Income:Dividends | 250.00 |
 
 Attributes IncomeEntry
 | Attribute | Type        | Default    |
@@ -502,10 +488,9 @@ Given the chart of accounts is as previous
 Given holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-03-01 |
-Given postings are : PostingRow
-| Ref | Date       | Account                 | Amount    |
-| T1  | 2024-03-01 | Assets:Brokerage:VTSAX  | 10000.00  |
-| T1  | 2024-03-01 | Equity:Opening Balances | -10000.00 |
+Given transactions are : Transaction
+| Ref | SourceAccount          | Date       | Destination             | Amount   |
+| T1  | Assets:Brokerage:VTSAX | 2024-03-01 | Equity:Opening Balances | 10000.00 |
 When dividend recorded : IncomeEntry Vertical
 | Account  | Assets:Brokerage:VTSAX |
 | Date     | 2024-06-30             |
@@ -515,10 +500,9 @@ When dividend recorded : IncomeEntry Vertical
 | Reinvest | true                   |
 | Shares   | 2.5                    |
 | Price    | 100.0000               |
-Then postings are : PostingRow
-| Ref | Date       | Account                | Amount  |
-| T2  | 2024-06-30 | Assets:Brokerage:VTSAX | 250.00  |
-| T2  | 2024-06-30 | Income:Dividends       | -250.00 |
+Then transactions are : Transaction
+| Ref | SourceAccount          | Date       | Destination      | Amount |
+| T2  | Assets:Brokerage:VTSAX | 2024-06-30 | Income:Dividends | 250.00 |
 Then holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 102.5  | 100.0000 | 2024-06-30 |
@@ -554,14 +538,11 @@ Description The two scenarios above and a revaluation, reported together. This
 Description is what the choice of Equity for revaluation buys, and it is the
 Description reason the choice was made.
 Given the chart of accounts is as previous
-Given postings are : PostingRow
-| Ref | Date       | Account                     | Amount   |
-| T1  | 2024-06-30 | Assets:Brokerage:Cash       | 250.00   |
-| T1  | 2024-06-30 | Income:Dividends            | -250.00  |
-| T2  | 2024-06-30 | Assets:Brokerage:Cash       | 12.00    |
-| T2  | 2024-06-30 | Income:Interest             | -12.00   |
-| T3  | 2024-06-28 | Assets:Brokerage:VTSAX      | 1000.00  |
-| T3  | 2024-06-28 | Equity:Market Value Changes | -1000.00 |
+Given transactions are : Transaction
+| Ref | SourceAccount          | Date       | Destination                 | Amount  |
+| T1  | Assets:Brokerage:Cash  | 2024-06-30 | Income:Dividends            | 250.00  |
+| T2  | Assets:Brokerage:Cash  | 2024-06-30 | Income:Interest             | 12.00   |
+| T3  | Assets:Brokerage:VTSAX | 2024-06-28 | Equity:Market Value Changes | 1000.00 |
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-01-01 |
@@ -592,18 +573,16 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Pension              | Brokerage  | false       |
 | Equity:Market Value Changes | Equity     | false       |
 | Equity:Opening Balances     | Equity     | false       |
-Given postings are : PostingRow
-| Ref | Date       | Account                 | Amount    |
-| T1  | 2024-01-01 | Assets:Pension          | 85000.00  |
-| T1  | 2024-01-01 | Equity:Opening Balances | -85000.00 |
+Given transactions are : Transaction
+| Ref | SourceAccount  | Date       | Destination             | Amount   |
+| T1  | Assets:Pension | 2024-01-01 | Equity:Opening Balances | 85000.00 |
 When value stated : ValueEntry Vertical
 | Account | Assets:Pension |
 | Value   | 91200.00       |
 | AsOf    | 2024-06-30     |
-Then postings are : PostingRow
-| Ref | Date       | Account                     | Amount   |
-| T2  | 2024-06-30 | Assets:Pension              | 6200.00  |
-| T2  | 2024-06-30 | Equity:Market Value Changes | -6200.00 |
+Then transactions are : Transaction
+| Ref | SourceAccount  | Date       | Destination                 | Amount  |
+| T2  | Assets:Pension | 2024-06-30 | Equity:Market Value Changes | 6200.00 |
 Then balances are : AccountBalance
 | Account        | RawBalance | DisplayBalance | Notes             |
 | Assets:Pension | 91200.00   | 91200.00       | As last stated    |
@@ -673,11 +652,11 @@ Given holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 110.0000 | 2024-06-28 |
 | Assets:Brokerage:BRK.B | BRK.B  | 10     | 405.0000 | 2022-01-14 |
-Given postings are : PostingRow
-| Ref | Date       | Account                | Amount   |
-| T1  | 2024-01-02 | Assets:Brokerage:Cash  | 2500.00  |
-| T2  | 2024-01-03 | Assets:Brokerage:VTSAX | 11000.00 |
-| T3  | 2024-01-03 | Assets:Brokerage:BRK.B | 4050.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount          | Date       | Destination | Amount   |
+| T1  | Assets:Brokerage:Cash  | 2024-01-02 | none        | 2500.00  |
+| T2  | Assets:Brokerage:VTSAX | 2024-01-03 | none        | 11000.00 |
+| T3  | Assets:Brokerage:BRK.B | 2024-01-03 | none        | 4050.00  |
 When holdings report run
 Then holdings report rows are : HoldingsReportRow
 | Symbol | Shares | Price    | Value    | PriceAsOf  | DaysOld | Stale |

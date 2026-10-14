@@ -97,10 +97,9 @@ Given import target is : ImportTarget Vertical
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name                         | Memo | CheckNum |
 | DEBIT   | 2024-01-15 | -45.00 | 20240115001 | HARRIS TEETER #231 DURHAM NC | none | none     |
-Then postings are : PostingRow
-| Ref | Date       | Payee         | Account            | Amount | Cleared   |
-| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 | Cleared   |
-| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00  | Uncleared |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Cleared |
 
 Scenario A rule with no category tidies the name only
 Description Some payees take a different category each time. The rule is still
@@ -118,10 +117,9 @@ Given import target is : ImportTarget Vertical
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name                    | Memo | CheckNum |
 | DEBIT   | 2024-02-01 | -89.99 | A1    | AMAZON MKTPLACE PMTS WA | none | none     |
-Then postings are : PostingRow
-| Ref | Date       | Payee  | Account                | Amount | Cleared   |
-| T1  | 2024-02-01 | Amazon | Assets:Checking        | -89.99 | Cleared   |
-| T1  | 2024-02-01 | Amazon | Expenses:Uncategorized | 89.99  | Uncleared |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination            | Amount | Cleared |
+| T1  | Assets:Checking | 2024-02-01 | Amazon | Expenses:Uncategorized | -89.99 | Cleared |
 # The side the statement is for is cleared, because the bank has reported it.
 # The category has not been reported by anyone and is not.
 
@@ -140,10 +138,9 @@ Given import target is : ImportTarget Vertical
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name              | Memo | CheckNum |
 | DEBIT   | 2024-02-02 | -12.00 | A2    | SOME SHOP 4471 NC | none | none     |
-Then postings are : PostingRow
-| Ref | Date       | Payee             | Account                | Amount | Cleared   |
-| T1  | 2024-02-02 | SOME SHOP 4471 NC | Assets:Checking        | -12.00 | Cleared   |
-| T1  | 2024-02-02 | SOME SHOP 4471 NC | Expenses:Uncategorized | 12.00 | Uncleared |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee             | Destination            | Amount | Cleared |
+| T1  | Assets:Checking | 2024-02-02 | SOME SHOP 4471 NC | Expenses:Uncategorized | -12.00 | Cleared |
 
 Scenario The raw name is kept even after a rule has renamed the payee
 Description A rule written next year must be able to match what the bank sent
@@ -188,12 +185,10 @@ When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name                    | Memo | CheckNum |
 | DEBIT   | 2024-02-03 | -31.00 | A3    | AMAZON GROCERY SUBS WA  | none | none     |
 | DEBIT   | 2024-02-04 | -89.99 | A4    | AMAZON MKTPLACE PMTS WA | none | none     |
-Then postings are : PostingRow
-| Ref | Date       | Payee          | Account            | Amount | Cleared   |
-| T1  | 2024-02-03 | Amazon Grocery | Assets:Checking    | -31.00 | Cleared   |
-| T1  | 2024-02-03 | Amazon Grocery | Expenses:Groceries | 31.00 | Uncleared |
-| T2  | 2024-02-04 | Amazon         | Assets:Checking    | -89.99 | Cleared   |
-| T2  | 2024-02-04 | Amazon         | Expenses:Shopping  | 89.99 | Uncleared |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee          | Destination        | Amount | Cleared |
+| T1  | Assets:Checking | 2024-02-03 | Amazon Grocery | Expenses:Groceries | -31.00 | Cleared |
+| T2  | Assets:Checking | 2024-02-04 | Amazon         | Expenses:Shopping  | -89.99 | Cleared |
 
 Scenario A disabled rule is passed over
 Description Rules are kept rather than deleted, because a rule that was wrong
@@ -212,10 +207,9 @@ Given import target is : ImportTarget Vertical
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name                    | Memo | CheckNum |
 | DEBIT   | 2024-02-04 | -89.99 | A4    | AMAZON MKTPLACE PMTS WA | none | none     |
-Then postings are : PostingRow
-| Ref | Date       | Payee                   | Account                | Amount | Cleared   |
-| T1  | 2024-02-04 | AMAZON MKTPLACE PMTS WA | Assets:Checking        | -89.99 | Cleared   |
-| T1  | 2024-02-04 | AMAZON MKTPLACE PMTS WA | Expenses:Uncategorized | 89.99 | Uncleared |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee                   | Destination            | Amount | Cleared |
+| T1  | Assets:Checking | 2024-02-04 | AMAZON MKTPLACE PMTS WA | Expenses:Uncategorized | -89.99 | Cleared |
 
 # ---------------------------------------------------------------------------
 # A rule that carries a split
@@ -398,10 +392,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee              | Account                | Amount |
-| T1  | 2024-01-15 | HARRIS TEETER #231 | Assets:Checking        | -45.00 |
-| T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee              | Destination            | Amount |
+| T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | -45.00 |
 When category changed : CategoryChange Vertical
 | Ref         | T1                     |
 | FromAccount | Expenses:Uncategorized |
@@ -467,14 +460,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee                    | Account                | Amount | Cleared   |
-| T1  | 2024-01-15 | HARRIS TEETER #231       | Assets:Checking        | -45.00 | Cleared   |
-| T1  | 2024-01-15 | HARRIS TEETER #231       | Expenses:Uncategorized | 45.00  | Uncleared |
-| T2  | 2024-02-20 | HARRIS TEETER #418 CARY  | Assets:Checking        | -62.10 | Cleared   |
-| T2  | 2024-02-20 | HARRIS TEETER #418 CARY  | Expenses:Uncategorized | 62.10  | Uncleared |
-| T3  | 2024-03-02 | SHELL OIL 4471           | Assets:Checking        | -52.00 | Cleared   |
-| T3  | 2024-03-02 | SHELL OIL 4471           | Expenses:Uncategorized | 52.00  | Uncleared |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee                   | Destination            | Amount | Cleared |
+| T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231      | Expenses:Uncategorized | -45.00 | Cleared |
+| T2  | Assets:Checking | 2024-02-20 | HARRIS TEETER #418 CARY | Expenses:Uncategorized | -62.10 | Cleared |
+| T3  | Assets:Checking | 2024-03-02 | SHELL OIL 4471          | Expenses:Uncategorized | -52.00 | Cleared |
 When rule applied to existing : PayeeRule Vertical
 | Pattern   | HARRIS TEETER      |
 | MatchType | Contains           |
@@ -484,14 +474,11 @@ Then would change : RuleApplication Vertical
 | Matched        | 2 |
 | AlreadyCorrect | 0 |
 | Skipped        | 1 |
-Then postings are : PostingRow
-| Ref | Date       | Payee          | Account                | Amount | Cleared   |
-| T1  | 2024-01-15 | Harris Teeter  | Assets:Checking        | -45.00 | Cleared   |
-| T1  | 2024-01-15 | Harris Teeter  | Expenses:Groceries     | 45.00 | Uncleared |
-| T2  | 2024-02-20 | Harris Teeter  | Assets:Checking        | -62.10 | Cleared   |
-| T2  | 2024-02-20 | Harris Teeter  | Expenses:Groceries     | 62.10 | Uncleared |
-| T3  | 2024-03-02 | SHELL OIL 4471 | Assets:Checking        | -52.00 | Cleared   |
-| T3  | 2024-03-02 | SHELL OIL 4471 | Expenses:Uncategorized | 52.00 | Uncleared |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee          | Destination            | Amount | Cleared |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter  | Expenses:Groceries     | -45.00 | Cleared |
+| T2  | Assets:Checking | 2024-02-20 | Harris Teeter  | Expenses:Groceries     | -62.10 | Cleared |
+| T3  | Assets:Checking | 2024-03-02 | SHELL OIL 4471 | Expenses:Uncategorized | -52.00 | Cleared |
 
 Attributes RuleApplication
 | Attribute      | Type    | Default |
@@ -501,19 +488,17 @@ Attributes RuleApplication
 
 Scenario Applying a rule backwards does not touch a transaction already categorised
 Description A category chosen by hand is a decision, and a rule applied in bulk
-Description does not overrule it. Only Uncategorized postings are changed.
+Description does not overrule it. Only Uncategorized transactions are changed.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Dining        | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee              | Account                | Amount | Cleared   |
-| T1  | 2024-01-15 | HARRIS TEETER #231 | Assets:Checking        | -45.00 | Cleared   |
-| T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  | Uncleared |
-| T2  | 2024-02-20 | HARRIS TEETER #418 | Assets:Checking        | -8.50  | Cleared   |
-| T2  | 2024-02-20 | HARRIS TEETER #418 | Expenses:Dining        | 8.50   | Uncleared |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee              | Destination            | Amount | Cleared |
+| T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | -45.00 | Cleared |
+| T2  | Assets:Checking | 2024-02-20 | HARRIS TEETER #418 | Expenses:Dining        | -8.50  | Cleared |
 When rule applied to existing : PayeeRule Vertical
 | Pattern   | HARRIS TEETER      |
 | MatchType | Contains           |
@@ -523,16 +508,14 @@ Then would change : RuleApplication Vertical
 | Matched        | 1 |
 | AlreadyCorrect | 0 |
 | Skipped        | 1 |
-Then postings are : PostingRow
-| Ref | Date       | Payee         | Account            | Amount | Cleared   |
-| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 | Cleared   |
-| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00 | Uncleared |
-| T2  | 2024-02-20 | Harris Teeter | Assets:Checking    | -8.50 | Cleared   |
-| T2  | 2024-02-20 | Harris Teeter | Expenses:Dining    | 8.50 | Uncleared |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Cleared |
+| T2  | Assets:Checking | 2024-02-20 | Harris Teeter | Expenses:Dining    | -8.50  | Cleared |
 # The payee of T2 is tidied, because that is not a judgement. Its category is
 # left, because it is.
 
-Scenario A rule does not change a reconciled posting
+Scenario A rule does not change a reconciled transaction
 Description A bulk change that altered a reconciled balance would undo a
 Description reconciliation nobody asked it to touch.
 Given the chart of accounts is : ChartOfAccounts
@@ -540,10 +523,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee              | Account                | Amount | Cleared    |
-| T1  | 2024-01-15 | HARRIS TEETER #231 | Assets:Checking        | -45.00 | Reconciled |
-| T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  | Reconciled |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee              | Destination            | Amount | Cleared    |
+| T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | -45.00 | Reconciled |
 When rule applied to existing : PayeeRule Vertical
 | Pattern   | HARRIS TEETER      |
 | MatchType | Contains           |
@@ -579,31 +561,23 @@ Given payee rules are : PayeeRule
 | Pattern       | MatchType | Payee         | Category           | Enabled |
 | SHELL OIL     | Contains  | Shell Oil     | Expenses:Auto:Fuel | true    |
 | HARRIS TEETER | Contains  | Harris Teeter | Expenses:Groceries | true    |
-Given postings are : PostingRow
-| Ref | Date       | Payee              | Account                | Amount |
-| T1  | 2024-01-15 | SHELL OIL 3344     | Assets:Checking        | -40.00 |
-| T1  | 2024-01-15 | SHELL OIL 3344     | Expenses:Uncategorized | 40.00  |
-| T2  | 2024-01-16 | HARRIS TEETER #231 | Assets:Checking        | -45.00 |
-| T2  | 2024-01-16 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  |
-| T3  | 2024-01-17 | TACO PLACE         | Assets:Checking        | -12.00 |
-| T3  | 2024-01-17 | TACO PLACE         | Expenses:Dining        | 12.00  |
-| T4  | 2024-01-18 | SHELL OIL 9981     | Assets:Checking        | -30.00 |
-| T4  | 2024-01-18 | SHELL OIL 9981     | Expenses:Auto:Fuel     | 30.00  |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee              | Destination            | Amount |
+| T1  | Assets:Checking | 2024-01-15 | SHELL OIL 3344     | Expenses:Uncategorized | -40.00 |
+| T2  | Assets:Checking | 2024-01-16 | HARRIS TEETER #231 | Expenses:Uncategorized | -45.00 |
+| T3  | Assets:Checking | 2024-01-17 | TACO PLACE         | Expenses:Dining        | -12.00 |
+| T4  | Assets:Checking | 2024-01-18 | SHELL OIL 9981     | Expenses:Auto:Fuel     | -30.00 |
 When rules applied to the book
 Then applying the rules reported is : RuleApplication Vertical
 | Matched        | 2 |
 | AlreadyCorrect | 1 |
 | Skipped        | 1 |
-Then postings are : PostingRow
-| Ref | Date       | Payee          | Account            | Amount |
-| T1  | 2024-01-15 | Shell Oil      | Assets:Checking    | -40.00 |
-| T1  | 2024-01-15 | Shell Oil      | Expenses:Auto:Fuel | 40.00  |
-| T2  | 2024-01-16 | Harris Teeter  | Assets:Checking    | -45.00 |
-| T2  | 2024-01-16 | Harris Teeter  | Expenses:Groceries | 45.00  |
-| T3  | 2024-01-17 | TACO PLACE     | Assets:Checking    | -12.00 |
-| T3  | 2024-01-17 | TACO PLACE     | Expenses:Dining    | 12.00  |
-| T4  | 2024-01-18 | Shell Oil      | Assets:Checking    | -30.00 |
-| T4  | 2024-01-18 | Shell Oil      | Expenses:Auto:Fuel | 30.00  |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
+| T1  | Assets:Checking | 2024-01-15 | Shell Oil     | Expenses:Auto:Fuel | -40.00 |
+| T2  | Assets:Checking | 2024-01-16 | Harris Teeter | Expenses:Groceries | -45.00 |
+| T3  | Assets:Checking | 2024-01-17 | TACO PLACE    | Expenses:Dining    | -12.00 |
+| T4  | Assets:Checking | 2024-01-18 | Shell Oil     | Expenses:Auto:Fuel | -30.00 |
 # T1 and T2 were Uncategorized and a rule caught each: Matched. T4 already had
 # the fuel rule's own category -- its name is still tidied, which is why
 # AlreadyCorrect is not the same as untouched -- so it counts separately. T3
@@ -611,9 +585,9 @@ Then postings are : PostingRow
 # and its hand-chosen Dining category and its untidied name are both left
 # exactly as they were.
 
-Scenario A transaction recorded the new way is categorised the same as one through postings
+Scenario A transaction is categorised by the rule that matches its payee
 Description Destination already is the category: a rule rewrites it directly
-Description rather than finding a posting to rewrite. See the section on naming
+Description rather than finding a transaction to rewrite. See the section on naming
 Description both accounts directly in Transactions.spectable.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
@@ -649,19 +623,17 @@ Given the chart of accounts is : ChartOfAccounts
 Given payee rules are : PayeeRule
 | Pattern       | MatchType | Payee         | Category           | Enabled |
 | HARRIS TEETER | Contains  | Harris Teeter | Expenses:Groceries | true    |
-Given postings are : PostingRow
-| Ref | Date       | Payee              | Account                | Amount | Cleared    |
-| T1  | 2024-01-15 | HARRIS TEETER #231 | Assets:Checking        | -45.00 | Reconciled |
-| T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  | Reconciled |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee              | Destination            | Amount | Cleared    |
+| T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | -45.00 | Reconciled |
 When rules applied to the book
 Then applying the rules reported is : RuleApplication Vertical
 | Matched        | 0 |
 | AlreadyCorrect | 0 |
 | Skipped        | 1 |
-Then postings are : PostingRow
-| Ref | Date       | Payee              | Account                | Amount | Cleared    |
-| T1  | 2024-01-15 | HARRIS TEETER #231 | Assets:Checking        | -45.00 | Reconciled |
-| T1  | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | 45.00  | Uncleared  |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee              | Destination            | Amount | Cleared    |
+| T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | -45.00 | Reconciled |
 # Reconciled, still, on the transaction's own side -- the whole point of the
 # scenario is that nothing about it moved, cleared status included. The
 # other side's Cleared is always Uncleared in this display now: there is
@@ -681,11 +653,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee         | Account         | Amount |
-| T1  | 2024-01-15 | Harris Teeter | Assets:Checking | -45.00 |
-| T2  | 2024-02-20 | Shell         | Assets:Checking | -52.00 |
-| T3  | 2024-03-02 | Harris Teeter | Assets:Checking | -31.00 |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination | Amount |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | none        | -45.00 |
+| T2  | Assets:Checking | 2024-02-20 | Shell         | none        | -52.00 |
+| T3  | Assets:Checking | 2024-03-02 | Harris Teeter | none        | -31.00 |
 Then payee list is : PayeeListEntry
 | Payee         | LastUsed   | Count |
 | Harris Teeter | 2024-03-02 | 2     |
@@ -705,12 +677,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Dining    | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee         | Account            | Amount |
-| T1  | 2024-01-15 | Harris Teeter | Assets:Checking    | -45.00 |
-| T1  | 2024-01-15 | Harris Teeter | Expenses:Groceries | 45.00  |
-| T2  | 2024-02-20 | Harris Teeter | Assets:Checking    | -8.50  |
-| T2  | 2024-02-20 | Harris Teeter | Expenses:Dining    | 8.50   |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
+| T2  | Assets:Checking | 2024-02-20 | Harris Teeter | Expenses:Dining    | -8.50  |
 When payee typed : PayeeSelect
 | Payee         |
 | Harris Teeter |
@@ -731,11 +701,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given postings are : PostingRow
-| Ref | Date       | Payee              | Account         | Amount |
-| T1  | 2024-01-15 | HARRIS TEETER #231 | Assets:Checking | -45.00 |
-| T2  | 2024-02-20 | Harris Teeter      | Assets:Checking | -62.10 |
-| T3  | 2024-03-02 | harris teeter 418  | Assets:Checking | -31.00 |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee              | Destination | Amount |
+| T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231 | none        | -45.00 |
+| T2  | Assets:Checking | 2024-02-20 | Harris Teeter      | none        | -62.10 |
+| T3  | Assets:Checking | 2024-03-02 | harris teeter 418  | none        | -31.00 |
 When payees merged : PayeeMerge Vertical
 | NewName | Harris Teeter |
 Then payee list is : PayeeListEntry
@@ -876,10 +846,9 @@ Given import target is : ImportTarget Vertical
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name           | Memo | CheckNum |
 | DEBIT   | 2024-03-01 | -40.00 | S1    | SHELL OIL 2343 | none | none     |
-Then postings are : PostingRow
-| Ref | Date       | Payee | Account            | Amount | Cleared   |
-| T1  | 2024-03-01 | Shell | Assets:Checking    | -40.00 | Cleared   |
-| T1  | 2024-03-01 | Shell | Expenses:Auto:Fuel | 40.00  | Uncleared |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee | Destination        | Amount | Cleared |
+| T1  | Assets:Checking | 2024-03-01 | Shell | Expenses:Auto:Fuel | -40.00 | Cleared |
 
 Scenario A rule deleted stops applying
 Description Disabling is the usual move, because a rule that was wrong once is
@@ -909,10 +878,9 @@ Given import target is : ImportTarget Vertical
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name           | Memo | CheckNum |
 | DEBIT   | 2024-03-01 | -40.00 | S1    | SHELL OIL 2343 | none | none     |
-Then postings are : PostingRow
-| Ref | Date       | Payee          | Account                | Amount | Cleared   |
-| T1  | 2024-03-01 | SHELL OIL 2343 | Assets:Checking        | -40.00 | Cleared   |
-| T1  | 2024-03-01 | SHELL OIL 2343 | Expenses:Uncategorized | 40.00  | Uncleared |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee          | Destination            | Amount | Cleared |
+| T1  | Assets:Checking | 2024-03-01 | SHELL OIL 2343 | Expenses:Uncategorized | -40.00 | Cleared |
 
 Scenario Deleting a rule leaves the transactions it already categorised alone
 Description A rule applies when a transaction is imported or categorised, not
@@ -934,10 +902,9 @@ When transactions imported : OfxTransactions
 When rule deleted : RuleSelect Vertical
 | Pattern   | SHELL OIL |
 | MatchType | Contains  |
-Then postings are : PostingRow
-| Ref | Date       | Payee | Account            | Amount | Cleared   |
-| T1  | 2024-03-01 | Shell | Assets:Checking    | -40.00 | Cleared   |
-| T1  | 2024-03-01 | Shell | Expenses:Auto:Fuel | 40.00  | Uncleared |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee | Destination        | Amount | Cleared |
+| T1  | Assets:Checking | 2024-03-01 | Shell | Expenses:Auto:Fuel | -40.00 | Cleared |
 
 Scenario A rule with nothing to look for is refused
 Description A pattern of nothing is contained in every name, so the rule would

@@ -149,12 +149,51 @@ public:
         ADD_FAILURE() << "Not implemented: then_asked_to_choose_an_account_for";
     }
 
-    void given_postings_of_business_are(const std::vector<PostingRowString>& v) {
-        write_postings("Business", v);
+    void given_transactions_of_business_are(const std::vector<TransactionString>& v) {
+        write_transactions("Business", v);
     }
 
-    void given_postings_of_personal_are(const std::vector<PostingRowString>& v) {
-        write_postings("Personal", v);
+    void given_transactions_of_personal_are(const std::vector<TransactionString>& v) {
+        write_transactions("Personal", v);
+    }
+
+    // One row is one transaction. The accounts it names are put in the chart
+    // for the same reason write_postings does it: these scenarios are about
+    // the books being separate, not about the chart.
+    void write_transactions(const std::string& name,
+                            const std::vector<TransactionString>& values) {
+        make_if_needed(name);
+        current_book_ = name;
+        chart::Chart accounts;
+        std::vector<ledger::Transaction> transactions;
+        ASSERT_TRUE(read_book(name, &accounts, &transactions));
+        const std::vector<ledger::TransactionSplit> splits;
+        for (const auto& value : values) {
+            for (const std::string& path : {blank(value.sourceaccount),
+                                            blank(value.destination)}) {
+                if (path.empty() || accounts.find(path) != nullptr) continue;
+                chart::Account a;
+                a.path = types::AccountPath(path);
+                a.type = account_type_guessed_from_path(path);
+                accounts.put(a);
+            }
+            ledger::Transaction t;
+            t.id = ledger::new_id();
+            t.ref = types::TransactionRef(value.ref);
+            const auto on = types::Date::from_iso(value.date);
+            ASSERT_TRUE(on.has_value()) << value.date;
+            t.date = *on;
+            t.payee = types::PayeeName(blank(value.payee));
+            t.check_no = types::CheckNumber(blank(value.checkno));
+            t.memo = blank(value.memo);
+            t.source_account = accounts.ref_for_path(blank(value.sourceaccount));
+            t.destination = accounts.ref_for_path(blank(value.destination));
+            t.amount = Money(value.amount);
+            if (value.cleared != DNCString && !value.cleared.empty())
+                t.cleared = types::cleared_status_from_string(value.cleared);
+            transactions.push_back(t);
+        }
+        write_back(name, accounts, transactions, splits);
     }
 
     // Each book opened on its own and checked on its own. Two books that
@@ -237,12 +276,46 @@ public:
         }
     }
 
-    void then_postings_of_business_are(const std::vector<PostingRowString>& values) {
-        check_postings_of("Business", values);
+    void then_transactions_of_business_are(const std::vector<TransactionString>& values) {
+        check_transactions_of("Business", values);
     }
 
-    void then_postings_of_personal_are(const std::vector<PostingRowString>& values) {
-        check_postings_of("Personal", values);
+    void then_transactions_of_personal_are(const std::vector<TransactionString>& values) {
+        check_transactions_of("Personal", values);
+    }
+
+    // Read back out of the file, in the order it holds them.
+    void check_transactions_of(const std::string& name,
+                               const std::vector<TransactionString>& values) {
+        chart::Chart accounts;
+        std::vector<ledger::Transaction> transactions;
+        std::vector<ledger::TransactionSplit> splits;
+        ASSERT_TRUE(read_book(name, &accounts, &transactions, &splits));
+        ASSERT_EQ(values.size(), transactions.size())
+            << name << " transactions that came back";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const ledger::Transaction& got = transactions[i];
+            const TransactionString& want = values[i];
+            const std::string where = name + " transaction " + std::to_string(i + 1);
+            if (want.ref != DNCString)
+                EXPECT_EQ(want.ref, got.ref.value()) << where << " ref";
+            if (want.date != DNCString)
+                EXPECT_EQ(want.date, got.date.iso()) << where << " date";
+            if (want.payee != DNCString)
+                EXPECT_EQ(blank(want.payee), got.payee.value()) << where << " payee";
+            if (want.memo != DNCString)
+                EXPECT_EQ(blank(want.memo), got.memo) << where << " memo";
+            if (want.sourceaccount != DNCString)
+                EXPECT_EQ(blank(want.sourceaccount), accounts.path_for_ref(got.source_account))
+                    << where << " source account";
+            if (want.destination != DNCString)
+                EXPECT_EQ(blank(want.destination), accounts.path_for_ref(got.destination))
+                    << where << " destination";
+            if (want.amount != DNCString)
+                EXPECT_EQ(Money(want.amount).cents(), got.amount.cents()) << where << " amount";
+            if (want.cleared != DNCString && !want.cleared.empty())
+                EXPECT_EQ(want.cleared, types::to_string(got.cleared)) << where << " cleared";
+        }
     }
 
     // Read back from the current book -- set explicitly by a Given, or, where
@@ -438,69 +511,6 @@ public:
         }
     }
 
-    void given_postings_are(const std::vector<PostingRowString>& values) {
-        transactions_.clear();
-        splits_.clear();
-        second_row_amount_.clear();
-        for (const auto& value : values) {
-            ledger::Transaction* first = nullptr;
-            for (ledger::Transaction& t : transactions_) {
-                if (t.ref.value() != value.ref) continue;
-                first = &t;
-                break;
-            }
-            const auto on = types::Date::from_iso(value.date);
-            ASSERT_TRUE(on.has_value()) << value.date;
-            const chart::Ref account_ref = chart_.ref_for_path(value.account);
-            const Money amount{value.amount};
-            const std::string memo = blank(value.memo);
-            const types::ClearedStatus cleared = types::cleared_status_from_string(value.cleared);
-
-            if (first == nullptr) {
-                // Named here as any creator must name one: the store refuses a
-                // transaction with no id rather than inventing one.
-                ledger::Transaction made;
-                made.id = ledger::new_id();
-                made.ref = types::TransactionRef(value.ref);
-                made.date = *on;
-                made.payee = types::PayeeName(blank(value.payee));
-                made.memo = memo;
-                made.source_account = account_ref;
-                made.amount = amount;
-                made.cleared = cleared;
-                transactions_.push_back(made);
-            } else if (first->destination.is_none()) {
-                first->destination = account_ref;
-                if (first->memo.empty() && !memo.empty()) first->memo = memo;
-                second_row_amount_[first->id.value()] = {amount, memo};
-            } else {
-                ledger::Transaction& t = *first;
-                if (!chart::is_split(t.destination)) {
-                    if (!t.destination.is_none()) {
-                        ledger::TransactionSplit promoted;
-                        promoted.transaction_id = t.id;
-                        promoted.destination = t.destination;
-                        const auto at = second_row_amount_.find(t.id.value());
-                        if (at != second_row_amount_.end()) {
-                            promoted.amount = at->second.amount;
-                            promoted.memo = at->second.memo;
-                        } else {
-                            promoted.amount = -t.amount;
-                        }
-                        splits_.push_back(promoted);
-                    }
-                    t.destination = chart::split_ref();
-                }
-                ledger::TransactionSplit s;
-                s.transaction_id = t.id;
-                s.destination = account_ref;
-                s.amount = amount;
-                s.memo = memo;
-                splits_.push_back(s);
-            }
-        }
-    }
-
     // Written, closed, and read back from the file -- not from anything still
     // in memory. Closing is the point: a book that only round-trips while the
     // program holds it has not been saved at all.
@@ -528,38 +538,6 @@ public:
             EXPECT_EQ(parse_bool_cell(value.placeholder), a->placeholder)
                 << value.path << " placeholder";
             EXPECT_EQ(parse_bool_cell(value.hidden), a->hidden) << value.path << " hidden";
-        }
-    }
-
-    void then_postings_are(const std::vector<PostingRowString>& values) {
-        std::vector<PostingRowString> got;
-        for (const ledger::Transaction& t : transactions_) {
-            const std::vector<ledger::Side> sides =
-                ledger::sides_of_display(chart_, t, transactions_, splits_);
-            for (std::size_t i = 0; i < sides.size(); ++i) {
-                const ledger::Side& s = sides[i];
-                PostingRowString row;
-                row.ref = t.ref.value();
-                row.date = t.date.iso();
-                row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = chart_.path_for_ref(s.account);
-                row.amount = s.amount.in_register();
-                row.memo = s.memo.empty() ? "none" : s.memo;
-                row.cleared = types::to_string(i == 0 ? t.cleared
-                                                      : types::ClearedStatus::Uncleared);
-                got.push_back(row);
-            }
-        }
-        ASSERT_EQ(values.size(), got.size()) << "postings that came back";
-        for (std::size_t i = 0; i < values.size(); ++i) {
-            EXPECT_EQ(values[i].ref, got[i].ref) << "posting " << i << " ref";
-            EXPECT_EQ(values[i].date, got[i].date) << "posting " << i << " date";
-            EXPECT_EQ(blank(values[i].payee), blank(got[i].payee)) << "posting " << i << " payee";
-            EXPECT_EQ(values[i].account, got[i].account) << "posting " << i << " account";
-            EXPECT_EQ(Money(values[i].amount).cents(), Money(got[i].amount).cents())
-                << "posting " << i << " amount";
-            EXPECT_EQ(blank(values[i].memo), blank(got[i].memo)) << "posting " << i << " memo";
-            EXPECT_EQ(values[i].cleared, got[i].cleared) << "posting " << i << " cleared";
         }
     }
 
@@ -838,84 +816,6 @@ private:
         write_back(name, accounts, transactions);
     }
 
-    void write_postings(const std::string& name, const std::vector<PostingRowString>& values) {
-        make_if_needed(name);
-        current_book_ = name;
-        chart::Chart accounts;
-        std::vector<ledger::Transaction> transactions;
-        ASSERT_TRUE(read_book(name, &accounts, &transactions));
-        std::vector<ledger::TransactionSplit> splits;
-        std::map<std::string, PendingSecondRow> second_row_amount;
-        for (const auto& value : values) {
-            // An account a posting names has to be in the chart for the book to
-            // read back, and these scenarios are about the books being separate
-            // rather than about the chart.
-            if (accounts.find(value.account) == nullptr) {
-                chart::Account a;
-                a.path = types::AccountPath(value.account);
-                a.type = account_type_guessed_from_path(value.account);
-                accounts.put(a);
-            }
-
-            ledger::Transaction* first = nullptr;
-            for (ledger::Transaction& t : transactions) {
-                if (t.ref.value() != value.ref) continue;
-                first = &t;
-                break;
-            }
-            const auto on = types::Date::from_iso(value.date);
-            ASSERT_TRUE(on.has_value()) << value.date;
-            const chart::Ref account_ref = accounts.ref_for_path(value.account);
-            const Money amount{value.amount};
-            const std::string memo = blank(value.memo);
-            const types::ClearedStatus cleared = types::cleared_status_from_string(value.cleared);
-
-            if (first == nullptr) {
-                ledger::Transaction made;
-                // Named here as any creator must name one: the store refuses a
-                // transaction with no id rather than inventing one.
-                made.id = ledger::new_id();
-                made.ref = types::TransactionRef(value.ref);
-                made.date = *on;
-                made.payee = types::PayeeName(blank(value.payee));
-                made.memo = memo;
-                made.source_account = account_ref;
-                made.amount = amount;
-                made.cleared = cleared;
-                transactions.push_back(made);
-            } else if (first->destination.is_none()) {
-                first->destination = account_ref;
-                if (first->memo.empty() && !memo.empty()) first->memo = memo;
-                second_row_amount[first->id.value()] = {amount, memo};
-            } else {
-                ledger::Transaction& t = *first;
-                if (!chart::is_split(t.destination)) {
-                    if (!t.destination.is_none()) {
-                        ledger::TransactionSplit promoted;
-                        promoted.transaction_id = t.id;
-                        promoted.destination = t.destination;
-                        const auto at = second_row_amount.find(t.id.value());
-                        if (at != second_row_amount.end()) {
-                            promoted.amount = at->second.amount;
-                            promoted.memo = at->second.memo;
-                        } else {
-                            promoted.amount = -t.amount;
-                        }
-                        splits.push_back(promoted);
-                    }
-                    t.destination = chart::split_ref();
-                }
-                ledger::TransactionSplit s;
-                s.transaction_id = t.id;
-                s.destination = account_ref;
-                s.amount = amount;
-                s.memo = memo;
-                splits.push_back(s);
-            }
-        }
-        write_back(name, accounts, transactions, splits);
-    }
-
     // A guess good enough for a fixture whose point is book separation rather
     // than the chart: the real program never invents a type this way, and
     // every scenario that cares about a type gives one through
@@ -949,39 +849,6 @@ private:
         ASSERT_FALSE(where.refused) << where.reason;
         const store::Failure no = opened.write(accounts, transactions, rules);
         ASSERT_FALSE(no.refused) << no.reason;
-    }
-
-    void check_postings_of(const std::string& name, const std::vector<PostingRowString>& values) {
-        chart::Chart accounts;
-        std::vector<ledger::Transaction> transactions;
-        std::vector<ledger::TransactionSplit> splits;
-        ASSERT_TRUE(read_book(name, &accounts, &transactions, &splits));
-        std::vector<PostingRowString> got;
-        for (const ledger::Transaction& t : transactions) {
-            const std::vector<ledger::Side> sides =
-                ledger::sides_of_display(accounts, t, transactions, splits);
-            for (std::size_t i = 0; i < sides.size(); ++i) {
-                const ledger::Side& s = sides[i];
-                PostingRowString row;
-                row.ref = t.ref.value();
-                row.date = t.date.iso();
-                row.payee = t.payee.value().empty() ? "none" : t.payee.value();
-                row.account = accounts.path_for_ref(s.account);
-                row.amount = s.amount.in_register();
-                row.memo = s.memo.empty() ? "none" : s.memo;
-                row.cleared = types::to_string(i == 0 ? t.cleared
-                                                      : types::ClearedStatus::Uncleared);
-                got.push_back(row);
-            }
-        }
-        ASSERT_EQ(values.size(), got.size()) << name << " postings that came back";
-        for (std::size_t i = 0; i < values.size(); ++i) {
-            EXPECT_EQ(values[i].ref, got[i].ref) << name << " posting " << i << " ref";
-            EXPECT_EQ(values[i].date, got[i].date) << name << " posting " << i << " date";
-            EXPECT_EQ(values[i].account, got[i].account) << name << " posting " << i << " account";
-            EXPECT_EQ(Money(values[i].amount).cents(), Money(got[i].amount).cents())
-                << name << " posting " << i << " amount";
-        }
     }
 
     // A Default of "none" arrives as the literal word.

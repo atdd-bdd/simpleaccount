@@ -205,7 +205,7 @@ Then report total is : ReportTotal Vertical
 | Net           | 2537.51 |
 # The expenses total has not moved and neither has the net: categorising says
 # where money went, not how much of it there was. A report whose total changed
-# when a category was assigned would mean a posting had been lost, and that is
+# when a category was assigned would mean a transaction had been lost, and that is
 # worth checking on every one of these.
 #
 # What is left in Expenses:Uncategorized is 84.50 of groceries bought on the
@@ -220,7 +220,7 @@ Description Giving the payment the card account as its category makes the
 Description transaction a transfer between two real accounts, and a transfer
 Description is in no report of what was earned or spent. This is the one kind
 Description of recategorisation that is allowed to move the total, because
-Description both postings have left the categories altogether.
+Description both transactions have left the categories altogether.
 When categories assigned : CategoryAssignment
 | Date       | Payee        | Category         |
 | 2026-03-25 | Visa Payment | Liabilities:Visa |

@@ -29,11 +29,6 @@ public:
         ADD_FAILURE() << "Not implemented: given_the_chart_of_accounts_is";
     }
 
-    void given_postings_are(const std::vector<PostingRowString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: given_postings_are";
-    }
-
     void then_comparison_lines_are(const std::vector<ComparisonLineString>& values) {
         for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
         ADD_FAILURE() << "Not implemented: then_comparison_lines_are";
@@ -97,11 +92,6 @@ public:
     void then_lines_not_compared_are(const std::vector<LineNotComparedString>& values) {
         for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
         ADD_FAILURE() << "Not implemented: then_lines_not_compared_are";
-    }
-
-    void given_imported_postings_are(const std::vector<ImportedPostingRowString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: given_imported_postings_are";
     }
 
     void given_import_target_is(const std::vector<ImportTargetString>& values) {
@@ -210,6 +200,18 @@ public:
     void examples_businessrule_in_what_order_the_comparisons_are_run_and_what_stopping_means(const std::vector<RunOrderString>& values) {
         for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
         ADD_FAILURE() << "Not implemented: examples_businessrule_in_what_order_the_comparisons_are_run_and_what_stopping_means";
+    }
+
+public:
+
+    void given_transactions_are(const std::vector<TransactionString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: given_transactions_are";
+    }
+
+    void given_imported_transactions_are(const std::vector<ImportedTransactionString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: given_imported_transactions_are";
     }
 
 };
