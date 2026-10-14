@@ -423,7 +423,8 @@ Examples: ColumnType
 | Integer        | INTEGER |                                              |
 | Boolean        | INTEGER | 0 or 1                                       |
 | Text           | TEXT    |                                              |
-| AccountPath    | TEXT    | The path, which is the account's identity    |
+| AccountPath    | TEXT    | The path as a person reads it                |
+| AccountId      | INTEGER | The identity a stored reference names         |
 | TransactionRef | TEXT    |                                              |
 | An enumeration | TEXT    | The value's own name, as this file writes it |
 
@@ -716,3 +717,81 @@ Then migration notes are : MigrationNote
 # In the business book this is an asset: money the business has placed outside
 # itself. Recategorising it as Equity:Owner Draw is the user's call, and the
 # note is what prompts it.
+
+# ---------------------------------------------------------------------------
+# The id counter belongs to the book
+# ---------------------------------------------------------------------------
+
+$WIP
+BusinessRule The id counter is recorded in the book, not worked out from it
+Description Accounts and categories are identified by a number drawn from one
+Description shared counter -- see Accounts. The number the counter last handed
+Description out is a column of the book row, written every time one is given
+Description out, so the next id a book hands out after being opened again is
+Description one past the last it ever gave, not one past the largest it still
+Description holds.
+Details The difference shows when something is deleted. A counter worked out
+Details from the chart would drop back when its highest account went, and the
+Details next account created would be handed a number something else still
+Details names -- a transaction in a file not yet imported, a backup opened
+Details later. A recorded counter cannot drop back.
+Details
+Details The column does not exist yet, which is why this rule is unbuilt: the
+Details book row above gains last_id_used when it does, and the row in
+Details BookInfrastructure is amended then rather than now.
+Details
+Details Nothing reads the number off a screen, so no scenario here states one.
+Details What is stated is where it lives and what it is not.
+Examples: CounterStorage
+| WhatIsAsked                               | Answer                                        |
+| Where the last id handed out is kept      | The last_id_used column of the book row       |
+| How the next id is found                  | One past it, and the column is written again   |
+| What a delete does to it                  | Nothing; the column does not drop back        |
+| What a book opened again counts from      | The column, not the largest id in the chart   |
+| Whether a group takes an id of its own    | Yes; a filled-in parent is a node like any other |
+
+Attributes CounterStorage
+| Attribute   | Type   | Default |
+| WhatIsAsked | String |         |
+| Answer      | String |         |
+
+$WIP
+Scenario Every node in the chart has an id, and the book records the last one
+Description The only scenario in this specification that states an id. It can,
+Description because a new book is empty and the counter starts from nothing, so
+Description the numbers here are not something a reader has to look up -- they
+Description are the order the nodes were made in.
+Description
+Description A group is a node like any other, so it takes an id too. Nothing
+Description needs one yet, but they are there and they cost nothing, and a chart
+Description where some nodes have an identity and some do not is worse than one
+Description where they all do. Assets and Expenses are the two groups here,
+Description filled in because a path names them, and each is numbered before
+Description the child that caused it.
+Given a new book named Business
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+When the book is saved and opened again
+Then account ids are : AccountIdentity
+| Path               | Id | Placeholder |
+| Assets             | 1  | true        |
+| Assets:Checking    | 2  | false       |
+| Expenses           | 3  | true        |
+| Expenses:Groceries | 4  | false       |
+Then the book records : IdCounter Vertical
+| LastIdUsed | 4 |
+# Four nodes, four ids, and the book opens again counting from four. Deleting
+# Expenses:Groceries would leave it at four, and the next account made would be
+# five -- see the rule above.
+
+Attributes AccountIdentity
+| Attribute   | Type        | Default |
+| Path        | AccountPath |         |
+| Id          | Integer     | 0       |
+| Placeholder | Boolean     | false   |
+
+Attributes IdCounter
+| Attribute  | Type    | Default |
+| LastIdUsed | Integer | 0       |

@@ -358,7 +358,7 @@ Description number line between them: the counter that hands out an AccountId
 Description is the same counter that hands out a CategoryId, so a program
 Description handed a bare number and told "look this up" never has to be told
 Description which collection to look in first, and never guesses wrong.
-Details This is what makes it safe for a transaction or a transaction to name "the
+Details This is what makes it safe for a transaction or a split line to name "the
 Details other side" by one id with no separate flag saying which kind it is.
 Details See Transactions.
 Examples: IdsGivenOut
@@ -374,6 +374,31 @@ Attributes IdsGivenOut
 | Kind           | String  |         |
 | Id             | Integer | 0       |
 | Notes          | String  | none    |
+
+$WIP
+BusinessRule An id is never given out a second time
+Description The counter only goes forward. The book records the last id it
+Description handed out, and the next id is that number plus one, so deleting
+Description an account does not free its number for the next one created.
+Details Working the next id out from the largest one in use would hand a
+Details deleted account's number to the next account made, and anything still
+Details naming the old one -- a transaction in a file not yet imported, a
+Details report somebody saved, a backup opened a year later -- would read as
+Details naming the new one. The counter is recorded, not computed. Where it is
+Details recorded is in Books.
+Examples: CounterOnlyGoesForward
+| WhatHappens                     | LastIdUsed | NextIdGivenOut |
+| A new book, nothing created yet | 0          | 1              |
+| Assets:Checking created         | 1          | 2              |
+| Expenses:Groceries created      | 2          | 3              |
+| Expenses:Groceries deleted      | 2          | 3              |
+| Expenses:Fuel created           | 3          | 4              |
+
+Attributes CounterOnlyGoesForward
+| Attribute      | Type    | Default |
+| WhatHappens    | String  |         |
+| LastIdUsed     | Integer | 0       |
+| NextIdGivenOut | Integer | 0       |
 
 Entity Category
 Description A node Quicken calls a category -- Income, Expense or Equity --

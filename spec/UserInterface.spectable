@@ -11,8 +11,15 @@ Details read at once -- or so that an import can be looked over beside the
 Details register it is about to change.
 Details
 Details What is specified here is what the windows show and what selecting
-Details things does. Pixels, fonts and column widths are not: those are not
-Details worth agreeing in a table, and changing them should not fail a test.
+Details things does. Pixels and fonts are not, and neither is the width a
+Details column starts at: those are not worth agreeing in a table, and
+Details changing them should not fail a test.
+Details
+Details Column widths used to be on that list and are not any more. What a
+Details column is wide by default is still nobody's business here, but a width
+Details a person set by dragging is: it has to outlast the register it was set
+Details in and outlast the session, and that is behaviour rather than
+Details appearance. See the width of a column, at the end of this file.
 
 # ---------------------------------------------------------------------------
 # The account list
@@ -1882,3 +1889,384 @@ Then the transaction id shown is : IdShown
 # Three transactions, three ids, and each one the same string in the report as
 # in the register. Two transactions sharing an id would make the click-through
 # land on the wrong line and is the thing this is really watching for.
+
+# ---------------------------------------------------------------------------
+# The listings, and the menu on the tree
+# ---------------------------------------------------------------------------
+
+Description Two windows that show the chart itself rather than the work done in
+Description it -- one of the accounts, one of the categories -- and the menu
+Description reached by right-clicking a line of the tree on the left.
+Details The tree answers "where am I working". It groups the real accounts
+Details under headings, totals each heading, leaves the hidden ones out until
+Details they are asked for, and shows no categories at all. Every one of those
+Details is right for working and wrong for maintaining: a category can only be
+Details renamed if it can be found, and a hidden account can only be brought
+Details back if it can be seen.
+Details
+Details So each listing is one line per node, every node, in path order, with no
+Details headings and nothing left out. The account listing carries the bank and
+Details the number from the account's own dialog, because seeing them together
+Details is how a statement is matched to the account it belongs to; the
+Details category listing carries the alias, because that is the only place it
+Details is ever read.
+Details
+Details Both are windows of their own and not tabs. A tab is something to come
+Details back to, and a listing is opened to find one node, change it, and close
+Details again. Which menu they are on is not a table's business; that they are
+Details reached from a menu rather than from the tree is, because the tree is
+Details the thing they exist to get around.
+Details
+Details Clicking a line opens the editor of the thing on that line, so finding
+Details and changing are one gesture rather than two. The menu on the tree
+Details opens the same editor, because there would be no sense in one account
+Details having two settings windows depending on where it was clicked.
+
+Attributes AccountListingRow
+Description One line of the account listing, in path order so a parent reads
+Description above its children.
+| Attribute     | Type        | Default  |
+| Path          | AccountPath |          |
+| Type          | AccountType | Checking |
+| Placeholder   | Boolean     | false    |
+| Hidden        | Boolean     | false    |
+| Bank          | Text        | none     |
+| AccountNumber | Text        | none     |
+| Balance       | Money       | 0.00     |
+
+Attributes CategoryListingRow
+Description One line of the category listing, in path order.
+| Attribute   | Type        | Default |
+| Path        | AccountPath |         |
+| Type        | AccountType | Expense |
+| Placeholder | Boolean     | false   |
+| Hidden      | Boolean     | false   |
+| Alias       | Text        | none    |
+
+Attributes ListingRowSelect
+Description The line clicked, named by the path on it.
+| Attribute | Type        | Default |
+| Path      | AccountPath |         |
+
+Attributes EditorOpened
+Description Which editor came up and what it came up on. What the account
+Description settings window holds is specified in Accounts; what is said here
+Description is only that clicking a line opens it on the right node.
+| Attribute | Type | Default |
+| Window    | Text |         |
+| Target    | Text | none    |
+
+Attributes TreeNode
+Description A line of the tree on the left, named the way the tree shows it --
+Description a group heading by its heading, an account by its path.
+| Attribute | Type | Default |
+| Node      | Text |         |
+
+$WIP
+Scenario The account listing is every account, one line each
+Description A placeholder is a line, a hidden account is a line, there are no
+Description group headings, and the categories are not here at all -- they have
+Description a listing of their own. Compare the account list scenarios above,
+Description where each of those four is the other way round.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type       | Placeholder | Hidden |
+| Assets             | Checking   | true        | false  |
+| Assets:Checking    | Checking   | false       | false  |
+| Assets:Old Savings | Savings    | false       | true   |
+| Liabilities:Visa   | CreditCard | false       | false  |
+| Expenses:Groceries | Expense    | false       | false  |
+When account listing opened
+Then account listing rows are : AccountListingRow CompareOnly
+| Path               | Type       | Placeholder | Hidden |
+| Assets             | Checking   | true        | false  |
+| Assets:Checking    | Checking   | false       | false  |
+| Assets:Old Savings | Savings    | false       | true   |
+| Liabilities:Visa   | CreditCard | false       | false  |
+# Four lines for five rows of chart. Expenses:Groceries is a category and is in
+# the other listing.
+
+$WIP
+Scenario The account listing shows the bank and the number beside each account
+Description The one place they are read together. An account with neither is
+Description still a line, because a book where some accounts are labelled and
+Description some are not is exactly when the listing is wanted.
+Given the chart of accounts is : ChartOfAccounts
+| Path             | Type       | Placeholder | Hidden |
+| Assets:Checking  | Checking   | false       | false  |
+| Assets:Savings   | Savings    | false       | false  |
+| Liabilities:Visa | CreditCard | false       | false  |
+When account settings changed : AccountSettings Vertical
+| Path          | Assets:Checking |
+| Bank          | First Bank      |
+| AccountNumber | 0012-3456       |
+When account settings changed : AccountSettings Vertical
+| Path          | Liabilities:Visa |
+| Bank          | First Bank       |
+| AccountNumber | 4111             |
+When account listing opened
+Then account listing rows are : AccountListingRow CompareOnly
+| Path             | Bank       | AccountNumber |
+| Assets:Checking  | First Bank | 0012-3456     |
+| Assets:Savings   | none       | none          |
+| Liabilities:Visa | First Bank | 4111          |
+
+$WIP
+Scenario The category listing is every category, which no other window shows
+Description The tree shows none of these, so without this window a category
+Description hidden by mistake cannot be found again, and one named badly
+Description cannot be renamed.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder | Hidden |
+| Assets:Checking    | Checking | false       | false  |
+| Expenses           | Expense  | true        | false  |
+| Expenses:Auto      | Expense  | true        | false  |
+| Expenses:Auto:Fuel | Expense  | false       | false  |
+| Income:Salary      | Income   | false       | true   |
+When category listing opened
+Then category listing rows are : CategoryListingRow CompareOnly
+| Path               | Type    | Placeholder | Hidden |
+| Expenses           | Expense | true        | false  |
+| Expenses:Auto      | Expense | true        | false  |
+| Expenses:Auto:Fuel | Expense | false       | false  |
+| Income:Salary      | Income  | false       | true   |
+# Assets:Checking is an account and is in the other listing. The hidden salary
+# category is here, which is the point of the window.
+
+$WIP
+Scenario Clicking a line of the account listing opens that account's settings
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type     | Placeholder | Hidden |
+| Assets:Checking | Checking | false       | false  |
+| Assets:Savings  | Savings  | false       | false  |
+When account listing opened
+When listing row clicked : ListingRowSelect Vertical
+| Path | Assets:Savings |
+Then the editor opened is : EditorOpened Vertical
+| Window | Account settings |
+| Target | Assets:Savings   |
+
+$WIP
+Scenario Clicking a line of the category listing opens that category's settings
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder | Hidden |
+| Expenses:Groceries | Expense | false       | false  |
+| Expenses:Auto:Fuel | Expense | false       | false  |
+When category listing opened
+When listing row clicked : ListingRowSelect Vertical
+| Path | Expenses:Auto:Fuel |
+Then the editor opened is : EditorOpened Vertical
+| Window | Category settings  |
+| Target | Expenses:Auto:Fuel |
+
+$WIP
+Scenario The menu on an account in the tree offers what can be done to it
+Description Delete is offered and refused rather than left off, because an
+Description account that cannot be deleted raises a question -- why not -- and
+Description a greyed item with the reason to hand answers it. Checking has
+Description entries, and an account with entries is not deleted; see Accounts.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder | Hidden |
+| Assets:Checking    | Checking | false       | false  |
+| Assets:Wallet      | Cash     | false       | false  |
+| Expenses:Groceries | Expense  | false       | false  |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
+| T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
+When account list shown
+When account list node right clicked : TreeNode Vertical
+| Node | Assets:Checking |
+Then menu items are : MenuItem
+| Item           | Enabled |
+| New account... | true    |
+| Edit...        | true    |
+| Hide           | true    |
+| Delete...      | false   |
+
+$WIP
+Scenario The menu on an account with nothing in it offers to delete it
+Description The same menu on the same tree, and the only difference is that
+Description this account has no entries to lose.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder | Hidden |
+| Assets:Checking    | Checking | false       | false  |
+| Assets:Wallet      | Cash     | false       | false  |
+| Expenses:Groceries | Expense  | false       | false  |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
+| T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
+When account list shown
+When account list node right clicked : TreeNode Vertical
+| Node | Assets:Wallet |
+Then menu items are : MenuItem
+| Item           | Enabled |
+| New account... | true    |
+| Edit...        | true    |
+| Hide           | true    |
+| Delete...      | true    |
+
+$WIP
+Scenario The menu on a group heading offers only a new account
+Description A heading is not a thing in the book. It is the kind of account
+Description written on the page, so there is nothing there to edit, hide or
+Description delete -- but it is a perfectly good place to say "another one of
+Description these".
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type     | Placeholder | Hidden |
+| Assets:Checking | Checking | false       | false  |
+When account list shown
+When account list node right clicked : TreeNode Vertical
+| Node | Banking |
+Then menu items are : MenuItem
+| Item           | Enabled |
+| New account... | true    |
+
+$WIP
+Scenario Edit on the tree opens the same window the listing opens
+Description One editor per account, whichever way it was reached.
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type     | Placeholder | Hidden |
+| Assets:Checking | Checking | false       | false  |
+When account list shown
+When node edit chosen : TreeNode Vertical
+| Node | Assets:Checking |
+Then the editor opened is : EditorOpened Vertical
+| Window | Account settings |
+| Target | Assets:Checking  |
+
+# ---------------------------------------------------------------------------
+# The width of a column
+# ---------------------------------------------------------------------------
+
+Description Dragging the divider between two headings makes a column wider or
+Description narrower. The width belongs to the column, is the same in every
+Description register, and is kept with the book.
+Details Every register is the same shape -- the same nine columns in the same
+Details order, whatever the account -- so a width learned in one of them is
+Details right in all of them. Widths held per account would mean widening the
+Details payee column once per account, twenty times, for one preference about
+Details how long a payee name is. Nobody would do that twice.
+Details
+Details Kept with the book rather than with the program, for the same reason
+Details every other setting is: a book is a file, and a book carried to
+Details another machine should look the way it was left. See how a book is
+Details stored in Books. The widths are one row per column there, keyed by the
+Details column's name as this specification writes it -- not by its heading,
+Details because Payment and Deposit are headed differently for different
+Details account types and the width is not.
+Details
+Details Only a column somebody resized is recorded. A column nobody touched
+Details keeps whatever width the program gives it, and that number is not
+Details stated anywhere here, so changing it does not fail a test. This is the
+Details one thing that distinguishes "wide by default", which is appearance,
+Details from "wide because I said so", which is not.
+
+Attributes RegisterColumnWidth
+Description The width of one register column, in pixels. A width is a number
+Description only because a drag produces one; see the rule above for why no
+Description default width appears in any table.
+| Attribute | Type    | Default |
+| Column    | Text    |         |
+| Width     | Integer | 0       |
+
+$WIP
+BusinessRule A column cannot be dragged away to nothing
+Description A width is clamped to a minimum. A column dragged to no width at
+Description all would be invisible, and a column that cannot be seen cannot be
+Description dragged back, so the program would have lost it until the book was
+Description edited by hand.
+Examples: WidthRequested
+| Requested | Stored | Notes                                   |
+| 240       | 240    | Taken as asked                          |
+| 20        | 20     | The minimum exactly                     |
+| 8         | 20     | Clamped; the divider stops here         |
+| 0         | 20     | A drag past the next column stops here  |
+
+Attributes WidthRequested
+| Attribute | Type    | Default |
+| Requested | Integer | 0       |
+| Stored    | Integer | 0       |
+| Notes     | String  | none    |
+
+$WIP
+Scenario A column widened in one register is that wide in every register
+Description The width is the column's, so moving to another account does not
+Description undo it. Both of these registers have a payee column, and after
+Description the drag there is one answer to how wide it is.
+Given the chart of accounts is : ChartOfAccounts
+| Path             | Type       | Placeholder | Hidden |
+| Assets:Checking  | Checking   | false       | false  |
+| Liabilities:Visa | CreditCard | false       | false  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register column resized : RegisterColumnWidth Vertical
+| Column | Payee |
+| Width  | 240   |
+When account selected : AccountSelect
+| Path             |
+| Liabilities:Visa |
+Then register column widths are : RegisterColumnWidth CompareOnly
+| Column | Width |
+| Payee  | 240   |
+
+$WIP
+Scenario Only the columns somebody resized are recorded
+Description The register has nine columns and one of them was dragged, so one
+Description of them is written down. The other eight are whatever the program
+Description makes them, which is deliberately not a number this
+Description specification knows.
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type     | Placeholder | Hidden |
+| Assets:Checking | Checking | false       | false  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register column resized : RegisterColumnWidth Vertical
+| Column | Memo |
+| Width  | 180  |
+Then recorded column widths are : RegisterColumnWidth
+| Column | Width |
+| Memo   | 180   |
+
+$WIP
+Scenario A width survives the book being saved and opened again
+Description A preference set once and lost on exit is worse than none, because
+Description it has to be set again every time and it looks like a defect.
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type     | Placeholder | Hidden |
+| Assets:Checking | Checking | false       | false  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register column resized : RegisterColumnWidth Vertical
+| Column | Payee |
+| Width  | 240   |
+When register column resized : RegisterColumnWidth Vertical
+| Column | Category |
+| Width  | 300      |
+When the book is saved and opened again
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register column widths are : RegisterColumnWidth CompareOnly
+| Column   | Width |
+| Payee    | 240   |
+| Category | 300   |
+
+$WIP
+Scenario A column dragged to nothing keeps the minimum width
+Description The clamp from the rule above, through the window rather than in a
+Description table of its own, because this is the case that would otherwise
+Description lose a column for good.
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type     | Placeholder | Hidden |
+| Assets:Checking | Checking | false       | false  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register column resized : RegisterColumnWidth Vertical
+| Column | CheckNo |
+| Width  | 0       |
+Then register column widths are : RegisterColumnWidth CompareOnly
+| Column  | Width |
+| CheckNo | 20    |

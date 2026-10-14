@@ -8,7 +8,24 @@ Each item says whether a spec table already exists for it. Per CLAUDE.md,
 anything marked **spec first** starts with a `.spectable` and stops for review
 before any production code.
 
-Selected order: **4, then 5.**
+Selected order: **4, then 5, then 10, 11 and 13.**
+
+Done so far: **4** (the specification speaks in transactions, suite green),
+and the spec tables for **5**, **10** and **13**, which are written and
+verified and are waiting for code. **11** is in hand.
+
+Two traps found while writing those tables, worth knowing before adding to
+them:
+
+- `Examples: BookInfrastructure` in `Books.spectable` is not documentation. Its
+  glue (`generated/books_glue.h`) creates a real book and checks every column
+  named there against the real schema, so naming a column that does not exist
+  yet turns a live test red. A column being added belongs in a `$WIP` rule
+  until the schema has it.
+- An `Examples:` table under a `BusinessRule` or a `DataType` generates a test
+  that calls a glue method of its own. A new one therefore needs either a
+  `$WIP` tag or a hand-written glue method -- without both, the build breaks on
+  a method nobody wrote.
 
 ## Three facts established while making this list
 
@@ -71,11 +88,21 @@ there, is the author's call.
 
 ## Identity and storage
 
-- [ ] **5. Unique ids, recorded in the book.** SELECTED -- next. Make `id` the
-      primary key (or UNIQUE) on accounts and categories, store the last id
-      used, increment from it rather than deriving a maximum, so a deleted
-      account's id is never handed out again. *Spec first
-      (`Books.spectable` storage rule, `Accounts.spectable`). Medium.*
+- [ ] **5. Unique ids, recorded in the book.** Spec written; code owed. Make
+      `id` the primary key (or UNIQUE) on accounts and categories, store the
+      last id used, increment from it rather than deriving a maximum, so a
+      deleted account's id is never handed out again.
+      Specified by: `BusinessRule An id is never given out a second time`
+      (`Accounts.spectable`, with the counter not dropping back over a delete),
+      `BusinessRule The id counter is recorded in the book, not worked out from
+      it` (`Books.spectable`), and `Scenario Every node in the chart has an id,
+      and the book records the last one` -- the one scenario in the whole
+      specification that states literal ids, because a new book starts the
+      counter from nothing. Groups take ids too, numbered before the child that
+      filled them in, which is the order `chart::add` already creates them in.
+      The code owed: a `last_id_used` column on the book row, written whenever
+      an id is handed out, and `next_id_` read from it instead of from the
+      maximum in the chart. *Medium.*
 - [ ] **6. Starting balance and its date in account settings.**
       `OpeningBalance` is in `Accounts.spectable`; the settings dialog does not
       offer it. *Spec first. Medium.*
@@ -91,18 +118,46 @@ there, is the author's call.
 
 ## The window
 
-- [ ] **10. An account listing and a category listing from the menu**, click to
-      edit, and a context menu on the left-hand tree. No spec exists for any
-      of it. *Spec first. Medium-large.*
+- [ ] **10. An account listing and a category listing from the menu**, click
+      to edit, and a context menu on the left-hand tree. Spec written; code
+      owed -- nine `$WIP` scenarios at the end of `UserInterface.spectable`,
+      under "The listings, and the menu on the tree". What they settle: each
+      listing is one line per node, every node, in path order, with no group
+      headings and nothing hidden left out (the tree is the opposite on all
+      four counts, deliberately); the account listing carries the bank and the
+      number from the account's own dialog, the category listing carries the
+      alias; both are windows of their own rather than tabs; a click opens the
+      editor of the thing on the line, and Edit on the tree opens the same one.
+      The tree's menu offers New account, Edit, Hide and Delete, with Delete
+      greyed rather than absent when the account has entries, and a group
+      heading offers only New account because a heading is not a thing in the
+      book. *Medium-large.*
 - [ ] **11. The import moves to the bottom panel** rather than beside the
-      register. *Already specified: `UserInterface.spectable:934, 951`.
-      Implementation only. Medium.*
+      register. *Specified; implementation in hand.* Note that "implementation
+      only" understated it: there was no bottom panel anywhere. `ui_model.h`
+      showed the review as pane 2, and `MainWindow` put `reviewPanel_` in a
+      horizontal splitter beside the tabs. So it is the panel in the model
+      (tabs, active tab, open exactly when it has a tab), `panes()` reduced to
+      the one pane, three glue steps connected, and the splitter turned
+      vertical with a closable tab widget below. The four bottom-panel
+      scenarios that do not need Find come off `$WIP`; the Find ones stay for
+      item 12.
 - [ ] **12. Find.** Modeless dialog, results as a tab in the same bottom panel.
       *Already specified: nine scenarios. Implementation only. Large.*
 - [ ] **13. Column resize, widths shared across registers and stored with the
-      book.** Note the conflict: `UserInterface.spectable:14` currently says
-      column widths are deliberately *not* specified, so that line has to be
-      revisited first. *Spec first. Medium.*
+      book.** Spec written; code owed -- "The width of a column" at the end of
+      `UserInterface.spectable`. The conflict at line 14 is resolved rather
+      than ignored: what a column is *wide by default* is still not specified,
+      so changing it cannot fail a test, but a width somebody set by dragging
+      is behaviour, because it has to outlast the register it was set in and
+      outlast the session. One set of widths for every register (they are all
+      the same nine columns), kept with the book, keyed by the column's name in
+      this specification rather than by its heading -- Payment and Deposit are
+      headed differently per account type and the width is not. Only a column
+      somebody resized is recorded. A width is clamped to a minimum of 20
+      pixels, because a column dragged to nothing cannot be dragged back; that
+      number is my choice and is the one thing here worth disagreeing with.
+      *Medium.*
 - [ ] **14. Sort a register by any column.** The only ordering scenario today
       is `TransactionRegister.spectable:182` (same-date entry order), which
       sorting has to keep as the tiebreak. *Spec first. Medium.*

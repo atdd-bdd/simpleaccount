@@ -705,4 +705,11 @@ public:
         }
     }
 
+public:
+
+    void examples_businessrule_an_id_is_never_given_out_a_second_time(const std::vector<CounterOnlyGoesForwardString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_an_id_is_never_given_out_a_second_time";
+    }
+
 };

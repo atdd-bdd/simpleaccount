@@ -810,4 +810,73 @@ public:
         }
     }
 
+public:
+
+    void when_account_listing_opened() {
+        ADD_FAILURE() << "Not implemented: when_account_listing_opened";
+    }
+
+    void then_account_listing_rows_are(const std::vector<AccountListingRowString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_account_listing_rows_are";
+    }
+
+    void when_account_settings_changed(const std::vector<AccountSettingsString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_account_settings_changed";
+    }
+
+    void when_category_listing_opened() {
+        ADD_FAILURE() << "Not implemented: when_category_listing_opened";
+    }
+
+    void then_category_listing_rows_are(const std::vector<CategoryListingRowString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_category_listing_rows_are";
+    }
+
+    void when_listing_row_clicked(const std::vector<ListingRowSelectString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_listing_row_clicked";
+    }
+
+    void then_the_editor_opened_is(const std::vector<EditorOpenedString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_the_editor_opened_is";
+    }
+
+    void when_account_list_node_right_clicked(const std::vector<TreeNodeString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_account_list_node_right_clicked";
+    }
+
+    void when_node_edit_chosen(const std::vector<TreeNodeString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_node_edit_chosen";
+    }
+
+    void when_register_column_resized(const std::vector<RegisterColumnWidthString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_register_column_resized";
+    }
+
+    void then_register_column_widths_are(const std::vector<RegisterColumnWidthString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_register_column_widths_are";
+    }
+
+    void then_recorded_column_widths_are(const std::vector<RegisterColumnWidthString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_recorded_column_widths_are";
+    }
+
+    void when_the_book_is_saved_and_opened_again() {
+        ADD_FAILURE() << "Not implemented: when_the_book_is_saved_and_opened_again";
+    }
+
+    void examples_businessrule_a_column_cannot_be_dragged_away_to_nothing(const std::vector<WidthRequestedString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_a_column_cannot_be_dragged_away_to_nothing";
+    }
+
 };

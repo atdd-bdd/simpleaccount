@@ -997,4 +997,21 @@ public:
         }
     }
 
+public:
+
+    void then_account_ids_are(const std::vector<AccountIdentityString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_account_ids_are";
+    }
+
+    void then_the_book_records(const std::vector<IdCounterString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_the_book_records";
+    }
+
+    void examples_businessrule_the_id_counter_is_recorded_in_the_book_not_worked_out_from_it(const std::vector<CounterStorageString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_the_id_counter_is_recorded_in_the_book_not_worked_out_from_it";
+    }
+
 };
