@@ -1,8 +1,8 @@
 # AlignThree findings from a real project
 
 Written while specifying and starting to implement SimpleAccount (a Quicken
-replacement) with AlignThree 0.9.1. Twelve `.spectable` files, ~9,900 lines,
-365 generated C++ tests, GoogleTest, MSVC 2022.
+replacement) with AlignThree 0.9.1. Fourteen `.spectable` files, ~16,400
+lines, 449 generated C++ tests, GoogleTest, MSVC 2022.
 
 Ready to drop in the AlignThree repository. Everything below was observed, not
 guessed; each item says how to reproduce it.
@@ -367,6 +367,72 @@ unwritten and is also undocumented.
 
 ---
 
+## 10. A named comment has no continuation, and a stray word takes a block's Examples with it
+
+**Feature request, with a defect behind it.**
+
+A named comment is written one keyword per line:
+
+```
+Description The most specific rule, which is taken to be the one with the
+Description longest pattern. Length is a crude measure, and it is used because
+Description it needs no explaining.
+```
+
+Three lines of prose, three repetitions of the keyword. In a specification with
+real prose in it -- this one has about 2,000 such lines -- the keyword is most
+of what a reader's eye meets, and rewrapping a paragraph means retyping the
+keyword on every line that moved. The obvious thing to reach for is a trailing
+backslash:
+
+```
+Description The most specific rule, which is taken to be the one with the \
+longest pattern. Length is a crude measure, and it is used because it \
+needs no explaining.
+```
+
+That is not supported, which is fair enough -- it is in neither the grammar
+(§3, `NamedComment ::= ("Description" | "Details" | ...) CommentText Table?`)
+nor the prose. **What is worth fixing is what happens instead.** Each continued
+line is read as a new block, and the first word of it is reported as a keyword:
+
+```
+Payees.spectable:67: warning: Unrecognized keyword 'pattern.'
+Payees.spectable:68: warning: Unrecognized keyword 'explaining:'
+```
+
+and then, from the same three lines:
+
+```
+Payees.spectable:65: warning: BusinessRule 'Which rule wins when several match'
+                              has no Examples: section
+```
+
+The stray lines ended the `BusinessRule`, so the `Examples:` table below them
+was no longer part of it. **A rule that was being checked stops being checked,
+and the message that says so is the third of three warnings rather than an
+error.** On a 16,000-line specification with a scroll of output, that is a test
+quietly leaving the suite.
+
+Two things would help, independently:
+
+1. **A continuation.** A trailing `\` on a named comment, or a block form
+   (`Description:` followed by indented lines, ending at the next keyword).
+   Either removes the repetition and makes rewrapping free.
+2. **An unrecognised keyword inside a block should not silently end it.** A line
+   that is not a keyword, inside a `BusinessRule` or `Scenario`, is far more
+   likely to be prose somebody wrapped than the start of something new. Either
+   treat it as a continuation of the comment above it, or make it an error
+   rather than a warning -- but a block losing its `Examples:` because of a
+   wrapped sentence should not be survivable.
+
+To reproduce: take any `BusinessRule` with a multi-line `Description` and an
+`Examples:` table, join the comment lines with a trailing backslash, and run
+`analyze_cli` on the folder. 4 diagnostics, all warnings, and one of them is the
+rule going dark.
+
+---
+
 ## What was not AlignThree's fault
 
 Recorded so the list above is not read as longer than it is.
@@ -383,7 +449,7 @@ Recorded so the list above is not read as longer than it is.
 
 ## Context
 
-The specification this came from: 12 files, 9,900 lines, 365 tests, covering
+The specification this came from: 14 files, 16,400 lines, 449 tests, covering
 double-entry transactions, QIF migration of a 43,000-record 20-year export,
 OFX/QFX and CSV import, payees, reporting, and acceptance comparison against
 Quicken's own PDF reports. Two of those acceptance comparisons now agree with
