@@ -447,6 +447,18 @@ public:
         return at == display_.end() ? display_of(path) : at->second;
     }
 
+    // The number the counter last handed out. Recorded with the book, so no
+    // id is ever given out twice: see the counter rule in Accounts.spectable
+    // and the storage rule in Books.
+    long long last_id_used() const { return next_id_; }
+
+    // What the book recorded, read back when it is opened. It never lowers the
+    // counter -- the chart is loaded first, and a row carrying a higher id than
+    // the book recorded would otherwise have its number handed out again.
+    void set_last_id_used(long long value) {
+        if (value > next_id_) next_id_ = value;
+    }
+
 private:
     std::map<std::string, Account> accounts_;
     std::map<std::string, Category> categories_;

@@ -285,6 +285,8 @@ MainWindow::MainWindow() {
     accounts_->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     accounts_->setMinimumWidth(260);
     connect(accounts_, &QTreeWidget::itemSelectionChanged, this, &MainWindow::accountClicked);
+    accounts_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(accounts_, &QTreeWidget::customContextMenuRequested, this, &MainWindow::treeMenu);
 
     tabs_ = new QTabWidget;
     tabs_->setTabsClosable(true);
@@ -403,6 +405,254 @@ void MainWindow::applyFont(const QFont& font) {
     if (workspace_) refreshAccounts();
 }
 
+// The register's columns, named as the specification names them rather than as
+// the headings read: Payment and Deposit are headed differently for different
+// account types, and the width is not.
+static std::string registerColumnName(int column) {
+    static const char* const names[] = {"Date",    "CheckNo", "Payee",   "Category",
+                                        "Memo",    "Payment", "Deposit", "Balance"};
+    if (column < 0 || column >= static_cast<int>(sizeof(names) / sizeof(names[0])))
+        return {};
+    return names[column];
+}
+
+void MainWindow::applyColumnWidths() {
+    const bool was = refreshing_;
+    refreshing_ = true;
+    for (const TabWidgets& t : tabWidgets_) {
+        if (t.isReport || t.reg == nullptr) continue;
+        for (int column = 0; column < t.reg->columnCount(); ++column) {
+            const auto at = columnWidths_.find(registerColumnName(column));
+            if (at != columnWidths_.end()) t.reg->setColumnWidth(column, at->second);
+        }
+    }
+    refreshing_ = was;
+}
+
+// One line per node, every node, in path order, with no group headings and
+// nothing hidden left out: the tree is the opposite on all four counts, and
+// that is what this window is for. Double-clicking a line opens its editor.
+void MainWindow::showAccountListing() {
+    if (!store_.is_open()) {
+        QMessageBox::information(this, "SimpleAccount",
+                                 "Open a book first, or make one with File > New book.");
+        return;
+    }
+    QDialog dialog(this);
+    dialog.setWindowTitle("Accounts");
+    dialog.resize(820, 520);
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->addWidget(new QLabel("Double-click a line to edit the account.", &dialog));
+    auto* table = new QTableWidget(&dialog);
+    table->setColumnCount(7);
+    table->setHorizontalHeaderLabels(
+        {"Account", "Type", "Group", "Hidden", "Bank", "Number", "Balance"});
+    table->verticalHeader()->setVisible(false);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    table->setFont(appFont_);
+    layout->addWidget(table);
+
+    const auto fill = [this, table]() {
+        const std::vector<ui::ListingRow> rows = ui::account_listing(chart_, book_);
+        table->setRowCount(static_cast<int>(rows.size()));
+        for (int r = 0; r < static_cast<int>(rows.size()); ++r) {
+            const ui::ListingRow& row = rows[static_cast<std::size_t>(r)];
+            table->setItem(r, 0, new QTableWidgetItem(QString::fromStdString(row.path)));
+            table->setItem(r, 1, new QTableWidgetItem(
+                                     QString::fromStdString(types::to_string(row.type))));
+            table->setItem(r, 2, new QTableWidgetItem(row.placeholder ? "group" : ""));
+            table->setItem(r, 3, new QTableWidgetItem(row.hidden ? "hidden" : ""));
+            table->setItem(r, 4, new QTableWidgetItem(QString::fromStdString(row.bank)));
+            table->setItem(r, 5,
+                           new QTableWidgetItem(QString::fromStdString(row.account_number)));
+            auto* balance = new QTableWidgetItem(QString::fromStdString(row.balance.in_register()));
+            balance->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            table->setItem(r, 6, balance);
+        }
+    };
+    fill();
+
+    connect(table, &QTableWidget::cellDoubleClicked, &dialog, [this, table, fill](int row, int) {
+        QTableWidgetItem* item = table->item(row, 0);
+        if (item == nullptr) return;
+        editAccountSettings(item->text());
+        fill();
+    });
+    dialog.exec();
+}
+
+// The categories, which no other window shows: the tree leaves them out, so
+// without this a category hidden by mistake could not be found again.
+void MainWindow::showCategoryListing() {
+    if (!store_.is_open()) {
+        QMessageBox::information(this, "SimpleAccount",
+                                 "Open a book first, or make one with File > New book.");
+        return;
+    }
+    QDialog dialog(this);
+    dialog.setWindowTitle("Categories");
+    dialog.resize(700, 520);
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->addWidget(new QLabel("Double-click a line to edit the category.", &dialog));
+    auto* table = new QTableWidget(&dialog);
+    table->setColumnCount(5);
+    table->setHorizontalHeaderLabels({"Category", "Type", "Group", "Hidden", "Alias"});
+    table->verticalHeader()->setVisible(false);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    table->setFont(appFont_);
+    layout->addWidget(table);
+
+    const auto fill = [this, table]() {
+        const std::vector<ui::ListingRow> rows = ui::category_listing(chart_);
+        table->setRowCount(static_cast<int>(rows.size()));
+        for (int r = 0; r < static_cast<int>(rows.size()); ++r) {
+            const ui::ListingRow& row = rows[static_cast<std::size_t>(r)];
+            table->setItem(r, 0, new QTableWidgetItem(QString::fromStdString(row.path)));
+            table->setItem(r, 1, new QTableWidgetItem(
+                                     QString::fromStdString(types::to_string(row.type))));
+            table->setItem(r, 2, new QTableWidgetItem(row.placeholder ? "group" : ""));
+            table->setItem(r, 3, new QTableWidgetItem(row.hidden ? "hidden" : ""));
+            table->setItem(r, 4, new QTableWidgetItem(QString::fromStdString(row.alias)));
+        }
+    };
+    fill();
+
+    connect(table, &QTableWidget::cellDoubleClicked, &dialog, [this, table, fill](int row, int) {
+        QTableWidgetItem* item = table->item(row, 0);
+        if (item == nullptr) return;
+        editCategorySettings(item->text());
+        fill();
+    });
+    dialog.exec();
+}
+
+// What is kept about one account: which bank it is at and the number on the
+// statement. See the settings section of Accounts.spectable.
+void MainWindow::editAccountSettings(const QString& path) {
+    const chart::Account* existing = chart_.find(path.toStdString());
+    if (existing == nullptr) return;
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("Account settings");
+    auto* form = new QFormLayout(&dialog);
+    form->addRow("Account", new QLabel(path, &dialog));
+    auto* bank = new QLineEdit(QString::fromStdString(existing->bank), &dialog);
+    auto* number = new QLineEdit(QString::fromStdString(existing->account_number), &dialog);
+    form->addRow("Bank", bank);
+    form->addRow("Number on the statement", number);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
+                                         &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    form->addRow(buttons);
+    if (dialog.exec() != QDialog::Accepted) return;
+
+    chart::Account a = *existing;
+    // Kept exactly as typed, with only the blanks at either end taken off: a
+    // number on a statement is a label and not an amount.
+    a.bank = bank->text().trimmed().toStdString();
+    a.account_number = number->text().trimmed().toStdString();
+    chart_.put(a);
+    save();
+    rebuildWorkspace();
+    refresh();
+}
+
+// A category's own editor. The alias is the short way to type it, and this is
+// the only place it is set; see the finding rule in Accounts.spectable.
+void MainWindow::editCategorySettings(const QString& path) {
+    const std::string which = path.toStdString();
+    const chart::Account* asAccount = chart_.find(which);
+    const chart::Category* asCategory = chart_.find_category(which);
+    if (asAccount == nullptr && asCategory == nullptr) return;
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("Category settings");
+    auto* form = new QFormLayout(&dialog);
+    form->addRow("Category", new QLabel(path, &dialog));
+    const std::string was = asAccount != nullptr ? asAccount->alias : asCategory->alias;
+    auto* alias = new QLineEdit(QString::fromStdString(was), &dialog);
+    form->addRow("Alias", alias);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
+                                         &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    form->addRow(buttons);
+    if (dialog.exec() != QDialog::Accepted) return;
+
+    if (asAccount != nullptr) {
+        chart::Account a = *asAccount;
+        a.alias = alias->text().trimmed().toStdString();
+        chart_.put(a);
+    } else {
+        chart::Category c = *asCategory;
+        c.alias = alias->text().trimmed().toStdString();
+        chart_.put_category(c);
+    }
+    save();
+    rebuildWorkspace();
+    refresh();
+}
+
+void MainWindow::hideAccount(const QString& path) {
+    const chart::Account* existing = chart_.find(path.toStdString());
+    if (existing == nullptr) return;
+    chart::Account a = *existing;
+    // Hiding keeps the history: the account stays in the chart and in every
+    // total, and only its line in the tree goes.
+    a.hidden = true;
+    chart_.put(a);
+    save();
+    rebuildWorkspace();
+    refresh();
+}
+
+void MainWindow::deleteAccount(const QString& path) {
+    const chart::Rejection no = chart_.remove(types::AccountPath(path.toStdString()));
+    if (no.refused) {
+        QMessageBox::warning(this, "SimpleAccount", QString::fromStdString(no.reason));
+        return;
+    }
+    save();
+    rebuildWorkspace();
+    refresh();
+}
+
+// The menu on a line of the tree. What is on it is the workspace's answer, so
+// that the greyed Delete and the heading's single item are decided in one place
+// and are the same here as in the specification.
+void MainWindow::treeMenu(const QPoint& at) {
+    QTreeWidgetItem* item = accounts_->itemAt(at);
+    if (item == nullptr || !workspace_) return;
+    const QString account = item->data(0, Qt::UserRole).toString();
+    // A heading carries no account, so it is named by what it says on the page.
+    const QString node = account.isEmpty() ? item->text(0) : account;
+
+    QMenu menu(this);
+    for (const ui::MenuEntry& entry : workspace_->tree_menu(node.toStdString())) {
+        QAction* action = menu.addAction(QString::fromStdString(entry.item));
+        action->setEnabled(entry.enabled);
+    }
+    QAction* chosen = menu.exec(accounts_->viewport()->mapToGlobal(at));
+    if (chosen == nullptr) return;
+
+    const QString what = chosen->text();
+    if (what.startsWith("New account")) {
+        newAccount();
+    } else if (what.startsWith("Edit")) {
+        if (chart_.find(node.toStdString()) != nullptr) editAccountSettings(node);
+        else editCategorySettings(node);
+    } else if (what == "Hide") {
+        hideAccount(node);
+    } else if (what.startsWith("Delete")) {
+        deleteAccount(node);
+    }
+}
+
 void MainWindow::chooseFont() {
     bool chosen = false;
     const QFont font = QFontDialog::getFont(&chosen, appFont_, this, "Font for all windows");
@@ -434,6 +684,9 @@ void MainWindow::buildMenus() {
 
     QMenu* accounts = menuBar()->addMenu("&Accounts");
     accounts->addAction("&New account...", this, &MainWindow::newAccount);
+    accounts->addSeparator();
+    accounts->addAction("Account &listing...", this, &MainWindow::showAccountListing);
+    accounts->addAction("&Category listing...", this, &MainWindow::showCategoryListing);
     accounts->addSeparator();
     accounts->addAction("Payee &rules...", this, &MainWindow::editRules);
     accounts->addSeparator();
@@ -474,6 +727,7 @@ void MainWindow::rebuildWorkspace() {
     }
 
     workspace_ = std::make_unique<ui::Workspace>(chart_, book_, transactions_, splits_);
+    workspace_->set_column_widths(columnWidths_);
     for (const std::string& account : accounts) workspace_->select(account);
     // select() activates whatever it opens or returns to, so selecting them
     // back in order leaves the last one active; asking for the one that
@@ -553,7 +807,8 @@ void MainWindow::openNamed(const QString& name) {
     std::vector<ledger::Transaction> transactions;
     std::vector<payees::Rule> rules;
     std::vector<ledger::TransactionSplit> splits;
-    no = opened.read(&accounts, &ledger, &transactions, &rules, &splits);
+    std::map<std::string, int> widths;
+    no = opened.read(&accounts, &ledger, &transactions, &rules, &splits, &widths);
     if (no.refused) {
         QMessageBox::warning(this, "SimpleAccount", QString::fromStdString(no.reason));
         return;
@@ -564,15 +819,18 @@ void MainWindow::openNamed(const QString& name) {
     transactions_ = transactions;
     rules_ = rules;
     splits_ = splits;
+    columnWidths_ = widths;
     rememberRecent(name);
     bookChanged(name);
+    applyColumnWidths();
 }
 
 // A book is a file rather than a session, so anything that changes it writes it.
 // Closing the window is not a way to lose a morning's entry.
 bool MainWindow::save() {
     if (!store_.is_open()) return false;
-    const store::Failure no = store_.write(chart_, transactions_, rules_, splits_);
+    const store::Failure no =
+        store_.write(chart_, transactions_, rules_, splits_, columnWidths_);
     if (no.refused) {
         QMessageBox::warning(this, "SimpleAccount", QString::fromStdString(no.reason));
         return false;
@@ -1577,6 +1835,19 @@ MainWindow::TabWidgets MainWindow::makeRegisterTab(int tabPosition) {
         {"Date", "Num", "Payee", "Category", "Memo", "Payment", "Deposit", "Balance"});
     t.reg->verticalHeader()->setVisible(false);
     t.reg->setSelectionBehavior(QAbstractItemView::SelectRows);
+    // Dragging a divider is how a width is set. It goes to the workspace, is
+    // written with the book, and is put onto every other register -- which is
+    // what refreshing_ guards: applying it would be heard as another drag.
+    connect(t.reg->horizontalHeader(), &QHeaderView::sectionResized, this,
+            [this](int column, int, int width) {
+                if (refreshing_ || !workspace_) return;
+                const std::string name = registerColumnName(column);
+                if (name.empty()) return;
+                workspace_->resize_column(name, width);
+                columnWidths_ = workspace_->column_widths();
+                applyColumnWidths();
+                save();
+            });
     // Typing is allowed, and only the blank line's cells carry the editable
     // flag, so the rest of a register stays read-only: a stray keypress must
     // not change a transaction from 2009.

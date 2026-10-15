@@ -10,10 +10,10 @@ before any production code.
 
 Selected order: **4, then 5, then 10, 11 and 13.**
 
-Done so far: **4** (the specification speaks in transactions) and **11** (the
-import is in the panel below the register), both green; and the spec tables for
-**5**, **10** and **13**, which are written and verified and are waiting for
-code.
+Done so far: **4** (the specification speaks in transactions), **5** (ids are
+recorded and never reused), **10** (the two listings and the menu on the tree),
+**11** (the import is in the panel below the register) and **13** (column
+widths). All green.
 
 Two traps found while writing those tables, worth knowing before adding to
 them:
@@ -89,10 +89,12 @@ there, is the author's call.
 
 ## Identity and storage
 
-- [ ] **5. Unique ids, recorded in the book.** Spec written; code owed. Make
-      `id` the primary key (or UNIQUE) on accounts and categories, store the
-      last id used, increment from it rather than deriving a maximum, so a
-      deleted account's id is never handed out again.
+- [x] **5. Unique ids, recorded in the book.** Done. `id` is UNIQUE on
+      accounts and categories, the last id used is a column of the book row,
+      written inside the same transaction as the save and read back when the
+      book is opened -- after the chart, so a row carrying a higher id still
+      raises the counter rather than being overwritten by it. Schema 9, with an
+      upgrade step that adds the column and the two unique indexes.
       Specified by: `BusinessRule An id is never given out a second time`
       (`Accounts.spectable`, with the counter not dropping back over a delete),
       `BusinessRule The id counter is recorded in the book, not worked out from
@@ -101,9 +103,13 @@ there, is the author's call.
       specification that states literal ids, because a new book starts the
       counter from nothing. Groups take ids too, numbered before the child that
       filled them in, which is the order `chart::add` already creates them in.
-      The code owed: a `last_id_used` column on the book row, written whenever
-      an id is handed out, and `next_id_` read from it instead of from the
-      maximum in the chart. *Medium.*
+      Two spec tables had to be restated to be implementable: each row of the
+      counter table now creates exactly one node (`Assets`, then
+      `Assets:Checking`, then the delete, then `Assets:Savings`), and the Books
+      scenario names its groups instead of relying on parent-filling -- as
+      written, one row would have made two ids. The counter rule's glue asserts
+      the id each node actually got, not just the counter, so a counter that
+      dropped back would hand out 2 twice and fail.
 - [ ] **6. Starting balance and its date in account settings.**
       `OpeningBalance` is in `Accounts.spectable`; the settings dialog does not
       offer it. *Spec first. Medium.*
@@ -119,10 +125,17 @@ there, is the author's call.
 
 ## The window
 
-- [ ] **10. An account listing and a category listing from the menu**, click
-      to edit, and a context menu on the left-hand tree. Spec written; code
-      owed -- nine `$WIP` scenarios at the end of `UserInterface.spectable`,
-      under "The listings, and the menu on the tree". What they settle: each
+- [x] **10. An account listing and a category listing from the menu**, click
+      to edit, and a context menu on the left-hand tree. Done -- nine scenarios
+      at the end of `UserInterface.spectable`, under "The listings, and the menu
+      on the tree", and `ui::account_listing` / `ui::category_listing` beside
+      the account list they are the opposite of. In the window: the two
+      listings on the Accounts menu, a context menu on the tree, and the
+      account-settings and category-settings editors, neither of which existed
+      before -- the settings were specified and stored but had no way in.
+      Delete is greyed by asking the transactions whether anything names the
+      account, because `chart::postings_on` answers from a count that nothing
+      in the workspace sets. What the scenarios settle: each
       listing is one line per node, every node, in path order, with no group
       headings and nothing hidden left out (the tree is the opposite on all
       four counts, deliberately); the account listing carries the bank and the
@@ -149,9 +162,14 @@ there, is the author's call.
       stay for item 12, which is what the panel's second tab is for.
 - [ ] **12. Find.** Modeless dialog, results as a tab in the same bottom panel.
       *Already specified: nine scenarios. Implementation only. Large.*
-- [ ] **13. Column resize, widths shared across registers and stored with the
-      book.** Spec written; code owed -- "The width of a column" at the end of
-      `UserInterface.spectable`. The conflict at line 14 is resolved rather
+- [x] **13. Column resize, widths shared across registers and stored with the
+      book.** Done -- "The width of a column" at the end of
+      `UserInterface.spectable`, widths on the workspace, a
+      `register_column_width` table at schema 10, and a `sectionResized`
+      connection in the window that records the width, puts it onto every other
+      register and saves. The table is written by upsert and never cleared, so
+      an ordinary save -- which is nearly every save, and knows nothing about
+      widths -- cannot wipe them. The conflict at line 14 is resolved rather
       than ignored: what a column is *wide by default* is still not specified,
       so changing it cannot fail a test, but a width somebody set by dragging
       is behaviour, because it has to outlast the register it was set in and

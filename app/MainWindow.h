@@ -4,6 +4,7 @@
 #include <QMenu>
 #include <QPoint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <vector>
 #include "chart.h"
@@ -63,6 +64,10 @@ private slots:
     void importTransactions();
     void editRules();
     void assignPayeesAccordingToRules();
+    // The two listings, which show the chart itself rather than the work done
+    // in it. See the listings section of UserInterface.spectable.
+    void showAccountListing();
+    void showCategoryListing();
     void showReport();
     void toggleHidden();
     void accountClicked();
@@ -123,6 +128,19 @@ private:
     // The menu on a selection of register lines, and what its items do. The
     // selection itself lives in the workspace, which has no Qt in it.
     void registerMenu(int tabPosition, const QPoint& at);
+    // The menu on a line of the tree on the left. A group heading offers only
+    // a new account, a heading being nothing in the book.
+    void treeMenu(const QPoint& at);
+    // The editor of one node, opened by clicking its line in a listing or by
+    // Edit on the tree -- the same window either way.
+    void editAccountSettings(const QString& path);
+    void editCategorySettings(const QString& path);
+    void hideAccount(const QString& path);
+    void deleteAccount(const QString& path);
+    // Puts the widths somebody dragged onto every register. The width belongs
+    // to the column rather than to the register; see the width rule in
+    // UserInterface.spectable.
+    void applyColumnWidths();
     void recategorise(int tabPosition);
     void deleteSelection(int tabPosition);
     void addPayeeRuleFrom(int tabPosition);
@@ -160,6 +178,12 @@ private:
     QSplitter* rightSplit_ = nullptr;
     QTabWidget* tabs_ = nullptr;
     std::vector<TabWidgets> tabWidgets_;
+
+    // The width each register column was dragged to, by the column's name in
+    // the specification rather than its heading -- Payment and Deposit are
+    // headed differently per account type and the width is not. Only the
+    // columns somebody resized are in here.
+    std::map<std::string, int> columnWidths_;
 
     // The panel below the register, one tab per thing waiting to be judged.
     // Hidden until it has a tab in it. See the bottom-panel section of

@@ -1956,7 +1956,6 @@ Description a group heading by its heading, an account by its path.
 | Attribute | Type | Default |
 | Node      | Text |         |
 
-$WIP
 Scenario The account listing is every account, one line each
 Description A placeholder is a line, a hidden account is a line, there are no
 Description group headings, and the categories are not here at all -- they have
@@ -1979,7 +1978,6 @@ Then account listing rows are : AccountListingRow CompareOnly
 # Four lines for five rows of chart. Expenses:Groceries is a category and is in
 # the other listing.
 
-$WIP
 Scenario The account listing shows the bank and the number beside each account
 Description The one place they are read together. An account with neither is
 Description still a line, because a book where some accounts are labelled and
@@ -2004,7 +2002,6 @@ Then account listing rows are : AccountListingRow CompareOnly
 | Assets:Savings   | none       | none          |
 | Liabilities:Visa | First Bank | 4111          |
 
-$WIP
 Scenario The category listing is every category, which no other window shows
 Description The tree shows none of these, so without this window a category
 Description hidden by mistake cannot be found again, and one named badly
@@ -2026,7 +2023,6 @@ Then category listing rows are : CategoryListingRow CompareOnly
 # Assets:Checking is an account and is in the other listing. The hidden salary
 # category is here, which is the point of the window.
 
-$WIP
 Scenario Clicking a line of the account listing opens that account's settings
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder | Hidden |
@@ -2039,7 +2035,6 @@ Then the editor opened is : EditorOpened Vertical
 | Window | Account settings |
 | Target | Assets:Savings   |
 
-$WIP
 Scenario Clicking a line of the category listing opens that category's settings
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder | Hidden |
@@ -2052,7 +2047,6 @@ Then the editor opened is : EditorOpened Vertical
 | Window | Category settings  |
 | Target | Expenses:Auto:Fuel |
 
-$WIP
 Scenario The menu on an account in the tree offers what can be done to it
 Description Delete is offered and refused rather than left off, because an
 Description account that cannot be deleted raises a question -- why not -- and
@@ -2076,7 +2070,6 @@ Then menu items are : MenuItem
 | Hide           | true    |
 | Delete...      | false   |
 
-$WIP
 Scenario The menu on an account with nothing in it offers to delete it
 Description The same menu on the same tree, and the only difference is that
 Description this account has no entries to lose.
@@ -2098,7 +2091,6 @@ Then menu items are : MenuItem
 | Hide           | true    |
 | Delete...      | true    |
 
-$WIP
 Scenario The menu on a group heading offers only a new account
 Description A heading is not a thing in the book. It is the kind of account
 Description written on the page, so there is nothing there to edit, hide or
@@ -2114,7 +2106,6 @@ Then menu items are : MenuItem
 | Item           | Enabled |
 | New account... | true    |
 
-$WIP
 Scenario Edit on the tree opens the same window the listing opens
 Description One editor per account, whichever way it was reached.
 Given the chart of accounts is : ChartOfAccounts
@@ -2162,7 +2153,6 @@ Description default width appears in any table.
 | Column    | Text    |         |
 | Width     | Integer | 0       |
 
-$WIP
 BusinessRule A column cannot be dragged away to nothing
 Description A width is clamped to a minimum. A column dragged to no width at
 Description all would be invisible, and a column that cannot be seen cannot be
@@ -2181,7 +2171,6 @@ Attributes WidthRequested
 | Stored    | Integer | 0       |
 | Notes     | String  | none    |
 
-$WIP
 Scenario A column widened in one register is that wide in every register
 Description The width is the column's, so moving to another account does not
 Description undo it. Both of these registers have a payee column, and after
@@ -2203,7 +2192,6 @@ Then register column widths are : RegisterColumnWidth CompareOnly
 | Column | Width |
 | Payee  | 240   |
 
-$WIP
 Scenario Only the columns somebody resized are recorded
 Description The register has nine columns and one of them was dragged, so one
 Description of them is written down. The other eight are whatever the program
@@ -2222,7 +2210,6 @@ Then recorded column widths are : RegisterColumnWidth
 | Column | Width |
 | Memo   | 180   |
 
-$WIP
 Scenario A width survives the book being saved and opened again
 Description A preference set once and lost on exit is worse than none, because
 Description it has to be set again every time and it looks like a defect.
@@ -2247,7 +2234,6 @@ Then register column widths are : RegisterColumnWidth CompareOnly
 | Payee    | 240   |
 | Category | 300   |
 
-$WIP
 Scenario A column dragged to nothing keeps the minimum width
 Description The clamp from the rule above, through the window rather than in a
 Description table of its own, because this is the case that would otherwise

@@ -32,7 +32,7 @@ namespace store {
 // this when that shape changes, and add the upgrade it needs to open_at below --
 // a book already on disk was made by kSchema as it read on an earlier version,
 // and has to be brought forward in place rather than recreated.
-inline constexpr int kSchemaVersion = 8;
+inline constexpr int kSchemaVersion = 10;
 
 struct Failure {
     bool refused = false;
@@ -122,13 +122,20 @@ CREATE TABLE book (
   fiscal_year_start INTEGER NOT NULL DEFAULT 1,
   -- How long a check number is trusted to settle a match. See the
   -- check-number rule in ImportOfx.spectable.
-  check_window_days INTEGER NOT NULL DEFAULT 1);
+  check_window_days INTEGER NOT NULL DEFAULT 1,
+  -- The number the id counter last handed out, for accounts and categories
+  -- together. Recorded rather than worked out from the chart, so a deleted
+  -- account's number is never given to the next one created. See the counter
+  -- rule in Accounts.spectable.
+  last_id_used      INTEGER NOT NULL DEFAULT 0);
 
 CREATE TABLE accounts (
   -- The identity a posting or a transaction names instead of the path --
   -- see chart::Ref. Zero only transiently, between being created in memory
   -- and first written; every row written by this store carries a real one.
-  id            INTEGER NOT NULL DEFAULT 0,
+  -- Unique, because it is an identity: two accounts sharing one would make
+  -- every reference to it ambiguous.
+  id            INTEGER NOT NULL DEFAULT 0 UNIQUE,
   path          TEXT    NOT NULL PRIMARY KEY,
   type          TEXT    NOT NULL,
   placeholder   INTEGER NOT NULL DEFAULT 0,
@@ -144,13 +151,21 @@ CREATE TABLE accounts (
   account_number  TEXT  NOT NULL DEFAULT '');
 
 CREATE TABLE categories (
-  id            INTEGER NOT NULL DEFAULT 0,
+  id            INTEGER NOT NULL DEFAULT 0 UNIQUE,
   path          TEXT    NOT NULL PRIMARY KEY,
   type          TEXT    NOT NULL,
   placeholder   INTEGER NOT NULL DEFAULT 0,
   hidden        INTEGER NOT NULL DEFAULT 0,
   -- A short way to type it; see the finding rule in Accounts.spectable.
   alias         TEXT    NOT NULL DEFAULT '');
+
+-- The width each register column was dragged to, one row per column that
+-- somebody resized. Not a setting of the book row: these are a measurement per
+-- column rather than one named thing, and a width for a column nobody
+-- recognises is simply ignored. See the width rule in UserInterface.spectable.
+CREATE TABLE register_column_width (
+  name  TEXT    NOT NULL PRIMARY KEY,
+  width INTEGER NOT NULL);
 
 CREATE TABLE transactions (
   -- The name the transaction was given when it was created, and what it is
@@ -472,6 +487,30 @@ private:
             for (const char* s : sql)
                 if (!detail::exec(db, s, why)) return false;
         }
+        if (from < 9) {
+            // The counter was worked out from the largest id in the chart,
+            // which drops back when the highest account is deleted. It is
+            // recorded now. An older book's ids are assigned at read() and
+            // written on the next save, so there is nothing to backfill: the
+            // column starts at zero and the first save raises it.
+            static const char* const sql[] = {
+                "ALTER TABLE book ADD COLUMN last_id_used INTEGER NOT NULL DEFAULT 0",
+                "CREATE UNIQUE INDEX accounts_id ON accounts (id)",
+                "CREATE UNIQUE INDEX categories_id ON categories (id)",
+            };
+            for (const char* s : sql)
+                if (!detail::exec(db, s, why)) return false;
+        }
+        if (from < 10) {
+            // Column widths were not kept at all before this, so there is
+            // nothing to carry over: the table starts empty, which is exactly
+            // what "nobody has resized anything" already meant.
+            static const char* const sql =
+                "CREATE TABLE register_column_width ("
+                "  name  TEXT    NOT NULL PRIMARY KEY,"
+                "  width INTEGER NOT NULL)";
+            if (!detail::exec(db, sql, why)) return false;
+        }
         detail::Statement set(db, "UPDATE schema SET version = ?");
         if (!set.ok()) { if (why) *why = set.why(); return false; }
         set.bind(1, kSchemaVersion);
@@ -509,7 +548,8 @@ public:
         if (!version.run()) return {true, version.why()};
 
         detail::Statement info(db.get(),
-                               "INSERT INTO book (name, fiscal_year_start, check_window_days) VALUES (?, 1, 1)");
+                               "INSERT INTO book (name, fiscal_year_start, check_window_days, "
+                               "last_id_used) VALUES (?, 1, 1, 0)");
         if (!info.ok()) return {true, info.why()};
         info.bind(1, name);
         if (!info.run()) return {true, info.why()};
@@ -537,7 +577,8 @@ public:
     Failure write(const chart::Chart& accounts,
                   const std::vector<ledger::Transaction>& transactions,
                   const std::vector<payees::Rule>& rules = {},
-                  const std::vector<ledger::TransactionSplit>& splits = {}) {
+                  const std::vector<ledger::TransactionSplit>& splits = {},
+                  const std::map<std::string, int>& column_widths = {}) {
         std::string why;
         if (!detail::exec(db_.get(), "BEGIN IMMEDIATE", &why)) return {true, why};
 
@@ -663,6 +704,29 @@ public:
             if (!rule.run()) return fail(rule.why());
         }
 
+        // The widths are written over rather than cleared and rewritten, so a
+        // save that was not about them -- which is nearly every save -- leaves
+        // the ones already recorded alone.
+        detail::Statement width(db_.get(),
+            "INSERT INTO register_column_width (name, width) VALUES (?, ?) "
+            "ON CONFLICT (name) DO UPDATE SET width = excluded.width");
+        if (!width.ok()) return fail(width.why());
+        for (const auto& one : column_widths) {
+            width.reset();
+            width.bind(1, one.first);
+            width.bind(2, static_cast<long long>(one.second));
+            if (!width.run()) return fail(width.why());
+        }
+
+        // The counter the chart is holding, so the next id this book hands out
+        // after being opened again is one past the last it ever gave rather
+        // than one past the largest it still holds. See the storage rule in
+        // Books.spectable.
+        detail::Statement counter(db_.get(), "UPDATE book SET last_id_used = ?");
+        if (!counter.ok()) return fail(counter.why());
+        counter.bind(1, accounts.last_id_used());
+        if (!counter.run()) return fail(counter.why());
+
         if (!detail::exec(db_.get(), "COMMIT", &why)) return fail(why);
         return {};
     }
@@ -672,7 +736,8 @@ public:
     Failure read(chart::Chart* accounts, ledger::Ledger* book,
                  std::vector<ledger::Transaction>* transactions,
                  std::vector<payees::Rule>* rules = nullptr,
-                 std::vector<ledger::TransactionSplit>* splits = nullptr) const {
+                 std::vector<ledger::TransactionSplit>* splits = nullptr,
+                 std::map<std::string, int>* column_widths = nullptr) const {
         *accounts = chart::Chart();
         *book = ledger::Ledger();
         transactions->clear();
@@ -707,6 +772,22 @@ public:
             c.hidden = category.integer(4) != 0;
             c.alias = category.text(5);
             accounts->put_category(c);
+        }
+
+        // After the chart, so that a row carrying a higher id than the book
+        // recorded still raises the counter rather than being overwritten by
+        // it. The counter never goes backwards; see Books.spectable.
+        detail::Statement counter(db_.get(), "SELECT last_id_used FROM book");
+        if (counter.ok() && counter.step_row())
+            accounts->set_last_id_used(counter.integer(0));
+
+        if (column_widths != nullptr) {
+            column_widths->clear();
+            detail::Statement width(db_.get(),
+                "SELECT name, width FROM register_column_width");
+            if (width.ok())
+                while (width.step_row())
+                    (*column_widths)[width.text(0)] = static_cast<int>(width.integer(1));
         }
 
         detail::Statement header(db_.get(),

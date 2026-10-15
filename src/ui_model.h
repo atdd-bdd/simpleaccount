@@ -155,6 +155,90 @@ inline int depth_within_group(const chart::Account& a,
 }
 
 // ---------------------------------------------------------------------------
+// The listings
+// ---------------------------------------------------------------------------
+
+// One line of a listing: one node, whatever kind it is. The tree on the left is
+// for working -- grouped, totalled, hidden ones left out, categories absent --
+// and every one of those is wrong for maintaining the chart, which is what the
+// listings are for. See the listings section of UserInterface.spectable.
+struct ListingRow {
+    std::string path;
+    types::AccountType type = types::AccountType::Checking;
+    bool placeholder = false;
+    bool hidden = false;
+    std::string bank;            // from the account's own dialog
+    std::string account_number;  // the same
+    std::string alias;           // the short way to type a category
+    Money balance;
+};
+
+// Every account, in path order so a parent reads above its children. A category
+// is not here: it is in the other listing.
+inline std::vector<ListingRow> account_listing(const chart::Chart& accounts,
+                                               const ledger::Ledger& book) {
+    std::map<std::string, Money> subtree;
+    for (const ledger::DatedPosting& p : book.postings()) {
+        std::string path = p.account.value();
+        while (true) {
+            subtree[path] += p.amount;
+            const std::string parent = types::parent_of(types::AccountPath(path));
+            if (parent.empty()) break;
+            path = parent;
+        }
+    }
+
+    std::vector<ListingRow> out;
+    for (const chart::Account& a : accounts.all()) {
+        // Qualified for the same reason account_list above qualifies it.
+        if (!ui::group_of(a.type)) continue;
+        ListingRow row;
+        row.path = a.path.value();
+        row.type = a.type;
+        row.placeholder = a.placeholder;
+        row.hidden = a.hidden;
+        row.bank = a.bank;
+        row.account_number = a.account_number;
+        row.alias = a.alias;
+        const auto at = subtree.find(row.path);
+        const Money raw = at == subtree.end() ? Money() : at->second;
+        row.balance = types::display_sign(a.type) < 0 ? -raw : raw;
+        out.push_back(row);
+    }
+    std::sort(out.begin(), out.end(),
+              [](const ListingRow& x, const ListingRow& y) { return x.path < y.path; });
+    return out;
+}
+
+// Every category, which no other window shows: the tree leaves them out, so
+// without this one a category hidden by mistake cannot be found again. Both
+// collections are walked, because a nominal node may be held either way.
+inline std::vector<ListingRow> category_listing(const chart::Chart& accounts) {
+    std::vector<ListingRow> out;
+    std::map<std::string, bool> seen;
+    const auto take = [&](const std::string& path, types::AccountType type,
+                          bool placeholder, bool hidden, const std::string& alias) {
+        if (seen.count(path) != 0) return;
+        seen[path] = true;
+        ListingRow row;
+        row.path = path;
+        row.type = type;
+        row.placeholder = placeholder;
+        row.hidden = hidden;
+        row.alias = alias;
+        out.push_back(row);
+    };
+    for (const chart::Account& a : accounts.all())
+        if (!ui::group_of(a.type))
+            take(a.path.value(), a.type, a.placeholder, a.hidden, a.alias);
+    for (const chart::Category& c : accounts.all_categories())
+        take(c.path.value(), c.type, c.placeholder, c.hidden, c.alias);
+    std::sort(out.begin(), out.end(),
+              [](const ListingRow& x, const ListingRow& y) { return x.path < y.path; });
+    return out;
+}
+
+// ---------------------------------------------------------------------------
 // Panes
 // ---------------------------------------------------------------------------
 
@@ -451,6 +535,109 @@ public:
         accepted_.clear();
         committed_ = false;
         close_review();
+    }
+
+    // --------------------------------------------- the width of a column
+
+    // A width is clamped to this. A column dragged to no width at all would be
+    // invisible, and a column that cannot be seen cannot be dragged back.
+    static int minimum_column_width() { return 20; }
+
+    // The width belongs to the column and not to the register: every register
+    // is the same columns in the same order, so a width learned in one of them
+    // is right in all of them. See the width rule in UserInterface.spectable.
+    void resize_column(const std::string& column, int width) {
+        widths_[column] = width < minimum_column_width() ? minimum_column_width() : width;
+    }
+
+    // Only the columns somebody resized. A column nobody touched keeps whatever
+    // width the program gives it, and that number is deliberately not one this
+    // program promises anybody.
+    const std::map<std::string, int>& column_widths() const { return widths_; }
+
+    void set_column_widths(const std::map<std::string, int>& widths) { widths_ = widths; }
+
+    // ------------------------------------------------- the two listings
+
+    std::vector<ListingRow> account_listing_rows() const {
+        return account_listing(accounts_, book_);
+    }
+
+    std::vector<ListingRow> category_listing_rows() const {
+        return category_listing(accounts_);
+    }
+
+    // Which listing is in front. Clicking a line opens the editor of the thing
+    // on it, and the two listings hold different things.
+    enum class Listing { None, Accounts, Categories };
+
+    void open_account_listing() { listing_ = Listing::Accounts; }
+    void open_category_listing() { listing_ = Listing::Categories; }
+
+    // Which editor came up and what it came up on. What the account settings
+    // window holds is in Accounts.spectable; what is recorded here is only that
+    // a click opened it on the right node.
+    struct Editor {
+        std::string window;
+        std::string target;
+    };
+
+    void click_listing_row(const std::string& path) {
+        editor_.window = listing_ == Listing::Categories ? "Category settings"
+                                                         : "Account settings";
+        editor_.target = path;
+    }
+
+    // Edit on the tree opens the same window the listing opens: there would be
+    // no sense in one account having two settings windows depending on where it
+    // was clicked.
+    void edit_tree_node(const std::string& node) {
+        const bool category = accounts_.find(node) == nullptr &&
+                              accounts_.find_category(node) != nullptr;
+        editor_.window = category ? "Category settings" : "Account settings";
+        editor_.target = node;
+    }
+
+    const Editor& editor_opened() const { return editor_; }
+
+    // The menu on a line of the tree. A group heading is not a thing in the
+    // book -- it is the kind of account written on the page -- so the only item
+    // there is another account of that kind. Delete is offered and refused
+    // rather than left off: an account that cannot be deleted raises the
+    // question why not, and a greyed item with the reason to hand answers it.
+    std::vector<MenuEntry> tree_menu(const std::string& node) const {
+        std::vector<MenuEntry> out;
+        out.push_back({"New account...", true});
+        if (accounts_.find(node) == nullptr) return out;
+        out.push_back({"Edit...", true});
+        out.push_back({"Hide", true});
+        out.push_back({"Delete...", !has_entries(node)});
+        return out;
+    }
+
+    // Whether anything in the book names this account. The chart holds no
+    // transactions, so the question is asked of the transactions themselves
+    // rather than of a count somebody has to remember to hand it.
+    bool has_entries(const std::string& path) const {
+        for (const ledger::Transaction& t : transactions_)
+            if (accounts_.path_for_ref(t.source_account) == path ||
+                accounts_.path_for_ref(t.destination) == path)
+                return true;
+        for (const ledger::TransactionSplit& s : splits_)
+            if (accounts_.path_for_ref(s.destination) == path) return true;
+        return false;
+    }
+
+    // What one account's own dialog holds, which the listing shows beside every
+    // other account's -- the only place they are read together.
+    void change_account_settings(const std::string& path, const std::string& bank,
+                                 const std::string& number) {
+        const chart::Account* existing = accounts_.find(path);
+        if (existing == nullptr) return;
+        chart::Account a = *existing;
+        a.bank = bank;
+        a.account_number = number;
+        accounts_.put(a);
     }
 
     // ------------------------------------------- lines chosen in a register
@@ -793,6 +980,9 @@ private:
     std::size_t active_tab_ = 0;
     bool review_open_ = false;
     std::string review_account_;
+    Listing listing_ = Listing::None;
+    Editor editor_;
+    std::map<std::string, int> widths_;
     std::vector<BottomTabKind> bottom_;
     std::size_t active_bottom_ = 0;
     std::vector<ReviewRow> review_;

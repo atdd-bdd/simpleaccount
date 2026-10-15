@@ -1,8 +1,10 @@
 #pragma once
 #include <gtest/gtest.h>
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <string>
+#include <system_error>
 #include <vector>
 #include "common/common.h"
 #include "account_type.h"
@@ -16,6 +18,7 @@
 #include "text_types.h"
 #include "payee_rules.h"
 #include "transaction_edit.h"
+#include "store_sqlite.h"
 #include "ui_model.h"
 
 // Glue for UserInterface.spectable.
@@ -36,6 +39,14 @@ public:
             a.hidden = parse_bool_cell(value.hidden);
             chart_.put(a);
         }
+        // A new chart is a new book. A transaction established against the one
+        // before it names accounts that are not there any more, and the ids it
+        // holds resolve to nothing -- which a save and reopen turns into an
+        // empty account path. The Background's chart is inlined first, so a
+        // scenario stating its own chart replaces the transactions with it.
+        transactions_.clear();
+        splits_.clear();
+        book_ = ledger::Ledger();
         workspace_.reset();
     }
 
@@ -376,6 +387,165 @@ private:
         ledger::add_to_book(&book_, chart_, transactions_, splits_);
     }
 
+    // ----------------------------------------------- the width of a column
+
+public:
+
+    void when_register_column_resized(const std::vector<RegisterColumnWidthString>& values) {
+        for (const RegisterColumnWidthString& value : values)
+            workspace().resize_column(value.column, std::stoi(value.width));
+    }
+
+    // The width the register is showing, whichever register that is: the width
+    // is the column's, so there is one answer rather than one per account.
+    void then_register_column_widths_are(const std::vector<RegisterColumnWidthString>& values) {
+        const std::map<std::string, int>& got = workspace().column_widths();
+        for (const RegisterColumnWidthString& want : values) {
+            const auto at = got.find(want.column);
+            ASSERT_NE(got.end(), at) << want.column << " has no width";
+            EXPECT_EQ(std::stoi(want.width), at->second) << want.column << " width";
+        }
+    }
+
+    // Only what somebody resized, so the size of the set is part of the answer.
+    void then_recorded_column_widths_are(const std::vector<RegisterColumnWidthString>& values) {
+        const std::map<std::string, int>& got = workspace().column_widths();
+        ASSERT_EQ(values.size(), got.size()) << "number of columns recorded";
+        for (const RegisterColumnWidthString& want : values) {
+            const auto at = got.find(want.column);
+            ASSERT_NE(got.end(), at) << want.column << " was not recorded";
+            EXPECT_EQ(std::stoi(want.width), at->second) << want.column << " width";
+        }
+    }
+
+    void examples_businessrule_a_column_cannot_be_dragged_away_to_nothing(
+            const std::vector<WidthRequestedString>& values) {
+        for (const WidthRequestedString& value : values) {
+            ui::Workspace fixture(chart_, book_, transactions_);
+            fixture.resize_column("Payee", std::stoi(value.requested));
+            const auto at = fixture.column_widths().find("Payee");
+            ASSERT_NE(fixture.column_widths().end(), at);
+            EXPECT_EQ(std::stoi(value.stored), at->second)
+                << value.requested << " -- " << value.notes;
+        }
+    }
+
+    // Written to a real file, closed, and read back -- a width that only
+    // survives while the program holds it has not been kept with the book.
+    void when_the_book_is_saved_and_opened_again() {
+        const std::string path =
+            (std::filesystem::temp_directory_path() / "sa_ui_widths.sadb").string();
+        std::error_code ignored;
+        std::filesystem::remove(path, ignored);
+
+        store::Book book;
+        store::Failure no = store::Book::create(path, "Widths", &book);
+        ASSERT_FALSE(no.refused) << no.reason;
+        no = book.write(chart_, transactions_, {}, splits_, workspace().column_widths());
+        ASSERT_FALSE(no.refused) << no.reason;
+
+        book = store::Book();
+        no = store::Book::open(path, &book);
+        ASSERT_FALSE(no.refused) << no.reason;
+
+        chart_ = chart::Chart();
+        book_ = ledger::Ledger();
+        transactions_.clear();
+        splits_.clear();
+        std::map<std::string, int> widths;
+        no = book.read(&chart_, &book_, &transactions_, nullptr, &splits_, &widths);
+        ASSERT_FALSE(no.refused) << no.reason;
+
+        workspace_.reset();
+        workspace().set_column_widths(widths);
+    }
+
+    // --------------------------------------------------------- the listings
+
+public:
+
+    void when_account_listing_opened() { workspace().open_account_listing(); }
+
+    void when_category_listing_opened() { workspace().open_category_listing(); }
+
+    void then_account_listing_rows_are(const std::vector<AccountListingRowString>& values) {
+        const std::vector<ui::ListingRow> got = workspace().account_listing_rows();
+        ASSERT_EQ(values.size(), got.size()) << "number of lines in the account listing";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const AccountListingRowString& want = values[i];
+            EXPECT_EQ(want.path, got[i].path) << "line " << i + 1;
+            if (!dnc(want.type))
+                EXPECT_EQ(want.type, types::to_string(got[i].type)) << want.path << " type";
+            if (!dnc(want.placeholder))
+                EXPECT_EQ(parse_bool_cell(want.placeholder), got[i].placeholder)
+                    << want.path << " placeholder";
+            if (!dnc(want.hidden))
+                EXPECT_EQ(parse_bool_cell(want.hidden), got[i].hidden)
+                    << want.path << " hidden";
+            if (!dnc(want.bank))
+                EXPECT_EQ(blank(want.bank), got[i].bank) << want.path << " bank";
+            if (!dnc(want.accountnumber))
+                EXPECT_EQ(blank(want.accountnumber), got[i].account_number)
+                    << want.path << " account number";
+            if (!dnc(want.balance))
+                EXPECT_EQ(Money(want.balance).cents(), got[i].balance.cents())
+                    << want.path << " balance";
+        }
+    }
+
+    void then_category_listing_rows_are(const std::vector<CategoryListingRowString>& values) {
+        const std::vector<ui::ListingRow> got = workspace().category_listing_rows();
+        ASSERT_EQ(values.size(), got.size()) << "number of lines in the category listing";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const CategoryListingRowString& want = values[i];
+            EXPECT_EQ(want.path, got[i].path) << "line " << i + 1;
+            if (!dnc(want.type))
+                EXPECT_EQ(want.type, types::to_string(got[i].type)) << want.path << " type";
+            if (!dnc(want.placeholder))
+                EXPECT_EQ(parse_bool_cell(want.placeholder), got[i].placeholder)
+                    << want.path << " placeholder";
+            if (!dnc(want.hidden))
+                EXPECT_EQ(parse_bool_cell(want.hidden), got[i].hidden)
+                    << want.path << " hidden";
+            if (!dnc(want.alias))
+                EXPECT_EQ(blank(want.alias), got[i].alias) << want.path << " alias";
+        }
+    }
+
+    void when_listing_row_clicked(const std::vector<ListingRowSelectString>& values) {
+        ASSERT_FALSE(values.empty());
+        workspace().click_listing_row(values.front().path);
+    }
+
+    void when_account_list_node_right_clicked(const std::vector<TreeNodeString>& values) {
+        ASSERT_FALSE(values.empty());
+        tree_node_ = values.front().node;
+    }
+
+    void when_node_edit_chosen(const std::vector<TreeNodeString>& values) {
+        ASSERT_FALSE(values.empty());
+        workspace().edit_tree_node(values.front().node);
+    }
+
+    void then_the_editor_opened_is(const std::vector<EditorOpenedString>& values) {
+        const ui::Workspace::Editor& got = workspace().editor_opened();
+        for (const EditorOpenedString& want : values) {
+            EXPECT_EQ(want.window, got.window) << "which editor opened";
+            EXPECT_EQ(blank(want.target), got.target) << "what it opened on";
+        }
+    }
+
+    // The account's own dialog, the same as in Accounts.spectable -- here only
+    // so that the listing has something to show beside the account.
+    void when_account_settings_changed(const std::vector<AccountSettingsString>& values) {
+        for (const AccountSettingsString& value : values)
+            workspace().change_account_settings(value.path, blank(value.bank),
+                                                blank(value.accountnumber));
+    }
+
+private:
+    std::string tree_node_;
+
     ui::Workspace& workspace() {
         if (!workspace_)
             workspace_ = std::make_unique<ui::Workspace>(chart_, book_, transactions_);
@@ -433,8 +603,13 @@ public:
     }
 
     void then_menu_items_are(const std::vector<MenuItemString>& values) {
+        // Three menus reached by one step: the tree's, the report's and the
+        // register's. A right-clicked tree node means the tree's, no scenario
+        // having any reason to ask for two of them at once.
         const std::vector<ui::MenuEntry> got =
-            report_mode_ ? report_menu_items() : workspace().menu_items();
+            !tree_node_.empty() ? workspace().tree_menu(tree_node_)
+                                : (report_mode_ ? report_menu_items()
+                                                : workspace().menu_items());
         ASSERT_EQ(values.size(), got.size()) << "number of menu items";
         for (std::size_t i = 0; i < values.size(); ++i) {
             EXPECT_EQ(values[i].item, got[i].item) << "item " << i + 1;
@@ -829,72 +1004,5 @@ public:
     }
 
 public:
-
-    void when_account_listing_opened() {
-        ADD_FAILURE() << "Not implemented: when_account_listing_opened";
-    }
-
-    void then_account_listing_rows_are(const std::vector<AccountListingRowString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_account_listing_rows_are";
-    }
-
-    void when_account_settings_changed(const std::vector<AccountSettingsString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_account_settings_changed";
-    }
-
-    void when_category_listing_opened() {
-        ADD_FAILURE() << "Not implemented: when_category_listing_opened";
-    }
-
-    void then_category_listing_rows_are(const std::vector<CategoryListingRowString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_category_listing_rows_are";
-    }
-
-    void when_listing_row_clicked(const std::vector<ListingRowSelectString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_listing_row_clicked";
-    }
-
-    void then_the_editor_opened_is(const std::vector<EditorOpenedString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_the_editor_opened_is";
-    }
-
-    void when_account_list_node_right_clicked(const std::vector<TreeNodeString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_account_list_node_right_clicked";
-    }
-
-    void when_node_edit_chosen(const std::vector<TreeNodeString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_node_edit_chosen";
-    }
-
-    void when_register_column_resized(const std::vector<RegisterColumnWidthString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_register_column_resized";
-    }
-
-    void then_register_column_widths_are(const std::vector<RegisterColumnWidthString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_register_column_widths_are";
-    }
-
-    void then_recorded_column_widths_are(const std::vector<RegisterColumnWidthString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_recorded_column_widths_are";
-    }
-
-    void when_the_book_is_saved_and_opened_again() {
-        ADD_FAILURE() << "Not implemented: when_the_book_is_saved_and_opened_again";
-    }
-
-    void examples_businessrule_a_column_cannot_be_dragged_away_to_nothing(const std::vector<WidthRequestedString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_a_column_cannot_be_dragged_away_to_nothing";
-    }
 
 };

@@ -1000,18 +1000,86 @@ public:
 public:
 
     void then_account_ids_are(const std::vector<AccountIdentityString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_account_ids_are";
+        EXPECT_EQ(values.size(), chart_.all().size()) << "number of nodes in the chart";
+        for (const AccountIdentityString& want : values) {
+            const chart::Account* a = chart_.find(want.path);
+            ASSERT_NE(nullptr, a) << want.path << " is not in the chart";
+            EXPECT_EQ(std::stoll(want.id), a->id.value()) << want.path << " id";
+            EXPECT_EQ(parse_bool_cell(want.placeholder), a->placeholder)
+                << want.path << " placeholder";
+        }
     }
 
+    // Read out of the file rather than off the chart in memory, because the
+    // column is the thing being asserted. A chart can work the number out from
+    // the rows it holds; a book has to have written it down.
     void then_the_book_records(const std::vector<IdCounterString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_the_book_records";
+        const std::vector<std::string> got =
+            query(store_.path(), "SELECT last_id_used FROM book");
+        ASSERT_FALSE(got.empty()) << "the book row has no last_id_used";
+        for (const IdCounterString& want : values)
+            EXPECT_EQ(want.lastidused, got.front()) << "the recorded counter";
     }
 
-    void examples_businessrule_the_id_counter_is_recorded_in_the_book_not_worked_out_from_it(const std::vector<CounterStorageString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_the_id_counter_is_recorded_in_the_book_not_worked_out_from_it";
+    // Each question in the table is asked of a real book: two nodes created, the
+    // second deleted, saved and opened again. Nothing here is asserted of a
+    // table of good intentions -- the last question is the one that matters,
+    // and it fails if the counter is worked out from what the chart still holds.
+    void examples_businessrule_the_id_counter_is_recorded_in_the_book_not_worked_out_from_it(
+            const std::vector<CounterStorageString>& values) {
+        const std::string path = store::path_for("Counter");
+        store::Book book;
+        const store::Failure no = store::Book::create(path, "Counter", &book);
+        ASSERT_FALSE(no.refused) << no.reason;
+
+        chart::Chart chart;
+        ASSERT_FALSE(chart.add(types::AccountPath("Assets"),
+                               types::AccountType::Checking).refused);
+        ASSERT_FALSE(chart.add(types::AccountPath("Assets:Checking"),
+                               types::AccountType::Checking).refused);
+        ASSERT_FALSE(book.write(chart, {}).refused);
+        ASSERT_FALSE(chart.remove(types::AccountPath("Assets:Checking")).refused);
+        ASSERT_FALSE(book.write(chart, {}).refused);
+
+        book = store::Book();
+        ASSERT_FALSE(store::Book::open_named("Counter", &book).refused);
+        chart::Chart reopened;
+        ledger::Ledger ignored;
+        std::vector<ledger::Transaction> none;
+        ASSERT_FALSE(book.read(&reopened, &ignored, &none).refused);
+
+        for (const CounterStorageString& value : values) {
+            const std::string& asked = value.whatisasked;
+            if (asked == "Where the last id handed out is kept") {
+                const std::vector<std::string> columns = columns_of(path, "book");
+                EXPECT_TRUE(std::find(columns.begin(), columns.end(), "last_id_used") !=
+                            columns.end())
+                    << "the book row has no last_id_used -- " << value.answer;
+            } else if (asked == "How the next id is found") {
+                // On a copy, so that asking the question does not change the
+                // chart the questions after it are asked of.
+                chart::Chart probe = reopened;
+                std::vector<chart::Account> made;
+                ASSERT_FALSE(probe.add(types::AccountPath("Assets:Savings"),
+                                       types::AccountType::Savings, &made).refused);
+                ASSERT_EQ(1u, made.size());
+                EXPECT_EQ(3, made.back().id.value()) << value.answer;
+            } else if (asked == "What a delete does to it") {
+                EXPECT_EQ("2", query(path, "SELECT last_id_used FROM book").front())
+                    << value.answer;
+            } else if (asked == "What a book opened again counts from") {
+                // One node left in the chart, carrying id 1, and the counter
+                // at 2 all the same. Worked out from the chart it would be 1.
+                EXPECT_EQ(1u, reopened.all().size());
+                EXPECT_LE(2, reopened.last_id_used()) << value.answer;
+            } else if (asked == "Whether a group takes an id of its own") {
+                const chart::Account* group = reopened.find("Assets");
+                ASSERT_NE(nullptr, group) << "the group did not come back";
+                EXPECT_LT(0, group->id.value()) << value.answer;
+            } else {
+                FAIL() << "nothing checks the question: " << asked;
+            }
+        }
     }
 
 };

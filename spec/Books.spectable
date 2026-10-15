@@ -406,7 +406,7 @@ Details ImportOfx for the first one that is not simply descriptive.
 Examples: BookInfrastructure
 | Table  | Columns                        | Notes                              |
 | schema | version                        | One row; read before anything else |
-| book   | name, fiscal_year_start, check_window_days | One row; the Book entity's own data |
+| book   | name, fiscal_year_start, check_window_days, last_id_used | One row; the Book entity's own data, and the id counter |
 
 Attributes BookInfrastructure
 | Attribute | Type   | Default |
@@ -722,7 +722,6 @@ Then migration notes are : MigrationNote
 # The id counter belongs to the book
 # ---------------------------------------------------------------------------
 
-$WIP
 BusinessRule The id counter is recorded in the book, not worked out from it
 Description Accounts and categories are identified by a number drawn from one
 Description shared counter -- see Accounts. The number the counter last handed
@@ -735,10 +734,6 @@ Details from the chart would drop back when its highest account went, and the
 Details next account created would be handed a number something else still
 Details names -- a transaction in a file not yet imported, a backup opened
 Details later. A recorded counter cannot drop back.
-Details
-Details The column does not exist yet, which is why this rule is unbuilt: the
-Details book row above gains last_id_used when it does, and the row in
-Details BookInfrastructure is amended then rather than now.
 Details
 Details Nothing reads the number off a screen, so no scenario here states one.
 Details What is stated is where it lives and what it is not.
@@ -755,7 +750,6 @@ Attributes CounterStorage
 | WhatIsAsked | String |         |
 | Answer      | String |         |
 
-$WIP
 Scenario Every node in the chart has an id, and the book records the last one
 Description The only scenario in this specification that states an id. It can,
 Description because a new book is empty and the counter starts from nothing, so
@@ -765,13 +759,14 @@ Description
 Description A group is a node like any other, so it takes an id too. Nothing
 Description needs one yet, but they are there and they cost nothing, and a chart
 Description where some nodes have an identity and some do not is worse than one
-Description where they all do. Assets and Expenses are the two groups here,
-Description filled in because a path names them, and each is numbered before
-Description the child that caused it.
+Description where they all do. Assets and Expenses are the two groups here, and
+Description each is numbered before the account under it.
 Given a new book named Business
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
+| Assets             | Checking | true        |
 | Assets:Checking    | Checking | false       |
+| Expenses           | Expense  | true        |
 | Expenses:Groceries | Expense  | false       |
 When the book is saved and opened again
 Then account ids are : AccountIdentity
@@ -784,7 +779,7 @@ Then the book records : IdCounter Vertical
 | LastIdUsed | 4 |
 # Four nodes, four ids, and the book opens again counting from four. Deleting
 # Expenses:Groceries would leave it at four, and the next account made would be
-# five -- see the rule above.
+# five -- see the counter rule in Accounts.
 
 Attributes AccountIdentity
 | Attribute   | Type        | Default |

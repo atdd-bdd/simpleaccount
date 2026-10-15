@@ -707,9 +707,40 @@ public:
 
 public:
 
-    void examples_businessrule_an_id_is_never_given_out_a_second_time(const std::vector<CounterOnlyGoesForwardString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_an_id_is_never_given_out_a_second_time";
+    // One chart, walked through the table a row at a time. What each row asserts
+    // is the id the node actually got, so a counter that dropped back after the
+    // delete would hand out 2 again and the last row would fail.
+    void examples_businessrule_an_id_is_never_given_out_a_second_time(
+            const std::vector<CounterOnlyGoesForwardString>& values) {
+        chart::Chart fixture;
+        for (const CounterOnlyGoesForwardString& value : values) {
+            const std::string& what = value.whathappens;
+            // What was done is the last word, so it is looked for at the end:
+            // "A new book, nothing created yet" has the word in the middle and
+            // is not a row that creates anything.
+            const auto ends_with = [&what](const std::string& tail) {
+                return what.size() > tail.size() &&
+                       what.compare(what.size() - tail.size(), tail.size(), tail) == 0;
+            };
+            const bool created = ends_with(" created");
+            const bool deleted = ends_with(" deleted");
+            if (created) {
+                const types::AccountPath path(what.substr(0, what.size() - 8));
+                std::vector<chart::Account> made;
+                const chart::Rejection no =
+                    fixture.add(path, types::AccountType::Checking, &made);
+                ASSERT_FALSE(no.refused) << no.reason;
+                ASSERT_EQ(1u, made.size()) << what << " made more than one node";
+                EXPECT_EQ(std::stoll(value.lastidused), made.back().id.value())
+                    << what << " got the wrong id";
+            } else if (deleted) {
+                const types::AccountPath path(what.substr(0, what.size() - 8));
+                const chart::Rejection no = fixture.remove(path);
+                ASSERT_FALSE(no.refused) << no.reason;
+            }
+            EXPECT_EQ(std::stoll(value.lastidused), fixture.last_id_used()) << what;
+            EXPECT_EQ(std::stoll(value.nextidgivenout), fixture.last_id_used() + 1) << what;
+        }
     }
 
 };

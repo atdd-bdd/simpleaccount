@@ -375,7 +375,6 @@ Attributes IdsGivenOut
 | Id             | Integer | 0       |
 | Notes          | String  | none    |
 
-$WIP
 BusinessRule An id is never given out a second time
 Description The counter only goes forward. The book records the last id it
 Description handed out, and the next id is that number plus one, so deleting
@@ -386,13 +385,17 @@ Details naming the old one -- a transaction in a file not yet imported, a
 Details report somebody saved, a backup opened a year later -- would read as
 Details naming the new one. The counter is recorded, not computed. Where it is
 Details recorded is in Books.
+Details Each row below creates one node, so the group is made first and the
+Details accounts under it afterwards. A path whose parent is missing creates
+Details that parent as well, and takes an id for it too -- which is the adding
+Details rule above, not this one.
 Examples: CounterOnlyGoesForward
 | WhatHappens                     | LastIdUsed | NextIdGivenOut |
 | A new book, nothing created yet | 0          | 1              |
-| Assets:Checking created         | 1          | 2              |
-| Expenses:Groceries created      | 2          | 3              |
-| Expenses:Groceries deleted      | 2          | 3              |
-| Expenses:Fuel created           | 3          | 4              |
+| Assets created                  | 1          | 2              |
+| Assets:Checking created         | 2          | 3              |
+| Assets:Checking deleted         | 2          | 3              |
+| Assets:Savings created          | 3          | 4              |
 
 Attributes CounterOnlyGoesForward
 | Attribute      | Type    | Default |
