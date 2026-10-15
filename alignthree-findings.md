@@ -416,9 +416,30 @@ quietly leaving the suite.
 
 Two things would help, independently:
 
-1. **A continuation.** A trailing `\` on a named comment, or a block form
-   (`Description:` followed by indented lines, ending at the next keyword).
-   Either removes the repetition and makes rewrapping free.
+1. **A continuation marked at the start of the line, not the end of the one
+   before it.** A leading `\` or `/` in the first column:
+
+   ```
+   Description The most specific rule, which is taken to be the one with the
+   \ longest pattern. Length is a crude measure, and it is used because it
+   \ needs no explaining.
+   ```
+
+   The failure above is the argument for putting the marker there. With a
+   trailing `\` the parser cannot classify a line until it has looked at the
+   line before it and remembered what it ended with, which is precisely how
+   these continuation lines became stray keywords and took the `Examples:`
+   table with them. A leading marker is decidable at the first character:
+   a line that starts with it continues the named comment above, and a line
+   that does not is still a line the analyzer can report. An unmarked stray
+   sentence stays an error instead of becoming invisible.
+
+   It also keeps the text **inside the model**. Commenting the continuation
+   lines out with `#` works today -- 0 diagnostics over this whole folder, and
+   the generated tests come out byte-identical -- but only the first line is
+   then part of the `Description`, so anything that ever renders a named
+   comment shows one line of a three-line paragraph. A continuation marker
+   appends to the comment; a comment character discards it.
 2. **An unrecognised keyword inside a block should not silently end it.** A line
    that is not a keyword, inside a `BusinessRule` or `Scenario`, is far more
    likely to be prose somebody wrapped than the start of something new. Either
