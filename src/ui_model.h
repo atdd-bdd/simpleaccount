@@ -8,6 +8,7 @@
 #include "account_type.h"
 #include "chart.h"
 #include "date.h"
+#include "find.h"
 #include "ledger.h"
 #include "money.h"
 #include "posting.h"
@@ -845,6 +846,44 @@ public:
         if (index < bottom_.size()) active_bottom_ = index;
     }
 
+    // Closing a tab closes that tab only. For the results of a find there is
+    // nothing else to it. For the import review there is: the panel is the
+    // only place the import can be accepted from, so closing it has to mean
+    // no, the same as the panel's own Cancel button. See the bottom-panel
+    // scenarios in UserInterface.spectable.
+    void close_bottom_tab_at(int position_one_based) {
+        const std::size_t index = static_cast<std::size_t>(position_one_based - 1);
+        if (index >= bottom_.size()) return;
+        switch (bottom_[index]) {
+            case BottomTabKind::ImportReview:
+                cancel_import();
+                break;
+            case BottomTabKind::FindResults:
+                close_bottom_tab(BottomTabKind::FindResults);
+                break;
+        }
+    }
+
+    // ------------------------------------------------------------- find
+
+    // There is one Find dialog, so there is one results tab: performing a
+    // find again replaces what is in it rather than opening a second one,
+    // and brings it to the front, since looking at the results is the whole
+    // reason for having asked.
+    void perform_find(const FindCriteria& criteria) {
+        const ActiveRegister where = active_register();
+        results_ = ui::find(accounts_, transactions_, splits_, criteria,
+                            where.refused ? std::string() : where.account);
+        for (std::size_t i = 0; i < bottom_.size(); ++i)
+            if (bottom_[i] == BottomTabKind::FindResults) {
+                active_bottom_ = i;
+                return;
+            }
+        open_bottom_tab(BottomTabKind::FindResults);
+    }
+
+    const std::vector<FindResultRow>& find_results() const { return results_; }
+
     // Whether an import is waiting in the panel, and which account it is for.
     // The window needs both to label the review; see refreshReviewPanel.
     bool review_showing() const { return review_open_; }
@@ -986,6 +1025,7 @@ private:
     std::vector<BottomTabKind> bottom_;
     std::size_t active_bottom_ = 0;
     std::vector<ReviewRow> review_;
+    std::vector<FindResultRow> results_;
     std::vector<ledger::Transaction> accepted_;
     std::vector<int> selected_;
     bool committed_ = false;

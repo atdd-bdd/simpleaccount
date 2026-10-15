@@ -880,8 +880,26 @@ public:
     }
 
     void when_find_performed(const std::vector<FindCriteriaString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_find_performed";
+        for (const FindCriteriaString& value : values) {
+            ui::FindCriteria criteria;
+            criteria.text = blank(value.text);
+            criteria.account = blank(value.account);
+            if (!blank(value.datefrom).empty())
+                criteria.date_from = types::Date::from_iso(blank(value.datefrom));
+            if (!blank(value.dateto).empty())
+                criteria.date_to = types::Date::from_iso(blank(value.dateto));
+            if (!blank(value.amountfrom).empty())
+                criteria.amount_from = Money(blank(value.amountfrom));
+            if (!blank(value.amountto).empty())
+                criteria.amount_to = Money(blank(value.amountto));
+            const std::string scope = blank(value.scope);
+            if (!scope.empty()) {
+                const auto which = ui::find_scope_from(scope);
+                ASSERT_TRUE(which.has_value()) << "unknown find scope: " << scope;
+                criteria.scope = *which;
+            }
+            workspace().perform_find(criteria);
+        }
     }
 
     void when_bottom_panel_tab_selected(const std::vector<BottomPanelTabSelectString>& values) {
@@ -889,9 +907,24 @@ public:
             workspace().select_bottom_tab(std::stoi(value.tab));
     }
 
+    void when_bottom_panel_tab_closed(const std::vector<BottomPanelTabSelectString>& values) {
+        for (const BottomPanelTabSelectString& value : values)
+            workspace().close_bottom_tab_at(std::stoi(value.tab));
+    }
+
     void then_find_results_are(const std::vector<FindResultRowString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_find_results_are";
+        const std::vector<ui::FindResultRow>& got = workspace().find_results();
+        ASSERT_EQ(values.size(), got.size()) << "number of find results";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const FindResultRowString& want = values[i];
+            EXPECT_EQ(want.ref, got[i].ref) << "result " << i << " ref";
+            EXPECT_EQ(want.date, got[i].date.iso()) << "result " << i << " date";
+            EXPECT_EQ(blank(want.payee), got[i].payee) << "result " << i << " payee";
+            EXPECT_EQ(want.account, got[i].account) << "result " << i << " account";
+            EXPECT_EQ(blank(want.category), got[i].category) << "result " << i << " category";
+            EXPECT_EQ(Money(want.amount).cents(), got[i].amount.cents())
+                << "result " << i << " amount";
+        }
     }
 
     void examples_datatype_bottompaneltabkind(const std::vector<EnumerationValuesString>& values) {
@@ -906,8 +939,11 @@ public:
     }
 
     void examples_datatype_findscope(const std::vector<EnumerationValuesString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_datatype_findscope";
+        for (const auto& value : values) {
+            const EnumerationValuesTyped v = EnumerationValuesTyped::from_string_struct(value);
+            EXPECT_TRUE(ui::find_scope_from(v.value).has_value())
+                << "unknown find scope: " << v.value;
+        }
     }
 
 

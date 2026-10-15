@@ -927,7 +927,6 @@ Description An import and a find's results can be open at once, each in its
 Description own tab. Closing one leaves the other; the panel itself only
 Description closes once nothing is left in it.
 
-$WIP
 Scenario A find opens its own tab in the bottom panel
 Given the chart of accounts is as previous
 Given transactions are as previous
@@ -944,7 +943,6 @@ Then bottom panel tabs are : BottomPanelTabRow
 | Tab | Kind        | Active |
 | 1   | FindResults | true   |
 
-$WIP
 Scenario An import and a find are open in the bottom panel together
 Description Opening the second does not close the first: a find started while
 Description an import is still waiting adds a tab rather than taking its place.
@@ -966,7 +964,6 @@ Then bottom panel tabs are : BottomPanelTabRow
 | 1   | ImportReview | false  |
 | 2   | FindResults  | true   |
 
-$WIP
 Scenario Closing one tab of the bottom panel leaves the other open
 Given the chart of accounts is as previous
 Given transactions are as previous
@@ -986,7 +983,85 @@ Then bottom panel tabs are : BottomPanelTabRow
 | Tab | Kind        | Active |
 | 1   | FindResults | true   |
 
-$WIP
+Scenario Closing the find results tab leaves the import waiting
+Description The panel's own close button, rather than the import being
+Description cancelled from its buttons. Closing a tab closes that tab only.
+Given the chart of accounts is as previous
+Given transactions are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import reviewed : ImportReviewRow
+=AnImportOfThree
+When find performed : FindCriteria Vertical
+| Text | Harris |
+When bottom panel tab closed : BottomPanelTabSelect
+| Tab | 2 |
+Then bottom panel is : BottomPanel Vertical
+| Open      | true |
+| TabCount  | 1    |
+| ActiveTab | 1    |
+Then bottom panel tabs are : BottomPanelTabRow
+| Tab | Kind         | Active |
+| 1   | ImportReview | true   |
+Then import review summary is : ImportReviewSummary Vertical
+| Rows       | 3     |
+| NewRows    | 2     |
+| Duplicates | 1     |
+| Accepted   | 2     |
+| Committed  | false |
+# The import is still waiting and still has two rows ticked. Closing the
+# results of a find says nothing about it.
+
+Scenario Closing the import review tab abandons the import
+Description Closing that tab is cancelling the import. There is nowhere else
+Description to accept it from, so leaving it open would be the only way to
+Description say yes, and a closed tab has to mean no.
+Given the chart of accounts is as previous
+Given transactions are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import reviewed : ImportReviewRow
+=AnImportOfThree
+When find performed : FindCriteria Vertical
+| Text | Harris |
+When bottom panel tab closed : BottomPanelTabSelect
+| Tab | 1 |
+Then bottom panel is : BottomPanel Vertical
+| Open      | true |
+| TabCount  | 1    |
+| ActiveTab | 1    |
+Then bottom panel tabs are : BottomPanelTabRow
+| Tab | Kind        | Active |
+| 1   | FindResults | true   |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Payee         | Balance |
+| T1  | 2026-01-05 | Acme Payroll  | 3000.00 |
+| T2  | 2026-01-15 | Harris Teeter | 2955.00 |
+| T4  | 2026-01-25 | Transfer      | 2455.00 |
+# Nothing was committed, exactly as if it had been cancelled from the
+# panel's own button. The find results are untouched beside it.
+
+Scenario Closing the last tab closes the bottom panel
+Given the chart of accounts is as previous
+Given transactions are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| Text | Harris |
+When bottom panel tab closed : BottomPanelTabSelect
+| Tab | 1 |
+Then bottom panel is : BottomPanel Vertical
+| Open      | false |
+| TabCount  | 0     |
+| ActiveTab | 0     |
+Then panes are : PaneState
+| Pane | Showing  | Account         | Active |
+| 1    | Register | Assets:Checking | true   |
+# The register above it takes the room back.
+
 Scenario Switching the active tab of the bottom panel changes nothing else
 Given the chart of accounts is as previous
 Given transactions are as previous
@@ -1047,7 +1122,6 @@ Details transaction that matches on both sides of a transfer is a row under
 Details each, because there is no one register it belongs to more than the
 Details other.
 
-$WIP
 DataType FindScope
 Description Which registers a find looks through.
 Examples: EnumerationValues
@@ -1074,7 +1148,6 @@ Attributes FindResultRow
 | Category  | Text           | none       |
 | Amount    | Money          | 0.00       |
 
-$WIP
 Scenario A find by text matches the payee
 Given the chart of accounts is as previous
 Given transactions are as previous
@@ -1087,12 +1160,11 @@ Then find results are : FindResultRow
 | Ref | Date       | Payee         | Account         | Category           | Amount |
 | T2  | 2026-01-15 | Harris Teeter | Assets:Checking | Expenses:Groceries | -45.00 |
 
-$WIP
 Scenario A find by text matches the memo when the payee does not
 Given the chart of accounts is as previous
 Given transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount | Memo             |
-| T1  | Assets:Checking | 2026-02-01 | Costco | Expenses:Shopping  | -60.00 | Birthday~present |
+| T1  | Assets:Checking | 2026-02-01 | Costco | Expenses:Groceries | -60.00 | Birthday~present |
 | T2  | Assets:Checking | 2026-02-02 | Costco | Expenses:Groceries | -40.00 | Groceries        |
 When account selected : AccountSelect
 | Path            |
@@ -1100,10 +1172,13 @@ When account selected : AccountSelect
 When find performed : FindCriteria Vertical
 | Text | Birthday |
 Then find results are : FindResultRow
-| Ref | Date       | Payee  | Account         | Category          | Amount |
-| T1  | 2026-02-01 | Costco | Assets:Checking | Expenses:Shopping | -60.00 |
+| Ref | Date       | Payee  | Account         | Category           | Amount |
+| T1  | 2026-02-01 | Costco | Assets:Checking | Expenses:Groceries | -60.00 |
+# Both rows are the same payee and the same category, so the memo is the only
+# thing that can have matched. The category is one the chart above has: a
+# destination the chart does not hold is no account, and the row would be
+# found with an empty category rather than the one named.
 
-$WIP
 Scenario A find with a date range leaves out what is outside it
 Given the chart of accounts is as previous
 Given transactions are as previous
@@ -1117,7 +1192,6 @@ Then find results are : FindResultRow
 | Ref | Date       | Payee         | Account         | Category           | Amount |
 | T2  | 2026-01-15 | Harris Teeter | Assets:Checking | Expenses:Groceries | -45.00 |
 
-$WIP
 Scenario A find with an amount range matches either sign
 Given the chart of accounts is as previous
 Given transactions are as previous
@@ -1125,17 +1199,19 @@ When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
 When find performed : FindCriteria Vertical
-| AmountFrom | 80.00  |
-| AmountTo   | 100.00 |
+| AmountFrom | 80.00        |
+| AmountTo   | 100.00       |
+| Scope      | AllRegisters |
 Then find results are : FindResultRow
 | Ref | Date       | Payee  | Account          | Category           | Amount |
 | T3  | 2026-01-20 | Amazon | Liabilities:Visa | Expenses:Groceries | -89.99 |
-# Scope defaults to the active tab's register, which is Checking; the Visa
-# transaction is found because Groceries, Amazon's other side, is not where the
-# result is read under -- Visa is, because that is where Amazon's own side
-# of the transaction posts. See the Account/Category note above.
+# The bounds are positive and the transaction is a payment of -89.99, which is
+# the point: the absolute value is what is bounded. The row is read under Visa
+# rather than under Groceries, because Visa is where Amazon's own side of the
+# transaction posts. See the Account/Category note above. The scope has to be
+# said here -- the active tab is Checking, and this transaction is in neither
+# side of that register.
 
-$WIP
 Scenario A find by account matches a category the same as a real account
 Given the chart of accounts is as previous
 Given transactions are as previous
@@ -1150,7 +1226,6 @@ Then find results are : FindResultRow
 | T2  | 2026-01-15 | Harris Teeter | Assets:Checking  | Expenses:Groceries | -45.00 |
 | T3  | 2026-01-20 | Amazon        | Liabilities:Visa | Expenses:Groceries | -89.99 |
 
-$WIP
 Scenario A find scoped to the current register does not look beyond it
 Given the chart of accounts is as previous
 Given transactions are as previous
@@ -1164,7 +1239,6 @@ Then find results are : FindResultRow
 | Ref | Date       | Payee    | Account         | Category       | Amount  |
 | T4  | 2026-01-25 | Transfer | Assets:Checking | Assets:Savings | -500.00 |
 
-$WIP
 Scenario A find scoped to all registers matches a transfer under both sides of it
 Description Transfer has no side that is more the transaction's register than
 Description the other, so a transfer matched this way is a row under each.
