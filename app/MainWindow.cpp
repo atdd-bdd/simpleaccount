@@ -422,6 +422,9 @@ void MainWindow::applyColumnWidths() {
     for (const TabWidgets& t : tabWidgets_) {
         if (t.isReport || t.reg == nullptr) continue;
         for (int column = 0; column < t.reg->columnCount(); ++column) {
+            if (t.reg->horizontalHeader()->sectionResizeMode(column) !=
+                QHeaderView::Interactive)
+                continue;
             const auto at = columnWidths_.find(registerColumnName(column));
             if (at != columnWidths_.end()) t.reg->setColumnWidth(column, at->second);
         }
@@ -1838,9 +1841,15 @@ MainWindow::TabWidgets MainWindow::makeRegisterTab(int tabPosition) {
     // Dragging a divider is how a width is set. It goes to the workspace, is
     // written with the book, and is put onto every other register -- which is
     // what refreshing_ guards: applying it would be heard as another drag.
-    connect(t.reg->horizontalHeader(), &QHeaderView::sectionResized, this,
-            [this](int column, int, int width) {
+    QHeaderView* header = t.reg->horizontalHeader();
+    connect(header, &QHeaderView::sectionResized, this,
+            [this, header](int column, int, int width) {
                 if (refreshing_ || !workspace_) return;
+                // A stretched column resizes itself whenever the table is laid
+                // out, and that is not somebody dragging a divider. Recording
+                // it would put a width in the book nobody asked for, and one
+                // that can never be applied either, since the stretch decides.
+                if (header->sectionResizeMode(column) != QHeaderView::Interactive) return;
                 const std::string name = registerColumnName(column);
                 if (name.empty()) return;
                 workspace_->resize_column(name, width);
@@ -1920,6 +1929,10 @@ void MainWindow::syncTabs() {
         }
 
     bottomTabs_->setVisible(workspace_->bottom_panel().open);
+    // A tab made just now has the widths the program gives it, not the ones
+    // somebody set. The width belongs to the column, so it belongs to a
+    // register opened a minute from now as much as to the one it was set in.
+    applyColumnWidths();
 }
 
 void MainWindow::refreshAccounts() {
