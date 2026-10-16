@@ -1,14 +1,14 @@
 Specification TransactionRegister
 
 Description The transaction register of one account: what each line shows, what
-Description order the lines are in, and what the running balance means.
+# order the lines are in, and what the running balance means.
 Details
-Details A register is always a view of one account. Every line of it is one
-Details transaction to that account, with the other side of the transaction
-Details summarised in the Category column. A transaction with four transactions
-Details appears once in each of the four registers, showing a different
-Details amount and a different category each time, and it is the same
-Details transaction.
+# A register is always a view of one account. Every line of it is one
+# transaction to that account, with the other side of the transaction
+# summarised in the Category column. A transaction with four transactions
+# appears once in each of the four registers, showing a different
+# amount and a different category each time, and it is the same
+# transaction.
 
 # ---------------------------------------------------------------------------
 # A line of the register
@@ -17,8 +17,8 @@ Details transaction.
 Attributes RegisterLine
 Description One line as it appears on screen.
 Details Payment and Deposit are headed differently for different account types;
-Details see the column heading rule below. Balance is the running balance after
-Details this line.
+# see the column heading rule below. Balance is the running balance after
+# this line.
 | Attribute | Type           | Default    |
 | Ref       | TransactionRef |            |
 | Date      | Date           | 2024-01-01 |
@@ -33,7 +33,7 @@ Details this line.
 
 Scenario A register of simple transactions
 Description The Category column holds the other account of the transaction. The
-Description running balance is the balance of this account after each line.
+# running balance is the balance of this account after each line.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -56,8 +56,8 @@ Then register lines are : RegisterLine
 
 Scenario The same transaction seen from the other account
 Description T2 above, in the register of the category rather than the bank. The
-Description amount is on the other side and the category column names the bank.
-Description Nothing was stored twice to make this possible.
+# amount is on the other side and the category column names the bank.
+# Nothing was stored twice to make this possible.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -84,7 +84,7 @@ Then register lines are : RegisterLine
 
 BusinessRule What the two amount columns are called
 Description The register is read as a statement of the account it is open on, so
-Description the headings are the words that account uses.
+# the headings are the words that account uses.
 Examples: ColumnHeadings
 | AccountType | OutColumn | InColumn | Notes                             |
 | Checking    | Payment   | Deposit  |                                   |
@@ -110,8 +110,8 @@ Attributes ColumnHeadings
 
 BusinessRule The running balance uses the display sign of the account
 Description A credit card register shows what is owed, growing as it is charged,
-Description because that is what the statement shows. See the display sign rule
-Description in Accounts.
+# because that is what the statement shows. See the display sign rule
+# in Accounts.
 Examples: RunningBalanceSign
 | AccountType | PostingAmount | BalanceShown | Notes                      |
 | Checking    | -45.00        | -45.00       | Money left the account     |
@@ -153,9 +153,9 @@ Then register lines are : RegisterLine
 BusinessRule What order the register is in
 Description By date, and within a date by the order the transactions were entered.
 Details Entry order is used for the tie rather than amount or payee because it
-Details is stable: reopening the file, or importing more, never reshuffles
-Details lines that are already there, so the running balance against a line
-Details does not change under the user.
+# is stable: reopening the file, or importing more, never reshuffles
+# lines that are already there, so the running balance against a line
+# does not change under the user.
 Examples: RegisterOrder
 | Date       | EntrySeq | Position | Notes                              |
 | 2024-01-15 | 2        | 1        | Earliest date first                |
@@ -194,7 +194,7 @@ Then register lines are : RegisterLine CompareOnly
 
 Attributes SequencedTransaction
 Description A transaction with the order it was entered in, so that a scenario
-Description about ordering can say what that order was.
+# about ordering can say what that order was.
 | Attribute     | Type           | Default    |
 | EntrySeq      | Integer        | 0          |
 | Ref           | TransactionRef |            |
@@ -206,9 +206,9 @@ Description about ordering can say what that order was.
 
 Scenario Sorting the register by another column hides the running balance
 Description A running balance down a list that is not in date order is a column
-Description of meaningless numbers. Sorting by payee is useful for finding
-Description something, so it is allowed, and the balance column is emptied
-Description rather than filled with figures that do not add up.
+# of meaningless numbers. Sorting by payee is useful for finding
+# something, so it is allowed, and the balance column is emptied
+# rather than filled with figures that do not add up.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -252,7 +252,7 @@ Attributes BalanceColumnState
 
 Scenario A split shows as Split in the category column
 Description There is no one category to show, so the column says so, and the
-Description line can be expanded to see the parts.
+# line can be expanded to see the parts.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
 | Assets:Checking           | Checking | false       |
@@ -309,8 +309,8 @@ Attributes SplitLineShown
 
 Scenario A split seen from one of its category registers shows only its own line
 Description The register of Expenses:Home:Garden shows 54.50, not 184.50, and
-Description names the bank account as the category. The other legs of the split
-Description are not its business.
+# names the bank account as the category. The other legs of the split
+# are not its business.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
 | Assets:Checking           | Checking | false       |
@@ -338,8 +338,8 @@ Then register lines are : RegisterLine
 
 Scenario A future-dated transaction appears at the end, below a marker
 Description A check written today and dated next month belongs in the register,
-Description and it must not be mistaken for money already gone. The balance as
-Description at today is shown on the marker line.
+# and it must not be mistaken for money already gone. The balance as
+# at today is shown on the marker line.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -378,7 +378,7 @@ Attributes TodayMarker
 
 Scenario The register opens on the most recent transactions
 Description Twenty years of history is tens of thousands of lines. Opening at
-Description the top would mean scrolling through 2005 to reach this month.
+# the top would mean scrolling through 2005 to reach this month.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
 | Assets:Checking | Checking | false       |
@@ -408,9 +408,9 @@ Attributes RegisterView
 
 Scenario A date filter narrows the register without changing the balance
 Description The running balance shown against a line is the balance of the
-Description account, not of the filtered list. A line that reads 2,903.00 in
-Description the unfiltered register reads 2,903.00 when only January is shown,
-Description because that is what the account held on that day.
+# account, not of the filtered list. A line that reads 2,903.00 in
+# the unfiltered register reads 2,903.00 when only January is shown,
+# because that is what the account held on that day.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -446,7 +446,7 @@ Attributes OpeningLine
 
 Scenario Searching the register matches payee, memo, category and amount
 Description One search box, because a user looking for something does not want
-Description to decide first which field it is in.
+# to decide first which field it is in.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -498,7 +498,7 @@ Then register lines are : RegisterLine CompareOnly
 
 Scenario The blank line at the end takes the next transaction
 Description The register ends in an empty line dated today. Filling it in and
-Description leaving the line commits the transaction, as in Transactions.
+# leaving the line commits the transaction, as in Transactions.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -514,7 +514,7 @@ Then blank line is : RegisterLine CompareOnly
 
 Scenario Leaving a part-filled blank line with no amount discards it
 Description A payee typed and then thought better of does not become a zero
-Description transaction.
+# transaction.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -533,9 +533,9 @@ Then register lines are : RegisterLine CompareOnly
 # ---------------------------------------------------------------------------
 
 Description A transaction recorded through SourceAccount/Destination/Amount
-Description needs no join against Transactions for its line: it already names its
-Description one line directly. See the section on naming both accounts
-Description directly in Transactions.spectable.
+# needs no join against Transactions for its line: it already names its
+# one line directly. See the section on naming both accounts
+# directly in Transactions.spectable.
 
 Scenario A register line reads directly off a transaction recorded the new way
 Given the chart of accounts is : ChartOfAccounts

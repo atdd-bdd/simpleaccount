@@ -1,25 +1,25 @@
 Specification UserInterface
 
 Description The windows the program is worked in: a list of accounts, the
-Description register of the account selected in it, and an optional second pane
-Description that shows either another account or an import waiting to be reviewed.
+# register of the account selected in it, and an optional second pane
+# that shows either another account or an import waiting to be reviewed.
 Details
-Details The shape is three regions. On the left, every account, grouped by the
-Details kind of thing it is. On the right, the register of whichever account is
-Details selected. The right may be split in two, so that two accounts can be
-Details read at once -- or so that an import can be looked over beside the
-Details register it is about to change.
-Details
-Details What is specified here is what the windows show and what selecting
-Details things does. Pixels and fonts are not, and neither is the width a
-Details column starts at: those are not worth agreeing in a table, and
-Details changing them should not fail a test.
-Details
-Details Column widths used to be on that list and are not any more. What a
-Details column is wide by default is still nobody's business here, but a width
-Details a person set by dragging is: it has to outlast the register it was set
-Details in and outlast the session, and that is behaviour rather than
-Details appearance. See the width of a column, at the end of this file.
+# The shape is three regions. On the left, every account, grouped by the
+# kind of thing it is. On the right, the register of whichever account is
+# selected. The right may be split in two, so that two accounts can be
+# read at once -- or so that an import can be looked over beside the
+# register it is about to change.
+#
+# What is specified here is what the windows show and what selecting
+# things does. Pixels and fonts are not, and neither is the width a
+# column starts at: those are not worth agreeing in a table, and
+# changing them should not fail a test.
+#
+# Column widths used to be on that list and are not any more. What a
+# column is wide by default is still nobody's business here, but a width
+# a person set by dragging is: it has to outlast the register it was set
+# in and outlast the session, and that is behaviour rather than
+# appearance. See the width of a column, at the end of this file.
 
 # ---------------------------------------------------------------------------
 # The account list
@@ -27,11 +27,11 @@ Details appearance. See the width of a column, at the end of this file.
 
 DataType AccountGroup
 Description The headings the account list is divided into. One per kind of real
-Description account, and the categories are not in the list at all: they are
-Description reached through a report, not browsed.
+# account, and the categories are not in the list at all: they are
+# reached through a report, not browsed.
 Details The words Asset and Liability are not headings here. Which side of a
-Details balance sheet an account is on is a different question, asked by the
-Details balance sheet and nowhere else; see the balance-side rule in CoreTypes.
+# balance sheet an account is on is a different question, asked by the
+# balance sheet and nowhere else; see the balance-side rule in CoreTypes.
 Examples: EnumerationValues
 | Value            | Notes                                      |
 | Banking          | Checking, savings and cash                 |
@@ -45,12 +45,12 @@ Examples: EnumerationValues
 BusinessRule Which group an account is listed under and how the heading reads
 Description Taken from the account type, so nothing has to be filed by hand.
 Details The nominal types have no group: Income, Expense and Equity are
-Details categories and the account list does not show them. Their heading is
-Details given here as an empty cell rather than a word, because there is none.
-Details
-Details The heading on the page is given beside the name because two of them
-Details carry an ampersand and a space, and a name in this specification is an
-Details identifier.
+# categories and the account list does not show them. Their heading is
+# given here as an empty cell rather than a word, because there is none.
+#
+# The heading on the page is given beside the name because two of them
+# carry an ampersand and a space, and a name in this specification is an
+# identifier.
 Examples: GroupOfType
 | AccountType        | AccountGroup     | Heading          | Listed |
 | Checking           | Banking          | Banking          | true   |
@@ -90,12 +90,12 @@ Attributes GroupOfType
 Attributes AccountListRow
 Description One line of the account list.
 Details A group heading carries the total of the accounts under it and names no
-Details account; an account names no group. The groups are listed in the order
-Details they are declared, and a group with nothing in it is left out rather
-Details than shown empty.
-Details
-Details Indent is the depth on the page: a group heading is 0, an account under
-Details it is 1, and a child of that account is 2.
+# account; an account names no group. The groups are listed in the order
+# they are declared, and a group with nothing in it is left out rather
+# than shown empty.
+#
+# Indent is the depth on the page: a group heading is 0, an account under
+# it is 1, and a child of that account is 2.
 | Attribute | Type        | Default |
 | Group     | Text        | none    |
 | Account   | AccountPath | none    |
@@ -122,9 +122,9 @@ Given transactions are : Transaction
 
 Scenario The account list groups the real accounts and totals each group
 Description Each balance is the display balance, so a card reads as what is
-Description owed. A group heading carries the total of what is under it.
-Description The categories are absent: Expenses:Groceries and Income:Salary
-Description have transactions and are not accounts to browse.
+# owed. A group heading carries the total of what is under it.
+# The categories are absent: Expenses:Groceries and Income:Salary
+# have transactions and are not accounts to browse.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account list shown
@@ -139,10 +139,10 @@ Then account list rows are : AccountListRow
 
 Scenario Every group that has an account in it is a heading
 Description One heading per kind of account, in the order the groups are
-Description declared, and nothing above them. A card is under Credit and a
-Description mortgage under Loan & Debt; neither the word Asset nor the word
-Description Liability is on the page, because the list is for reaching an
-Description account and the balance sheet is where the two sides are read.
+# declared, and nothing above them. A card is under Credit and a
+# mortgage under Loan & Debt; neither the word Asset nor the word
+# Liability is on the page, because the list is for reaching an
+# account and the balance sheet is where the two sides are read.
 Given the chart of accounts is : ChartOfAccounts
 | Path                 | Type       | Placeholder |
 | Assets:Checking      | Checking   | false       |
@@ -181,7 +181,7 @@ Then account list rows are : AccountListRow
 
 Scenario A group with no accounts is not shown
 Description There is nothing under Investments, Assets or Liabilities in this
-Description book, so those headings are left out rather than shown empty.
+# book, so those headings are left out rather than shown empty.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account list shown
@@ -196,8 +196,8 @@ Attributes GroupShown
 
 Scenario A hidden account is left out until it is asked for
 Description Hiding an account is how it is got out of the way without losing its
-Description history, so the list follows that. The total of the group follows
-Description the list, so hiding an account changes what the heading says.
+# history, so the list follows that. The total of the group follows
+# the list, so hiding an account changes what the heading says.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder | Hidden |
 | Assets:Checking | Checking | false       | false  |
@@ -220,7 +220,7 @@ Then account list rows are : AccountListRow
 
 Scenario A placeholder is a line in the list with its subtree beneath it
 Description A placeholder takes no transactions of its own, so its balance is the
-Description roll-up. It is shown because it is how a deep tree is navigated.
+# roll-up. It is shown because it is how a deep tree is navigated.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type | Placeholder |
 | Assets:Brokerage        | Brokerage  | true  |
@@ -240,12 +240,12 @@ Then account list rows are : AccountListRow
 
 Scenario A legacy root is not a line of its own
 Description Assets and Liabilities were the only heading an account had before
-Description groups existed, and adding an account still creates one as an
-Description ordinary placeholder above it. Now that the group heading says the
-Description same thing, that placeholder would say it twice -- Banking, then
-Description Assets, then Checking -- so it has no line of its own. Its balance
-Description still counts in the group heading above it, because the money is
-Description still there; only the redundant line is gone.
+# groups existed, and adding an account still creates one as an
+# ordinary placeholder above it. Now that the group heading says the
+# same thing, that placeholder would say it twice -- Banking, then
+# Assets, then Checking -- so it has no line of its own. Its balance
+# still counts in the group heading above it, because the money is
+# still there; only the redundant line is gone.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder |
 | Assets          | Checking | true        |
@@ -281,9 +281,9 @@ Description What one pane of the right-hand side is showing.
 DataType PaneContent
 Description What a pane can show.
 Details An import under review and a find's results used to be a second kind
-Details of pane, shown beside this one. They are a tab of the bottom panel
-Details now, so a pane is always exactly one per open tab; see the bottom-panel
-Details section below.
+# of pane, shown beside this one. They are a tab of the bottom panel
+# now, so a pane is always exactly one per open tab; see the bottom-panel
+# section below.
 Examples: EnumerationValues
 | Value    | Notes                                                  |
 | Register | The transactions of one account                        |
@@ -307,9 +307,9 @@ Then register lines are : RegisterLine CompareOnly
 
 Scenario Selecting a placeholder shows everything beneath it
 Description A placeholder has no transactions of its own, so showing an empty
-Description register would be useless. It shows the subtree, which is what a
-Description reader of a brokerage account wants: the cash and the holdings
-Description together.
+# register would be useless. It shows the subtree, which is what a
+# reader of a brokerage account wants: the cash and the holdings
+# together.
 Given the chart of accounts is : ChartOfAccounts
 | Path                  | Type       | Placeholder |
 | Assets:Brokerage      | Brokerage  | true        |
@@ -329,8 +329,8 @@ Then register lines are : RegisterLine CompareOnly
 
 Scenario The other side of a transfer is named in the category column
 Description A transfer appears in both registers, and in each of them the
-Description category column names the other account. It is one transaction seen
-Description twice, not two.
+# category column names the other account. It is one transaction seen
+# twice, not two.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -348,36 +348,36 @@ Then register lines are : RegisterLine CompareOnly
 # ---------------------------------------------------------------------------
 
 Description A bar of tabs, each one a register or a report, and one of them is
-Description the active tab.
+# the active tab.
 Details Several things stay open at once because the work moves between them. A
-Details card statement is reconciled against the card; the payment that
-Details settles it is in the current account; whether it has cleared is
-Details answered by looking at both. Two reports over two periods answer
-Details whether a month was unusual. Closing one to open the other and back
-Details again is the work a tab bar does away with.
-Details
-Details The active tab is where anything that needs a register goes. An import
-Details goes into the active tab, and so does a transaction typed on the blank
-Details line, so the question "into which account" is answered by what is in
-Details front of you rather than by a dialog asking it again.
-Details
-Details One tab per account. Selecting an account already open returns to its
-Details tab rather than opening a second: two tabs on one register would show
-Details the same lines and leave which to believe an open question.
-Details
-Details Reports are the other way round. Asking for a report opens another tab
-Details every time, because the reason to have two is to read two periods side
-Details by side, and a report that replaced the one already open could not do
-Details that.
-Details
-Details The import review is not a tab. It is the second pane, beside the
-Details register it is about to change, and only while the import is waiting;
-Details see the section below. A tab is something to come back to, and the
-Details second pane is a comparison that lasts as long as the comparison does.
-Details
-Details Pane 1 is the tab area and its account is the active tab's, which is
-Details why the scenarios here can speak of panes and of tabs at once without
-Details the two disagreeing.
+# card statement is reconciled against the card; the payment that
+# settles it is in the current account; whether it has cleared is
+# answered by looking at both. Two reports over two periods answer
+# whether a month was unusual. Closing one to open the other and back
+# again is the work a tab bar does away with.
+#
+# The active tab is where anything that needs a register goes. An import
+# goes into the active tab, and so does a transaction typed on the blank
+# line, so the question "into which account" is answered by what is in
+# front of you rather than by a dialog asking it again.
+#
+# One tab per account. Selecting an account already open returns to its
+# tab rather than opening a second: two tabs on one register would show
+# the same lines and leave which to believe an open question.
+#
+# Reports are the other way round. Asking for a report opens another tab
+# every time, because the reason to have two is to read two periods side
+# by side, and a report that replaced the one already open could not do
+# that.
+#
+# The import review is not a tab. It is the second pane, beside the
+# register it is about to change, and only while the import is waiting;
+# see the section below. A tab is something to come back to, and the
+# second pane is a comparison that lasts as long as the comparison does.
+#
+# Pane 1 is the tab area and its account is the active tab's, which is
+# why the scenarios here can speak of panes and of tabs at once without
+# the two disagreeing.
 
 DataType TabKind
 Description What one tab holds.
@@ -389,10 +389,10 @@ Examples: EnumerationValues
 Attributes OpenTab
 Description One tab of the tab bar, in the order the tabs are shown.
 Details A register tab is named by the account's own name and not its path: a
-Details tab is narrow, and the path is on the account list where there is room
-Details for it. A report tab is named by the report; a second tab of the same
-Details report has a 2 after it, and so on, because the period is shown on the
-Details controls inside the tab where there is room to read it.
+# tab is narrow, and the path is on the account list where there is room
+# for it. A report tab is named by the report; a second tab of the same
+# report has a 2 after it, and so on, because the period is shown on the
+# controls inside the tab where there is room to read it.
 | Attribute | Type        | Default  |
 | Position  | Integer     | 1        |
 | Kind      | TabKind     | Register |
@@ -419,7 +419,7 @@ Then panes are : PaneState
 
 Scenario Selecting a second account leaves the first one open
 Description This is the whole point. The card and the current account are both
-Description open and the eye moves between them.
+# open and the eye moves between them.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -440,8 +440,8 @@ Then panes are : PaneState
 
 Scenario Selecting an account that is already open returns to its tab
 Description Not a second tab on the same register. Two tabs showing the same
-Description lines would leave which of them to believe an open question, and
-Description nothing would ever answer it.
+# lines would leave which of them to believe an open question, and
+# nothing would ever answer it.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -479,7 +479,7 @@ Then open tabs are : OpenTab
 
 Scenario Asking for the same report again opens a second tab
 Description Two periods side by side is the reason to have two, so a report
-Description does not replace the one already open.
+# does not replace the one already open.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run : ReportSpec Vertical
@@ -501,10 +501,10 @@ Then open tabs are : OpenTab
 
 Scenario Clicking an open tab makes it active, whatever kind it is
 Description A tab bar is clicked by position, not by what is on the tab, so
-Description this is the step a click actually produces -- unlike selecting an
-Description account, which is also how a tab gets opened in the first place.
-Description Without it, clicking back to a report that lost focus has nothing
-Description to tell the workspace, and the next redraw puts the register back.
+# this is the step a click actually produces -- unlike selecting an
+# account, which is also how a tab gets opened in the first place.
+# Without it, clicking back to a report that lost focus has nothing
+# to tell the workspace, and the next redraw puts the register back.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -530,7 +530,7 @@ Then open tabs are : OpenTab
 
 Scenario Closing the active tab moves to the one beside it
 Description The one to its right, or the one to its left when it was the last,
-Description so that closing a tab always leaves something showing.
+# so that closing a tab always leaves something showing.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -554,8 +554,8 @@ Then panes are : PaneState
 
 Scenario Closing another tab leaves the active one where it was
 Description Closing something that is not being read should not change what is
-Description being read. The position shifts because a tab before it has gone;
-Description the register showing does not.
+# being read. The position shifts because a tab before it has gone;
+# the register showing does not.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -597,8 +597,8 @@ Then panes are : PaneState
 
 Scenario An import goes into the active tab
 Description The account is not asked for. Whichever register is in front of you
-Description is the one the statement is for, which is also how a transaction
-Description typed on the blank line knows where it belongs.
+# is the one the statement is for, which is also how a transaction
+# typed on the blank line knows where it belongs.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -630,9 +630,9 @@ Then bottom panel tabs are : BottomPanelTabRow
 
 Scenario An import with a report in front is refused
 Description There is no register to compare against, so there is nothing to
-Description judge a proposed row by. Said rather than guessed at: importing
-Description into whichever register happened to be open last is how a
-Description statement ends up in the wrong account.
+# judge a proposed row by. Said rather than guessed at: importing
+# into whichever register happened to be open last is how a
+# statement ends up in the wrong account.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run : ReportSpec Vertical
@@ -651,27 +651,27 @@ Open the register this statement is for, then import into it.
 # ---------------------------------------------------------------------------
 
 Description One pane, showing the register or the report of the selected tab.
-Description An optional panel below it holds everything that is not the
-Description register itself -- an import waiting to be accepted, or the
-Description results of a find -- each in a tab of its own, so more than one can
-Description be open and read at once.
+# An optional panel below it holds everything that is not the
+# register itself -- an import waiting to be accepted, or the
+# results of a find -- each in a tab of its own, so more than one can
+# be open and read at once.
 Details The panel is open exactly when it has a tab in it, and closes itself
-Details when the last one does: accepting or cancelling an import closes that
-Details tab, closing a find's results closes that one, and the panel is gone
-Details once nothing is left. Opening a new one -- a second find, an import
-Details started from another register -- adds a tab rather than replacing
-Details what is already open, and the one just opened becomes active, the
-Details same rule a register tab already follows.
-Details
-Details There used to be a Split view on the menu, two registers side by side
-Details for reading two accounts at once, and before that an import was shown
-Details the same way -- as a second pane beside the register, rather than in
-Details this panel. Both are gone. A window that can be left in a two-register
-Details state shows two registers on the next launch with nothing to say why;
-Details the panel's tabs say why for themselves, and more than one thing can
-Details wait to be judged at once, which a single second pane could not do
-Details either. Reading two registers at once is worth having again one day as
-Details two windows, not as a mode this one can be left in.
+# when the last one does: accepting or cancelling an import closes that
+# tab, closing a find's results closes that one, and the panel is gone
+# once nothing is left. Opening a new one -- a second find, an import
+# started from another register -- adds a tab rather than replacing
+# what is already open, and the one just opened becomes active, the
+# same rule a register tab already follows.
+#
+# There used to be a Split view on the menu, two registers side by side
+# for reading two accounts at once, and before that an import was shown
+# the same way -- as a second pane beside the register, rather than in
+# this panel. Both are gone. A window that can be left in a two-register
+# state shows two registers on the next launch with nothing to say why;
+# the panel's tabs say why for themselves, and more than one thing can
+# wait to be judged at once, which a single second pane could not do
+# either. Reading two registers at once is worth having again one day as
+# two windows, not as a mode this one can be left in.
 
 Scenario The bottom panel is closed until something opens it
 Given the chart of accounts is as previous
@@ -686,7 +686,7 @@ Then bottom panel is : BottomPanel Vertical
 
 Attributes BottomPanel
 Description Whether the panel below the register is open, and how many tabs
-Description are in it.
+# are in it.
 | Attribute | Type    | Default |
 | Open      | Boolean | false   |
 | TabCount  | Integer | 0       |
@@ -711,13 +711,13 @@ Description One tab of the bottom panel, in the order it was opened.
 # ---------------------------------------------------------------------------
 
 Description An import is shown in a tab of the bottom panel rather than in a
-Description dialog of its own, so that the register it is about to change stays
-Description in view while it is read. Nothing reaches the book until it is
-Description accepted.
+# dialog of its own, so that the register it is about to change stays
+# in view while it is read. Nothing reaches the book until it is
+# accepted.
 
 Attributes ImportReviewRow
 Description One row of an import waiting to be reviewed. Account is where the
-Description money moved; Category is the other side as the import worked it out.
+# money moved; Category is the other side as the import worked it out.
 | Attribute   | Type              | Default    |
 | Line        | Integer           | 0          |
 | Date        | Date              | 2026-01-01 |
@@ -736,8 +736,8 @@ Description money moved; Category is the other side as the import worked it out.
 
 Define AnImportOfThree
 Description The import the next several scenarios all read. A scenario cannot
-Description take a table from the scenario before it: every generated test stands
-Description alone, so the rows are named here and asked for by name.
+# take a table from the scenario before it: every generated test stands
+# alone, so the rows are named here and asked for by name.
 | Line | Date       | Payee         | Account         | Category               | Amount  | Disposition |
 | 1    | 2026-02-02 | Harris Teeter | Assets:Checking | Expenses:Groceries     | -52.10  | New         |
 | 2    | 2026-02-03 | Unknown Shop  | Assets:Checking | Expenses:Uncategorized | -23.75  | New         |
@@ -745,7 +745,7 @@ Description alone, so the rows are named here and asked for by name.
 
 Scenario An import opens a tab in the bottom panel with every row proposed
 Description The panel opens by itself if it was not open: the point of
-Description showing an import here is to have the register still in view.
+# showing an import here is to have the register still in view.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -780,9 +780,9 @@ Attributes ImportReviewSummary
 
 Scenario A row the import thinks is a duplicate starts unaccepted
 Description The import has already decided it has seen this one. It is shown
-Description rather than hidden, because the decision is worth disagreeing with,
-Description and it starts unticked so that accepting everything does not bring
-Description it in.
+# rather than hidden, because the decision is worth disagreeing with,
+# and it starts unticked so that accepting everything does not bring
+# it in.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -798,7 +798,7 @@ Then import review rows are : ImportReviewRow
 
 Scenario Nothing is in the book until the import is accepted
 Description The register in the other pane is unchanged while the review is
-Description open, which is what makes it worth having beside it.
+# open, which is what makes it worth having beside it.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -814,7 +814,7 @@ Then register lines are : RegisterLine CompareOnly
 
 Scenario Accepting the import adds the ticked rows and closes the review
 Description The two new rows arrive, the duplicate does not, and the panel
-Description closes so that the result can be read in the register it changed.
+# closes so that the result can be read in the register it changed.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -877,7 +877,7 @@ Attributes ReviewRowSelect
 
 Scenario Ticking a duplicate brings it in after all
 Description The import's decision is a proposal. A user who knows the bank sent
-Description the same transaction twice for a real reason can say so.
+# the same transaction twice for a real reason can say so.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -924,8 +924,8 @@ Then panes are : PaneState
 # ---------------------------------------------------------------------------
 
 Description An import and a find's results can be open at once, each in its
-Description own tab. Closing one leaves the other; the panel itself only
-Description closes once nothing is left in it.
+# own tab. Closing one leaves the other; the panel itself only
+# closes once nothing is left in it.
 
 Scenario A find opens its own tab in the bottom panel
 Given the chart of accounts is as previous
@@ -945,7 +945,7 @@ Then bottom panel tabs are : BottomPanelTabRow
 
 Scenario An import and a find are open in the bottom panel together
 Description Opening the second does not close the first: a find started while
-Description an import is still waiting adds a tab rather than taking its place.
+# an import is still waiting adds a tab rather than taking its place.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -985,7 +985,7 @@ Then bottom panel tabs are : BottomPanelTabRow
 
 Scenario Closing the find results tab leaves the import waiting
 Description The panel's own close button, rather than the import being
-Description cancelled from its buttons. Closing a tab closes that tab only.
+# cancelled from its buttons. Closing a tab closes that tab only.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1015,8 +1015,8 @@ Then import review summary is : ImportReviewSummary Vertical
 
 Scenario Closing the import review tab abandons the import
 Description Closing that tab is cancelling the import. There is nowhere else
-Description to accept it from, so leaving it open would be the only way to
-Description say yes, and a closed tab has to mean no.
+# to accept it from, so leaving it open would be the only way to
+# say yes, and a closed tab has to mean no.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1100,27 +1100,27 @@ Attributes BottomPanelTabSelect
 # ---------------------------------------------------------------------------
 
 Description Find looks across transactions for ones matching what was typed,
-Description and shows the matches in a tab of the bottom panel, beside the
-Description register, the same as an import. There is one Find dialog, so
-Description performing a find again replaces that tab's results rather than
-Description opening a second one.
+# and shows the matches in a tab of the bottom panel, beside the
+# register, the same as an import. There is one Find dialog, so
+# performing a find again replaces that tab's results rather than
+# opening a second one.
 Details A blank field in FindCriteria is not a filter: Text blank matches
-Details every payee and memo, a blank date or amount bound is open-ended, and
-Details a blank Account matches every account. AmountFrom and AmountTo bound
-Details the amount's absolute value, so a search for 80.00 to 100.00 finds
-Details both a payment of -89.99 and a deposit of 89.99 -- a person recalling
-Details a transaction rarely remembers which side of it they are thinking of.
-Details Account matches a category the same way a real account's, and
-Details matches a transaction if either side of it is the named account or
-Details anything beneath it.
-Details
-Details FindResultRow names the transaction the way a register names the
-Details other side of a transfer: Account is the side the result is read
-Details under, and Category is the other side of it. Scoped to one register,
-Details that is always the register searched. Scoped to every register, a
-Details transaction that matches on both sides of a transfer is a row under
-Details each, because there is no one register it belongs to more than the
-Details other.
+# every payee and memo, a blank date or amount bound is open-ended, and
+# a blank Account matches every account. AmountFrom and AmountTo bound
+# the amount's absolute value, so a search for 80.00 to 100.00 finds
+# both a payment of -89.99 and a deposit of 89.99 -- a person recalling
+# a transaction rarely remembers which side of it they are thinking of.
+# Account matches a category the same way a real account's, and
+# matches a transaction if either side of it is the named account or
+# anything beneath it.
+#
+# FindResultRow names the transaction the way a register names the
+# other side of a transfer: Account is the side the result is read
+# under, and Category is the other side of it. Scoped to one register,
+# that is always the register searched. Scoped to every register, a
+# transaction that matches on both sides of a transfer is a row under
+# each, because there is no one register it belongs to more than the
+# other.
 
 DataType FindScope
 Description Which registers a find looks through.
@@ -1241,7 +1241,7 @@ Then find results are : FindResultRow
 
 Scenario A find scoped to all registers matches a transfer under both sides of it
 Description Transfer has no side that is more the transaction's register than
-Description the other, so a transfer matched this way is a row under each.
+# the other, so a transfer matched this way is a row under each.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1256,23 +1256,23 @@ Then find results are : FindResultRow
 | T4  | 2026-01-25 | Transfer | Assets:Savings  | Assets:Checking | 500.00  |
 
 Description Choosing a result goes to the transaction in the register the
-Description result is read under -- the Account column of the result, not
-Description whichever register happens to be open. That is the whole use of
-Description the column being there: a find scoped to every register lists
-Description matches from accounts the reader is not looking at, and a result
-Description under Savings has to open Savings. The results stay open while it
-Description happens, because a find is usually a list to work down rather
-Description than one line to reach.
+# result is read under -- the Account column of the result, not
+# whichever register happens to be open. That is the whole use of
+# the column being there: a find scoped to every register lists
+# matches from accounts the reader is not looking at, and a result
+# under Savings has to open Savings. The results stay open while it
+# happens, because a find is usually a list to work down rather
+# than one line to reach.
 Details Going to a result is going to the transaction, so it is the same
-Details operation the report's "Go to the transaction..." performs: the
-Details register opens and the transaction's line in it is selected. A
-Details result names its register, so unlike the report's version nothing
-Details has to be chosen -- a transfer matched under both of its sides is
-Details two results, and each goes to its own.
+# operation the report's "Go to the transaction..." performs: the
+# register opens and the transaction's line in it is selected. A
+# result names its register, so unlike the report's version nothing
+# has to be chosen -- a transfer matched under both of its sides is
+# two results, and each goes to its own.
 
 Attributes FindResultChoice
 Description Which result was chosen, counting from one in the order the
-Description results are listed.
+# results are listed.
 | Attribute | Type    | Default |
 | Line      | Integer | 1       |
 
@@ -1327,37 +1327,37 @@ Then the register line selected is : RegisterSelect
 # ---------------------------------------------------------------------------
 
 Description An accepted row keeps what the file called it.
-Description
-Description A downloaded row arrives with the name the file gave it -- a FITID
-Description from a QFX, whatever the bank's CSV uses for a reference -- and that
-Description name is the whole reason a second download of the same statement
-Description does nothing. So it has to reach the transaction that is stored.
+#
+# A downloaded row arrives with the name the file gave it -- a FITID
+# from a QFX, whatever the bank's CSV uses for a reference -- and that
+# name is the whole reason a second download of the same statement
+# does nothing. So it has to reach the transaction that is stored.
 Details The review shows a row as date, payee, account, category and amount,
-Details because that is what a person reads. Building the transaction back out
-Details of those five columns would lose the identifier, and the loss would be
-Details silent: the import would look right, the register would look right,
-Details and next month's download of the same account would offer every
-Details transaction in it again as new.
-Details
-Details So what the import prepared is what is stored. The columns on the
-Details screen are a view of it, not the source of it.
-Details
-Details The raw name travels the same way and for a related reason: a rule
-Details written next year has to be able to match what the bank sent this
-Details year, so what the bank sent is kept rather than only what it was
-Details turned into. The memo, the check number and whether the bank has
-Details settled the row travel with it for no deeper reason than that the file
-Details said so and the review is not the place to lose it.
-Details
-Details Whether a row arrives settled is the import's to say, not the review's:
-Details an OFX file's rows are a statement and are cleared, and a CSV says
-Details nothing about what the bank has settled. So the review carries what it
-Details was given rather than deciding.
+# because that is what a person reads. Building the transaction back out
+# of those five columns would lose the identifier, and the loss would be
+# silent: the import would look right, the register would look right,
+# and next month's download of the same account would offer every
+# transaction in it again as new.
+#
+# So what the import prepared is what is stored. The columns on the
+# screen are a view of it, not the source of it.
+#
+# The raw name travels the same way and for a related reason: a rule
+# written next year has to be able to match what the bank sent this
+# year, so what the bank sent is kept rather than only what it was
+# turned into. The memo, the check number and whether the bank has
+# settled the row travel with it for no deeper reason than that the file
+# said so and the review is not the place to lose it.
+#
+# Whether a row arrives settled is the import's to say, not the review's:
+# an OFX file's rows are a statement and are cleared, and a CSV says
+# nothing about what the bank has settled. So the review carries what it
+# was given rather than deciding.
 
 Attributes AcceptedTransaction
 Description A transaction that accepting the review has just added, with the
-Description identifier it was imported under. Only the accepted rows are
-Description listed; what the book already held is not.
+# identifier it was imported under. Only the accepted rows are
+# listed; what the book already held is not.
 | Attribute     | Type          | Default   |
 | SourceAccount | AccountPath   |           |
 | Destination   | AccountPath   | none      |
@@ -1371,7 +1371,7 @@ Description listed; what the book already held is not.
 
 Scenario Accepting an import keeps the identifier the file gave each row
 Description The identifier belongs to the side the statement is for. The bank
-Description has never heard of the category, so that side carries none.
+# has never heard of the category, so that side carries none.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1387,9 +1387,9 @@ Then accepted transactions are : AcceptedTransaction
 
 Scenario A CSV row keeps its reference under its own source
 Description Two files describing one transaction do not agree on what to call
-Description it, so the source travels with the identifier. A reference kept
-Description under Csv does not make a later QFX of the same account do nothing,
-Description and that is deliberate -- see the identifier scope rule.
+# it, so the source travels with the identifier. A reference kept
+# under Csv does not make a later QFX of the same account do nothing,
+# and that is deliberate -- see the identifier scope rule.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1405,9 +1405,9 @@ Then accepted transactions are : AcceptedTransaction
 
 Scenario A row the file gave no identifier is still accepted
 Description A QIF carries no identifier, and a row read from one is still worth
-Description bringing in. It is the weaker tests -- the date, the amount, the
-Description check number -- that keep a second reading of the same QIF from
-Description duplicating it.
+# bringing in. It is the weaker tests -- the date, the amount, the
+# check number -- that keep a second reading of the same QIF from
+# duplicating it.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1423,7 +1423,7 @@ Then accepted transactions are : AcceptedTransaction
 
 Scenario An unticked row contributes nothing at all
 Description The identifier of a row that was not accepted must not be stored
-Description either, or the row could never be imported again.
+# either, or the row could never be imported again.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1446,21 +1446,21 @@ Then accepted transactions are : AcceptedTransaction
 # ---------------------------------------------------------------------------
 
 Description A register is where the work gets done, so what can be done to a
-Description line is reached from the line itself.
+# line is reached from the line itself.
 Details A selection is a set of lines. How it was made is the table's business
-Details and not the program's: a click takes one, shift extends the run from
-Details the line last clicked, and control adds or removes a single line -- so
-Details a run and a scattered set are the same thing once they exist, and
-Details nothing below needs to know which gesture was used.
-Details
-Details Everything on the menu acts on the whole selection. Recategorising
-Details twenty lines at once is the reason the selection is worth having: a
-Details statement arrives with twenty charges from one shop, and categorising
-Details them one at a time is the work the program is supposed to save.
+# and not the program's: a click takes one, shift extends the run from
+# the line last clicked, and control adds or removes a single line -- so
+# a run and a scattered set are the same thing once they exist, and
+# nothing below needs to know which gesture was used.
+#
+# Everything on the menu acts on the whole selection. Recategorising
+# twenty lines at once is the reason the selection is worth having: a
+# statement arrives with twenty charges from one shop, and categorising
+# them one at a time is the work the program is supposed to save.
 
 Attributes RegisterSelect
 Description The lines of the register that are selected, counting from one in
-Description the order the register is showing.
+# the order the register is showing.
 | Attribute | Type    | Default |
 | Line      | Integer | 1       |
 
@@ -1476,13 +1476,13 @@ Attributes CategoryChoice
 
 Attributes DeletionCount
 Description How many transactions a delete actually removed, because a
-Description selection of twenty is too many to count by eye.
+# selection of twenty is too many to count by eye.
 | Attribute | Type    | Default |
 | Removed   | Integer | 0       |
 
 Attributes Recategorised
 Description What came of it, counted, because a selection of twenty is too many
-Description to check by eye.
+# to check by eye.
 | Attribute | Type    | Default |
 | Changed   | Integer | 0       |
 | Refused   | Integer | 0       |
@@ -1490,7 +1490,7 @@ Description to check by eye.
 
 Scenario The menu on a selection offers what can be done to it
 Description Two items to begin with. The menu will grow, and what is already
-Description there is what a month of categorising needs.
+# there is what a month of categorising needs.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1512,7 +1512,7 @@ Then menu items are : MenuItem
 
 Scenario Recategorising a selection puts every line in the new category
 Description Three visits to the same filling station, selected together and
-Description given their category once.
+# given their category once.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1548,9 +1548,9 @@ Then register lines are : RegisterLine CompareOnly
 
 Scenario A split in the selection is left alone and said so
 Description A split has more than one category, so there is no single transaction
-Description to move and choosing one would be a guess that left the book
-Description balanced and silently wrong. The rest of the selection still
-Description changes, and the count says what happened.
+# to move and choosing one would be a guess that left the book
+# balanced and silently wrong. The rest of the selection still
+# changes, and the count says what happened.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1586,8 +1586,8 @@ Then register lines are : RegisterLine CompareOnly
 
 Scenario Deleting a selection removes every transaction in it
 Description Both transactions of each, never one side, because a delete that left
-Description the other side standing would leave the book out of balance. The
-Description confirmation is the window's business and happens before this.
+# the other side standing would leave the book out of balance. The
+# confirmation is the window's business and happens before this.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1618,9 +1618,9 @@ Then register lines are : RegisterLine CompareOnly
 
 Scenario Add payee rule offers the category the transaction already has
 Description The rule writes itself from a line that is already right: the name
-Description gives the pattern, the category is the one sitting on the line.
-Description This is the same rule the categorisation offers in Payees, reached
-Description from the register instead.
+# gives the pattern, the category is the one sitting on the line.
+# This is the same rule the categorisation offers in Payees, reached
+# from the register instead.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -1647,8 +1647,8 @@ Then rule offered is : PayeeRule Vertical
 
 Scenario Add payee rule on an uncategorised line has no category to offer
 Description Nothing has been chosen yet, so the rule comes up with its category
-Description empty and the dialog is where it gets asked for. The name part is
-Description still worth offering: it is the half the program can work out.
+# empty and the dialog is where it gets asked for. The name part is
+# still worth offering: it is the half the program can work out.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1678,16 +1678,16 @@ Then rule offered is : PayeeRule Vertical
 # ---------------------------------------------------------------------------
 
 Description A report that shows its transactions should let one be opened. The
-Description figure is the question; the register is where the answer is, and
-Description where it can be corrected.
+# figure is the question; the register is where the answer is, and
+# where it can be corrected.
 Details The register opened is the one of the real account the transaction
-Details touches -- the bank or the card side. A category has no register to
-Details browse: categories are reached through a report, which is where the
-Details click started.
-Details
-Details The line is selected, and the window scrolls it into view. Twenty years
-Details of history is tens of thousands of lines, so a selection nobody can see
-Details is the same as no selection at all.
+# touches -- the bank or the card side. A category has no register to
+# browse: categories are reached through a report, which is where the
+# click started.
+#
+# The line is selected, and the window scrolls it into view. Twenty years
+# of history is tens of thousands of lines, so a selection nobody can see
+# is the same as no selection at all.
 
 Attributes ReportLineSelect
 Description Which line of the report was clicked, counting from one.
@@ -1696,8 +1696,8 @@ Description Which line of the report was clicked, counting from one.
 
 Define FebruaryOnChecking
 Description The book the next three scenarios read. Two visits to a filling
-Description station and one to a supermarket, so that one category figure has
-Description more than one transaction behind it.
+# station and one to a supermarket, so that one category figure has
+# more than one transaction behind it.
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
 | T1  | Assets:Checking | 2026-02-01 | Shell         | Expenses:Auto:Fuel | -40.00 |
 | T2  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -60.00 |
@@ -1707,8 +1707,8 @@ Description more than one transaction behind it.
 # window, which is what a report tab needs; see the tabs section above.
 Scenario Clicking a transaction in the report opens its register at that line
 Description The fifth line of the report is the second of the two visits to the
-Description filling station. It is the third line of the checking register, and
-Description that is where the click lands.
+# filling station. It is the third line of the checking register, and
+# that is where the click lands.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -1743,8 +1743,8 @@ Then the register line selected is : RegisterSelect
 
 Scenario Clicking a category line in the report opens nothing
 Description A category figure is made of several transactions, so there is no
-Description one of them to go to. The drill-down is what answers that question
-Description and it is a different gesture.
+# one of them to go to. The drill-down is what answers that question
+# and it is a different gesture.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -1772,14 +1772,14 @@ Then panes are : PaneState
 
 Attributes ReportMenuSelect
 Description The transaction lines of the report that are selected, counting the
-Description report's lines from one.
+# report's lines from one.
 | Attribute | Type    | Default |
 | Line      | Integer | 1       |
 
 Scenario The menu on one transaction in the report offers to go to it
 Description One line selected is one transaction, so it can be opened. The
-Description register is where a figure is checked and where it is corrected,
-Description and both are on the menu.
+# register is where a figure is checked and where it is corrected,
+# and both are on the menu.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false      |
@@ -1804,8 +1804,8 @@ Then menu items are : MenuItem
 
 Scenario The menu on several transactions offers only to recategorise them
 Description There is no one transaction to go to, and recategorising the lot at
-Description once is the reason to have selected them. Shift took a run of them
-Description or control picked them out; by here they are a set either way.
+# once is the reason to have selected them. Shift took a run of them
+# or control picked them out; by here they are a set either way.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false      |
@@ -1830,8 +1830,8 @@ Then menu items are : MenuItem
 
 Scenario A category line in the report has no menu
 Description A category figure is made of several transactions and is not one of
-Description them, so there is neither a transaction to go to nor a single
-Description category to change.
+# them, so there is neither a transaction to go to nor a single
+# category to change.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false      |
@@ -1857,22 +1857,22 @@ Then menu items are : MenuItem
 
 Scenario Going to a transaction opens its register at that line
 Description Which register: the one of the real account the transaction
-Description touches. A category has none to browse, and the bank side is where
-Description the figure can be checked against a statement and corrected.
+# touches. A category has none to browse, and the bank side is where
+# the figure can be checked against a statement and corrected.
 Details The line is selected, and the window scrolls it into view. Twenty
-Details years of history is tens of thousands of lines, so a selection nobody
-Details can see is the same as none.
-Details
-Details Named by its ref here because a table has to name it somehow. What the
-Details report hands over is the transaction's own id, which is why the id is
-Details on both pages; see the scenario below.
-Details
-Details A transfer touches two real accounts and so has two registers it could
-Details be read in. Neither is more right than the other -- a payment to a card
-Details is in the current account's register and in the card's, and which one
-Details is wanted depends on what is being checked -- so both are offered and
-Details nothing is opened until one is chosen. Choosing for the reader would be
-Details wrong half the time and silent about it.
+# years of history is tens of thousands of lines, so a selection nobody
+# can see is the same as none.
+#
+# Named by its ref here because a table has to name it somehow. What the
+# report hands over is the transaction's own id, which is why the id is
+# on both pages; see the scenario below.
+#
+# A transfer touches two real accounts and so has two registers it could
+# be read in. Neither is more right than the other -- a payment to a card
+# is in the current account's register and in the card's, and which one
+# is wanted depends on what is being checked -- so both are offered and
+# nothing is opened until one is chosen. Choosing for the reader would be
+# wrong half the time and silent about it.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -1895,7 +1895,7 @@ Then the register line selected is : RegisterSelect
 
 Attributes RegisterOffer
 Description A register a transaction could be read in, in the order the
-Description transaction's transactions name them.
+# transaction's transactions name them.
 | Attribute | Type        | Default |
 | Account   | AccountPath |         |
 
@@ -1906,8 +1906,8 @@ Attributes RegisterChoice
 
 Scenario A transfer offers both of its registers and opens neither
 Description The payment is in the current account and in the card, so there is
-Description nothing to choose between until the reader chooses. Nothing is
-Description opened in the meantime.
+# nothing to choose between until the reader chooses. Nothing is
+# opened in the meantime.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type       | Placeholder |
 | Assets:Checking    | Checking   | false       |
@@ -1958,9 +1958,9 @@ Then the register line selected is : RegisterSelect
 
 Scenario Recategorising from the report moves the figures with it
 Description The same operation as in the register, reached from the report. It
-Description is the one place where recategorising is expected to change what
-Description is on the page: the transaction leaves one category line and joins
-Description another, and both totals move.
+# is the one place where recategorising is expected to change what
+# is on the page: the transaction leaves one category line and joins
+# another, and both totals move.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -1988,7 +1988,7 @@ Attributes TransactionRecategorise
 
 Attributes IdShown
 Description Whether the id of one transaction is shown, and whether the two
-Description places that show it agree.
+# places that show it agree.
 | Attribute | Type      | Default |
 | Date      | Date      |         |
 | Payee     | PayeeName |         |
@@ -1997,11 +1997,11 @@ Description places that show it agree.
 
 Scenario The report and the register show the same transaction id
 Description Shown in both places while the click-through is being checked: it
-Description is how a line on one page is known to be the line on the other.
-Description The id is a clock reading to the millisecond, so no table can write
-Description it down -- what is checked is that it is there and that the two
-Description agree. Expected to come off both pages once the navigation is
-Description trusted; see the naming rule in Transactions for what it is.
+# is how a line on one page is known to be the line on the other.
+# The id is a clock reading to the millisecond, so no table can write
+# it down -- what is checked is that it is there and that the two
+# agree. Expected to come off both pages once the navigation is
+# trusted; see the naming rule in Transactions for what it is.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -2030,36 +2030,36 @@ Then the transaction id shown is : IdShown
 # ---------------------------------------------------------------------------
 
 Description Two windows that show the chart itself rather than the work done in
-Description it -- one of the accounts, one of the categories -- and the menu
-Description reached by right-clicking a line of the tree on the left.
+# it -- one of the accounts, one of the categories -- and the menu
+# reached by right-clicking a line of the tree on the left.
 Details The tree answers "where am I working". It groups the real accounts
-Details under headings, totals each heading, leaves the hidden ones out until
-Details they are asked for, and shows no categories at all. Every one of those
-Details is right for working and wrong for maintaining: a category can only be
-Details renamed if it can be found, and a hidden account can only be brought
-Details back if it can be seen.
-Details
-Details So each listing is one line per node, every node, in path order, with no
-Details headings and nothing left out. The account listing carries the bank and
-Details the number from the account's own dialog, because seeing them together
-Details is how a statement is matched to the account it belongs to; the
-Details category listing carries the alias, because that is the only place it
-Details is ever read.
-Details
-Details Both are windows of their own and not tabs. A tab is something to come
-Details back to, and a listing is opened to find one node, change it, and close
-Details again. Which menu they are on is not a table's business; that they are
-Details reached from a menu rather than from the tree is, because the tree is
-Details the thing they exist to get around.
-Details
-Details Clicking a line opens the editor of the thing on that line, so finding
-Details and changing are one gesture rather than two. The menu on the tree
-Details opens the same editor, because there would be no sense in one account
-Details having two settings windows depending on where it was clicked.
+# under headings, totals each heading, leaves the hidden ones out until
+# they are asked for, and shows no categories at all. Every one of those
+# is right for working and wrong for maintaining: a category can only be
+# renamed if it can be found, and a hidden account can only be brought
+# back if it can be seen.
+#
+# So each listing is one line per node, every node, in path order, with no
+# headings and nothing left out. The account listing carries the bank and
+# the number from the account's own dialog, because seeing them together
+# is how a statement is matched to the account it belongs to; the
+# category listing carries the alias, because that is the only place it
+# is ever read.
+#
+# Both are windows of their own and not tabs. A tab is something to come
+# back to, and a listing is opened to find one node, change it, and close
+# again. Which menu they are on is not a table's business; that they are
+# reached from a menu rather than from the tree is, because the tree is
+# the thing they exist to get around.
+#
+# Clicking a line opens the editor of the thing on that line, so finding
+# and changing are one gesture rather than two. The menu on the tree
+# opens the same editor, because there would be no sense in one account
+# having two settings windows depending on where it was clicked.
 
 Attributes AccountListingRow
 Description One line of the account listing, in path order so a parent reads
-Description above its children.
+# above its children.
 | Attribute     | Type        | Default  |
 | Path          | AccountPath |          |
 | Type          | AccountType | Checking |
@@ -2085,23 +2085,23 @@ Description The line clicked, named by the path on it.
 
 Attributes EditorOpened
 Description Which editor came up and what it came up on. What the account
-Description settings window holds is specified in Accounts; what is said here
-Description is only that clicking a line opens it on the right node.
+# settings window holds is specified in Accounts; what is said here
+# is only that clicking a line opens it on the right node.
 | Attribute | Type | Default |
 | Window    | Text |         |
 | Target    | Text | none    |
 
 Attributes TreeNode
 Description A line of the tree on the left, named the way the tree shows it --
-Description a group heading by its heading, an account by its path.
+# a group heading by its heading, an account by its path.
 | Attribute | Type | Default |
 | Node      | Text |         |
 
 Scenario The account listing is every account, one line each
 Description A placeholder is a line, a hidden account is a line, there are no
-Description group headings, and the categories are not here at all -- they have
-Description a listing of their own. Compare the account list scenarios above,
-Description where each of those four is the other way round.
+# group headings, and the categories are not here at all -- they have
+# a listing of their own. Compare the account list scenarios above,
+# where each of those four is the other way round.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type       | Placeholder | Hidden |
 | Assets             | Checking   | true        | false  |
@@ -2121,8 +2121,8 @@ Then account listing rows are : AccountListingRow CompareOnly
 
 Scenario The account listing shows the bank and the number beside each account
 Description The one place they are read together. An account with neither is
-Description still a line, because a book where some accounts are labelled and
-Description some are not is exactly when the listing is wanted.
+# still a line, because a book where some accounts are labelled and
+# some are not is exactly when the listing is wanted.
 Given the chart of accounts is : ChartOfAccounts
 | Path             | Type       | Placeholder | Hidden |
 | Assets:Checking  | Checking   | false       | false  |
@@ -2145,8 +2145,8 @@ Then account listing rows are : AccountListingRow CompareOnly
 
 Scenario The category listing is every category, which no other window shows
 Description The tree shows none of these, so without this window a category
-Description hidden by mistake cannot be found again, and one named badly
-Description cannot be renamed.
+# hidden by mistake cannot be found again, and one named badly
+# cannot be renamed.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder | Hidden |
 | Assets:Checking    | Checking | false       | false  |
@@ -2190,9 +2190,9 @@ Then the editor opened is : EditorOpened Vertical
 
 Scenario The menu on an account in the tree offers what can be done to it
 Description Delete is offered and refused rather than left off, because an
-Description account that cannot be deleted raises a question -- why not -- and
-Description a greyed item with the reason to hand answers it. Checking has
-Description entries, and an account with entries is not deleted; see Accounts.
+# account that cannot be deleted raises a question -- why not -- and
+# a greyed item with the reason to hand answers it. Checking has
+# entries, and an account with entries is not deleted; see Accounts.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder | Hidden |
 | Assets:Checking    | Checking | false       | false  |
@@ -2213,7 +2213,7 @@ Then menu items are : MenuItem
 
 Scenario The menu on an account with nothing in it offers to delete it
 Description The same menu on the same tree, and the only difference is that
-Description this account has no entries to lose.
+# this account has no entries to lose.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder | Hidden |
 | Assets:Checking    | Checking | false       | false  |
@@ -2234,9 +2234,9 @@ Then menu items are : MenuItem
 
 Scenario The menu on a group heading offers only a new account
 Description A heading is not a thing in the book. It is the kind of account
-Description written on the page, so there is nothing there to edit, hide or
-Description delete -- but it is a perfectly good place to say "another one of
-Description these".
+# written on the page, so there is nothing there to edit, hide or
+# delete -- but it is a perfectly good place to say "another one of
+# these".
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder | Hidden |
 | Assets:Checking | Checking | false       | false  |
@@ -2264,41 +2264,41 @@ Then the editor opened is : EditorOpened Vertical
 # ---------------------------------------------------------------------------
 
 Description Dragging the divider between two headings makes a column wider or
-Description narrower. The width belongs to the column, is the same in every
-Description register, and is kept with the book.
+# narrower. The width belongs to the column, is the same in every
+# register, and is kept with the book.
 Details Every register is the same shape -- the same nine columns in the same
-Details order, whatever the account -- so a width learned in one of them is
-Details right in all of them. Widths held per account would mean widening the
-Details payee column once per account, twenty times, for one preference about
-Details how long a payee name is. Nobody would do that twice.
-Details
-Details Kept with the book rather than with the program, for the same reason
-Details every other setting is: a book is a file, and a book carried to
-Details another machine should look the way it was left. See how a book is
-Details stored in Books. The widths are one row per column there, keyed by the
-Details column's name as this specification writes it -- not by its heading,
-Details because Payment and Deposit are headed differently for different
-Details account types and the width is not.
-Details
-Details Only a column somebody resized is recorded. A column nobody touched
-Details keeps whatever width the program gives it, and that number is not
-Details stated anywhere here, so changing it does not fail a test. This is the
-Details one thing that distinguishes "wide by default", which is appearance,
-Details from "wide because I said so", which is not.
+# order, whatever the account -- so a width learned in one of them is
+# right in all of them. Widths held per account would mean widening the
+# payee column once per account, twenty times, for one preference about
+# how long a payee name is. Nobody would do that twice.
+#
+# Kept with the book rather than with the program, for the same reason
+# every other setting is: a book is a file, and a book carried to
+# another machine should look the way it was left. See how a book is
+# stored in Books. The widths are one row per column there, keyed by the
+# column's name as this specification writes it -- not by its heading,
+# because Payment and Deposit are headed differently for different
+# account types and the width is not.
+#
+# Only a column somebody resized is recorded. A column nobody touched
+# keeps whatever width the program gives it, and that number is not
+# stated anywhere here, so changing it does not fail a test. This is the
+# one thing that distinguishes "wide by default", which is appearance,
+# from "wide because I said so", which is not.
 
 Attributes RegisterColumnWidth
 Description The width of one register column, in pixels. A width is a number
-Description only because a drag produces one; see the rule above for why no
-Description default width appears in any table.
+# only because a drag produces one; see the rule above for why no
+# default width appears in any table.
 | Attribute | Type    | Default |
 | Column    | Text    |         |
 | Width     | Integer | 0       |
 
 BusinessRule A column cannot be dragged away to nothing
 Description A width is clamped to a minimum. A column dragged to no width at
-Description all would be invisible, and a column that cannot be seen cannot be
-Description dragged back, so the program would have lost it until the book was
-Description edited by hand.
+# all would be invisible, and a column that cannot be seen cannot be
+# dragged back, so the program would have lost it until the book was
+# edited by hand.
 Examples: WidthRequested
 | Requested | Stored | Notes                                   |
 | 240       | 240    | Taken as asked                          |
@@ -2314,8 +2314,8 @@ Attributes WidthRequested
 
 Scenario A column widened in one register is that wide in every register
 Description The width is the column's, so moving to another account does not
-Description undo it. Both of these registers have a payee column, and after
-Description the drag there is one answer to how wide it is.
+# undo it. Both of these registers have a payee column, and after
+# the drag there is one answer to how wide it is.
 Given the chart of accounts is : ChartOfAccounts
 | Path             | Type       | Placeholder | Hidden |
 | Assets:Checking  | Checking   | false       | false  |
@@ -2335,9 +2335,9 @@ Then register column widths are : RegisterColumnWidth CompareOnly
 
 Scenario Only the columns somebody resized are recorded
 Description The register has nine columns and one of them was dragged, so one
-Description of them is written down. The other eight are whatever the program
-Description makes them, which is deliberately not a number this
-Description specification knows.
+# of them is written down. The other eight are whatever the program
+# makes them, which is deliberately not a number this
+# specification knows.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder | Hidden |
 | Assets:Checking | Checking | false       | false  |
@@ -2353,7 +2353,7 @@ Then recorded column widths are : RegisterColumnWidth
 
 Scenario A width survives the book being saved and opened again
 Description A preference set once and lost on exit is worse than none, because
-Description it has to be set again every time and it looks like a defect.
+# it has to be set again every time and it looks like a defect.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder | Hidden |
 | Assets:Checking | Checking | false       | false  |
@@ -2377,8 +2377,8 @@ Then register column widths are : RegisterColumnWidth CompareOnly
 
 Scenario A column dragged to nothing keeps the minimum width
 Description The clamp from the rule above, through the window rather than in a
-Description table of its own, because this is the case that would otherwise
-Description lose a column for good.
+# table of its own, because this is the case that would otherwise
+# lose a column for good.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder | Hidden |
 | Assets:Checking | Checking | false       | false  |

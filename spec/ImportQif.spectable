@@ -1,17 +1,17 @@
 Specification ImportQif
 
 Description Reading a QIF export of twenty years of Quicken history: its
-Description sections, its account and category lists, its transactions, its
-Description splits, its transfers and its investment actions.
+# sections, its account and category lists, its transactions, its
+# splits, its transfers and its investment actions.
 Details
-Details This is the migration. It runs once, against a file nobody will produce
-Details again, and whatever it gets wrong is wrong for twenty years. So it
-Details reports everything it did, it refuses rather than guesses wherever a
-Details guess would be unverifiable, and it can be run twice without doubling
-Details the book.
-Details
-Details QIF carries both halves of every transfer. That is the single largest
-Details hazard here, and the rule that collapses them is the heart of this file.
+# This is the migration. It runs once, against a file nobody will produce
+# again, and whatever it gets wrong is wrong for twenty years. So it
+# reports everything it did, it refuses rather than guesses wherever a
+# guess would be unverifiable, and it can be run twice without doubling
+# the book.
+#
+# QIF carries both halves of every transfer. That is the single largest
+# hazard here, and the rule that collapses them is the heart of this file.
 
 # ---------------------------------------------------------------------------
 # The shape of the file
@@ -20,9 +20,9 @@ Details hazard here, and the rule that collapses them is the heart of this file.
 DataType QifSection
 Description What an exclamation-mark header introduces.
 Details Everything after a header belongs to that section until the next one.
-Details The sections marked "observed" are the ones the two files in testdata
-Details actually contain. ClassList and PriceList are not among them: Quicken
-Details replaced classes with tags, and neither file carries a price list.
+# The sections marked "observed" are the ones the two files in testdata
+# actually contain. ClassList and PriceList are not among them: Quicken
+# replaced classes with tags, and neither file carries a price list.
 Examples: EnumerationValues
 | Value           | Notes                                              |
 | AccountList     | !Account -- observed                               |
@@ -50,7 +50,7 @@ Examples: EnumerationValues
 BusinessRule How a header line is read
 Description Case and trailing blanks are ignored, because exports differ in both.
 Details Both files in testdata write "!Type:Bank " and "!Type:Cash " with a
-Details trailing space and the others without, so trimming is not optional.
+# trailing space and the others without, so trimming is not optional.
 Examples: SectionHeader
 | Line                | Section         | Notes                            |
 | !Type:Bank          | BankTxns        |                                  |
@@ -81,10 +81,10 @@ Attributes SectionHeader
 
 BusinessRule What an account block means depends on AutoSwitch
 Description An !Account block is a definition while AutoSwitch is on, and a
-Description change of the current account while it is off.
+# change of the current account while it is off.
 Details A Quicken export of a whole file turns AutoSwitch on, lists every
-Details account, turns it off, and then alternates !Account with a transaction
-Details section once per account. Reading an !Account block as a definition in
+# account, turns it off, and then alternates !Account with a transaction
+# section once per account. Reading an !Account block as a definition in
 Description the second half would lose the account context and put every
 Details transaction in the first account.
 Examples: AccountBlockMeaning
@@ -100,8 +100,8 @@ Attributes AccountBlockMeaning
 
 Scenario A single-account file with no account block at all
 Description The simplest export, and the one a bank or an old Quicken produces.
-Description There is no account name anywhere in it, so the user names the
-Description account to import into, as for a CSV file.
+# There is no account name anywhere in it, so the user names the
+# account to import into, as for a CSV file.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 Given the chart of accounts is : ChartOfAccounts
@@ -143,8 +143,8 @@ Description One record of a transaction section, before it becomes transactions.
 
 Scenario A whole-file export switches account as it goes
 Description The account list defines three accounts; the sections that follow
-Description each name the account their transactions belong to. The second
-Description !Account block is a switch, not a redefinition.
+# each name the account their transactions belong to. The second
+# !Account block is a switch, not a redefinition.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Expenses           | Expense | true        |
@@ -204,19 +204,19 @@ Then qif records read are : QifRecord
 
 BusinessRule How a QIF account type becomes an account type and a path
 Description QIF names a type and a bare name. The tree needs a root, and which
-Description root follows from the type.
+# root follows from the type.
 Details The roots are fixed: Assets, Liabilities, Income, Expenses, Equity. A
-Details user who wants other names renames them afterwards, which renames the
-Details descendants too.
-Details Every type below occurs in the two files in testdata. Invoice, Bill and
-Details Tax are Quicken Home and Business accounts: receivables, payables, and a
-Details tax holding account. The first two have types of their own now that the
-Details Business group exists, which says what they are rather than only which
-Details side of the sheet they fall on. Tax is an asset and nothing more needs
-Details modelling about it for the balances to come out right.
-Details
-Details The first column is the word in the file, which is Quicken's and not
-Details ours. QIF writes Bank where this program now says Checking.
+# user who wants other names renames them afterwards, which renames the
+# descendants too.
+# Every type below occurs in the two files in testdata. Invoice, Bill and
+# Tax are Quicken Home and Business accounts: receivables, payables, and a
+# tax holding account. The first two have types of their own now that the
+# Business group exists, which says what they are rather than only which
+# side of the sheet they fall on. Tax is an asset and nothing more needs
+# modelling about it for the balances to come out right.
+#
+# The first column is the word in the file, which is Quicken's and not
+# ours. QIF writes Bank where this program now says Checking.
 Examples: QifAccountMapping
 | QifType | AccountType        | Root        | ExampleName | ExamplePath          |
 | Bank    | Checking           | Assets      | Checking    | Assets:Checking      |
@@ -232,8 +232,8 @@ Examples: QifAccountMapping
 
 Scenario A credit limit on a card account is kept
 Description Forty-three of the card accounts in the business file carry one. It
-Description is not a balance and posts nothing; it is kept so that a register
-Description can show how much of the card is used.
+# is not a balance and posts nothing; it is kept so that a register
+# can show how much of the card is used.
 Given the file contains
 """
 !Option:AutoSwitch
@@ -263,8 +263,8 @@ Attributes QifAccountMapping
 
 Scenario An account name containing a colon is kept whole
 Description QIF account names are free text and a colon in one would otherwise
-Description split it into two levels of the tree. The colon is replaced on the
-Description way in, and the change is reported.
+# split it into two levels of the tree. The colon is replaced on the
+# way in, and the change is reported.
 Given the file contains
 """
 !Option:AutoSwitch
@@ -289,9 +289,9 @@ Attributes MigrationNote
 
 Scenario An account with a statement balance records an opening balance
 Description The QIF account block may carry the balance and the date it was
-Description taken. It is not an opening balance and is not used as one: it is
-Description kept as the figure to check the import against, as a downloaded
-Description ledger balance is in ImportOfx.
+# taken. It is not an opening balance and is not used as one: it is
+# kept as the figure to check the import against, as a downloaded
+# ledger balance is in ImportOfx.
 Given the file contains
 """
 !Option:AutoSwitch
@@ -319,9 +319,9 @@ Attributes QifStatementBalance
 
 Scenario The category list says which categories are income and which expense
 Description This list is read before any transaction, because it is the only
-Description thing in the file that says whether Bonus is income or an expense.
-Description Without it the sign of the first transaction has to decide, which
-Description is a guess that will be wrong somewhere in twenty years.
+# thing in the file that says whether Bonus is income or an expense.
+# Without it the sign of the first transaction has to decide, which
+# is a guess that will be wrong somewhere in twenty years.
 Given the file contains
 """
 !Type:Cat
@@ -360,8 +360,8 @@ Then accounts created are : ChartOfAccounts
 
 BusinessRule How a category name becomes an account path
 Description Using the income or expense flag from the category list. A name not
-Description in the list falls back to the sign of the amount, and that fallback
-Description is reported every time it is used.
+# in the list falls back to the sign of the amount, and that fallback
+# is reported every time it is used.
 Examples: CategoryMapping
 | CategoryText | InList  | Amount  | AccountPath          | Fallback | Notes                     |
 | Groceries    | Expense | -45.00  | Expenses:Groceries   | false    |                           |
@@ -384,8 +384,8 @@ Attributes CategoryMapping
 
 Scenario Every use of the sign fallback is reported
 Description A category that was not declared is the sort of thing worth looking
-Description at once, so each distinct name is listed with a count rather than
-Description one line per transaction.
+# at once, so each distinct name is listed with a count rather than
+# one line per transaction.
 Given the file contains
 """
 !Type:Cat
@@ -419,17 +419,17 @@ Then migration notes are : MigrationNote
 
 BusinessRule How a QIF date is read
 Description QIF dates are the worst part of the format. The order of the day and
-Description the month is stated in a profile, as for a CSV file, and never
-Description guessed. The apostrophe is Quicken's own century marker.
+# the month is stated in a profile, as for a CSV file, and never
+# guessed. The apostrophe is Quicken's own century marker.
 Details Every date in both files in testdata uses the apostrophe form, and
-Details every part of it may be blank-padded rather than zero-padded -- the
-Details year included, which is the form that is easiest to get wrong. The
-Details year tokens observed run from " 5" to "26" without a gap, so an
-Details apostrophe year is two thousand plus the number, for one digit and for
-Details two alike.
-Details The slash form with a two-digit year does not occur in either file. It
-Details is kept, reading by the window rule of ImportCsv, because an older
-Details export would use it.
+# every part of it may be blank-padded rather than zero-padded -- the
+# year included, which is the form that is easiest to get wrong. The
+# year tokens observed run from " 5" to "26" without a gap, so an
+# apostrophe year is two thousand plus the number, for one digit and for
+# two alike.
+# The slash form with a two-digit year does not occur in either file. It
+# is kept, reading by the window rule of ImportCsv, because an older
+# export would use it.
 Examples: QifDateParse
 | DateOrder | Text        | Date       | Valid | Notes                            |
 | MDY       | 3/12'17     | 2017-03-12 | true  | The commonest shape              |
@@ -451,9 +451,9 @@ Examples: QifDateParse
 
 Scenario A file that proves its own date order is not queried
 Description The business file has 24,324 dates whose second part is above
-Description twelve and none whose first part is, so it can only be month first.
-Description Where the file settles the question the profile is not consulted and
-Description the user is not asked.
+# twelve and none whose first part is, so it can only be month first.
+# Where the file settles the question the profile is not consulted and
+# the user is not asked.
 Given the qif profile is : QifProfile Vertical
 | DateOrder | MDY |
 Given the file contains
@@ -484,7 +484,7 @@ Attributes DateOrderEvidence
 $WIP
 Scenario A file that contradicts the profile it was given is refused
 Description If the file proves DMY and the profile says MDY, one of them is
-Description wrong and importing either way would be a guess.
+# wrong and importing either way would be a guess.
 Given the qif profile is : QifProfile Vertical
 | DateOrder | MDY |
 Given the file contains
@@ -509,8 +509,8 @@ Attributes QifDateParse
 
 Scenario A file whose dates could be read either way stops before importing
 Description The same rule as for a CSV file, and it matters more here: a whole
-Description history read in the wrong order is not something that gets noticed
-Description by looking at one register.
+# history read in the wrong order is not something that gets noticed
+# by looking at one register.
 Given the qif profile is : QifProfile Vertical
 | DateOrder | MDY |
 Given the file contains
@@ -542,7 +542,7 @@ Description The few things about a QIF file that cannot be read from it.
 
 BusinessRule How a QIF amount is read
 Description Newer exports write the amount twice, as U and as T. T is used, and
-Description a disagreement between the two is reported rather than resolved.
+# a disagreement between the two is reported rather than resolved.
 Examples: QifAmountParse
 | Text        | DecimalComma | Amount  | Valid | Notes                        |
 | -45.00      | false        | -45.00  | true  |                              |
@@ -565,8 +565,8 @@ Attributes QifAmountParse
 
 Scenario A record whose U and T amounts disagree is reported
 Description They are the same field written twice and they should never differ.
-Description When they do, something has rewritten the file, and that is worth
-Description knowing before twenty years of it is trusted.
+# When they do, something has rewritten the file, and that is worth
+# knowing before twenty years of it is trusted.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 Given the file contains
@@ -589,7 +589,7 @@ Then migration notes are : MigrationNote
 
 BusinessRule How the C field becomes a cleared status
 Description Quicken has written four different markers over the years and they
-Description mean two things between them.
+# mean two things between them.
 Examples: ClearedMapping
 | Text | Cleared    | Notes                       |
 |      | Uncleared  | Absent or empty             |
@@ -606,8 +606,8 @@ Attributes ClearedMapping
 
 Scenario A cleared marker is applied to the transaction in its own account only
 Description The marker belongs to the account whose section the record is in,
-Description which is exactly the transaction-level status of Transactions. The
-Description other side of the transaction is left uncleared.
+# which is exactly the transaction-level status of Transactions. The
+# other side of the transaction is left uncleared.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 Given the chart of accounts is : ChartOfAccounts
@@ -635,13 +635,13 @@ Then transactions are : Transaction
 
 BusinessRule The split lines decide the categories, not the L field
 Description A split record carries S, E and dollar lines for its real categories,
-Description and its L field holds the literal text "--Split--". Taken as a
-Description category name that text would create an account called --Split--
-Description with a thousand transactions in it.
+# and its L field holds the literal text "--Split--". Taken as a
+# category name that text would create an account called --Split--
+# with a thousand transactions in it.
 Details All 1,026 records in the business file whose L is "--Split--" have
-Details dollar lines, and 19 records have dollar lines while L holds a real
-Details category. So the rule is not "ignore L when it says --Split--" but
-Details "ignore L whenever there are split lines", which covers both.
+# dollar lines, and 19 records have dollar lines while L holds a real
+# category. So the rule is not "ignore L when it says --Split--" but
+# "ignore L whenever there are split lines", which covers both.
 Examples: SplitCategorySource
 | LField             | HasSplitLines | CategoriesFrom | Notes                        |
 | --Split--          | true          | SplitLines     | 1,026 records in the business file |
@@ -692,13 +692,13 @@ Then split lines are : TransactionSplit
 
 BusinessRule How a split line amount becomes a split line's amount
 Description The dollar lines are signed from the point of view of the account the
-Description record is in, and they sum to the T amount. A transaction to the category
-Description is therefore the dollar value with its sign turned round, and the
-Description transaction to the account itself is T.
+# record is in, and they sum to the T amount. A transaction to the category
+# is therefore the dollar value with its sign turned round, and the
+# transaction to the account itself is T.
 Details This is confirmed rather than assumed: in all 1,045 records with dollar
-Details lines across both files, the lines sum exactly to T. In 268 of them the
-Details lines do not all share one sign -- a paycheque has gross pay one way
-Details and deductions the other -- so the rule is per line, not per record.
+# lines across both files, the lines sum exactly to T. In 268 of them the
+# lines do not all share one sign -- a paycheque has gross pay one way
+# and deductions the other -- so the rule is per line, not per record.
 Examples: SplitLineSign
 | T        | Dollar1  | Dollar2  | Dollar3 | AccountPosting | Posting1 | Posting2 | Posting3 | Notes          |
 | -154.50  | -100.00  | -54.50   |         | -154.50        | 100.00   | 54.50    |          | A payment      |
@@ -719,7 +719,7 @@ Attributes SplitLineSign
 
 Scenario A split record becomes one transaction with a split line per category
 Description The S, E and dollar fields repeat, one group per split line, and
-Description they come after the fields of the transaction itself.
+# they come after the fields of the transaction itself.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 Given the chart of accounts is : ChartOfAccounts
@@ -759,8 +759,8 @@ Then split lines are : TransactionSplit
 
 Scenario A split whose lines do not add up to the total is reported and balanced
 Description Refusing the record would lose it. The difference goes to
-Description Uncategorized, where it is visible and can be put right, and the
-Description record is listed in the migration report.
+# Uncategorized, where it is visible and can be put right, and the
+# record is listed in the migration report.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 Given the chart of accounts is : ChartOfAccounts
@@ -796,25 +796,25 @@ Then migration notes are : MigrationNote
 
 DomainTerm TransferHalf : QifRecord
 Description A record whose category field is an account name in square
-Description brackets. Quicken writes one in each of the two accounts, so a
-Description transfer appears in the file twice.
+# brackets. Quicken writes one in each of the two accounts, so a
+# transfer appears in the file twice.
 
 $WIP
 BusinessRule When two transfer halves are the same transfer
 Description The accounts must cross-match and the amounts must be equal and
-Description opposite. The dates need not agree, and where several halves could
-Description pair the nearest date wins.
+# opposite. The dates need not agree, and where several halves could
+# pair the nearest date wins.
 Details This rule was wrong until the real export was measured against. It
-Details required the dates to be the same, and of the 4,025 pairs in the
-Details business file only 3,053 share one: 558 are a day apart, 174 two, 180
-Details three, 41 four or five, and 19 more than ten days apart.
-Details That mattered far more than a count suggests. A half with no partner
-Details still posts both of its sides, because the bracketed name tells us both
-Details accounts -- so each of the 972 pairs the rule missed had its transfer
-Details counted twice, once from each half, in both accounts. The card balances
-Details came out tens of thousands of dollars wrong.
-Details The nearest date is what keeps two separate transfers of one amount
-Details between one pair of accounts pairing with the right halves.
+# required the dates to be the same, and of the 4,025 pairs in the
+# business file only 3,053 share one: 558 are a day apart, 174 two, 180
+# three, 41 four or five, and 19 more than ten days apart.
+# That mattered far more than a count suggests. A half with no partner
+# still posts both of its sides, because the bracketed name tells us both
+# accounts -- so each of the 972 pairs the rule missed had its transfer
+# counted twice, once from each half, in both accounts. The card balances
+# came out tens of thousands of dollars wrong.
+# The nearest date is what keeps two separate transfers of one amount
+# between one pair of accounts pairing with the right halves.
 Examples: TransferPairing
 | Test | Condition                                                          |
 | 1    | One names the account of the other in brackets, and the other names the first |
@@ -829,7 +829,7 @@ Attributes TransferPairing
 
 Scenario Both halves of a transfer become one transaction
 Description This is the rule that stops the migration doubling every transfer
-Description in twenty years of history.
+# in twenty years of history.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
@@ -879,7 +879,7 @@ Then import summary is : ImportSummary Vertical
 
 Scenario Two transfers of the same amount on the same day stay two transfers
 Description Both are real. Each half pairs with exactly one other half, and
-Description once a half is paired it is not available to pair again.
+# once a half is paired it is not available to pair again.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
@@ -938,9 +938,9 @@ Then import summary is : ImportSummary Vertical
 
 Scenario A transfer half with no partner still becomes a whole transfer
 Description The bracketed account names both sides, so the transaction can be
-Description made from one half alone. It happens when only some accounts were
-Description exported, and it is reported because the other account may be
-Description about to be imported from a second file.
+# made from one half alone. It happens when only some accounts were
+# exported, and it is reported because the other account may be
+# about to be imported from a second file.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
@@ -978,8 +978,8 @@ Then migration notes are : MigrationNote
 
 Scenario Dates a day apart do pair
 Description Quicken does not always write both halves with the same date: 558 of
-Description the pairs in the business file are exactly one day apart. Leaving
-Description them unpaired counted each of those transfers twice.
+# the pairs in the business file are exactly one day apart. Leaving
+# them unpaired counted each of those transfers twice.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
@@ -1028,9 +1028,9 @@ Then transactions are : Transaction
 
 Scenario A transfer to the account itself is an opening balance
 Description Quicken writes the opening balance of an account as a transfer from
-Description the account to itself. Left alone it would be refused by the rule
-Description in Transactions against transaction to one account twice, so it is
-Description recognised and posted against Equity.
+# the account to itself. Left alone it would be refused by the rule
+# in Transactions against transaction to one account twice, so it is
+# recognised and posted against Equity.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type   | Placeholder |
 | Equity:Opening Balances | Equity | false       |
@@ -1060,8 +1060,8 @@ Then transactions are : Transaction
 
 Scenario A category name in brackets that is not an account creates the account
 Description Brackets mean an account, so a bracketed name that is not in the
-Description account list is an account that was not exported rather than a
-Description category that happens to have brackets in its name.
+# account list is an account that was not exported rather than a
+# category that happens to have brackets in its name.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type   | Placeholder |
 | Equity:Opening Balances | Equity | false       |
@@ -1091,8 +1091,8 @@ Then migration notes are : MigrationNote
 
 Scenario A class on a category is kept as a tag
 Description Reporting by class is not in this release. Discarding the class
-Description during a migration that runs once would lose it for good, so it is
-Description stored on the transaction and reported as not yet shown anywhere.
+# during a migration that runs once would lose it for good, so it is
+# stored on the transaction and reported as not yet shown anywhere.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 Given the chart of accounts is : ChartOfAccounts
@@ -1132,8 +1132,8 @@ $WIP
 DataType InvestmentMode
 Description What to do with twenty years of trades in an investment account.
 Details Replay is the default because the income it posts belongs in a report
-Details of income. PositionsOnly exists because an account whose history is
-Details not wanted is common, and because the balance is what matters here.
+# of income. PositionsOnly exists because an account whose history is
+# not wanted is common, and because the balance is what matters here.
 Examples: EnumerationValues
 | Value         | Notes                                                        |
 | CashOnly      | This round: only records that move cash out of the account   |
@@ -1171,8 +1171,8 @@ Examples: EnumerationValues
 $WIP
 BusinessRule What each investment action posts
 Description In the terms of Investments: a holding is an account carrying a money
-Description balance, income goes to an Income category, and anything that is only
-Description a change in market value goes to Equity:Market Value Changes.
+# balance, income goes to an Income category, and anything that is only
+# a change in market value goes to Equity:Market Value Changes.
 Examples: ActionPosting
 | Action   | Debited                  | Credited                    | Notes                             |
 | Buy      | The holding account      | The cash account            | Commission to Expenses:Investment:Fees |
@@ -1207,8 +1207,8 @@ Attributes ActionPosting
 $WIP
 Scenario A buy and a reinvested dividend in an investment account
 Description The security name from the Y field becomes an account under the
-Description investment account, named by its symbol when the security list
-Description gives one and by its name when it does not.
+# investment account, named by its symbol when the security list
+# gives one and by its name when it does not.
 Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type   | Placeholder |
 | Income:Dividends            | Income | false       |
@@ -1313,9 +1313,9 @@ Then transactions are : Transaction
 $WIP
 Scenario A stock split changes the shares and the price but posts nothing
 Description The value of the holding is the same before and after, so there is
-Description nothing to post, and transaction a revaluation of zero would clutter
-Description the register. The Q field holds the number of new shares for each
-Description old one, multiplied by ten, which is Quicken's own convention.
+# nothing to post, and transaction a revaluation of zero would clutter
+# the register. The Q field holds the number of new shares for each
+# old one, multiplied by ten, which is Quicken's own convention.
 Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type   | Placeholder |
 | Income:Dividends            | Income | false       |
@@ -1343,8 +1343,8 @@ Then holdings are : Holdings
 BusinessRule How a stock split ratio is read
 Description The Q field is the new shares per old share, times ten.
 Details This is the convention Quicken writes and it is worth confirming
-Details against the file being migrated, because a wrong reading here changes
-Details a share count by a factor of ten.
+# against the file being migrated, because a wrong reading here changes
+# a share count by a factor of ten.
 Examples: SplitRatio
 | QField | Ratio | HeldBefore | HeldAfter | PriceBefore | PriceAfter | Notes       |
 | 20     | 2     | 100        | 200       | 100.0000    | 50.0000    | Two for one |
@@ -1365,8 +1365,8 @@ Attributes SplitRatio
 $WIP
 Scenario An unsupported action is reported and not imported
 Description Employee stock plan actions carry tax meaning this program does not
-Description model. Importing them as something else would be worse than
-Description leaving them out and saying so.
+# model. Importing them as something else would be worse than
+# leaving them out and saying so.
 Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type   | Placeholder |
 | Income:Dividends            | Income | false       |
@@ -1391,8 +1391,8 @@ Then migration notes are : MigrationNote
 $WIP
 Scenario PositionsOnly skips the trades and establishes the holdings
 Description For an account whose twenty years of trades are not wanted. The
-Description holdings that result are posted once, at the last price in the
-Description file, against Equity:Opening Balances.
+# holdings that result are posted once, at the last price in the
+# file, against Equity:Opening Balances.
 Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type   | Placeholder |
 | Income:Dividends            | Income | false       |
@@ -1447,9 +1447,9 @@ Then holdings are : Holdings
 $WIP
 Scenario The price list sets the last price of each security
 Description The price list is a comma-separated oddity in the middle of a
-Description field-per-line format. Only the latest price per security is used:
-Description the earlier ones would each post a revaluation, and twenty years of
-Description daily prices would bury the register.
+# field-per-line format. Only the latest price per security is used:
+# the earlier ones would each post a revaluation, and twenty years of
+# daily prices would bury the register.
 Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type   | Placeholder |
 | Income:Dividends            | Income | false       |
@@ -1480,7 +1480,7 @@ Then migration notes are : MigrationNote
 $WIP
 BusinessRule How a price list line is read
 Description Quoted symbol, bare price, quoted date, and the date uses the same
-Description apostrophe century marker as everywhere else.
+# apostrophe century marker as everywhere else.
 Examples: PriceLine
 | Line                        | Symbol | Price    | AsOf       | Valid |
 | "VTSAX",110.00,"6/28'24"    | VTSAX  | 110.0000 | 2024-06-28 | true  |
@@ -1504,8 +1504,8 @@ Attributes PriceLine
 $WIP
 Scenario Memorized transactions become payee rules
 Description Quicken remembers a payee and the category it takes, which is what
-Description a payee rule is. Bringing them over means the categorising that was
-Description done over twenty years is not done again. See Payees.
+# a payee rule is. Bringing them over means the categorising that was
+# done over twenty years is not done again. See Payees.
 Given the file contains
 """
 !Type:Memorized
@@ -1531,7 +1531,7 @@ Then payee rules created are : PayeeRules
 $WIP
 Scenario A memorized split becomes a remembered split rule
 Description The mortgage split that Payees exists to handle, arriving ready
-Description made.
+# made.
 Given the file contains
 """
 !Type:Memorized
@@ -1567,7 +1567,7 @@ Then remembered split lines created are : RememberedSplitLine
 $WIP
 BusinessRule In what order a QIF file is read
 Description Four passes, because a transaction cannot be placed until the
-Description accounts and categories it names are known.
+# accounts and categories it names are known.
 Examples: MigrationPass
 | Pass | Reads                                     | Why                                      |
 | 1    | Account, category, class and security lists | A transaction names these               |
@@ -1583,8 +1583,8 @@ Attributes MigrationPass
 
 Scenario Nothing is written until the whole file has been read without error
 Description A migration that half succeeded would leave a book that is neither
-Description the old data nor the new, and no way to tell which transactions had
-Description arrived. It is all or nothing.
+# the old data nor the new, and no way to tell which transactions had
+# arrived. It is all or nothing.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
@@ -1612,8 +1612,8 @@ Then transactions are : Transaction
 
 Scenario A migration report is produced whether or not anything was odd
 Description The report is the deliverable of a migration, not a by-product. It
-Description is what makes it possible to say the twenty years came over, and
-Description to find the handful of things that did not.
+# is what makes it possible to say the twenty years came over, and
+# to find the handful of things that did not.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
@@ -1695,8 +1695,8 @@ Attributes MigrationReport
 
 Scenario Every transaction in the book balances after the migration
 Description The check from Transactions, run over the whole book at the end of
-Description the migration. It is the one assertion that catches a mistake in any
-Description of the rules above.
+# the migration. It is the one assertion that catches a mistake in any
+# of the rules above.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
@@ -1727,10 +1727,10 @@ Attributes BookCheck
 $WIP
 Scenario Importing the same QIF file twice does not double the book
 Description A migration gets run again: because the first attempt was abandoned,
-Description or because a second export was taken. Every record carries a
-Description fingerprint of its account, date, amount, payee and category, and
-Description a record whose fingerprint is already present is offered rather
-Description than created, as a CSV row is in ImportCsv.
+# or because a second export was taken. Every record carries a
+# fingerprint of its account, date, amount, payee and category, and
+# a record whose fingerprint is already present is offered rather
+# than created, as a CSV row is in ImportCsv.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
@@ -1763,22 +1763,22 @@ Then import summary is : ImportSummary Vertical
 # ---------------------------------------------------------------------------
 
 Description The first round is about spending reports from banking and card
-Description accounts. This section says exactly which records that includes,
-Description because the answer is not quite "the bank and card sections".
+# accounts. This section says exactly which records that includes,
+# because the answer is not quite "the bank and card sections".
 
 $WIP
 BusinessRule Which sections the first round imports
 Description Every section that carries dated, categorised transactions, which is
-Description more than the bank and card ones.
+# more than the bank and card ones.
 Details The invoice and bill sections are not investment data and not an aside:
-Details across the two files they carry 334 income references and 660 expense
-Details references. They are consulting revenue and business costs, and a
-Details spending report without them is short by that much. They have the same
-Details shape as a bank record -- a date, an amount, a payee, a category,
-Details sometimes splits -- so they are imported the same way, and only their
-Details X and A extension fields are dropped.
-Details The securities side of the investment sections is the one thing left
-Details out. See the rule after this one.
+# across the two files they carry 334 income references and 660 expense
+# references. They are consulting revenue and business costs, and a
+# spending report without them is short by that much. They have the same
+# shape as a bank record -- a date, an amount, a payee, a category,
+# sometimes splits -- so they are imported the same way, and only their
+# X and A extension fields are dropped.
+# The securities side of the investment sections is the one thing left
+# out. See the rule after this one.
 Examples: RoundOneSection
 | Section        | Records | InRound1 | Why                                      |
 | !Type:Bank     | 11,587  | true     | The main case                            |
@@ -1806,17 +1806,17 @@ Attributes RoundOneSection
 $WIP
 BusinessRule Which investment records the first round imports
 Description Those that move cash to somewhere outside the account, and no
-Description others. The securities side is left for a later round.
+# others. The securities side is left for a later round.
 Details The reason this is not simply "skip the investment sections" is that
-Details 21 of those records name a category that a spending report shows:
-Details twenty use Investment transfer, which the category list declares as
-Details income, and one uses Misc Expense. Dropping them would leave two
-Details lines short against Quicken.
-Details The other 848 records are dividends reinvested, buys, sells, shares in
-Details and out, and the one stock split. None of them carries a category --
-Details the holdings are in retirement accounts, so nothing they earn is
-Details reportable spending or income -- and all of them are internal to the
-Details account. Leaving them out changes no figure in a spending report.
+# 21 of those records name a category that a spending report shows:
+# twenty use Investment transfer, which the category list declares as
+# income, and one uses Misc Expense. Dropping them would leave two
+# lines short against Quicken.
+# The other 848 records are dividends reinvested, buys, sells, shares in
+# and out, and the one stock split. None of them carries a category --
+# the holdings are in retirement accounts, so nothing they earn is
+# reportable spending or income -- and all of them are internal to the
+# account. Leaving them out changes no figure in a spending report.
 Examples: RoundOneInvestmentAction
 | Action   | Records | InRound1 | Becomes                                   |
 | XIn      | 11      | true     | Cash in, from the account or category in L |
@@ -1839,10 +1839,10 @@ Attributes RoundOneInvestmentAction
 
 Scenario An investment account exists so that a transfer into it stays a transfer
 Description Nineteen banking and card records transfer to an investment account.
-Description If the account did not exist those nineteen would fall to
-Description Uncategorized, and money moved to a retirement account would read as
-Description spending. So the accounts are created even though their contents are
-Description not imported.
+# If the account did not exist those nineteen would fall to
+# Uncategorized, and money moved to a retirement account would read as
+# spending. So the accounts are created even though their contents are
+# not imported.
 Given the qif profile is : QifProfile Vertical
 | DateOrder      | MDY      |
 | InvestmentMode | CashOnly |
@@ -1902,8 +1902,8 @@ Then report rows are : ReportRow
 $WIP
 Scenario A categorised investment cash movement does reach the spending report
 Description The twenty-one records that keep the investment sections in scope at
-Description all. A fee charged inside the account is an expense wherever it was
-Description charged.
+# all. A fee charged inside the account is an expense wherever it was
+# charged.
 Given the qif profile is : QifProfile Vertical
 | DateOrder      | MDY      |
 | InvestmentMode | CashOnly |
@@ -1940,9 +1940,9 @@ Then report rows are : ReportRow
 
 Scenario The securities side is skipped, counted, and the balance is flagged
 Description A reinvested dividend in a retirement account changes what the
-Description account is worth and changes no spending figure. It is not
-Description imported this round, and the account is marked as holding an
-Description incomplete balance so that nobody reads the number as a valuation.
+# account is worth and changes no spending figure. It is not
+# imported this round, and the account is marked as holding an
+# incomplete balance so that nobody reads the number as a valuation.
 Given the qif profile is : QifProfile Vertical
 | DateOrder      | MDY      |
 | InvestmentMode | CashOnly |
@@ -1988,8 +1988,8 @@ Attributes IncompleteBalance
 
 Scenario An incomplete balance is not offered as a figure to rely on
 Description The account appears in the chart, its transfers are right, and its
-Description balance is marked rather than shown as though it were a valuation.
-Description A net worth report is not in this round, and this is why.
+# balance is marked rather than shown as though it were a valuation.
+# A net worth report is not in this round, and this is why.
 Given the qif profile is : QifProfile Vertical
 | DateOrder      | MDY      |
 | InvestmentMode | CashOnly |
@@ -2014,18 +2014,18 @@ Attributes BalanceDisplay
 # ---------------------------------------------------------------------------
 
 Description Income from an invoice is recognised when the invoice is paid, not
-Description when it is issued. The reports being compared against are on a cash
-Description basis, and that is what cash basis means.
+# when it is issued. The reports being compared against are on a cash
+# basis, and that is what cash basis means.
 Details
-Details This section says what the QIF export makes possible, which is less than
-Details the rule asks for, and it says so rather than approximating quietly.
+# This section says what the QIF export makes possible, which is less than
+# the rule asks for, and it says so rather than approximating quietly.
 
 $WIP
 BusinessRule How the invoice section is shaped
 Description Two kinds of record share the section, told apart by the L field.
 Details Observed in the business file: 425 records, 212 invoices and 213
-Details payments. The counts are almost equal because almost every invoice was
-Details paid.
+# payments. The counts are almost equal because almost every invoice was
+# paid.
 Examples: InvoiceRecordKind
 | Kind    | LField           | HasSplitLines | CarriesCategories | Count |
 | Invoice | --Split--        | true          | true              | 207   |
@@ -2063,28 +2063,28 @@ Attributes InvoiceRecordKind
 $WIP
 BusinessRule What the N field is, and why nothing is posted from it
 Description N on an invoice is the invoice number and N on a payment is the
-Description number of the invoice being paid, which an earlier reading of this
-Description file missed: it examined XI, a record-type flag with two values
-Description across all 425 records, and did not look at N.
+# number of the invoice being paid, which an earlier reading of this
+# file missed: it examined XI, a record-type flag with two values
+# across all 425 records, and did not look at N.
 Details The link is real. 194 of the 212 invoices carry N and 176 of the 213
-Details payments do; in 156 cases the N matches, the amount agrees and the
-Details payee agrees as well, all 156 of them, which is not a coincidence that
-Details is available. Payments also carry the number with a letter appended,
-Details one per instalment: 2820a, 2820b, 2820c and 2820d come to invoice 2820
-Details exactly, and two payments of 4,000.00 settle invoice 2050 of 8,000.00.
-Details
-Details It is not complete enough to post from, which is what matters here. Not
-Details one of the 32 inter-company invoices has a payment carrying its number.
-Details 37 payments carry no N at all. Numbers are reused, and some payments
-Details carry what looks like the customer's own cheque number instead.
-Details
-Details Reconstructing the allocation was tried twelve ways -- by N, by N with
-Details the instalment suffix stripped, by payee and amount, by letting a
-Details combined payment run on to the next open invoice, with and without
-Details credit notes offset -- and the best of them still put uncollected
-Details Consulting at -80.65 against the 975.00 that is wanted. So the N field
-Details is recorded here as a fact about the format and is not used to decide a
-Details figure. The cleared marker below is used instead, and it is one field.
+# payments do; in 156 cases the N matches, the amount agrees and the
+# payee agrees as well, all 156 of them, which is not a coincidence that
+# is available. Payments also carry the number with a letter appended,
+# one per instalment: 2820a, 2820b, 2820c and 2820d come to invoice 2820
+# exactly, and two payments of 4,000.00 settle invoice 2050 of 8,000.00.
+#
+# It is not complete enough to post from, which is what matters here. Not
+# one of the 32 inter-company invoices has a payment carrying its number.
+# 37 payments carry no N at all. Numbers are reused, and some payments
+# carry what looks like the customer's own cheque number instead.
+#
+# Reconstructing the allocation was tried twelve ways -- by N, by N with
+# the instalment suffix stripped, by payee and amount, by letting a
+# combined payment run on to the next open invoice, with and without
+# credit notes offset -- and the best of them still put uncollected
+# Consulting at -80.65 against the 975.00 that is wanted. So the N field
+# is recorded here as a fact about the format and is not used to decide a
+# figure. The cleared marker below is used instead, and it is one field.
 Examples: InvoiceLinkEvidence
 | Question                                      | Answer                                       |
 | Do payments carry categories                  | No; 0 of 213 have split lines                |
@@ -2102,27 +2102,27 @@ Attributes InvoiceLinkEvidence
 
 BusinessRule The cleared marker says whether an invoice was collected
 Description Quicken marks a document cleared once the money is in, and leaves
-Description the C field off one that is still outstanding. That is the whole
-Description test, and it is exact.
+# the C field off one that is still outstanding. That is the whole
+# test, and it is exact.
 Details 203 of the 212 documents in the business file carry C*, and the nine
-Details that carry nothing hold 975.00 of Consulting, 378.75 of Uncategorized
-Details Income - Business and no Royalty. Those are each of the three figures
-Details the all-dates report gives, to the cent.
-Details
-Details Eight of the nine have no payment carrying their number either, which
-Details agrees. The ninth, Convregence for 300.00, does have one -- so it was
-Details paid and never marked -- and Quicken's own report leaves its 300.00 out
-Details as well. The marker is followed rather than second-guessed, because
-Details following it reproduces the report including that inconsistency.
-Details
-Details It governs income and not expense, which was measured rather than
-Details assumed. Four of the nine are reimbursement invoices to Ken's own
-Details companies and their lines are expense categories, not income: they are
-Details claims to be paid back for money already spent on a personal card.
-Details Quicken credits those whether or not the invoice has been collected.
-Details Treating all nine alike moved 2025 expenses from -198,939.00, which
-Details agrees with Quicken to the cent, to -212,342.46 -- out by 13,403.46,
-Details exactly the two reimbursement invoices outstanding at the export.
+# that carry nothing hold 975.00 of Consulting, 378.75 of Uncategorized
+# Income - Business and no Royalty. Those are each of the three figures
+# the all-dates report gives, to the cent.
+#
+# Eight of the nine have no payment carrying their number either, which
+# agrees. The ninth, Convregence for 300.00, does have one -- so it was
+# paid and never marked -- and Quicken's own report leaves its 300.00 out
+# as well. The marker is followed rather than second-guessed, because
+# following it reproduces the report including that inconsistency.
+#
+# It governs income and not expense, which was measured rather than
+# assumed. Four of the nine are reimbursement invoices to Ken's own
+# companies and their lines are expense categories, not income: they are
+# claims to be paid back for money already spent on a personal card.
+# Quicken credits those whether or not the invoice has been collected.
+# Treating all nine alike moved 2025 expenses from -198,939.00, which
+# agrees with Quicken to the cent, to -212,342.46 -- out by 13,403.46,
+# exactly the two reimbursement invoices outstanding at the export.
 Examples: CollectedTest
 | CField | Bills      | Documents | Recognised                              |
 | *      | Income     | 203       | Yes; its categories are income          |
@@ -2139,12 +2139,12 @@ Attributes CollectedTest
 $WIP
 BusinessRule What the cash basis is worth, measured against the all-dates report
 Description Quicken's all-dates report is itself on a cash basis, so the gap
-Description between it and an accrual reading is exactly what was invoiced and
-Description never collected. That gave three equations, and the cleared marker
-Description satisfies all three.
+# between it and an accrual reading is exactly what was invoiced and
+# never collected. That gave three equations, and the cleared marker
+# satisfies all three.
 Details Ken confirmed the first of them from his own records before the code was
-Details written: an unpaid invoice from 2008 for 975.00. A report difference
-Details predicted a fact about the business and the fact held.
+# written: an unpaid invoice from 2008 for 975.00. A report difference
+# predicted a fact about the business and the fact held.
 Examples: CashBasisTarget
 | Category                        | QuickenAllDates | OnAccrual | Uncollected | Ours      |
 | Consulting                      | 311128.75       | 312103.75 | 975.00      | 311128.75 |
@@ -2161,25 +2161,25 @@ Attributes CashBasisTarget
 
 BusinessRule Where an invoice that was never collected is parked
 Description It cannot credit an income category, because no money came. It
-Description cannot credit nothing, because then the book would not balance and a
-Description trial balance would be out by the amount outstanding. So it credits
-Description a holding account, and the receivable stands against it.
+# cannot credit nothing, because then the book would not balance and a
+# trial balance would be out by the amount outstanding. So it credits
+# a holding account, and the receivable stands against it.
 Details It is a real account, which is what keeps it out of a spending report,
-Details and its balance is the whole of the income that was invoiced and never
-Details earned: 907.80 in the business file, being 975.00 of Consulting and
-Details 378.75 of Uncategorized Income - Business less a credit note of 445.95.
-Details That is the figure that answers "is anything outstanding", because the
-Details receivable itself nets to zero -- payments in that file come to the same
-Details total as invoices even though five invoices are open, which is an
-Details inconsistency in the source and not in the import.
-Details
-Details A collected invoice is posted in its own period, as it always was, and
-Details its receivable and categories are the two sides of one transaction. So
-Details is an uncollected one that bills for an expense rather than income.
-Details
-Details The asset holding account is the symmetric case, for a bill whose lines
-Details are income. Neither file in testdata has one, so it is specified and
-Details untested.
+# and its balance is the whole of the income that was invoiced and never
+# earned: 907.80 in the business file, being 975.00 of Consulting and
+# 378.75 of Uncategorized Income - Business less a credit note of 445.95.
+# That is the figure that answers "is anything outstanding", because the
+# receivable itself nets to zero -- payments in that file come to the same
+# total as invoices even though five invoices are open, which is an
+# inconsistency in the source and not in the import.
+#
+# A collected invoice is posted in its own period, as it always was, and
+# its receivable and categories are the two sides of one transaction. So
+# is an uncollected one that bills for an expense rather than income.
+#
+# The asset holding account is the symmetric case, for a bill whose lines
+# are income. Neither file in testdata has one, so it is specified and
+# untested.
 Examples: InvoiceHoldingAccount
 | Document | DocumentAccount            | HoldingAccount                  |
 | Invoice  | Assets:Customer~Invoices   | Liabilities:Unrecognised~Income |
@@ -2193,23 +2193,23 @@ Attributes InvoiceHoldingAccount
 
 BusinessRule Which period a collected invoice is reported in
 Description Its own, not the date the money arrived. This is a deviation from a
-Description strict cash basis and it is deliberate, because the alternative
-Description cannot be done honestly from this export.
+# strict cash basis and it is deliberate, because the alternative
+# cannot be done honestly from this export.
 Details The payment date is not recoverable for a large part of the file: no
-Details inter-company invoice has a payment carrying its number and 37 payments
-Details carry none at all, so dating recognition by payment means guessing the
-Details date for those. Measured, guessing it moved 2021 expenses from 7,500.00
-Details away from Quicken to 27,777.72 away, and 2022 from 7,500.00 to
-Details 25,196.24. Transaction in the invoice's own period left every one of those
-Details figures where it already was.
-Details
-Details The all-dates totals are the same under either reading, because an
-Details invoice collected at all is collected once. Only the year moves, and
-Details only for an invoice that crossed a year end before being paid.
-Details
-Details Put to Ken with the measurement above, and accepted: the deviation is
-Details fine. So this is a settled choice and not a thing to revisit when the
-Details next QIF arrives.
+# inter-company invoice has a payment carrying its number and 37 payments
+# carry none at all, so dating recognition by payment means guessing the
+# date for those. Measured, guessing it moved 2021 expenses from 7,500.00
+# away from Quicken to 27,777.72 away, and 2022 from 7,500.00 to
+# 25,196.24. Transaction in the invoice's own period left every one of those
+# figures where it already was.
+#
+# The all-dates totals are the same under either reading, because an
+# invoice collected at all is collected once. Only the year moves, and
+# only for an invoice that crossed a year end before being paid.
+#
+# Put to Ken with the measurement above, and accepted: the deviation is
+# fine. So this is a settled choice and not a thing to revisit when the
+# next QIF arrives.
 Examples: RecognitionPeriod
 | Case                                    | ReportedIn           | Why                               |
 | Invoiced and collected in the same year | That year            | The two readings agree            |
@@ -2224,8 +2224,8 @@ Attributes RecognitionPeriod
 
 Scenario A collected invoice is income in its own period
 Description Marked cleared, so the money came. The receivable and the category
-Description are the two sides of one transaction, exactly as a bank record with
-Description a category is.
+# are the two sides of one transaction, exactly as a bank record with
+# a category is.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Customer Invoices |
 Given the chart of accounts is : ChartOfAccounts
@@ -2291,7 +2291,7 @@ Then split lines are : TransactionSplit
 
 Scenario An invoice never collected owes but earns nothing
 Description The 975.00 from 2008 that Ken confirmed was never paid. It has no
-Description cleared marker, so the amount is owed and none of it is income.
+# cleared marker, so the amount is owed and none of it is income.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Customer Invoices |
 Given the chart of accounts is : ChartOfAccounts
@@ -2332,9 +2332,9 @@ Attributes UnpaidInvoice
 
 Scenario An uncollected invoice claiming an expense still credits it
 Description The four recent invoices to Warp And Bytes and Ken Pugh, Inc. are
-Description claims to be paid back for charges Ken put on a personal card. Their
-Description lines are expense categories, so the expense is credited when the
-Description claim is made, whether or not the company has paid it yet.
+# claims to be paid back for charges Ken put on a personal card. Their
+# lines are expense categories, so the expense is credited when the
+# claim is made, whether or not the company has paid it yet.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Customer Invoices |
 Given the chart of accounts is : ChartOfAccounts
@@ -2369,11 +2369,11 @@ Then unpaid invoices are : UnpaidInvoice
 
 Scenario A credit note is an uncollected invoice for a negative amount
 Description Three of the nine carry negative amounts. Calling them unpaid
-Description invoices in the report would be misleading, so they are named for
-Description what they are.
+# invoices in the report would be misleading, so they are named for
+# what they are.
 Details The chart is spelled out rather than taken as previous, because Misc
-Details Income has to be known to be income: the amount of a credit note runs
-Details the other way, so the sign of the transaction would place it under Expenses.
+# Income has to be known to be income: the amount of a credit note runs
+# the other way, so the sign of the transaction would place it under Expenses.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Customer Invoices |
 Given the chart of accounts is : ChartOfAccounts
@@ -2401,12 +2401,12 @@ Then unpaid invoices are : UnpaidInvoice
 
 Scenario A bill posts its expense whether or not it has been paid
 Description A bill is a payable, and its lines are expense categories, so the
-Description cleared marker does not govern it: the expense is recorded when the
-Description bill arrives either way. Ken pays most bills the day they arrive, so
-Description the distinction rarely shows.
+# cleared marker does not govern it: the expense is recorded when the
+# bill arrives either way. Ken pays most bills the day they arrive, so
+# the distinction rarely shows.
 Details Unverified against Quicken. The bills are in the S corp book and no
-Details report for that book has been exported yet, so this follows the rule
-Details measured on the invoices rather than evidence of its own.
+# report for that book has been exported yet, so this follows the rule
+# measured on the invoices rather than evidence of its own.
 Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type      | Placeholder |
 | Liabilities:Business Bills  | OtherDebt | false       |
@@ -2458,8 +2458,8 @@ Then transactions are : Transaction
 $WIP
 Scenario The migration report totals what invoicing left unresolved
 Description Four numbers that say how much of the invoice history did not
-Description resolve, so that the size of it is known before the figures are
-Description trusted.
+# resolve, so that the size of it is known before the figures are
+# trusted.
 Given import target is : ImportTarget Vertical
 | AccountPath | Liabilities:Business Bills |
 Given the chart of accounts is : ChartOfAccounts
@@ -2491,10 +2491,10 @@ Attributes InvoiceReconciliation
 $WIP
 Scenario Invoicing was used in two spells, and the report says so
 Description 180 of the 212 invoices fall between 2006 and 2011, none at all
-Description between 2012 and 2016, and 32 from 2017 onwards. The gap is not a
-Description fault: the practice changed to banking the money against its
-Description category directly. Saying so in the report stops the gap being
-Description read as missing data.
+# between 2012 and 2016, and 32 from 2017 onwards. The gap is not a
+# fault: the practice changed to banking the money against its
+# category directly. Saying so in the report stops the gap being
+# read as missing data.
 When invoice years summarised
 Then invoice years are : InvoiceYearSpan
 | Span      | FromYear | ToYear | Invoices | Note                              |
@@ -2515,16 +2515,16 @@ Attributes InvoiceYearSpan
 # ---------------------------------------------------------------------------
 
 Description The rules in this section were written from the files rather than
-Description from the format, and each says what was observed.
+# from the format, and each says what was observed.
 
 BusinessRule What encoding a QIF file is read as
 Description Tried as UTF-8 first; read as Windows-1252 if that fails.
 Details The two files differ. pughkilleen.QIF is valid UTF-8, with the
-Details registered-trade-mark sign written as two bytes. kenpugh.QIF is not
-Details valid UTF-8: it contains a lone byte 0x96, which is an en dash in
-Details Windows-1252 and an illegal lead byte in UTF-8. Reading either as the
-Details wrong one of the two either fails or produces mojibake, so the choice
-Details is made by trying, not by asking.
+# registered-trade-mark sign written as two bytes. kenpugh.QIF is not
+# valid UTF-8: it contains a lone byte 0x96, which is an en dash in
+# Windows-1252 and an illegal lead byte in UTF-8. Reading either as the
+# wrong one of the two either fails or produces mojibake, so the choice
+# is made by trying, not by asking.
 Examples: EncodingChoice
 | Observed                       | ReadAs       | Notes                        |
 | Decodes as UTF-8               | UTF8         | pughkilleen.QIF              |
@@ -2539,14 +2539,14 @@ Attributes EncodingChoice
 
 BusinessRule A field whose value will not parse is a continuation of the one before
 Description QIF has no way to quote a value, so a value containing a newline
-Description becomes a line that begins with whatever character follows it. A
-Description line beginning with D whose value is not a date is not a date.
+# becomes a line that begins with whatever character follows it. A
+# line beginning with D whose value is not a date is not a date.
 Details This happens only in the invoice sections of these files: thirteen such
-Details lines in kenpugh.QIF, inside !Type:Invoice. Elsewhere every D parses.
-Details The D fields that look wrong in !Type:Cat and !Account are not
-Details continuations at all: D means Description in those sections, which is
-Details the other reason a field code cannot be read without knowing the
-Details section it is in.
+# lines in kenpugh.QIF, inside !Type:Invoice. Elsewhere every D parses.
+# The D fields that look wrong in !Type:Cat and !Account are not
+# continuations at all: D means Description in those sections, which is
+# the other reason a field code cannot be read without knowing the
+# section it is in.
 Examples: ContinuationLine
 | Section       | Line                     | Reading                        |
 | !Type:Invoice | D4/ 2'24                 | The date of the record         |
@@ -2564,7 +2564,7 @@ Attributes ContinuationLine
 $WIP
 BusinessRule What a field code means depends on its section
 Description The same letter is a different field in a different section, which is
-Description why the reader tracks the section and never reads a record alone.
+# why the reader tracks the section and never reads a record alone.
 Examples: FieldCodeBySection
 | Code | InTransaction | InCategoryList | InAccountList   |
 | D    | Date          | Description    | Description     |
@@ -2584,10 +2584,10 @@ Attributes FieldCodeBySection
 
 Scenario Invoice extension and address fields are dropped, and counted
 Description The X fields carry the line items, terms and numbering of a Quicken
-Description Home and Business invoice, and the A fields carry a transaction address.
-Description Neither has anywhere to go in a register. The transaction part of
-Description the record is imported and the rest is reported as dropped, so that
-Description nothing is lost quietly.
+# Home and Business invoice, and the A fields carry a transaction address.
+# Neither has anywhere to go in a register. The transaction part of
+# the record is imported and the rest is reported as dropped, so that
+# nothing is lost quietly.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Receivables |
 Given the chart of accounts is : ChartOfAccounts
@@ -2621,9 +2621,9 @@ Then migration notes are : MigrationNote
 
 Scenario An invoice section posts to the receivables account
 Description An invoice is money owed to the business, which is an asset, and a
-Description bill is money owed by it. Neither needs anything beyond the two
-Description transactions every other transaction has. When the income is recognised
-Description is a separate question; see the invoice section further down.
+# bill is money owed by it. Neither needs anything beyond the two
+# transactions every other transaction has. When the income is recognised
+# is a separate question; see the invoice section further down.
 Given the file contains
 """
 !Option:AutoSwitch
@@ -2651,9 +2651,9 @@ Then accounts created are : ChartOfAccounts
 $WIP
 Scenario No price list means the last price comes from the last transaction
 Description Neither file has a !Type:Prices section, so there is no price to
-Description revalue a holding to. The price carried is the one from the most
-Description recent transaction that stated a price, and the holdings report
-Description shows how old it is.
+# revalue a holding to. The price carried is the one from the most
+# recent transaction that stated a price, and the holdings report
+# shows how old it is.
 Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type       | Placeholder |
 | Assets:Portfolio            | Brokerage  | true        |
@@ -2707,10 +2707,10 @@ Then holdings report rows are : HoldingsReportRow CompareOnly
 
 Scenario No statement balance means the import cannot check itself
 Description The account blocks in these files carry a name, a type and
-Description sometimes a credit limit, and never a statement balance. So the
-Description check that ImportOfx makes against a downloaded ledger balance has
-Description nothing to compare with, and the migration says so rather than
-Description reporting that everything agreed.
+# sometimes a credit limit, and never a statement balance. So the
+# check that ImportOfx makes against a downloaded ledger balance has
+# nothing to compare with, and the migration says so rather than
+# reporting that everything agreed.
 Given the file contains
 """
 !Option:AutoSwitch
@@ -2731,7 +2731,7 @@ Then migration notes are : MigrationNote
 
 Scenario The Cash action moves cash in an investment account
 Description Forty-one records in the business file use it. It is a cash movement
-Description with a category, and nothing to do with securities.
+# with a category, and nothing to do with securities.
 Given the chart of accounts is : ChartOfAccounts
 | Path                     | Type       | Placeholder |
 | Assets:Portfolio         | Brokerage  | true        |
@@ -2760,8 +2760,8 @@ Then transactions are : Transaction CompareOnly
 $WIP
 Scenario The one stock split in the business file
 Description Read with the ratio rule confirmed below. The holding is iShares US
-Description Transportation on 7 March 2024, which was a four-for-one split, and
-Description the Q field holds 40. That is what settles the factor of ten.
+# Transportation on 7 March 2024, which was a four-for-one split, and
+# the Q field holds 40. That is what settles the factor of ten.
 Given the chart of accounts is : ChartOfAccounts
 | Path                     | Type       | Placeholder |
 | Assets:Portfolio         | Brokerage  | true        |
@@ -2791,10 +2791,10 @@ Then holdings are : Holdings
 
 Scenario The amount is written twice and the two always agree
 Description Every one of the 42,322 transaction records across both files that
-Description carries both U and T has them equal. The check is kept because a
-Description disagreement would matter, and it is expected never to fire.
+# carries both U and T has them equal. The check is kept because a
+# disagreement would matter, and it is expected never to fire.
 Details The only records where the two differ are in !Type:Template, which is
-Details a report definition rather than a transaction and is not imported.
+# a report definition rather than a transaction and is not imported.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 Given the file contains
@@ -2817,9 +2817,9 @@ Then migration notes are : MigrationNote
 $WIP
 BusinessRule What the two files settled, and what is still assumed
 Description Each point was a place where being wrong would be expensive and
-Description quiet. Most are now settled by reading the files in testdata. The
-Description ones still marked Assumed have no evidence either way in those
-Description files, and would only matter to a different export.
+# quiet. Most are now settled by reading the files in testdata. The
+# ones still marked Assumed have no evidence either way in those
+# files, and would only matter to a different export.
 Examples: DialectRisk
 | Point                  | Status  | Evidence                                                                 |
 | Date order             | Settled | 24,324 dates have a second part above 12 and none a first part above 12  |
@@ -2848,10 +2848,10 @@ Attributes DialectRisk
 
 Scenario Transfer pairing is the one unsettled rule that matters at scale
 Description There are 8,228 bracketed category fields in the business file, so
-Description a wrong pairing rule is wrong thousands of times. The counts are
-Description therefore in the migration report, where they can be checked
-Description against what Quicken says the balances are. See
-Description AcceptanceAgainstQuicken.
+# a wrong pairing rule is wrong thousands of times. The counts are
+# therefore in the migration report, where they can be checked
+# against what Quicken says the balances are. See
+# AcceptanceAgainstQuicken.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |

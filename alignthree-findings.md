@@ -452,6 +452,13 @@ To reproduce: take any `BusinessRule` with a multi-line `Description` and an
 `analyze_cli` on the folder. 4 diagnostics, all warnings, and one of them is the
 rule going dark.
 
+**Since taken up here.** The whole folder now writes continuations as `#`:
+2,350 lines across the fourteen files, with only the first line of each
+paragraph keeping its keyword. 0 diagnostics, the same 467 tests. It reads the
+way it should and it is the discarding form, so every one of those lines is a
+`\` waiting for the leading marker to arrive — which is the request above, and
+the reason it is worth having.
+
 ---
 
 ## What was not AlignThree's fault

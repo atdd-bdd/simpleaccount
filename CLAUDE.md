@@ -96,6 +96,23 @@ glue-header style, are in `../SpecStudioExampleTests/CPlusPlus/ExampleTests/`.
 - Examples table column headings must match the attribute names exactly —
   `AssumedHere`, not `Assumed here`. A mismatched heading is a silently
   ignored column plus a missing-column error.
+- **A wrapped `Description` or `Details` repeats nothing: the lines after the
+  first start with `#`.** Only the first line of a paragraph carries the
+  keyword, and a paragraph break is a bare `#`.
+
+  ```
+  Description The round trip is the whole of what storage has to do, so it is
+  # stated as one scenario over a book with something in it: a chart,
+  # a transaction naming both its accounts, its memo, and its cleared status.
+  ```
+
+  This is a stopgap, deliberately chosen. AlignThree has no continuation
+  marker yet (finding 10 in `alignthree-findings.md` asks for a leading `\`),
+  and a `#` line is a comment, so only the first line is inside the model:
+  anything that ever renders a named comment will show one line of the
+  paragraph. When `\` arrives, every one of these becomes `\` and the text
+  comes back. Nothing else changes — the analyzer is silent either way and the
+  generated tests are byte-identical.
 - **Never write `as previous`.** Spell the table out, or use a table-form
   `Define`. It compiles to a no-argument call that establishes nothing, and the
   only reason it ever appears to work is that a `Background`'s givens are

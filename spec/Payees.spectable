@@ -1,15 +1,15 @@
 Specification Payees
 
 Description Turning what the bank calls a payee into what the user calls it, and
-Description remembering which category that payee usually takes.
+# remembering which category that payee usually takes.
 Details
-Details A bank writes a payee as a terminal record: HARRIS TEETER #231 DURHAM NC
-Details 01/15. A report grouped by that is useless, because every shop appears
-Details once per branch and once per visit. The rules here collapse that back to
-Details one name, and carry the category that was chosen last time.
-Details
-Details Nothing here guesses. A rule exists because the user made it, or because
-Details the user categorised a transaction and agreed to remember it.
+# A bank writes a payee as a terminal record: HARRIS TEETER #231 DURHAM NC
+# 01/15. A report grouped by that is useless, because every shop appears
+# once per branch and once per visit. The rules here collapse that back to
+# one name, and carry the category that was chosen last time.
+#
+# Nothing here guesses. A rule exists because the user made it, or because
+# the user categorised a transaction and agreed to remember it.
 
 # ---------------------------------------------------------------------------
 # The rule
@@ -27,7 +27,7 @@ Description One rule: what to look for, and what to do when it is found.
 DataType MatchType
 Description How a pattern is compared with the raw name from the bank.
 Details The comparison ignores case in every form. Contains is the default
-Details because it is what a user means by typing part of a name.
+# because it is what a user means by typing part of a name.
 Examples: EnumerationValues
 | Value      | Notes                                                |
 | Contains   | The pattern appears somewhere in the raw name        |
@@ -41,7 +41,7 @@ Collection PayeeRules
 
 BusinessRule How a pattern is matched
 Description Each match type against the same raw name, so the difference is
-Description visible in one place.
+# visible in one place.
 Examples: MatchCase
 | MatchType  | Pattern          | RawName                       | Matches |
 | Contains   | HARRIS TEETER    | HARRIS TEETER #231 DURHAM NC  | true    |
@@ -64,10 +64,10 @@ Attributes MatchCase
 
 BusinessRule Which rule wins when several match
 Description The most specific rule, which is taken to be the one with the longest
-Description pattern. Length is a crude measure, and it is used because it needs no
-Description explaining: a user who adds a longer pattern expects it to win.
+# pattern. Length is a crude measure, and it is used because it needs no
+# explaining: a user who adds a longer pattern expects it to win.
 Details Ties are broken by match type, in the order Exact, StartsWith, Regex,
-Details Contains, and then by the order the rules were added.
+# Contains, and then by the order the rules were added.
 Examples: RulePrecedence
 | PatternA      | TypeA    | PatternB         | TypeB    | Winner           | Notes                       |
 | AMAZON        | Contains | AMAZON MKTPLACE  | Contains | AMAZON MKTPLACE  | Longer pattern              |
@@ -103,7 +103,7 @@ Then transactions are : Transaction
 
 Scenario A rule with no category tidies the name only
 Description Some payees take a different category each time. The rule is still
-Description worth having, because it is what makes the report readable.
+# worth having, because it is what makes the report readable.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -125,7 +125,7 @@ Then transactions are : Transaction
 
 Scenario With no rule the raw name is kept
 Description Nothing is invented. The raw name is what the bank said, and it is
-Description kept so that a rule written later can still match it.
+# kept so that a rule written later can still match it.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -144,8 +144,8 @@ Then transactions are : Transaction
 
 Scenario The raw name is kept even after a rule has renamed the payee
 Description A rule written next year must be able to match what the bank sent
-Description this year, so the original text is stored alongside the tidied name
-Description rather than replaced by it.
+# this year, so the original text is stored alongside the tidied name
+# rather than replaced by it.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -192,7 +192,7 @@ Then transactions are : Transaction
 
 Scenario A disabled rule is passed over
 Description Rules are kept rather than deleted, because a rule that was wrong
-Description once is usually wanted again in a changed form.
+# once is usually wanted again in a changed form.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -218,7 +218,7 @@ Then transactions are : Transaction
 Entity PayeeSplitRule
 Description A rule whose category side is several categories in fixed proportion.
 Details A mortgage payment is the case this exists for: the same division of
-Details interest, principal and escrow every month, with the amounts changing.
+# interest, principal and escrow every month, with the amounts changing.
 | Attribute | Type        | Default | Notes                              |
 | Pattern   | Text        |         |                                    |
 | MatchType | MatchType   | Contains |                                   |
@@ -243,8 +243,8 @@ Attributes RememberedSplitLine
 $WIP
 Scenario A remembered split in fixed amounts is offered
 Description The escrow and principal are the amounts last used. The total of the
-Description downloaded transaction differs, so the shortfall is reported rather
-Description than silently absorbed into one line.
+# downloaded transaction differs, so the shortfall is reported rather
+# than silently absorbed into one line.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
 | Assets:Checking           | Checking | false       |
@@ -294,8 +294,8 @@ Attributes SplitShortfall
 $WIP
 Scenario A remembered split whose amounts no longer add up reports the shortfall
 Description The payment went up by twenty dollars in January, as it does. The
-Description remembered amounts are offered unchanged and the difference is
-Description shown, for the user to put where it belongs.
+# remembered amounts are offered unchanged and the difference is
+# shown, for the user to put where it belongs.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
 | Assets:Checking           | Checking | false       |
@@ -327,8 +327,8 @@ Then split shortfall is : SplitShortfall Vertical
 $WIP
 Scenario A remembered split in percentages divides the total
 Description Percentages are applied to the downloaded total, so the lines always
-Description add up. The rounding goes to the largest line, so that the sum is
-Description exact and the adjustment lands where it is least visible.
+# add up. The rounding goes to the largest line, so that the sum is
+# exact and the adjustment lands where it is least visible.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type    | Placeholder |
 | Assets:Checking         | Checking | false       |
@@ -362,7 +362,7 @@ Then split shortfall is : SplitShortfall Vertical
 $WIP
 BusinessRule How a percentage split rounds
 Description Each line is rounded to the cent, and whatever is left over after
-Description that is added to the largest line.
+# that is added to the largest line.
 Examples: PercentageSplit
 | Total   | PercentA | PercentB | AmountA | AmountB | Notes                       |
 | 1000.00 | 70       | 30       | 700.00  | 300.00  | Exact                       |
@@ -385,8 +385,8 @@ Attributes PercentageSplit
 
 Scenario Categorising an uncategorised transaction offers to remember it
 Description This is how the rules get written: by doing the work once. The offer
-Description is made, not taken, because the user is the only one who knows
-Description whether this payee always takes this category.
+# is made, not taken, because the user is the only one who knows
+# whether this payee always takes this category.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -417,23 +417,23 @@ Then rule offered is : PayeeRule Vertical
 
 BusinessRule The significant part of a name is what a rule is made from
 Description A bank writes a payee as the shop, then whatever that shop's till,
-Description branch or town adds to it. The shop is the part that repeats; the
-Description rest changes every visit, and a rule made from the whole name would
-Description match once and never again.
+# branch or town adds to it. The shop is the part that repeats; the
+# rest changes every visit, and a rule made from the whole name would
+# match once and never again.
 Details So a rule is offered on the part that identifies the payee, and the rest
-Details is dropped. What is dropped is anything from the first thing that carries
-Details a digit onwards -- a store number, a till number, a date, a reference --
-Details and then any trailing word that is a state code or one of the handful of
-Details words a card network adds.
-Details
-Details The raw name is kept on the transaction either way, so a rule written next
-Details year can still match what the bank sent this year, and shortening the
-Details pattern loses nothing.
-Details
-Details This is a guess, and it is offered rather than applied. A payee whose name
-Details genuinely carries a digit -- 7-ELEVEN, SHELL 24 HOUR -- would be cut too
-Details short, and the user is the one who can see that. The first word is always
-Details kept for that reason: a pattern of nothing would match everything.
+# is dropped. What is dropped is anything from the first thing that carries
+# a digit onwards -- a store number, a till number, a date, a reference --
+# and then any trailing word that is a state code or one of the handful of
+# words a card network adds.
+#
+# The raw name is kept on the transaction either way, so a rule written next
+# year can still match what the bank sent this year, and shortening the
+# pattern loses nothing.
+#
+# This is a guess, and it is offered rather than applied. A payee whose name
+# genuinely carries a digit -- 7-ELEVEN, SHELL 24 HOUR -- would be cut too
+# short, and the user is the one who can see that. The first word is always
+# kept for that reason: a pattern of nothing would match everything.
 Examples: SignificantName
 | RawName                      | Pattern         | Notes                           |
 | SHELL OIL 3344               | SHELL OIL       | The store number is dropped     |
@@ -453,8 +453,8 @@ Attributes SignificantName
 
 Scenario Accepting a learned rule categorises the transactions already there
 Description Twenty years of imported history is mostly uncategorised. A rule is
-Description only useful if it can be applied backwards, so accepting one offers
-Description to do exactly that, and says how many it would change.
+# only useful if it can be applied backwards, so accepting one offers
+# to do exactly that, and says how many it would change.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -488,7 +488,7 @@ Attributes RuleApplication
 
 Scenario Applying a rule backwards does not touch a transaction already categorised
 Description A category chosen by hand is a decision, and a rule applied in bulk
-Description does not overrule it. Only Uncategorized transactions are changed.
+# does not overrule it. Only Uncategorized transactions are changed.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -517,7 +517,7 @@ Then transactions are : Transaction
 
 Scenario A rule does not change a reconciled transaction
 Description A bulk change that altered a reconciled balance would undo a
-Description reconciliation nobody asked it to touch.
+# reconciliation nobody asked it to touch.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -541,15 +541,15 @@ Then would change : RuleApplication Vertical
 # ---------------------------------------------------------------------------
 
 Description Accepting one new rule offers to apply it backwards; this is the
-Description same idea run on demand over every rule already saved, reached
-Description from Accounts > Assign payees according to rules. It is what turns
-Description twenty years of imported history, mostly sitting in Uncategorized,
-Description into a book that matches how it is actually read.
+# same idea run on demand over every rule already saved, reached
+# from Accounts > Assign payees according to rules. It is what turns
+# twenty years of imported history, mostly sitting in Uncategorized,
+# into a book that matches how it is actually read.
 
 Scenario Assigning payees according to rules sorts a whole month in one pass
 Description Three rules, four transactions: one each rule should catch, one
-Description already categorised by hand that no rule should touch, and the
-Description book comes out with every one of them accounted for.
+# already categorised by hand that no rule should touch, and the
+# book comes out with every one of them accounted for.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -587,8 +587,8 @@ Then transactions are : Transaction
 
 Scenario A transaction is categorised by the rule that matches its payee
 Description Destination already is the category: a rule rewrites it directly
-Description rather than finding a transaction to rewrite. See the section on naming
-Description both accounts directly in Transactions.spectable.
+# rather than finding a transaction to rewrite. See the section on naming
+# both accounts directly in Transactions.spectable.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -612,9 +612,9 @@ Then transaction is : Transaction Vertical CompareOnly
 
 Scenario Assigning payees according to rules leaves a reconciled transaction untouched
 Description A finished reconciliation agreed with a statement, name and all. A
-Description bulk pass across the whole book is not the time to find out that
-Description touching the name as well as the category would have been safe
-Description here and was not worth risking.
+# bulk pass across the whole book is not the time to find out that
+# touching the name as well as the category would have been safe
+# here and was not worth risking.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -646,9 +646,9 @@ Then transactions are : Transaction
 
 Scenario The payee list is what the transactions use, not a separate table
 Description There is no list of payees to maintain. The list offered for
-Description autocompletion is the distinct payees of the transactions, most
-Description recently used first, which means it needs no upkeep and can never
-Description disagree with the register.
+# autocompletion is the distinct payees of the transactions, most
+# recently used first, which means it needs no upkeep and can never
+# disagree with the register.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -671,7 +671,7 @@ Attributes PayeeListEntry
 
 Scenario Choosing a payee offers the category it took last time
 Description The last category used for a payee is the best guess there is, and
-Description it costs nothing to offer because the register already knows it.
+# it costs nothing to offer because the register already knows it.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -695,8 +695,8 @@ Attributes CategorySuggestion
 
 Scenario A payee renamed everywhere keeps its history together
 Description Twenty years of imports leave the same shop under several spellings.
-Description Merging them is a rename applied to every transaction, and it is
-Description what makes a report by payee worth reading.
+# Merging them is a rename applied to every transaction, and it is
+# what makes a report by payee worth reading.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -721,24 +721,24 @@ Attributes PayeeMerge
 # ---------------------------------------------------------------------------
 
 Description The rules are worked on in a window of their own: every rule listed,
-Description and one added, changed, disabled or removed. Until there was such a
-Description window a rule could only be made by agreeing to remember a
-Description categorisation, which meant one that came out slightly wrong could
-Description not be put right.
+# and one added, changed, disabled or removed. Until there was such a
+# window a rule could only be made by agreeing to remember a
+# categorisation, which meant one that came out slightly wrong could
+# not be put right.
 
 BusinessRule The rules are listed in the order they are tried
 Description Which rule wins is decided by the pattern and the match type rather
-Description than by where it sits in the list, so a list in the order it was
-Description typed would leave a reader working out the precedence in their head.
+# than by where it sits in the list, so a list in the order it was
+# typed would leave a reader working out the precedence in their head.
 Details So the list is in the order the rules are tried: longest pattern first,
-Details ties by match type in the order Exact, StartsWith, Regex, Contains, and
-Details then by the order they were added. A rule above another in the list is
-Details a rule that beats it, which is the question a reader of this window
-Details actually has.
-Details
-Details Disabled rules are listed with the rest, in their place, rather than
-Details being moved to the bottom or hidden: a rule is disabled to stop it
-Details applying, not to get it out of the way.
+# ties by match type in the order Exact, StartsWith, Regex, Contains, and
+# then by the order they were added. A rule above another in the list is
+# a rule that beats it, which is the question a reader of this window
+# actually has.
+#
+# Disabled rules are listed with the rest, in their place, rather than
+# being moved to the bottom or hidden: a rule is disabled to stop it
+# applying, not to get it out of the way.
 Examples: RuleOrdering
 | FirstPattern    | FirstType | SecondPattern | SecondType | Notes                                |
 | AMAZON MKTPLACE | Contains  | AMAZON        | Contains   | Longer pattern is tried first        |
@@ -748,8 +748,8 @@ Examples: RuleOrdering
 
 Attributes RuleOrdering
 Description Two rules, named in the order the list puts them in. The glue adds
-Description them in the opposite order, because a rule about which comes first
-Description is worth nothing if it only holds when they were typed that way.
+# them in the opposite order, because a rule about which comes first
+# is worth nothing if it only holds when they were typed that way.
 | Attribute     | Type      | Default  |
 | FirstPattern  | Text      |          |
 | FirstType     | MatchType | Contains |
@@ -759,7 +759,7 @@ Description is worth nothing if it only holds when they were typed that way.
 
 Attributes RuleListRow
 Description One line of the rule list. Position is the place in the order the
-Description rules are tried, counted from one.
+# rules are tried, counted from one.
 | Attribute | Type        | Default  |
 | Position  | Integer     | 0        |
 | Pattern   | Text        |          |
@@ -770,7 +770,7 @@ Description rules are tried, counted from one.
 
 Scenario The rule list is in the order the rules are tried
 Description The three were added in the order below, which is not the order they
-Description are tried in.
+# are tried in.
 Given payee rules are : PayeeRules
 | Pattern         | MatchType | Payee         | Category           | Enabled |
 | SHELL           | Contains  | Shell         | Expenses:Auto:Fuel | true    |
@@ -785,14 +785,14 @@ Then rule list rows are : RuleListRow
 
 Attributes RuleSelect
 Description Which rule is meant, by what it looks for. Two rules may share a
-Description pattern, so the match type is part of naming one.
+# pattern, so the match type is part of naming one.
 | Attribute | Type      | Default  |
 | Pattern   | Text      |          |
 | MatchType | MatchType | Contains |
 
 Attributes RuleEdit
 Description A rule being added or changed. Which rule is being changed is named
-Description by the pattern and match type it had before.
+# by the pattern and match type it had before.
 | Attribute    | Type        | Default  |
 | WasPattern   | Text        | none     |
 | WasMatchType | MatchType   | Contains |
@@ -824,7 +824,7 @@ Then rule list rows are : RuleListRow
 
 Scenario A rule changed applies in its changed form from then on
 Description The pattern was too narrow to catch the second filling station, so
-Description it is shortened. This is the repair the window exists for.
+# it is shortened. This is the repair the window exists for.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -852,9 +852,9 @@ Then transactions are : Transaction
 
 Scenario A rule deleted stops applying
 Description Disabling is the usual move, because a rule that was wrong once is
-Description usually wanted again in a changed form. Deleting is for a rule that
-Description was a mistake, and it is offered because a list that only grows
-Description becomes one nobody reads.
+# usually wanted again in a changed form. Deleting is for a rule that
+# was a mistake, and it is offered because a list that only grows
+# becomes one nobody reads.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -884,8 +884,8 @@ Then transactions are : Transaction
 
 Scenario Deleting a rule leaves the transactions it already categorised alone
 Description A rule applies when a transaction is imported or categorised, not
-Description continuously. Deleting one is not a way to undo the categorising it
-Description did, and must not quietly rewrite a year of history.
+# continuously. Deleting one is not a way to undo the categorising it
+# did, and must not quietly rewrite a year of history.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -908,8 +908,8 @@ Then transactions are : Transaction
 
 Scenario A rule with nothing to look for is refused
 Description A pattern of nothing is contained in every name, so the rule would
-Description rename every payee in the book. It is refused where it is typed
-Description rather than being allowed to reach the rules.
+# rename every payee in the book. It is refused where it is typed
+# rather than being allowed to reach the rules.
 When rule added : RuleEdit Vertical
 | Pattern   | ""                 |
 | MatchType | Contains           |
@@ -922,8 +922,8 @@ Then rule refused because : RuleRefusal Vertical
 
 Scenario A rule with no name to record is refused
 Description The point of a rule is the name it records instead. One with no
-Description payee would blank the name the bank sent and leave nothing in its
-Description place.
+# payee would blank the name the bank sent and leave nothing in its
+# place.
 When rule added : RuleEdit Vertical
 | Pattern   | HARRIS TEETER      |
 | MatchType | Contains           |
