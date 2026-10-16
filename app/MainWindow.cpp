@@ -1939,8 +1939,12 @@ void MainWindow::refresh() {
     refreshing_ = true;
     syncTabs();
     refreshAccounts();
+    // One index for every open register, rather than one per register: they
+    // are all read from the same book, and the sort and the three lookups a
+    // register needs are the same for all of them.
+    const reg::BookIndex book(chart_, transactions_, splits_);
     for (int position = 1; position <= tabs_->count(); ++position)
-        refreshPane(position);
+        refreshPane(position, book);
     refreshReviewPanel();
     refreshFindPanel();
     refreshing_ = was;
@@ -2022,7 +2026,7 @@ void MainWindow::refreshAccounts() {
     refreshing_ = was;
 }
 
-void MainWindow::refreshPane(int tabPosition) {
+void MainWindow::refreshPane(int tabPosition, const reg::BookIndex& book) {
     const bool was = refreshing_;
     refreshing_ = true;
     TabWidgets& p = tabWidgets_[static_cast<std::size_t>(tabPosition - 1)];
@@ -2040,8 +2044,7 @@ void MainWindow::refreshPane(int tabPosition) {
         static_cast<std::size_t>(tabPosition - 1) < rows.size()
             ? rows[static_cast<std::size_t>(tabPosition - 1)].account
             : std::string();
-    const std::vector<reg::Line> lines =
-        reg::lines_for(chart_, transactions_, splits_, account);
+    const std::vector<reg::Line> lines = reg::lines_for(book, account);
     // The two amount columns are headed with the words the account uses: a
     // credit card is charged and paid, not paid and deposited into.
     const chart::Account* a = account.empty() ? nullptr : chart_.find(account);

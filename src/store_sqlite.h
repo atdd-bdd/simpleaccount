@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <system_error>
 #include <string>
@@ -818,33 +819,51 @@ public:
         // Read regardless of whether the caller wants the lines back: a
         // split's own sides are only in this table now, and the book has to
         // have all of them whether or not splits is null.
-        std::vector<ledger::TransactionSplit> all_splits;
-        for (const ledger::Transaction& t : *transactions) {
+        //
+        // Both of these were a statement per transaction -- a prepare, a bind
+        // and a step for each of 37,000 transactions, twice over, which was
+        // most of the time it took to open the author's own book. One query
+        // each, grouped by the transaction it belongs to, says the same thing.
+        // The lines are then appended transaction by transaction, in the order
+        // the transactions are in, so the vector reads exactly as it did
+        // before: by transaction in date order, and by line within one.
+        std::map<std::string, std::vector<ledger::TransactionSplit>> split_lines;
+        {
             detail::Statement s(db_.get(),
-                "SELECT destination_ref, amount_cents, memo FROM transaction_splits "
-                "WHERE transaction_id = ? ORDER BY line");
+                "SELECT transaction_id, destination_ref, amount_cents, memo "
+                "FROM transaction_splits ORDER BY transaction_id, line");
             if (!s.ok()) return {true, s.why()};
-            s.bind(1, t.id.value());
             while (s.step_row()) {
                 ledger::TransactionSplit one;
-                one.transaction_id = t.id;
-                one.destination = chart::Ref(s.integer(0));
-                one.amount = Money::from_cents(s.integer(1));
-                one.memo = s.text(2);
-                all_splits.push_back(one);
+                one.transaction_id = types::TransactionId(s.text(0));
+                one.destination = chart::Ref(s.integer(1));
+                one.amount = Money::from_cents(s.integer(2));
+                one.memo = s.text(3);
+                split_lines[one.transaction_id.value()].push_back(one);
             }
+        }
+        std::vector<ledger::TransactionSplit> all_splits;
+        for (const ledger::Transaction& t : *transactions) {
+            const auto at = split_lines.find(t.id.value());
+            if (at == split_lines.end()) continue;
+            all_splits.insert(all_splits.end(), at->second.begin(), at->second.end());
         }
         if (splits != nullptr) *splits = all_splits;
 
-        for (ledger::Transaction& t : *transactions) {
+        std::map<std::string, std::vector<ledger::ImportId>> marks;
+        {
             detail::Statement mark(db_.get(),
-                "SELECT source, id FROM transaction_import_ids "
-                "WHERE transaction_id = ? ORDER BY source");
+                "SELECT transaction_id, source, id FROM transaction_import_ids "
+                "ORDER BY transaction_id, source");
             if (!mark.ok()) return {true, mark.why()};
-            mark.bind(1, t.id.value());
             while (mark.step_row())
-                t.import_ids.push_back(ledger::ImportId{
-                    types::import_source_from_string(mark.text(0)), mark.text(1)});
+                marks[mark.text(0)].push_back(ledger::ImportId{
+                    types::import_source_from_string(mark.text(1)), mark.text(2)});
+        }
+        for (ledger::Transaction& t : *transactions) {
+            const auto at = marks.find(t.id.value());
+            if (at == marks.end()) continue;
+            t.import_ids = at->second;
         }
         ledger::add_to_book(book, *accounts, *transactions, all_splits);
 

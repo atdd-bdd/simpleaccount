@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <map>
 #include <string>
 #include <vector>
 #include "account_type.h"
@@ -65,29 +66,101 @@ inline std::string displayed(const chart::Chart& accounts, const std::string& pa
 
 // Selecting a placeholder shows everything beneath it: a placeholder takes no
 // transactions of its own, so a register of only its own would be empty.
-inline std::vector<Line> lines_for(
-        const chart::Chart& accounts,
-        const std::vector<ledger::Transaction>& transactions,
-        const std::vector<ledger::TransactionSplit>& splits,
-        const std::string& account) {
+// Everything a register needs that belongs to the book rather than to the
+// account being read: a ref's path, a transaction's split lines, which
+// accounts a transaction starts from, and the order the transactions are read
+// in. Built once and handed to every register that is being built, because
+// the work is identical for all of them -- a find over the 111 registers of
+// the author's book was 111 sorts of the whole book, which was four of its
+// four and a quarter seconds.
+//
+// Like chart::RefIndex it holds pointers into what it was built from, so it is
+// good for one computation only: build it, use it, let it go. An index that
+// outlives the book it indexes is how a transaction ends up reported against
+// the wrong account.
+class BookIndex {
+public:
+    BookIndex(const chart::Chart& accounts,
+              const std::vector<ledger::Transaction>& transactions,
+              const std::vector<ledger::TransactionSplit>& splits)
+        : accounts_(&accounts), transactions_(&transactions), refs_(accounts) {
+        // A transaction's split lines by where the transaction is, not by its
+        // id: the register asks for them per transaction per account, and a
+        // map keyed by a thirty-character string answers that in string
+        // compares. The id map is kept for a caller holding only an id.
+        for (std::size_t i = 0; i < transactions.size(); ++i)
+            where_[transactions[i].id.value()] = i;
+        parts_.assign(transactions.size(), {});
+        for (const ledger::TransactionSplit& s : splits) {
+            const auto at = where_.find(s.transaction_id.value());
+            if (at != where_.end()) parts_[at->second].push_back(&s);
+        }
+        for (const ledger::Transaction& t : transactions)
+            ++starts_from_[t.source_account.value()];
+        // Date, then the order the transactions were entered. Entry order is
+        // stable: importing more never reshuffles lines already there, so the
+        // running balance against a line does not change under the reader.
+        for (std::size_t i = 0; i < transactions.size(); ++i) order_.push_back(i);
+        std::stable_sort(order_.begin(), order_.end(),
+                         [&transactions](std::size_t x, std::size_t y) {
+                             return transactions[x].date < transactions[y].date;
+                         });
+    }
+
+    const chart::Chart& accounts() const { return *accounts_; }
+    const chart::RefIndex& refs() const { return refs_; }
+    const std::vector<ledger::Transaction>& transactions() const { return *transactions_; }
+    const std::vector<std::size_t>& order() const { return order_; }
+
+    // Nothing is at this position, which is what a transaction the index has
+    // never heard of answers to.
+    static constexpr std::size_t nowhere = static_cast<std::size_t>(-1);
+
+    std::size_t position_of(const types::TransactionId& id) const {
+        const auto at = where_.find(id.value());
+        return at == where_.end() ? nowhere : at->second;
+    }
+
+    const std::vector<const ledger::TransactionSplit*>& split_parts(
+            std::size_t position) const {
+        static const std::vector<const ledger::TransactionSplit*> none;
+        return position < parts_.size() ? parts_[position] : none;
+    }
+
+    const std::vector<const ledger::TransactionSplit*>& split_parts(
+            const types::TransactionId& id) const {
+        return split_parts(position_of(id));
+    }
+
+    // How many transactions start from this account, which is what says
+    // whether a transfer into it is matched.
+    int starts_from(const chart::Ref& account) const {
+        const auto at = starts_from_.find(account.value());
+        return at == starts_from_.end() ? 0 : at->second;
+    }
+
+private:
+    const chart::Chart* accounts_;
+    const std::vector<ledger::Transaction>* transactions_;
+    chart::RefIndex refs_;
+    std::map<std::string, std::size_t> where_;
+    std::vector<std::vector<const ledger::TransactionSplit*>> parts_;
+    std::map<long long, int> starts_from_;
+    std::vector<std::size_t> order_;
+};
+
+inline std::vector<Line> lines_for(const BookIndex& book, const std::string& account) {
+    const chart::Chart& accounts = book.accounts();
+    const chart::RefIndex& index = book.refs();
+    const std::vector<ledger::Transaction>& transactions = book.transactions();
     const chart::Account* a = accounts.find(account);
     const int sign = a != nullptr ? types::display_sign(a->type) : 1;
 
-    // Date, then the order the transactions were entered. Entry order is stable:
-    // importing more never reshuffles lines already there, so the running balance
-    // against a line does not change under the reader.
-    std::vector<std::size_t> order;
-    for (std::size_t i = 0; i < transactions.size(); ++i) order.push_back(i);
-    std::stable_sort(order.begin(), order.end(),
-                     [&](std::size_t x, std::size_t y) {
-                         return transactions[x].date < transactions[y].date;
-                     });
-
     std::vector<Line> out;
     Money running;
-    for (std::size_t index : order) {
-        const ledger::Transaction& t = transactions[index];
-        const std::string source_path = accounts.path_for_ref(t.source_account);
+    for (std::size_t position : book.order()) {
+        const ledger::Transaction& t = transactions[position];
+        const std::string& source_path = index.path_for(t.source_account);
 
         // This account is the one the transaction itself lives in: its own
         // line, named the way the register has always named one.
@@ -105,14 +178,14 @@ inline std::vector<Line> lines_for(
 
             if (chart::is_split(t.destination)) {
                 line.category = "--Split--";
-                for (const ledger::TransactionSplit& s : ledger::split_lines_of(splits, t.id)) {
+                for (const ledger::TransactionSplit* s : book.split_parts(position)) {
                     if (!line.category_detail.empty()) line.category_detail += '\n';
-                    line.category_detail += accounts.path_for_ref(s.destination) + "   " +
-                                            s.amount.in_register();
-                    if (!s.memo.empty()) line.category_detail += "   " + s.memo;
+                    line.category_detail += index.path_for(s->destination) + "   " +
+                                            s->amount.in_register();
+                    if (!s->memo.empty()) line.category_detail += "   " + s->memo;
                 }
             } else {
-                const std::string other = accounts.path_for_ref(t.destination);
+                const std::string& other = index.path_for(t.destination);
                 line.category = other.empty() ? std::string() : detail::displayed(accounts, other);
                 line.category_detail = other;
             }
@@ -129,8 +202,9 @@ inline std::vector<Line> lines_for(
         // "A split seen from one of its category registers shows only its
         // own line" in TransactionRegister.spectable.
         if (chart::is_split(t.destination)) {
-            for (const ledger::TransactionSplit& s : ledger::split_lines_of(splits, t.id)) {
-                const std::string s_path = accounts.path_for_ref(s.destination);
+            for (const ledger::TransactionSplit* part : book.split_parts(position)) {
+                const ledger::TransactionSplit& s = *part;
+                const std::string& s_path = index.path_for(s.destination);
                 if (!chart::Chart::is_descendant_or_self(s_path, account)) continue;
                 Line line;
                 line.ref = t.ref.value();
@@ -153,7 +227,7 @@ inline std::vector<Line> lines_for(
             continue;
         }
         if (t.destination.is_none()) continue;
-        const std::string dest_path = accounts.path_for_ref(t.destination);
+        const std::string& dest_path = index.path_for(t.destination);
         if (!chart::Chart::is_descendant_or_self(dest_path, account)) continue;
 
         // A real destination that is itself another transaction's own
@@ -161,11 +235,13 @@ inline std::vector<Line> lines_for(
         // shows this movement from its own side, so showing it again here
         // would be the same line twice. See the two-rows-for-a-transfer rule
         // in Transactions.spectable.
-        if (accounts.is_real(t.destination)) {
-            bool paired = false;
-            for (const ledger::Transaction& other : transactions)
-                if (&other != &t && other.source_account == t.destination) { paired = true; break; }
-            if (paired) continue;
+        if (index.is_real(t.destination)) {
+            int others = book.starts_from(t.destination);
+            // This transaction is counted in that figure if it is the one
+            // whose two sides are the same account, and it is not its own
+            // other half.
+            if (t.source_account == t.destination) others -= 1;
+            if (others > 0) continue;
         }
 
         Line line;
@@ -187,6 +263,18 @@ inline std::vector<Line> lines_for(
         out.push_back(line);
     }
     return out;
+}
+
+// One register on its own, for a caller with nothing else to build. A caller
+// building several -- a find, or a window refreshing every open tab -- should
+// make one BookIndex and hand it to each, rather than paying for a new one per
+// register.
+inline std::vector<Line> lines_for(
+        const chart::Chart& accounts,
+        const std::vector<ledger::Transaction>& transactions,
+        const std::vector<ledger::TransactionSplit>& splits,
+        const std::string& account) {
+    return lines_for(BookIndex(accounts, transactions, splits), account);
 }
 
 // --- what the register shows, beyond the lines themselves -------------------

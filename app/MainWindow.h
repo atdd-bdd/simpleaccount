@@ -131,7 +131,10 @@ private:
     // tab that just opened, removes one for a tab that closed, and brings
     // the rest's titles and active state into step.
     void syncTabs();
-    void refreshPane(int tabPosition);
+    // The index is the book's, not the pane's: a refresh builds one and every
+    // open register is read from it, rather than each of them building the
+    // same thing again. See reg::BookIndex.
+    void refreshPane(int tabPosition, const reg::BookIndex& book);
     // Makes the bottom panel's tab bar match workspace_->bottom_panel_tabs().
     // The pages are the window's own two widgets rather than new ones, so a
     // tab that closes and opens again is the same widget both times.

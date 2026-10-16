@@ -76,21 +76,18 @@ struct NetWorthTie {
 
 namespace detail {
 
+// Both of these were a walk over every posting in the book, once per account
+// on the sheet. The ledger answers the same two questions from its own index
+// now; these stay as names, because a balance sheet reads better for having
+// them.
 inline Money subtree_balance_as_at(const ledger::Ledger& book, const std::string& path,
                                    const types::Date& as_at) {
-    Money total;
-    for (const ledger::DatedPosting& p : book.postings())
-        if (p.date <= as_at && chart::Chart::is_descendant_or_self(p.account.value(), path))
-            total += p.amount;
-    return total;
+    return book.total_balance_as_at(path, as_at);
 }
 
 inline Money own_balance_as_at(const ledger::Ledger& book, const std::string& path,
                                const types::Date& as_at) {
-    Money total;
-    for (const ledger::DatedPosting& p : book.postings())
-        if (p.date <= as_at && p.account.value() == path) total += p.amount;
-    return total;
+    return book.balance_as_at(path, as_at);
 }
 
 }  // namespace detail

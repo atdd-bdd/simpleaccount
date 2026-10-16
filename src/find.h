@@ -1,6 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <cctype>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -79,24 +80,23 @@ inline bool contains_folded(const std::string& haystack, const std::string& need
 // read under. For a split that is each destination, which is why the
 // transaction is looked up rather than the line being read on its own: the
 // line says --Split-- and nothing more.
-inline std::vector<std::string> other_sides(
-        const chart::Chart& accounts,
-        const std::vector<ledger::Transaction>& transactions,
-        const std::vector<ledger::TransactionSplit>& splits,
-        const reg::Line& line) {
+// The transaction a line came from is asked for by id rather than searched
+// for: looking it up was a walk over the whole book per result, and a find on
+// the author's book has thirty thousand results.
+inline std::vector<std::string> other_sides(const reg::BookIndex& book,
+                                            const reg::Line& line) {
     if (line.category != "--Split--") {
         if (line.category_detail.empty()) return {};
         return {line.category_detail};
     }
-    for (const ledger::Transaction& t : transactions) {
-        if (t.id.value() != line.id) continue;
-        std::vector<std::string> out;
-        out.push_back(accounts.path_for_ref(t.source_account));
-        for (const ledger::TransactionSplit& s : ledger::split_lines_of(splits, t.id))
-            out.push_back(accounts.path_for_ref(s.destination));
-        return out;
-    }
-    return {};
+    const std::size_t where = book.position_of(types::TransactionId(line.id));
+    if (where == reg::BookIndex::nowhere) return {};
+    const ledger::Transaction& t = book.transactions()[where];
+    std::vector<std::string> out;
+    out.push_back(book.refs().path_for(t.source_account));
+    for (const ledger::TransactionSplit* s : book.split_parts(where))
+        out.push_back(book.refs().path_for(s->destination));
+    return out;
 }
 
 }  // namespace detail
@@ -129,9 +129,12 @@ inline std::vector<FindResultRow> find(const chart::Chart& accounts,
                                        const FindCriteria& criteria,
                                        const std::string& current) {
     std::vector<FindResultRow> out;
+    // One index for the whole find. Every register in scope is built from the
+    // same book, and building one per register was all but a second in four
+    // of what a find cost. See reg::BookIndex.
+    const reg::BookIndex book(accounts, transactions, splits);
     for (const std::string& account : registers_in_scope(accounts, criteria, current)) {
-        for (const reg::Line& line :
-             reg::lines_for(accounts, transactions, splits, account)) {
+        for (const reg::Line& line : reg::lines_for(book, account)) {
             if (!criteria.text.empty() &&
                 !detail::contains_folded(line.payee, criteria.text) &&
                 !detail::contains_folded(line.memo, criteria.text))
@@ -148,7 +151,7 @@ inline std::vector<FindResultRow> find(const chart::Chart& accounts,
                 bool named = chart::Chart::is_descendant_or_self(account, criteria.account);
                 if (!named)
                     for (const std::string& other :
-                         detail::other_sides(accounts, transactions, splits, line))
+                         detail::other_sides(book, line))
                         if (chart::Chart::is_descendant_or_self(other, criteria.account))
                             named = true;
                 if (!named) continue;

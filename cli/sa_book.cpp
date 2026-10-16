@@ -10,6 +10,7 @@
 //   sa_book list
 //   sa_book new      <book>
 //   sa_book show     <book>
+//   sa_book time     <book>
 //   sa_book account  <book> <path> <Type> [opening] [YYYY-MM-DD]
 //   sa_book entry    <book> <YYYY-MM-DD> <payee> <account> <category> <amount>
 //   sa_book register <book> <account>
@@ -19,6 +20,7 @@
 //   sa_book report   <book> <from> <to> [--quicken]
 #include <cstdio>
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -26,6 +28,8 @@
 #include <fstream>
 #include <sstream>
 
+#include "balance_sheet.h"
+#include "find.h"
 #include "ofx_import.h"
 #include "register_lines.h"
 #include "report.h"
@@ -33,6 +37,7 @@
 #include "payee_rules.h"
 #include "store_sqlite.h"
 #include "transaction_id.h"
+#include "ui_model.h"
 
 namespace {
 
@@ -42,6 +47,7 @@ int usage() {
         "  sa_book list\n"
         "  sa_book new      <book>\n"
         "  sa_book show     <book>\n"
+        "  sa_book time     <book>              where the seconds go\n"
         "  sa_book account  <book> <path> <Type> [opening] [YYYY-MM-DD]\n"
         "  sa_book entry    <book> <YYYY-MM-DD> <payee> <account> <category> <amount>\n"
         "  sa_book register <book> <account>\n"
@@ -229,6 +235,93 @@ int main(int argc, char** argv) {
                             types::to_string(a.type).c_str(), held.in_register().c_str());
             }
         }
+        return 0;
+    }
+
+    // Where the seconds go. Each line is one call on the book named, so an
+    // optimisation can be argued from a measurement rather than from a
+    // reading of the code -- and so the same measurement afterwards says
+    // whether it worked. Not part of the program: this is a dev tool, like
+    // the scripts in tools/.
+    if (command == "time") {
+        const auto now = []() { return std::chrono::steady_clock::now(); };
+        const auto since = [](std::chrono::steady_clock::time_point from) {
+            return std::chrono::duration<double, std::milli>(
+                       std::chrono::steady_clock::now() - from).count();
+        };
+
+        // Loaded again, so the figure is the load itself rather than
+        // everything the dispatch above did before reaching here.
+        Loaded again;
+        store::Failure second;
+        auto at = now();
+        if (!load(name, &again, &second)) return complain(second);
+        std::printf("%-30s %9.1f ms\n", "open and read the book", since(at));
+        std::printf("%-30s %9zu\n", "transactions", again.transactions.size());
+        std::printf("%-30s %9zu\n", "postings", again.ledger.postings().size());
+
+        at = now();
+        ledger::Ledger filled;
+        ledger::add_to_book(&filled, again.accounts, again.transactions, again.splits);
+        std::printf("%-30s %9.1f ms\n", "fill the ledger", since(at));
+
+        at = now();
+        const std::vector<ui::AccountRow> listed =
+            ui::account_list(again.accounts, again.ledger, true);
+        std::printf("%-30s %9.1f ms  (%zu rows)\n", "the account list", since(at),
+                    listed.size());
+
+        at = now();
+        Money every;
+        for (const chart::Account& a : again.accounts.all())
+            every += again.ledger.display_balance(a.path.value(), a.type);
+        std::printf("%-30s %9.1f ms  (sums to %s)\n", "a balance per account",
+                    since(at), every.in_register().c_str());
+
+        // The register of whichever account holds the most postings: the one
+        // somebody actually waits on.
+        std::string busiest;
+        std::size_t most = 0;
+        std::map<std::string, std::size_t> counted;
+        for (const ledger::DatedPosting& p : again.ledger.postings())
+            ++counted[p.account.value()];
+        for (const auto& one : counted)
+            if (one.second > most) { most = one.second; busiest = one.first; }
+
+        at = now();
+        const std::vector<reg::Line> lines =
+            reg::lines_for(again.accounts, again.transactions, again.splits, busiest);
+        std::printf("%-30s %9.1f ms  (%s, %zu lines)\n", "one register", since(at),
+                    busiest.c_str(), lines.size());
+
+        at = now();
+        const reports::BalanceSheet sheet = reports::balance_sheet(
+            again.accounts, again.ledger, types::Date(2026, 12, 31), false);
+        std::printf("%-30s %9.1f ms  (%zu rows)\n", "a balance sheet", since(at),
+                    sheet.rows.size());
+
+        // The registers a find has to build before it can filter anything,
+        // which is where a find's time goes.
+        at = now();
+        {
+            const reg::BookIndex shared(again.accounts, again.transactions, again.splits);
+            ui::FindCriteria all;
+            all.scope = ui::FindScope::AllRegisters;
+            std::size_t built = 0;
+            for (const std::string& one : ui::registers_in_scope(again.accounts, all, busiest))
+                built += reg::lines_for(shared, one).size();
+            std::printf("%-30s %9.1f ms  (%zu lines)\n", "every register in scope",
+                        since(at), built);
+        }
+
+        at = now();
+        ui::FindCriteria criteria;
+        criteria.text = "a";
+        criteria.scope = ui::FindScope::AllRegisters;
+        const std::vector<ui::FindResultRow> found =
+            ui::find(again.accounts, again.transactions, again.splits, criteria, busiest);
+        std::printf("%-30s %9.1f ms  (%zu results)\n", "a find over every register",
+                    since(at), found.size());
         return 0;
     }
 

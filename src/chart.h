@@ -2,6 +2,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include "account_type.h"
 #include "text_types.h"
@@ -481,6 +482,57 @@ private:
         for (const Account& a : moved) accounts_[a.path.value()] = a;
         return {};
     }
+};
+
+// A ref-to-node lookup, built once for a computation that reads many
+// postings. Chart::path_for_ref walks every account and then every category,
+// which costs nothing for one posting and is quadratic for a book's worth of
+// them: twenty years of history is tens of thousands of postings against five
+// hundred accounts, and the walk was being done for every one of them.
+//
+// It is built from the chart as it stands and is good for the length of one
+// computation. It does not notice a chart that changes underneath it, which is
+// why it is not kept on the Chart itself: an index that can go stale is how a
+// transaction ends up reported against the wrong account, and no amount of
+// speed is worth that.
+class RefIndex {
+public:
+    explicit RefIndex(const Chart& accounts) {
+        for (const Account& a : accounts.all())
+            nodes_[a.id.value()] =
+                Node{a.path.value(), types::class_of(a.type) == types::AccountClass::Real};
+        for (const Category& c : accounts.all_categories())
+            nodes_[c.id.value()] = Node{c.path.value(), false};
+    }
+
+    // The same answers Chart::path_for_ref and Chart::is_real give, including
+    // for the two refs that name no node: none is empty and a split is
+    // "Split", neither of which is looked up.
+    // By reference, not by value: a register asks this of every transaction
+    // in the book, and a find asks it of every transaction once per register.
+    // Returning a copy was eight million string allocations on the author's
+    // book.
+    const std::string& path_for(const Ref& r) const {
+        static const std::string nothing;
+        static const std::string split_path("Split");
+        if (r.is_none()) return nothing;
+        if (is_split(r)) return split_path;
+        const auto at = nodes_.find(r.value());
+        return at == nodes_.end() ? nothing : at->second.path;
+    }
+
+    bool is_real(const Ref& r) const {
+        if (r.is_none() || is_split(r)) return false;
+        const auto at = nodes_.find(r.value());
+        return at != nodes_.end() && at->second.real;
+    }
+
+private:
+    struct Node {
+        std::string path;
+        bool real = false;
+    };
+    std::unordered_map<long long, Node> nodes_;
 };
 
 }  // namespace chart
