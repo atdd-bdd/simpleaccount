@@ -638,6 +638,249 @@ Then rejected because : Rejection
 | Reason                                     |
 | The split is 30.00 short of 184.50         |
 
+$WIP
+BusinessRule A split is saved only when its lines match the total it was opened on
+Description A split is edited in a window of its own, on a transaction that
+Description already has an amount, so the window knows what its lines are
+Description supposed to come to. That total is checked when the window is
+Description saved, and a split that does not match it is not quietly written.
+Details The shortfall is shown as the lines are typed -- the scenario above
+Details is that -- so by the time somebody presses save they have usually
+Details seen it already. The check at save is for the case where they have
+Details not: a line typed and left half finished, a figure corrected in one
+Details place and not the other.
+Details
+Details Saying "not matching" and stopping there would leave the user to do
+Details the arithmetic themselves. So two answers are offered. Cancel the
+Details save returns to the window with the lines as they were typed and
+Details writes nothing. Add the remainder puts the difference in a line of
+Details its own, which balances the split and leaves the amount visible in
+Details a category instead of hidden in a rounding nobody can find.
+Details
+Details The remainder goes to Expenses:Uncategorized, not to Unassigned. The
+Details two kinds of unknown are set out at the top of this file: Unassigned
+Details is for money whose other account nobody has worked out, and it is a
+Details real account whose balance is a work list. A split line is a
+Details category line, so a remainder nobody has categorised is the other
+Details unknown -- the one that appears on a spending report as
+Details Uncategorized and asks to be given a heading.
+Details
+Details A split whose lines come to more than the transaction is the same
+Details question with the sign turned round, and is offered the same two
+Details answers. The remainder is then negative, and a line of -30.00 under
+Details Uncategorized is honest about where the arithmetic went.
+Examples: SplitSaveCheck
+| Total  | Allocated | Remainder | Saved                                     |
+| 184.50 | 184.50    | 0.00      | Saved; nothing is said                    |
+| 184.50 | 154.50    | 30.00     | Not matching; cancel or add the remainder |
+| 184.50 | 214.50    | -30.00    | Not matching; cancel or add the remainder |
+
+Attributes SplitSaveCheck
+| Attribute | Type   | Default |
+| Total     | Money  | 0.00    |
+| Allocated | Money  | 0.00    |
+| Remainder | Money  | 0.00    |
+| Saved     | String |         |
+
+$WIP
+DataType SplitMismatchChoice
+Description What the user answers when a split does not match its total.
+Examples: EnumerationValues
+| Value        | Notes                                                    |
+| CancelSave   | Back to the window with the lines as typed; nothing saved |
+| AddRemainder | The difference becomes a line under Expenses:Uncategorized |
+
+$WIP
+Scenario Saving a split whose lines do not match the total says so
+Description The window is opened on a split of 184.50 and one of its lines is
+Description taken out, so the lines now come to 154.50. The save says what the
+Description two figures are rather than only that they differ: the user is
+Description about to choose between them.
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type     | Placeholder |
+| Assets:Checking           | Checking | false       |
+| Expenses:Home:Maintenance | Expense  | false       |
+| Expenses:Home:Garden      | Expense  | false       |
+| Expenses:Auto:Repairs     | Expense  | false       |
+| Expenses:Uncategorized    | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
+| T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
+Given split lines are : TransactionSplit
+| Destination               | Amount | Memo         |
+| Expenses:Home:Maintenance | 100.00 | Paint        |
+| Expenses:Home:Garden      | 54.50  | Compost      |
+| Expenses:Auto:Repairs     | 30.00  | Wiper blades |
+When split opened on : TransactionSelect
+| Ref |
+| T1  |
+When split lines are : SplitLine
+| Category                  | Amount | Memo    |
+| Expenses:Home:Maintenance | 100.00 | Paint   |
+| Expenses:Home:Garden      | 54.50  | Compost |
+When split saved
+Then not matching is said : SplitMismatch Vertical
+| Message   | Not matching: the lines come to 154.50 of 184.50 |
+| Total     | 184.50                                          |
+| Allocated | 154.50                                          |
+| Remainder | 30.00                                           |
+| Options   | Cancel save, Add the remainder                  |
+
+Attributes SplitMismatch
+| Attribute | Type  | Default |
+| Message   | Text  |         |
+| Total     | Money | 0.00    |
+| Allocated | Money | 0.00    |
+| Remainder | Money | 0.00    |
+| Options   | Text  |         |
+
+$WIP
+Scenario Cancelling the save leaves the stored split as it was
+Description Nothing is written, so the split is still the three lines it was
+Description opened on. The window is still open on the lines as they were
+Description typed, which is where the user can finish them.
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type     | Placeholder |
+| Assets:Checking           | Checking | false       |
+| Expenses:Home:Maintenance | Expense  | false       |
+| Expenses:Home:Garden      | Expense  | false       |
+| Expenses:Auto:Repairs     | Expense  | false       |
+| Expenses:Uncategorized    | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
+| T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
+Given split lines are : TransactionSplit
+| Destination               | Amount | Memo         |
+| Expenses:Home:Maintenance | 100.00 | Paint        |
+| Expenses:Home:Garden      | 54.50  | Compost      |
+| Expenses:Auto:Repairs     | 30.00  | Wiper blades |
+When split opened on : TransactionSelect
+| Ref |
+| T1  |
+When split lines are : SplitLine
+| Category                  | Amount | Memo    |
+| Expenses:Home:Maintenance | 100.00 | Paint   |
+| Expenses:Home:Garden      | 54.50  | Compost |
+When split saved
+When not matching answered : SplitMismatchAnswer Vertical
+| Choice | CancelSave |
+Then split lines are : TransactionSplit
+| Destination               | Amount | Memo         |
+| Expenses:Home:Maintenance | 100.00 | Paint        |
+| Expenses:Home:Garden      | 54.50  | Compost      |
+| Expenses:Auto:Repairs     | 30.00  | Wiper blades |
+
+Attributes SplitMismatchAnswer
+| Attribute | Type                | Default |
+| Choice    | SplitMismatchChoice |         |
+
+$WIP
+Scenario Adding the remainder balances the split and saves it
+Description The 30.00 that was taken out comes back as a line of its own under
+Description Uncategorized. The transaction's own amount does not move -- what
+Description the bank took is not in question here, only where it went.
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type     | Placeholder |
+| Assets:Checking           | Checking | false       |
+| Expenses:Home:Maintenance | Expense  | false       |
+| Expenses:Home:Garden      | Expense  | false       |
+| Expenses:Auto:Repairs     | Expense  | false       |
+| Expenses:Uncategorized    | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
+| T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
+Given split lines are : TransactionSplit
+| Destination               | Amount | Memo         |
+| Expenses:Home:Maintenance | 100.00 | Paint        |
+| Expenses:Home:Garden      | 54.50  | Compost      |
+| Expenses:Auto:Repairs     | 30.00  | Wiper blades |
+When split opened on : TransactionSelect
+| Ref |
+| T1  |
+When split lines are : SplitLine
+| Category                  | Amount | Memo    |
+| Expenses:Home:Maintenance | 100.00 | Paint   |
+| Expenses:Home:Garden      | 54.50  | Compost |
+When split saved
+When not matching answered : SplitMismatchAnswer Vertical
+| Choice | AddRemainder |
+Then split lines are : TransactionSplit
+| Destination               | Amount | Memo    |
+| Expenses:Home:Maintenance | 100.00 | Paint   |
+| Expenses:Home:Garden      | 54.50  | Compost |
+| Expenses:Uncategorized    | 30.00  | none    |
+Then transaction is : Transaction Vertical CompareOnly
+| Ref         | T1      |
+| Destination | Split   |
+| Amount      | -184.50 |
+
+$WIP
+Scenario A split whose lines come to more than the total is the same question
+Description Over by thirty rather than short by thirty, and the remainder is
+Description negative. Adding it is still the honest answer: a line of -30.00
+Description under Uncategorized says the lines came to more than the bank took
+Description and nobody has yet said which of them is wrong.
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type     | Placeholder |
+| Assets:Checking           | Checking | false       |
+| Expenses:Home:Maintenance | Expense  | false       |
+| Expenses:Home:Garden      | Expense  | false       |
+| Expenses:Uncategorized    | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
+| T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
+Given split lines are : TransactionSplit
+| Destination               | Amount | Memo    |
+| Expenses:Home:Maintenance | 130.00 | Paint   |
+| Expenses:Home:Garden      | 54.50  | Compost |
+When split opened on : TransactionSelect
+| Ref |
+| T1  |
+When split lines are : SplitLine
+| Category                  | Amount | Memo    |
+| Expenses:Home:Maintenance | 160.00 | Paint   |
+| Expenses:Home:Garden      | 54.50  | Compost |
+When split saved
+Then not matching is said : SplitMismatch Vertical
+| Message   | Not matching: the lines come to 214.50 of 184.50 |
+| Total     | 184.50                                          |
+| Allocated | 214.50                                          |
+| Remainder | -30.00                                          |
+| Options   | Cancel save, Add the remainder                  |
+
+$WIP
+Scenario A split whose lines match the total is saved without a word
+Description The ordinary case, stated so that the dialog above is known to be
+Description the exception rather than a step in saving a split.
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type     | Placeholder |
+| Assets:Checking           | Checking | false       |
+| Expenses:Home:Maintenance | Expense  | false       |
+| Expenses:Home:Garden      | Expense  | false       |
+| Expenses:Auto:Repairs     | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
+| T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
+Given split lines are : TransactionSplit
+| Destination               | Amount | Memo         |
+| Expenses:Home:Maintenance | 100.00 | Paint        |
+| Expenses:Home:Garden      | 54.50  | Compost      |
+| Expenses:Auto:Repairs     | 30.00  | Wiper blades |
+When split opened on : TransactionSelect
+| Ref |
+| T1  |
+When split lines are : SplitLine
+| Category                  | Amount | Memo         |
+| Expenses:Home:Maintenance | 120.00 | Paint        |
+| Expenses:Home:Garden      | 34.50  | Compost      |
+| Expenses:Auto:Repairs     | 30.00  | Wiper blades |
+When split saved
+Then split lines are : TransactionSplit
+| Destination               | Amount | Memo         |
+| Expenses:Home:Maintenance | 120.00 | Paint        |
+| Expenses:Home:Garden      | 34.50  | Compost      |
+| Expenses:Auto:Repairs     | 30.00  | Wiper blades |
+
 Scenario A split with an income line and an expense line
 Description A paycheque is the usual case: gross pay in, tax and insurance out,
 Description and the net is what reaches the account.
@@ -1057,6 +1300,37 @@ When transaction deleted : TransactionSelect
 Then transactions are : Transaction CompareOnly
 | Ref | SourceAccount   | Date       | Destination        | Amount |
 | T2  | Assets:Checking | 2024-01-16 | Expenses:Groceries | -12.00 |
+
+Scenario Deleting a split takes its lines with it
+Description The lines of a split belong to the transaction that carries the
+Description total and have nothing to belong to once it is gone. Left behind
+Description they would be the split of a transaction that does not exist: the
+Description categories would still carry the money on every report, and
+Description nothing in the register would say where it came from.
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type     | Placeholder |
+| Assets:Checking           | Checking | false       |
+| Expenses:Home:Maintenance | Expense  | false       |
+| Expenses:Home:Garden      | Expense  | false       |
+| Expenses:Groceries        | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount  |
+| T1  | Assets:Checking | 2024-04-02 | Home Depot    | Split              | -154.50 |
+| T2  | Assets:Checking | 2024-04-03 | Harris Teeter | Expenses:Groceries | -12.00  |
+Given split lines are : TransactionSplit
+| Destination               | Amount | Memo    |
+| Expenses:Home:Maintenance | 100.00 | Paint   |
+| Expenses:Home:Garden      | 54.50  | Compost |
+When transaction deleted : TransactionSelect
+| Ref |
+| T1  |
+Then transactions are : Transaction CompareOnly
+| Ref | SourceAccount   | Date       | Destination        | Amount |
+| T2  | Assets:Checking | 2024-04-03 | Expenses:Groceries | -12.00 |
+Then split lines are : TransactionSplit
+| Destination | Amount | Memo |
+# No rows left. T2 is not a split and never had any, so what this says is that
+# T1's two lines went with T1.
 
 Scenario A reconciled transaction warns before it is changed
 Description A finished reconciliation agreed with a statement. Changing a

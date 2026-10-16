@@ -24,9 +24,13 @@ the spending report.
 
 **Two books.** The business and personal QIF files become two separate files,
 with no query that can reach across them. `Books.spectable` sets out what is per
-book (accounts, categories, payees, rules, OFX account mappings, fiscal year)
-and what is shared (bank CSV profiles and header aliases, which are facts about
-the bank rather than about either book). Money moving between them — an owner
+book, which is very nearly everything: accounts, categories, payees, rules, OFX
+account mappings, fiscal year, and the bank CSV profiles and header aliases too.
+A profile describes the bank rather than either book, so sharing it would save
+setting the same layout up twice; that repetition is accepted, because a book
+that cannot be opened, copied or carried to another machine on its own is the
+larger cost. The one thing kept outside a book is the QIF profile, which
+describes how Quicken writes a file. Money moving between them — an owner
 draw — is two transactions, one in each book, each balancing on its own, both
 against Equity so that neither book counts it as income.
 
@@ -34,7 +38,7 @@ against Equity so that neither book counts it as income.
 
 | Feature | File |
 | --- | --- |
-| The book, and what two books share | `spec/Books.spectable` |
+| The book, and what belongs to one book alone | `spec/Books.spectable` |
 | Core types, money, enumerations | `spec/CoreTypes.spectable` |
 | Chart of accounts, balances, net worth | `spec/Accounts.spectable` |
 | Transactions, splits, transfers | `spec/Transactions.spectable` |

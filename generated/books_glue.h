@@ -1082,4 +1082,65 @@ public:
         }
     }
 
+public:
+
+    void given_saved_profiles_of_business_are(const std::vector<SavedProfileString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: given_saved_profiles_of_business_are";
+    }
+
+    void given_saved_profiles_of_personal_are(const std::vector<SavedProfileString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: given_saved_profiles_of_personal_are";
+    }
+
+    void when_the_book_is_saved() {
+        ADD_FAILURE() << "Not implemented: when_the_book_is_saved";
+    }
+
+    void when_transactions_become(const std::vector<TransactionString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_transactions_become";
+    }
+
+    void then_transactions_are(const std::vector<TransactionString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_transactions_are";
+    }
+
+    void given_split_lines_are(const std::vector<TransactionSplitString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: given_split_lines_are";
+    }
+
+    void then_split_lines_are(const std::vector<TransactionSplitString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_split_lines_are";
+    }
+
+    void when_split_lines_become(const std::vector<TransactionSplitString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_split_lines_become";
+    }
+
+    void when_account_renamed(const std::vector<AccountRenameString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_account_renamed";
+    }
+
+    void when_payee_rules_become(const std::vector<PayeeRuleString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_payee_rules_become";
+    }
+
+    void then_payee_rules_in_force_in_business_are(const std::vector<PayeeRuleString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_payee_rules_in_force_in_business_are";
+    }
+
+    void examples_businessrule_a_save_leaves_the_file_holding_exactly_what_the_book_holds(const std::vector<SaveEffectString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_a_save_leaves_the_file_holding_exactly_what_the_book_holds";
+    }
+
 };

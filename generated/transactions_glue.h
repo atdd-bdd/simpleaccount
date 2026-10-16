@@ -120,8 +120,13 @@ public:
         rebuild_book();
     }
 
+    // The splits go with the transaction, so they are handed over to be
+    // erased alongside it. Deleting the transaction alone would leave its
+    // lines carrying money in the categories with nothing in any register to
+    // say where it came from.
     void when_transaction_deleted(const std::vector<TransactionSelectString>& values) {
-        for (const auto& value : values) edit::delete_transaction(&transactions_, value.ref);
+        for (const auto& value : values)
+            edit::delete_transaction(&transactions_, value.ref, &splits_);
         rebuild_book();
     }
 
@@ -623,6 +628,37 @@ public:
             EXPECT_EQ(value, got) << "wanted " << value.to_string()
                                   << " got " << got.to_string();
         }
+    }
+
+public:
+
+    void when_split_opened_on(const std::vector<TransactionSelectString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_split_opened_on";
+    }
+
+    void when_split_saved() {
+        ADD_FAILURE() << "Not implemented: when_split_saved";
+    }
+
+    void then_not_matching_is_said(const std::vector<SplitMismatchString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_not_matching_is_said";
+    }
+
+    void when_not_matching_answered(const std::vector<SplitMismatchAnswerString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_not_matching_answered";
+    }
+
+    void examples_businessrule_a_split_is_saved_only_when_its_lines_match_the_total_it_was_opened_on(const std::vector<SplitSaveCheckString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_a_split_is_saved_only_when_its_lines_match_the_total_it_was_opened_on";
+    }
+
+    void examples_datatype_splitmismatchchoice(const std::vector<EnumerationValuesString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_datatype_splitmismatchchoice";
     }
 
 };

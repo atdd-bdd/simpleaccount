@@ -123,16 +123,20 @@ Then payee rules in force in Personal are : PayeeRules
 # No rows.
 
 $WIP
-Scenario A bank profile set up for one book serves the other
+Scenario A CSV profile set up for one book is not in the other
 Description The headings of a CSV file from a bank are the same whichever
-Description account they describe, so the profile is shared and the second book
-Description needs no setting up. What is not shared is which account the rows
-Description are imported into: that is asked, or taken from the mapping of the
-Description book being imported into.
+Description account they describe, so a shared profile would save the second
+Description book its setting up. It is not shared. The same bank's layout
+Description being set up twice is the repetition this decision accepts: a
+Description book that cannot be opened, copied or carried to another machine
+Description on its own would be the permanent cost, and it is the larger one.
+Description The second book asks, and what it is told becomes its own profile.
 Given books are as previous
-Given saved profiles are : SavedProfile
+Given saved profiles of Business are : SavedProfile
 | Name         | Signature                                      |
 | Example Bank | Posted Date,Description,Amount,Running Balance |
+Given saved profiles of Personal are : SavedProfile
+| Name | Signature |
 Given the current book is : CurrentBook Vertical
 | Name | Personal |
 Given the file contains
@@ -142,8 +146,13 @@ Posted Date,Description,Amount,Running Balance
 """
 When headers matched
 Then profile recognised is : ProfileRecognition Vertical
-| Name  | Example Bank |
-| Asked | false        |
+| Name      | none  |
+| Asked     | true  |
+| MatchedBy | Alias |
+# Business has a profile for this bank and Personal has none, so this file is
+# read the way any unrecognised one is: the headings are matched against the
+# alias table, and the user is asked to name the bank. Nothing reaches into
+# the business book to find the answer already given there.
 
 Attributes CurrentBook
 | Attribute | Type | Default |
@@ -541,6 +550,208 @@ Then transaction is : Transaction Vertical CompareOnly
 # The memo is the transaction's one memo, so it reads the same from either
 # register regardless of which side it was typed against, and the cleared
 # marker is the one account's own -- the account this entry lives in.
+
+# ---------------------------------------------------------------------------
+# What a save writes
+# ---------------------------------------------------------------------------
+
+$WIP
+BusinessRule A save leaves the file holding exactly what the book holds
+Description A save is under no obligation to write everything, and it is under
+Description an obligation to leave nothing behind. What is specified is the
+Description state of the file afterwards: every change the book has taken is in
+Description it, every row the book no longer has is gone from it, and a row
+Description nobody touched reads back as it was.
+Details The first implementation wrote everything -- every table emptied and
+Details every row inserted again, twenty years of history for one new
+Details transaction. That is correct, and it is most of why entering a
+Details transaction takes as long as it does.
+Details
+Details The rule is stated about the file afterwards rather than about the
+Details rows written, because the second would be a specification of the
+Details mechanism. Nobody reading a register can tell an UPDATE from a
+Details DELETE followed by an INSERT. They can tell a stale row.
+Details
+Details A save is all or nothing. If it cannot be completed -- the disk is
+Details full, another process holds the file -- what is on disk afterwards is
+Details the book as it was before the save, not half of each. A half-written
+Details save is the worst outcome available here: a register would read back
+Details with one side of a transfer missing, and nothing would say so.
+Details
+Details Deletion is what an incremental save gets wrong, so it is below
+Details twice: a transaction deleted, and a split with one line fewer than it
+Details had. The row nobody asked about is the same rule read the other way,
+Details and it is in the editing scenario -- the transaction beside the
+Details edited one must read back untouched.
+Examples: SaveEffect
+| Change                | Afterwards                                      |
+| A transaction added   | Its row is there, and no other row has altered  |
+| A transaction edited  | Its row holds the new values                    |
+| A transaction deleted | No row for it, and none for its split lines     |
+| A split line removed  | No row for that line; the other lines as before |
+| An account renamed    | Its row holds the new path                      |
+| A payee rule added    | Its row is there, and the earlier rules untouched |
+| Nothing changed       | The file as it was                              |
+| The save fails        | The file as it was before the save              |
+
+Attributes SaveEffect
+| Attribute  | Type   | Default |
+| Change     | String |         |
+| Afterwards | String |         |
+
+$WIP
+Scenario A transaction edited after a save reads back edited
+Description And the transaction beside it, which nobody touched, reads back as
+Description it was. Both halves matter: the edit has to reach the file, and
+Description reaching it must not disturb anything else.
+Given a new book named Business
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo   | Cleared   |
+| T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Apples | Cleared   |
+| T2  | Assets:Checking | 2026-01-16 | Lowes         | Expenses:Groceries | -12.00 | Nails  | Uncleared |
+When the book is saved
+When transactions become : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo             | Cleared   |
+| T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -52.00 | Apples and pears | Cleared   |
+| T2  | Assets:Checking | 2026-01-16 | Lowes         | Expenses:Groceries | -12.00 | Nails            | Uncleared |
+When the book is saved and opened again
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo             | Cleared   |
+| T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -52.00 | Apples and pears | Cleared   |
+| T2  | Assets:Checking | 2026-01-16 | Lowes         | Expenses:Groceries | -12.00 | Nails            | Uncleared |
+# Two saves of the same book, with one row different between them. The second
+# save is the one under test; the first is what gives it something to be
+# incremental against.
+
+$WIP
+Scenario A transaction deleted after a save is gone from the file
+Description Along with its split lines. A transaction is deleted from the
+Description register and the lines beneath it are nobody's any more: left in
+Description the file, they would be read back as a split of a transaction
+Description that no longer exists.
+Given a new book named Business
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+| Expenses:Household | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo   | Cleared   |
+| T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Split              | -45.00 | none   | Cleared   |
+| T2  | Assets:Checking | 2026-01-16 | Lowes         | Expenses:Groceries | -12.00 | Nails  | Uncleared |
+Given split lines are : TransactionSplit
+| Destination        | Amount | Memo   |
+| Expenses:Groceries | 30.00  | Apples |
+| Expenses:Household | 15.00  | Soap   |
+When the book is saved
+When transactions become : Transaction
+| Ref | SourceAccount   | Date       | Payee | Destination        | Amount | Memo  | Cleared   |
+| T2  | Assets:Checking | 2026-01-16 | Lowes | Expenses:Groceries | -12.00 | Nails | Uncleared |
+When the book is saved and opened again
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee | Destination        | Amount | Memo  | Cleared   |
+| T2  | Assets:Checking | 2026-01-16 | Lowes | Expenses:Groceries | -12.00 | Nails | Uncleared |
+Then split lines are : TransactionSplit
+| Destination | Amount | Memo |
+# No rows: T1's two lines went with it.
+
+$WIP
+Scenario A split line removed after a save is not read back
+Description The split had two lines and now has one. The line that went has to
+Description go from the file as well, because a save that wrote the lines it
+Description has and left the rest would read the split back as seventy-five.
+Given a new book named Business
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+| Expenses:Household | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination | Amount | Memo | Cleared |
+| T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Split       | -45.00 | none | Cleared |
+Given split lines are : TransactionSplit
+| Destination        | Amount | Memo   |
+| Expenses:Groceries | 30.00  | Apples |
+| Expenses:Household | 15.00  | Soap   |
+When the book is saved
+When split lines become : TransactionSplit
+| Destination        | Amount | Memo   |
+| Expenses:Groceries | 45.00  | Apples |
+When the book is saved and opened again
+Then split lines are : TransactionSplit
+| Destination        | Amount | Memo   |
+| Expenses:Groceries | 45.00  | Apples |
+
+$WIP
+Scenario A second save with nothing changed leaves the book as it was
+Description The common case while somebody is reading rather than typing. A save
+Description with nothing to write is still a save: it may not empty anything,
+Description and what was there is read back whole.
+Given a new book named Business
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo   | Cleared |
+| T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Apples | Cleared |
+When the book is saved
+When the book is saved and opened again
+Then the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo   | Cleared |
+| T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Apples | Cleared |
+
+$WIP
+Scenario An account renamed after a save reads back renamed
+Description The account kept its identity and changed its name, so the file has
+Description to hold the new path against the same row rather than a second row
+Description under the new name. The account renamed here is one no transaction
+Description names, so what is under test is the chart alone.
+Given a new book named Business
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Assets:Savings     | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+When the book is saved
+When account renamed : AccountRename Vertical
+| Path    | Assets:Savings |
+| NewName | Rainy Day      |
+When the book is saved and opened again
+Then the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Assets:Rainy Day   | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+# Three accounts afterwards, not four. A rename that wrote a row and left the
+# old one would show the account twice in every picker in the program.
+
+$WIP
+Scenario A payee rule added after a save leaves the earlier rules alone
+Description Rules are learned one at a time, as categories are chosen, so this
+Description is the shape of nearly every save the rules table ever sees.
+Given a new book named Business
+Given payee rules of Business are : PayeeRules
+| Pattern | MatchType | Payee  |
+| STAPLES | Contains  | Office |
+When the book is saved
+When payee rules become : PayeeRules
+| Pattern       | MatchType | Payee         |
+| STAPLES       | Contains  | Office        |
+| HARRIS TEETER | Contains  | Harris Teeter |
+When the book is saved and opened again
+Then payee rules in force in Business are : PayeeRules
+| Pattern       | MatchType | Payee         |
+| STAPLES       | Contains  | Office        |
+| HARRIS TEETER | Contains  | Harris Teeter |
 
 Scenario Opening a book that is not there is refused
 Description And says so, rather than making one. A mistyped name is the likely
