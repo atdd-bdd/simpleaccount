@@ -34,6 +34,7 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QKeyEvent>
+#include <QKeySequence>
 #include <functional>
 #include <memory>
 #include <fstream>
@@ -306,6 +307,7 @@ MainWindow::MainWindow() {
         {"", "Date", "Payee", "Account", "Category", "Amount", "Import says"});
     reviewTable_->verticalHeader()->setVisible(false);
     reviewTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    reviewTable_->setMinimumHeight(1);
     reviewTable_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
     reviewTable_->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
     reviewLayout->addWidget(reviewTable_);
@@ -326,15 +328,56 @@ MainWindow::MainWindow() {
                 else workspace_->untick(line);
                 refreshReviewPanel();
             });
+    // What a find matched, the panel's other tab. A result is read the way a
+    // register line is read -- under an account, with the other side of the
+    // transaction beside it -- because that is the shape a person recognises.
+    findPanel_ = new QWidget;
+    auto* findLayout = new QVBoxLayout(findPanel_);
+    findHeading_ = new QLabel;
+    findLayout->addWidget(findHeading_);
+    findTable_ = new QTableWidget;
+    findTable_->setColumnCount(5);
+    findTable_->setHorizontalHeaderLabels(
+        {"Date", "Payee", "Account", "Category", "Amount"});
+    findTable_->verticalHeader()->setVisible(false);
+    findTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    findTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    // A table asks for room for several rows, and a splitter honours what its
+    // children ask for, which is what stopped the panel being dragged small.
+    // An explicit minimum of one pixel is what overrides that -- a minimum of
+    // zero is read as "not set" and the asked-for height applies again -- and
+    // the table scrolls at whatever height it is given.
+    findTable_->setMinimumHeight(1);
+    findTable_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    findTable_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
+    findLayout->addWidget(findTable_);
+    // A result is read in its register, so clicking one goes there: the
+    // register the result names, not whichever one is open, and the line in it.
+    // The results stay where they are -- a find is a list to work down.
+    connect(findTable_, &QTableWidget::cellClicked, this, [this](int row, int) {
+        if (refreshing_) return;
+        if (!workspace_->go_to_find_result(row + 1)) return;
+        refresh();
+    });
+
     // The panel below the register. The import review is a tab of it, so that
     // the register it is about to change stays in view above, and so that more
-    // than one thing can wait to be judged at once. Closing the tab is
-    // cancelling the import: there is nothing else it could mean.
+    // than one thing can wait to be judged at once -- the results of a find
+    // are the other tab it can hold. Which tabs are in it is the workspace's
+    // to say, so the close button asks it rather than deciding here: closing
+    // the review is cancelling the import, closing the results is only
+    // closing them.
     bottomTabs_ = new QTabWidget;
     bottomTabs_->setTabsClosable(true);
-    bottomTabs_->addTab(reviewPanel_, "Import review");
-    connect(bottomTabs_, &QTabWidget::tabCloseRequested, this,
-            [this](int) { cancelImport(); });
+    connect(bottomTabs_, &QTabWidget::tabCloseRequested, this, [this](int index) {
+        workspace_->close_bottom_tab_at(index + 1);
+        refresh();
+    });
+    connect(bottomTabs_, &QTabWidget::currentChanged, this, [this](int index) {
+        if (refreshing_ || index < 0) return;
+        workspace_->select_bottom_tab(index + 1);
+        refresh();
+    });
     bottomTabs_->setVisible(false);
 
     rightSplit_ = new QSplitter(Qt::Vertical);
@@ -684,6 +727,12 @@ void MainWindow::buildMenus() {
                     &MainWindow::importTransactions);
     file->addSeparator();
     file->addAction("E&xit", this, &QWidget::close);
+
+    // Find is modeless and its results are a tab, so it belongs with the
+    // things done to what is already in the book rather than with the file.
+    QMenu* edit = menuBar()->addMenu("&Edit");
+    auto* find = edit->addAction("&Find...", this, &MainWindow::showFind);
+    find->setShortcut(QKeySequence::Find);
 
     QMenu* accounts = menuBar()->addMenu("&Accounts");
     accounts->addAction("&New account...", this, &MainWindow::newAccount);
@@ -1893,6 +1942,7 @@ void MainWindow::refresh() {
     for (int position = 1; position <= tabs_->count(); ++position)
         refreshPane(position);
     refreshReviewPanel();
+    refreshFindPanel();
     refreshing_ = was;
 }
 
@@ -1928,7 +1978,7 @@ void MainWindow::syncTabs() {
             tabs_->setCurrentIndex(static_cast<int>(i));
         }
 
-    bottomTabs_->setVisible(workspace_->bottom_panel().open);
+    syncBottomTabs();
     // A tab made just now has the widths the program gives it, not the ones
     // somebody set. The width belongs to the column, so it belongs to a
     // register opened a minute from now as much as to the one it was set in.
@@ -2068,6 +2118,31 @@ void MainWindow::refreshPane(int tabPosition) {
     refreshing_ = was;
 }
 
+// The tab bar of the panel below the register, brought into step with the
+// workspace. The two pages are the window's own widgets, so a tab is taken
+// out and put back rather than built again; a page that is not in the bar is
+// kept as a child of the window, because removeTab leaves it parentless and
+// an orphan widget is one nobody deletes.
+void MainWindow::syncBottomTabs() {
+    const std::vector<ui::BottomTabRow> rows = workspace_->bottom_panel_tabs();
+    const QSignalBlocker quiet(bottomTabs_);
+    while (bottomTabs_->count() > 0) {
+        QWidget* page = bottomTabs_->widget(0);
+        bottomTabs_->removeTab(0);
+        page->setParent(this);
+        page->hide();
+    }
+    for (const ui::BottomTabRow& row : rows) {
+        if (row.kind == ui::BottomTabKind::ImportReview)
+            bottomTabs_->addTab(reviewPanel_, "Import review");
+        else
+            bottomTabs_->addTab(findPanel_, "Find results");
+    }
+    for (const ui::BottomTabRow& row : rows)
+        if (row.active) bottomTabs_->setCurrentIndex(row.tab - 1);
+    bottomTabs_->setVisible(workspace_->bottom_panel().open);
+}
+
 // The import review, beside the active tab only while one is waiting. There
 // is one of these, not one per tab.
 void MainWindow::refreshReviewPanel() {
@@ -2097,6 +2172,113 @@ void MainWindow::refreshReviewPanel() {
     reviewTable_->resizeColumnsToContents();
     reviewTable_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
     refreshing_ = was;
+}
+
+// What the last find matched. Nothing clears this when the tab closes: the
+// rows are only read, and the next find replaces them.
+void MainWindow::refreshFindPanel() {
+    const bool was = refreshing_;
+    refreshing_ = true;
+    // Going to a result refreshes the window, which rebuilds this table, so
+    // the row that was clicked is put back afterwards -- otherwise choosing a
+    // result clears the highlight from the thing just chosen.
+    const int chosen = findTable_->currentRow();
+    const std::vector<ui::FindResultRow>& rows = workspace_->find_results();
+    findHeading_->setText(rows.empty()
+                              ? QString("Nothing matched")
+                              : QString("%1 matching line(s)").arg(rows.size()));
+    findTable_->setRowCount(static_cast<int>(rows.size()));
+    for (int r = 0; r < static_cast<int>(rows.size()); ++r) {
+        const ui::FindResultRow& row = rows[static_cast<std::size_t>(r)];
+        findTable_->setItem(r, 0, text(row.date.iso()));
+        findTable_->setItem(r, 1, text(row.payee, row.payee));
+        findTable_->setItem(r, 2, text(row.account, row.account));
+        findTable_->setItem(r, 3, text(row.category, row.category));
+        setAmount(findTable_, r, 4, row.amount);
+    }
+    findTable_->resizeColumnsToContents();
+    findTable_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    if (chosen >= 0 && chosen < static_cast<int>(rows.size()))
+        findTable_->selectRow(chosen);
+    refreshing_ = was;
+}
+
+// The Find dialog: modeless, and built once. A find is adjusted and run
+// again more often than it is right first time, so the fields keep what was
+// typed and the window stays open over its own results.
+void MainWindow::buildFindDialog() {
+    findDialog_ = new QDialog(this);
+    findDialog_->setWindowTitle("Find");
+    auto* form = new QFormLayout(findDialog_);
+    findText_ = new QLineEdit;
+    findDateFrom_ = new QLineEdit;
+    findDateTo_ = new QLineEdit;
+    findAmountFrom_ = new QLineEdit;
+    findAmountTo_ = new QLineEdit;
+    findAccount_ = new QLineEdit;
+    findScope_ = new QComboBox;
+    // A blank field is not a filter, so every one of them says so rather than
+    // looking like something that was not filled in yet.
+    findText_->setPlaceholderText("any payee or memo");
+    findDateFrom_->setPlaceholderText("yyyy-mm-dd, or blank for no earliest");
+    findDateTo_->setPlaceholderText("yyyy-mm-dd, or blank for no latest");
+    findAmountFrom_->setPlaceholderText("any amount");
+    findAmountTo_->setPlaceholderText("any amount");
+    findAccount_->setPlaceholderText("any account or category");
+    findScope_->addItem("This register", QString("CurrentRegister"));
+    findScope_->addItem("Every register", QString("AllRegisters"));
+    form->addRow("Text", findText_);
+    form->addRow("Date from", findDateFrom_);
+    form->addRow("Date to", findDateTo_);
+    // The bound is on the amount itself rather than on the sign of it:
+    // somebody recalling a transaction rarely remembers which way it went.
+    form->addRow("Amount from", findAmountFrom_);
+    form->addRow("Amount to", findAmountTo_);
+    form->addRow("Account", findAccount_);
+    form->addRow("Look in", findScope_);
+    auto* buttons = new QDialogButtonBox;
+    QPushButton* findButton = buttons->addButton("Find", QDialogButtonBox::AcceptRole);
+    buttons->addButton("Close", QDialogButtonBox::RejectRole);
+    form->addRow(buttons);
+    connect(findButton, &QPushButton::clicked, this, &MainWindow::performFind);
+    connect(buttons, &QDialogButtonBox::rejected, findDialog_, &QDialog::hide);
+    // Return in any of the fields means Find, which is what it means in every
+    // other search box.
+    findButton->setDefault(true);
+}
+
+void MainWindow::showFind() {
+    if (findDialog_ == nullptr) buildFindDialog();
+    findDialog_->show();
+    findDialog_->raise();
+    findDialog_->activateWindow();
+    findText_->setFocus();
+    findText_->selectAll();
+}
+
+void MainWindow::performFind() {
+    ui::FindCriteria criteria;
+    criteria.text = findText_->text().trimmed().toStdString();
+    criteria.account = findAccount_->text().trimmed().toStdString();
+    const auto date = [](const QLineEdit* field) -> std::optional<types::Date> {
+        const QString typed = field->text().trimmed();
+        if (typed.isEmpty()) return std::nullopt;
+        return types::Date::from_iso(typed.toStdString());
+    };
+    const auto amount = [](const QLineEdit* field) -> std::optional<Money> {
+        const QString typed = field->text().trimmed();
+        if (typed.isEmpty()) return std::nullopt;
+        return moneyTyped(typed);
+    };
+    criteria.date_from = date(findDateFrom_);
+    criteria.date_to = date(findDateTo_);
+    criteria.amount_from = amount(findAmountFrom_);
+    criteria.amount_to = amount(findAmountTo_);
+    const std::optional<ui::FindScope> scope =
+        ui::find_scope_from(findScope_->currentData().toString().toStdString());
+    criteria.scope = scope ? *scope : ui::FindScope::CurrentRegister;
+    workspace_->perform_find(criteria);
+    refresh();
 }
 
 void MainWindow::tabClosed(int index) {

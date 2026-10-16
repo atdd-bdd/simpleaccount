@@ -24,6 +24,8 @@ class QLabel;
 class QComboBox;
 class QDateEdit;
 class QCheckBox;
+class QDialog;
+class QLineEdit;
 
 // The window. Three regions: the account list on the left, a tab bar of
 // registers and reports on the right, and -- only while an import is waiting
@@ -75,6 +77,12 @@ private slots:
     void tabChanged(int index);
     void acceptImport();
     void cancelImport();
+    // Find. The dialog is modeless and there is one of it, so showFind brings
+    // the same window back rather than making a second, and performFind
+    // replaces what is in the results tab. See the Find section of
+    // UserInterface.spectable.
+    void showFind();
+    void performFind();
     void chooseFont();
 
 private:
@@ -124,7 +132,14 @@ private:
     // the rest's titles and active state into step.
     void syncTabs();
     void refreshPane(int tabPosition);
+    // Makes the bottom panel's tab bar match workspace_->bottom_panel_tabs().
+    // The pages are the window's own two widgets rather than new ones, so a
+    // tab that closes and opens again is the same widget both times.
+    void syncBottomTabs();
     void refreshReviewPanel();
+    void refreshFindPanel();
+    // The Find dialog, built the first time it is asked for.
+    void buildFindDialog();
     // The menu on a selection of register lines, and what its items do. The
     // selection itself lives in the workspace, which has no Qt in it.
     void registerMenu(int tabPosition, const QPoint& at);
@@ -195,6 +210,22 @@ private:
     QWidget* reviewPanel_ = nullptr;
     QLabel* reviewHeading_ = nullptr;
     QTableWidget* reviewTable_ = nullptr;
+
+    // The results of a find, the panel's other tab. The dialog that asks for
+    // them is modeless and kept, so that a search can be adjusted and run
+    // again without typing it out a second time; its fields are the window's,
+    // not the workspace's, the same way a report's controls are.
+    QWidget* findPanel_ = nullptr;
+    QLabel* findHeading_ = nullptr;
+    QTableWidget* findTable_ = nullptr;
+    QDialog* findDialog_ = nullptr;
+    QLineEdit* findText_ = nullptr;
+    QLineEdit* findDateFrom_ = nullptr;
+    QLineEdit* findDateTo_ = nullptr;
+    QLineEdit* findAmountFrom_ = nullptr;
+    QLineEdit* findAmountTo_ = nullptr;
+    QLineEdit* findAccount_ = nullptr;
+    QComboBox* findScope_ = nullptr;
 
     QLabel* status_ = nullptr;
 };

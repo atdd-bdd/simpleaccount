@@ -902,6 +902,17 @@ public:
         }
     }
 
+    // The result names its own register, so the choice is the line and
+    // nothing else; a result that does not reach its transaction is a failure
+    // rather than a quiet nothing.
+    void when_find_result_chosen(const std::vector<FindResultChoiceString>& values) {
+        for (const FindResultChoiceString& value : values) {
+            const int line = std::stoi(value.line);
+            EXPECT_TRUE(workspace().go_to_find_result(line))
+                << "result " << line << " of " << workspace().find_results().size();
+        }
+    }
+
     void when_bottom_panel_tab_selected(const std::vector<BottomPanelTabSelectString>& values) {
         for (const BottomPanelTabSelectString& value : values)
             workspace().select_bottom_tab(std::stoi(value.tab));

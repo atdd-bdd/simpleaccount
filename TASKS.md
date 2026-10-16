@@ -160,8 +160,11 @@ there, is the author's call.
       the specification's enumeration no longer lists the one, and the other
       could only return false. Six blocks came off `$WIP`; the four Find ones
       stay for item 12, which is what the panel's second tab is for.
-- [ ] **12. Find.** Modeless dialog, results as a tab in the same bottom panel.
-      *Already specified: nine scenarios. Implementation only. Large.*
+- [x] **12. Find.** Modeless dialog, results as a tab in the same bottom panel.
+      Done -- the Find section of `UserInterface.spectable`, `src/find.h`, and
+      Edit > Find... in the window. Choosing a result goes to the transaction
+      in the register the result is read under, which the spec gained two
+      scenarios for.
 - [x] **13. Column resize, widths shared across registers and stored with the
       book.** Done -- "The width of a column" at the end of
       `UserInterface.spectable`, widths on the workspace, a

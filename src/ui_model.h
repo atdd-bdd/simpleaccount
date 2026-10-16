@@ -884,6 +884,16 @@ public:
 
     const std::vector<FindResultRow>& find_results() const { return results_; }
 
+    // Going to a result is going to the transaction, in the register the
+    // result is read under rather than whichever one is open. The result names
+    // that register, so unlike the report's version nothing has to be chosen.
+    bool go_to_find_result(int line_one_based) {
+        if (line_one_based < 1 || line_one_based > static_cast<int>(results_.size()))
+            return false;
+        const FindResultRow& chosen = results_[static_cast<std::size_t>(line_one_based - 1)];
+        return go_to_transaction_in(chosen.ref, chosen.account);
+    }
+
     // Whether an import is waiting in the panel, and which account it is for.
     // The window needs both to label the review; see refreshReviewPanel.
     bool review_showing() const { return review_open_; }

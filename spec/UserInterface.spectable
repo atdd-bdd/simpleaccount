@@ -1255,6 +1255,73 @@ Then find results are : FindResultRow
 | T4  | 2026-01-25 | Transfer | Assets:Checking | Assets:Savings  | -500.00 |
 | T4  | 2026-01-25 | Transfer | Assets:Savings  | Assets:Checking | 500.00  |
 
+Description Choosing a result goes to the transaction in the register the
+Description result is read under -- the Account column of the result, not
+Description whichever register happens to be open. That is the whole use of
+Description the column being there: a find scoped to every register lists
+Description matches from accounts the reader is not looking at, and a result
+Description under Savings has to open Savings. The results stay open while it
+Description happens, because a find is usually a list to work down rather
+Description than one line to reach.
+Details Going to a result is going to the transaction, so it is the same
+Details operation the report's "Go to the transaction..." performs: the
+Details register opens and the transaction's line in it is selected. A
+Details result names its register, so unlike the report's version nothing
+Details has to be chosen -- a transfer matched under both of its sides is
+Details two results, and each goes to its own.
+
+Attributes FindResultChoice
+Description Which result was chosen, counting from one in the order the
+Description results are listed.
+| Attribute | Type    | Default |
+| Line      | Integer | 1       |
+
+Scenario Choosing a result opens the register it is read under and selects its line
+Given the chart of accounts is as previous
+Given transactions are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| Text  | Transfer     |
+| Scope | AllRegisters |
+When find result chosen : FindResultChoice
+| Line |
+| 2    |
+Then open tabs are : OpenTab
+| Position | Kind     | Account         | Name     | Active |
+| 1        | Register | Assets:Checking | Checking | false  |
+| 2        | Register | Assets:Savings  | Savings  | true   |
+Then the register line selected is : RegisterSelect
+| Line |
+| 1    |
+Then bottom panel tabs are : BottomPanelTabRow
+| Tab | Kind        | Active |
+| 1   | FindResults | true   |
+# The second result is the transfer read under Savings, and Savings holds that
+# one transaction, so it is the first line of the register that opens. The
+# register the find was started from stays open as the first tab.
+
+Scenario Choosing a result in the register already open selects its line there
+Given the chart of accounts is as previous
+Given transactions are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| Text | Harris |
+When find result chosen : FindResultChoice
+| Line |
+| 1    |
+Then open tabs are : OpenTab
+| Position | Kind     | Account         | Name     | Active |
+| 1        | Register | Assets:Checking | Checking | true   |
+Then the register line selected is : RegisterSelect
+| Line |
+| 2    |
+# No second tab: the register is the one already open. Harris Teeter is the
+# fifteenth of January, the second of the three lines Checking holds.
+
 # ---------------------------------------------------------------------------
 # What accepting an import keeps
 # ---------------------------------------------------------------------------
