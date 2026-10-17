@@ -651,11 +651,23 @@ Details The shortfall is shown as the lines are typed -- the scenario above
 # place and not the other.
 #
 # Saying "not matching" and stopping there would leave the user to do
-# the arithmetic themselves. So two answers are offered. Cancel the
-# save returns to the window with the lines as they were typed and
-# writes nothing. Add the remainder puts the difference in a line of
-# its own, which balances the split and leaves the amount visible in
-# a category instead of hidden in a rounding nobody can find.
+# the arithmetic themselves. So three answers are offered, and what
+# separates them is what becomes of the lines that were typed. Edit
+# the split goes back to the window with those lines still in it,
+# which is the answer for somebody who can now see which of the two
+# figures is wrong and wants to fix it. Add the remainder puts the
+# difference in a line of its own, which balances the split and
+# leaves the amount visible in a category instead of hidden in a
+# rounding nobody can find. Cancel the save abandons the edit: the
+# window closes, the typed lines go with it, and the split is the one
+# it was opened on.
+#
+# Cancel and edit are both "do not save this", and the difference
+# between them is the only thing about this dialog anyone has to
+# think about. Edit keeps the work and stays; cancel discards it and
+# leaves. Offering one without the other would make somebody choose
+# between losing a figure they have just typed and not being able to
+# leave the window at all.
 #
 # The remainder goes to Expenses:Uncategorized, not to Unassigned. The
 # two kinds of unknown are set out at the top of this file: Unassigned
@@ -666,14 +678,14 @@ Details The shortfall is shown as the lines are typed -- the scenario above
 # Uncategorized and asks to be given a heading.
 #
 # A split whose lines come to more than the transaction is the same
-# question with the sign turned round, and is offered the same two
+# question with the sign turned round, and is offered the same three
 # answers. The remainder is then negative, and a line of -30.00 under
 # Uncategorized is honest about where the arithmetic went.
 Examples: SplitSaveCheck
-| Total  | Allocated | Remainder | Saved                                     |
-| 184.50 | 184.50    | 0.00      | Saved; nothing is said                    |
-| 184.50 | 154.50    | 30.00     | Not matching; cancel or add the remainder |
-| 184.50 | 214.50    | -30.00    | Not matching; cancel or add the remainder |
+| Total  | Allocated | Remainder | Saved                                           |
+| 184.50 | 184.50    | 0.00      | Saved; nothing is said                          |
+| 184.50 | 154.50    | 30.00     | Not matching; cancel, edit or add the remainder |
+| 184.50 | 214.50    | -30.00    | Not matching; cancel, edit or add the remainder |
 
 Attributes SplitSaveCheck
 | Attribute | Type   | Default |
@@ -686,9 +698,10 @@ $WIP
 DataType SplitMismatchChoice
 Description What the user answers when a split does not match its total.
 Examples: EnumerationValues
-| Value        | Notes                                                    |
-| CancelSave   | Back to the window with the lines as typed; nothing saved |
-| AddRemainder | The difference becomes a line under Expenses:Uncategorized |
+| Value        | Notes                                                       |
+| CancelSave   | The window closes, the typed lines go, nothing is saved     |
+| EditSplit    | Back to the window with the lines as typed; nothing saved   |
+| AddRemainder | The difference becomes a line under Expenses:Uncategorized  |
 
 $WIP
 Scenario Saving a split whose lines do not match the total says so
@@ -721,10 +734,10 @@ When split lines are : SplitLine
 When split saved
 Then not matching is said : SplitMismatch Vertical
 | Message   | Not matching: the lines come to 154.50 of 184.50 |
-| Total     | 184.50                                          |
-| Allocated | 154.50                                          |
-| Remainder | 30.00                                           |
-| Options   | Cancel save, Add the remainder                  |
+| Total     | 184.50                                           |
+| Allocated | 154.50                                           |
+| Remainder | 30.00                                            |
+| Options   | Cancel save, Edit the split, Add the remainder   |
 
 Attributes SplitMismatch
 | Attribute | Type  | Default |
@@ -737,8 +750,9 @@ Attributes SplitMismatch
 $WIP
 Scenario Cancelling the save leaves the stored split as it was
 Description Nothing is written, so the split is still the three lines it was
-# opened on. The window is still open on the lines as they were
-# typed, which is where the user can finish them.
+# opened on, and the window has gone with the typed lines in it. The
+# line for the wiper blades is back, because it was never taken out
+# of anything but the window.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type     | Placeholder |
 | Assets:Checking           | Checking | false       |
@@ -769,10 +783,54 @@ Then split lines are : TransactionSplit
 | Expenses:Home:Maintenance | 100.00 | Paint        |
 | Expenses:Home:Garden      | 54.50  | Compost      |
 | Expenses:Auto:Repairs     | 30.00  | Wiper blades |
+Then the split window is closed
 
 Attributes SplitMismatchAnswer
 | Attribute | Type                | Default |
 | Choice    | SplitMismatchChoice |         |
+
+$WIP
+Scenario Choosing to edit the split goes back to the lines as they were typed
+Description The answer for somebody who has now seen the two figures and knows
+# which of them is wrong. Nothing is written and nothing is thrown
+# away either: the window is still there with the two lines in it,
+# and the 30.00 can be typed against whichever category it belongs
+# to. This is the difference between editing and cancelling -- cancel
+# would have closed the window and lost the two lines as typed.
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type     | Placeholder |
+| Assets:Checking           | Checking | false       |
+| Expenses:Home:Maintenance | Expense  | false       |
+| Expenses:Home:Garden      | Expense  | false       |
+| Expenses:Auto:Repairs     | Expense  | false       |
+| Expenses:Uncategorized    | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
+| T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
+Given split lines are : TransactionSplit
+| Destination               | Amount | Memo         |
+| Expenses:Home:Maintenance | 100.00 | Paint        |
+| Expenses:Home:Garden      | 54.50  | Compost      |
+| Expenses:Auto:Repairs     | 30.00  | Wiper blades |
+When split opened on : TransactionSelect
+| Ref |
+| T1  |
+When split lines are : SplitLine
+| Category                  | Amount | Memo    |
+| Expenses:Home:Maintenance | 100.00 | Paint   |
+| Expenses:Home:Garden      | 54.50  | Compost |
+When split saved
+When not matching answered : SplitMismatchAnswer Vertical
+| Choice | EditSplit |
+Then the split window is open on : SplitLine
+| Category                  | Amount | Memo    |
+| Expenses:Home:Maintenance | 100.00 | Paint   |
+| Expenses:Home:Garden      | 54.50  | Compost |
+Then split lines are : TransactionSplit
+| Destination               | Amount | Memo         |
+| Expenses:Home:Maintenance | 100.00 | Paint        |
+| Expenses:Home:Garden      | 54.50  | Compost      |
+| Expenses:Auto:Repairs     | 30.00  | Wiper blades |
 
 $WIP
 Scenario Adding the remainder balances the split and saves it
@@ -843,10 +901,10 @@ When split lines are : SplitLine
 When split saved
 Then not matching is said : SplitMismatch Vertical
 | Message   | Not matching: the lines come to 214.50 of 184.50 |
-| Total     | 184.50                                          |
-| Allocated | 214.50                                          |
-| Remainder | -30.00                                          |
-| Options   | Cancel save, Add the remainder                  |
+| Total     | 184.50                                           |
+| Allocated | 214.50                                           |
+| Remainder | -30.00                                           |
+| Options   | Cancel save, Edit the split, Add the remainder   |
 
 $WIP
 Scenario A split whose lines match the total is saved without a word

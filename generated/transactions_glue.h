@@ -661,4 +661,15 @@ public:
         ADD_FAILURE() << "Not implemented: examples_datatype_splitmismatchchoice";
     }
 
+public:
+
+    void then_the_split_window_is_closed() {
+        ADD_FAILURE() << "Not implemented: then_the_split_window_is_closed";
+    }
+
+    void then_the_split_window_is_open_on(const std::vector<SplitLineString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_the_split_window_is_open_on";
+    }
+
 };
