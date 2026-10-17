@@ -80,8 +80,12 @@ public:
         EXPECT_EQ(want, got) << "the picker offered " << got.size() << " categories";
     }
 
+    // Into the file and into the book: a scenario that goes on to save holds
+    // these rules in memory, and one that only asks another book what is in
+    // force needs them on disk.
     void given_payee_rules_of_business_are(const std::vector<PayeeRuleString>& values) {
         write_rules("Business", values);
+        rules_ = rules_from(values);
     }
 
     void given_payee_rules_of_personal_are(const std::vector<PayeeRuleString>& values) {
@@ -516,7 +520,7 @@ public:
     // program holds it has not been saved at all.
     void when_the_book_is_saved_and_opened_again() {
         ASSERT_TRUE(store_.is_open()) << "no book was made";
-        last_ = store_.write(chart_, transactions_, {}, splits_);
+        last_ = store_.write(chart_, transactions_, rules_, splits_);
         ASSERT_FALSE(last_.refused) << last_.reason;
         store_ = store::Book();
 
@@ -525,8 +529,9 @@ public:
         chart_ = chart::Chart();
         transactions_.clear();
         splits_.clear();
+        rules_.clear();
         ledger::Ledger ignored;
-        last_ = store_.read(&chart_, &ignored, &transactions_, nullptr, &splits_);
+        last_ = store_.read(&chart_, &ignored, &transactions_, &rules_, &splits_);
         ASSERT_FALSE(last_.refused) << last_.reason;
     }
 
@@ -731,6 +736,7 @@ private:
     chart::Chart chart_;
     std::vector<ledger::Transaction> transactions_;
     std::vector<ledger::TransactionSplit> splits_;
+    std::vector<payees::Rule> rules_;
     std::vector<std::string> named_;
     std::vector<std::string> listed_;
     std::string open_name_;
@@ -834,16 +840,7 @@ private:
         std::vector<ledger::Transaction> transactions;
         std::vector<payees::Rule> rules;
         ASSERT_TRUE(read_book_with_rules(name, &accounts, &transactions, &rules));
-        rules.clear();
-        for (const auto& value : values) {
-            payees::Rule r;
-            r.pattern = value.pattern;
-            r.match_type = payees::match_type_from_string(value.matchtype);
-            r.payee = value.payee;
-            r.category = blank(value.category);
-            r.enabled = parse_bool_cell(value.enabled);
-            rules.push_back(r);
-        }
+        rules = rules_from(values);
         store::Book opened;
         const store::Failure where = store::Book::open_named(name, &opened);
         ASSERT_FALSE(where.refused) << where.reason;
@@ -1095,52 +1092,315 @@ public:
     }
 
     void when_the_book_is_saved() {
-        ADD_FAILURE() << "Not implemented: when_the_book_is_saved";
+        ASSERT_TRUE(store_.is_open()) << "no book was made";
+        last_ = store_.write(chart_, transactions_, rules_, splits_);
+        ASSERT_FALSE(last_.refused) << last_.reason;
     }
 
+    // An edit of the book in front of it rather than a new book, so a
+    // transaction whose ref is already there keeps its id. The id is what a
+    // save matches a row against: hand every row a new one and every row is a
+    // different transaction, and a save that rewrote all of them would be
+    // right to.
     void when_transactions_become(const std::vector<TransactionString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_transactions_become";
+        std::map<std::string, types::TransactionId> kept;
+        for (const ledger::Transaction& t : transactions_) kept.emplace(t.ref.value(), t.id);
+        given_transactions_are(values);
+        for (ledger::Transaction& t : transactions_) {
+            const auto at = kept.find(t.ref.value());
+            if (at != kept.end()) t.id = at->second;
+        }
+        // Lines belong to a transaction by id, so the lines of a transaction
+        // that has gone go with it. That is what deleting a split from a
+        // register does, and leaving them here would hide the save's part in
+        // it.
+        std::vector<ledger::TransactionSplit> still;
+        for (const ledger::TransactionSplit& s : splits_)
+            for (const ledger::Transaction& t : transactions_)
+                if (t.id.value() == s.transaction_id.value()) { still.push_back(s); break; }
+        splits_ = still;
     }
 
     void then_transactions_are(const std::vector<TransactionString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_transactions_are";
+        ASSERT_EQ(values.size(), transactions_.size()) << "transactions in the book";
+        for (const auto& value : values) {
+            const ledger::Transaction* t = nullptr;
+            for (const ledger::Transaction& one : transactions_)
+                if (one.ref.value() == value.ref) t = &one;
+            ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
+            EXPECT_EQ(value.date, t->date.iso()) << value.ref << " date";
+            EXPECT_EQ(blank(value.payee), t->payee.value()) << value.ref << " payee";
+            EXPECT_EQ(blank(value.sourceaccount), chart_.path_for_ref(t->source_account))
+                << value.ref << " source account";
+            EXPECT_EQ(blank(value.destination), chart_.path_for_ref(t->destination))
+                << value.ref << " destination";
+            EXPECT_EQ(Money(value.amount).cents(), t->amount.cents()) << value.ref << " amount";
+            EXPECT_EQ(blank(value.memo), t->memo) << value.ref << " memo";
+            EXPECT_EQ(value.cleared, types::to_string(t->cleared)) << value.ref << " cleared";
+        }
+    }
+
+    // The transaction these lines are the parts of: the one that says Split.
+    types::TransactionId split_owner_id() const {
+        for (auto it = transactions_.rbegin(); it != transactions_.rend(); ++it)
+            if (chart::is_split(it->destination)) return it->id;
+        return types::TransactionId();
     }
 
     void given_split_lines_are(const std::vector<TransactionSplitString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: given_split_lines_are";
+        const types::TransactionId owner = split_owner_id();
+        ASSERT_FALSE(owner.value().empty()) << "no transaction for these split lines";
+        for (const auto& value : values) {
+            ledger::TransactionSplit s;
+            s.transaction_id = owner;
+            s.destination = chart_.ref_for_path(blank(value.destination));
+            s.amount = Money(value.amount);
+            s.memo = blank(value.memo);
+            splits_.push_back(s);
+        }
     }
 
+    // Every line in the book, not only the ones under the transaction asked
+    // about. A line left behind by a deletion belongs to nothing, so no
+    // register would ever show it; the file is what this is about.
     void then_split_lines_are(const std::vector<TransactionSplitString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_split_lines_are";
+        ASSERT_EQ(values.size(), splits_.size()) << "split lines in the book";
+        for (std::size_t k = 0; k < values.size(); ++k) {
+            EXPECT_EQ(blank(values[k].destination), chart_.path_for_ref(splits_[k].destination))
+                << "line " << k + 1 << " destination";
+            EXPECT_EQ(Money(values[k].amount).cents(), splits_[k].amount.cents())
+                << "line " << k + 1 << " amount";
+            EXPECT_EQ(blank(values[k].memo), splits_[k].memo) << "line " << k + 1 << " memo";
+        }
     }
 
     void when_split_lines_become(const std::vector<TransactionSplitString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_split_lines_become";
+        const types::TransactionId owner = split_owner_id();
+        ASSERT_FALSE(owner.value().empty()) << "no split to change";
+        std::vector<ledger::TransactionSplit> others;
+        for (const ledger::TransactionSplit& s : splits_)
+            if (s.transaction_id.value() != owner.value()) others.push_back(s);
+        splits_ = others;
+        given_split_lines_are(values);
     }
 
     void when_account_renamed(const std::vector<AccountRenameString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_account_renamed";
+        ASSERT_FALSE(values.empty());
+        const chart::Rejection no = chart_.rename(types::AccountPath(values.front().path),
+                                                  types::AccountName(values.front().newname));
+        ASSERT_FALSE(no.refused) << no.reason;
     }
 
     void when_payee_rules_become(const std::vector<PayeeRuleString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_payee_rules_become";
+        rules_ = rules_from(values);
     }
 
     void then_payee_rules_in_force_in_business_are(const std::vector<PayeeRuleString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_payee_rules_in_force_in_business_are";
+        std::vector<payees::Rule> rules;
+        ASSERT_TRUE(read_book_with_rules("Business", nullptr, nullptr, &rules));
+        ASSERT_EQ(values.size(), rules.size()) << "payee rules in force in Business";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            EXPECT_EQ(values[i].pattern, rules[i].pattern) << "rule " << i << " pattern";
+            EXPECT_EQ(values[i].matchtype, payees::to_string(rules[i].match_type))
+                << "rule " << i << " match type";
+            EXPECT_EQ(values[i].payee, rules[i].payee) << "rule " << i << " payee";
+        }
     }
 
-    void examples_businessrule_a_save_leaves_the_file_holding_exactly_what_the_book_holds(const std::vector<SaveEffectString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_a_save_leaves_the_file_holding_exactly_what_the_book_holds";
+    // Each row driven for real against a book of its own: made, saved,
+    // changed, saved again, and read back from the file. The rows are what a
+    // reader of the rule takes away, so they are checked rather than
+    // illustrated -- and both halves of a row are checked, the change that
+    // must be in the file and the rest of the book that must not have moved.
+    void examples_businessrule_a_save_leaves_the_file_holding_exactly_what_the_book_holds(
+            const std::vector<SaveEffectString>& values) {
+        int which = 0;
+        for (const auto& value : values) {
+            const std::string name = "Saves" + std::to_string(++which);
+            store::Book one;
+            const store::Failure made = store::Book::create(store::path_for(name), name, &one);
+            ASSERT_FALSE(made.refused) << made.reason;
+
+            chart::Chart c;
+            for (const char* path : {"Assets:Checking", "Assets:Savings"})
+                c.put(account_named(path, types::AccountType::Checking));
+            for (const char* path : {"Expenses:Groceries", "Expenses:Household"})
+                c.put(account_named(path, types::AccountType::Expense));
+
+            std::vector<ledger::Transaction> ts;
+            ts.push_back(transaction_in(c, "T1", "2026-01-15", "Harris Teeter", "Split", -4500));
+            ts.push_back(
+                transaction_in(c, "T2", "2026-01-16", "Lowes", "Expenses:Groceries", -1200));
+            std::vector<ledger::TransactionSplit> ls;
+            ls.push_back(line_in(c, ts[0].id, "Expenses:Groceries", 3000, "Apples"));
+            ls.push_back(line_in(c, ts[0].id, "Expenses:Household", 1500, "Soap"));
+            std::vector<payees::Rule> rs(1);
+            rs[0].pattern = "STAPLES";
+            rs[0].match_type = payees::MatchType::Contains;
+            rs[0].payee = "Office";
+            rs[0].enabled = true;
+
+            store::Failure no = one.write(c, ts, rs, ls);
+            ASSERT_FALSE(no.refused) << no.reason;
+            const std::string before = what_is_in(name);
+
+            std::string wanted_gone;
+            std::string wanted_there;
+            if (value.change == "A transaction added") {
+                ts.push_back(
+                    transaction_in(c, "T3", "2026-01-17", "Staples", "Expenses:Household", -900));
+                wanted_there = "transaction T3";
+            } else if (value.change == "A transaction edited") {
+                ts[1].amount = Money::from_cents(-1900);
+                ts[1].memo = "Nails and screws";
+                wanted_gone = "Lowes Assets:Checking -> Expenses:Groceries -1200";
+                wanted_there = "Nails and screws";
+            } else if (value.change == "A transaction deleted") {
+                ts.erase(ts.begin());
+                ls.clear();
+                wanted_gone = "transaction T1";
+                wanted_there = "split lines 0";
+            } else if (value.change == "A split line removed") {
+                ls.pop_back();
+                wanted_gone = "Soap";
+                wanted_there = "split lines 1";
+            } else if (value.change == "An account renamed") {
+                const chart::Rejection why = c.rename(types::AccountPath("Assets:Savings"),
+                                                      types::AccountName("Rainy Day"));
+                ASSERT_FALSE(why.refused) << why.reason;
+                wanted_gone = "account Assets:Savings";
+                wanted_there = "account Assets:Rainy Day";
+            } else if (value.change == "A payee rule added") {
+                payees::Rule more;
+                more.pattern = "HARRIS TEETER";
+                more.match_type = payees::MatchType::Contains;
+                more.payee = "Harris Teeter";
+                more.enabled = true;
+                rs.push_back(more);
+                wanted_there = "rule HARRIS TEETER";
+            } else if (value.change == "Nothing changed") {
+                // Nothing to do, which is the row: a second save of a book
+                // nobody has touched has to leave it alone rather than empty
+                // it and fill it again.
+            } else if (value.change == "The save fails") {
+                // Refused by the one refusal reachable from outside: a
+                // transaction with no id, which the store will not store
+                // because there would be nothing to match its row against
+                // next time.
+                ledger::Transaction nameless = ts.front();
+                nameless.id = types::TransactionId();
+                nameless.ref = types::TransactionRef("T9");
+                ts.push_back(nameless);
+            } else {
+                FAIL() << "unlisted change " << value.change;
+            }
+
+            no = one.write(c, ts, rs, ls);
+            if (value.change == "The save fails") {
+                EXPECT_TRUE(no.refused) << value.afterwards;
+                EXPECT_EQ(before, what_is_in(name)) << value.afterwards;
+                continue;
+            }
+            ASSERT_FALSE(no.refused) << no.reason;
+
+            const std::string after = what_is_in(name);
+            if (value.change == "Nothing changed") {
+                EXPECT_EQ(before, after) << value.afterwards;
+                continue;
+            }
+            if (!wanted_there.empty())
+                EXPECT_NE(std::string::npos, after.find(wanted_there))
+                    << value.afterwards << " -- the file holds\n"
+                    << after;
+            if (!wanted_gone.empty())
+                EXPECT_EQ(std::string::npos, after.find(wanted_gone))
+                    << value.afterwards << " -- the file still holds " << wanted_gone;
+        }
+    }
+
+private:
+
+    static chart::Account account_named(const std::string& path, types::AccountType type) {
+        chart::Account a;
+        a.path = types::AccountPath(path);
+        a.type = type;
+        return a;
+    }
+
+    static ledger::Transaction transaction_in(const chart::Chart& c, const std::string& ref,
+                                              const std::string& date, const std::string& payee,
+                                              const std::string& destination, long long cents) {
+        ledger::Transaction t;
+        t.id = ledger::new_id();
+        t.ref = types::TransactionRef(ref);
+        const auto on = types::Date::from_iso(date);
+        if (on) t.date = *on;
+        t.payee = types::PayeeName(payee);
+        t.source_account = c.ref_for_path("Assets:Checking");
+        t.destination = c.ref_for_path(destination);
+        t.amount = Money::from_cents(cents);
+        return t;
+    }
+
+    static ledger::TransactionSplit line_in(const chart::Chart& c,
+                                            const types::TransactionId& owner,
+                                            const std::string& destination, long long cents,
+                                            const std::string& memo) {
+        ledger::TransactionSplit s;
+        s.transaction_id = owner;
+        s.destination = c.ref_for_path(destination);
+        s.amount = Money::from_cents(cents);
+        s.memo = memo;
+        return s;
+    }
+
+    // What the file holds, as one sorted string, so a row of the rule can say
+    // "and nothing else altered" in a single comparison. The count of split
+    // lines is in it on purpose: a line whose transaction has gone appears
+    // under no transaction, and without the count a deletion that left one
+    // behind would read as clean.
+    std::string what_is_in(const std::string& name) {
+        chart::Chart c;
+        std::vector<ledger::Transaction> ts;
+        std::vector<payees::Rule> rs;
+        std::vector<ledger::TransactionSplit> ls;
+        if (!read_book_with_rules(name, &c, &ts, &rs, &ls)) return "unreadable";
+        std::vector<std::string> lines;
+        for (const ledger::Transaction& t : ts) {
+            std::string one = "transaction " + t.ref.value() + " " + t.date.iso() + " " +
+                              t.payee.value() + " " + c.path_for_ref(t.source_account) + " -> " +
+                              c.path_for_ref(t.destination) + " " +
+                              std::to_string(t.amount.cents()) + " " + t.memo + " " +
+                              types::to_string(t.cleared);
+            for (const ledger::TransactionSplit& s : ledger::split_lines_of(ls, t.id))
+                one += " / " + c.path_for_ref(s.destination) + " " +
+                       std::to_string(s.amount.cents()) + " " + s.memo;
+            lines.push_back(one);
+        }
+        lines.push_back("split lines " + std::to_string(ls.size()));
+        for (const chart::Account& a : c.all())
+            lines.push_back("account " + a.path.value() + " " + types::to_string(a.type));
+        for (const payees::Rule& r : rs)
+            lines.push_back("rule " + r.pattern + " " + payees::to_string(r.match_type) + " " +
+                            r.payee);
+        std::sort(lines.begin(), lines.end());
+        std::string out;
+        for (const std::string& line : lines) out += line + "\n";
+        return out;
+    }
+
+    static std::vector<payees::Rule> rules_from(const std::vector<PayeeRuleString>& values) {
+        std::vector<payees::Rule> rules;
+        for (const auto& value : values) {
+            payees::Rule r;
+            r.pattern = value.pattern;
+            r.match_type = payees::match_type_from_string(value.matchtype);
+            r.payee = value.payee;
+            r.category = blank(value.category);
+            r.enabled = parse_bool_cell(value.enabled);
+            rules.push_back(r);
+        }
+        return rules;
     }
 
 };

@@ -555,7 +555,6 @@ Then transaction is : Transaction Vertical CompareOnly
 # What a save writes
 # ---------------------------------------------------------------------------
 
-$WIP
 BusinessRule A save leaves the file holding exactly what the book holds
 Description A save is under no obligation to write everything, and it is under
 # an obligation to leave nothing behind. What is specified is the
@@ -599,7 +598,6 @@ Attributes SaveEffect
 | Change     | String |         |
 | Afterwards | String |         |
 
-$WIP
 Scenario A transaction edited after a save reads back edited
 Description And the transaction beside it, which nobody touched, reads back as
 # it was. Both halves matter: the edit has to reach the file, and
@@ -627,7 +625,6 @@ Then transactions are : Transaction
 # save is the one under test; the first is what gives it something to be
 # incremental against.
 
-$WIP
 Scenario A transaction deleted after a save is gone from the file
 Description Along with its split lines. A transaction is deleted from the
 # register and the lines beneath it are nobody's any more: left in
@@ -659,7 +656,6 @@ Then split lines are : TransactionSplit
 | Destination | Amount | Memo |
 # No rows: T1's two lines went with it.
 
-$WIP
 Scenario A split line removed after a save is not read back
 Description The split had two lines and now has one. The line that went has to
 # go from the file as well, because a save that wrote the lines it
@@ -686,7 +682,6 @@ Then split lines are : TransactionSplit
 | Destination        | Amount | Memo   |
 | Expenses:Groceries | 45.00  | Apples |
 
-$WIP
 Scenario A second save with nothing changed leaves the book as it was
 Description The common case while somebody is reading rather than typing. A save
 # with nothing to write is still a save: it may not empty anything,
@@ -709,7 +704,6 @@ Then transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo   | Cleared |
 | T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Apples | Cleared |
 
-$WIP
 Scenario An account renamed after a save reads back renamed
 Description The account kept its identity and changed its name, so the file has
 # to hold the new path against the same row rather than a second row
@@ -734,7 +728,6 @@ Then the chart of accounts is : ChartOfAccounts
 # Three accounts afterwards, not four. A rename that wrote a row and left the
 # old one would show the account twice in every picker in the program.
 
-$WIP
 Scenario A payee rule added after a save leaves the earlier rules alone
 Description Rules are learned one at a time, as categories are chosen, so this
 # is the shape of nearly every save the rules table ever sees.

@@ -9,6 +9,7 @@
 #include <memory>
 #include <system_error>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "account_type.h"
@@ -573,13 +574,59 @@ public:
         return out;
     }
 
-    // Writes the whole book. One transaction around the lot, so an interrupted
-    // save leaves the file as it was rather than half of each.
+    // Writes the book. One database transaction around the lot, so an
+    // interrupted save leaves the file as it was rather than half of each.
+    //
+    // The chart and the rules are rewritten outright -- there are hundreds of
+    // them, not tens of thousands. The transactions are not: the author's book
+    // holds 37,000 and a save happens after nearly every edit, so rewriting
+    // them all meant a few seconds of inserts to record one typed amount.
+    // Instead each transaction is compared against what this object last saw
+    // in the file and only the ones that differ are touched. What the file
+    // holds afterwards is the same either way, which is how the rule in
+    // Books.spectable is stated: about the state of the file, not about which
+    // rows were written.
     Failure write(const chart::Chart& accounts,
                   const std::vector<ledger::Transaction>& transactions,
                   const std::vector<payees::Rule>& rules = {},
                   const std::vector<ledger::TransactionSplit>& splits = {},
                   const std::map<std::string, int>& column_widths = {}) {
+        // The lines of one transaction, found once for all of them. This was a
+        // scan of every split line for every transaction, which on a book with
+        // a few thousand splits was tens of millions of comparisons per save.
+        std::unordered_map<std::string, std::vector<const ledger::TransactionSplit*>> lines;
+        for (const ledger::TransactionSplit& one : splits)
+            lines[one.transaction_id.value()].push_back(&one);
+
+        // What the book is asking the file to hold. Built before anything is
+        // written, so a transaction that cannot be stored is refused while the
+        // file is still untouched.
+        std::unordered_map<std::string, std::string> wanted;
+        wanted.reserve(transactions.size());
+        const std::vector<const ledger::TransactionSplit*> no_lines;
+        for (const ledger::Transaction& t : transactions) {
+            // A transaction reaching the store without a name has not been
+            // created properly. Giving it one here would hide where that
+            // happened and would hand it a name from the wrong moment, so it
+            // is refused instead.
+            if (t.id.value().empty())
+                return {true, "transaction " + t.ref.value() + " has no id"};
+            const auto at = lines.find(t.id.value());
+            // Two transactions under one id cannot both be stored -- id is the
+            // primary key. The whole-book rewrite learned this from the UNIQUE
+            // constraint partway through writing; saying it here names the
+            // transaction instead of the column.
+            if (!wanted.emplace(t.id.value(),
+                                state_of(t, at == lines.end() ? no_lines : at->second)).second)
+                return {true, "transaction " + t.ref.value() + " is stored twice"};
+        }
+
+        // Once per opened book: after this the save keeps it up to date itself.
+        if (!stored_known_) {
+            const Failure no = look_at_what_is_stored();
+            if (no.refused) return no;
+        }
+
         std::string why;
         if (!detail::exec(db_.get(), "BEGIN IMMEDIATE", &why)) return {true, why};
 
@@ -588,13 +635,11 @@ public:
             return {true, reason};
         };
 
-        // Still a whole-book rewrite, which is the next thing to go: the store
-        // should be the record and a save should touch the rows that changed.
-        // See the note in development.txt.
-        if (!detail::exec(db_.get(), "DELETE FROM transaction_import_ids; "
-                                     "DELETE FROM transaction_splits; "
-                                     "DELETE FROM transactions; "
-                                     "DELETE FROM accounts; DELETE FROM categories; "
+        // The small tables. A rewrite of a few hundred rows costs about a
+        // millisecond, and the chart has no stable key to diff on that is
+        // worth the trouble while that is true. The transactions are dealt
+        // with below, row by row.
+        if (!detail::exec(db_.get(), "DELETE FROM accounts; DELETE FROM categories; "
                                      "DELETE FROM payee_rules;",
                           &why))
             return fail(why);
@@ -648,14 +693,57 @@ public:
             "VALUES (?, ?, ?, ?, ?)");
         if (!split.ok()) return fail(split.why());
 
+        // A transaction is replaced rather than updated in place: its row goes
+        // and is written again, and so do its lines and its import marks. The
+        // lines have no identity of their own -- the line number is a position
+        // -- so there is nothing to update them by, and a transaction that
+        // went from three lines to two would otherwise keep the third.
+        //
+        // The children are deleted here rather than left to the foreign keys.
+        // The schema declares ON DELETE CASCADE, but nothing turns
+        // PRAGMA foreign_keys on, so those clauses do nothing at all.
+        detail::Statement forget_header(db_.get(), "DELETE FROM transactions WHERE id = ?");
+        if (!forget_header.ok()) return fail(forget_header.why());
+        detail::Statement forget_splits(db_.get(),
+            "DELETE FROM transaction_splits WHERE transaction_id = ?");
+        if (!forget_splits.ok()) return fail(forget_splits.why());
+        detail::Statement forget_marks(db_.get(),
+            "DELETE FROM transaction_import_ids WHERE transaction_id = ?");
+        if (!forget_marks.ok()) return fail(forget_marks.why());
+
+        const auto forget = [&](const std::string& id) -> std::string {
+            forget_marks.reset();
+            forget_marks.bind(1, id);
+            if (!forget_marks.run()) return forget_marks.why();
+            forget_splits.reset();
+            forget_splits.bind(1, id);
+            if (!forget_splits.run()) return forget_splits.why();
+            forget_header.reset();
+            forget_header.bind(1, id);
+            if (!forget_header.run()) return forget_header.why();
+            return {};
+        };
+
+        // Gone from the book, so gone from the file. This is the case a save
+        // that only wrote what it had in front of it would get wrong, and it
+        // is why the rule is stated about what the file holds afterwards.
+        for (const auto& was : stored_)
+            if (wanted.find(was.first) == wanted.end()) {
+                const std::string why_not = forget(was.first);
+                if (!why_not.empty()) return fail(why_not);
+            }
+
         for (const ledger::Transaction& t : transactions) {
+            const auto now = wanted.find(t.id.value());
+            const auto before = stored_.find(t.id.value());
+            if (before != stored_.end() && before->second == now->second) continue;
+
+            if (before != stored_.end()) {
+                const std::string why_not = forget(t.id.value());
+                if (!why_not.empty()) return fail(why_not);
+            }
+
             header.reset();
-            // A transaction reaching the store without a name has not been
-            // created properly. Giving it one here would hide where that
-            // happened and would hand it a name from the wrong moment, so it is
-            // refused instead.
-            if (t.id.value().empty())
-                return fail("transaction " + t.ref.value() + " has no id");
             header.bind(1, t.id.value());
             header.bind(2, t.ref.value());
             header.bind(3, t.date.iso());
@@ -670,16 +758,18 @@ public:
             header.bind(12, types::to_string(t.cleared));
             if (!header.run()) return fail(header.why());
 
-            int split_line = 0;
-            for (const ledger::TransactionSplit& s : splits) {
-                if (s.transaction_id.value() != t.id.value()) continue;
-                split.reset();
-                split.bind(1, t.id.value());
-                split.bind(2, split_line++);
-                split.bind(3, s.destination.value());
-                split.bind(4, static_cast<long long>(s.amount.cents()));
-                split.bind(5, s.memo);
-                if (!split.run()) return fail(split.why());
+            const auto at = lines.find(t.id.value());
+            if (at != lines.end()) {
+                int split_line = 0;
+                for (const ledger::TransactionSplit* s : at->second) {
+                    split.reset();
+                    split.bind(1, t.id.value());
+                    split.bind(2, split_line++);
+                    split.bind(3, s->destination.value());
+                    split.bind(4, static_cast<long long>(s->amount.cents()));
+                    split.bind(5, s->memo);
+                    if (!split.run()) return fail(split.why());
+                }
             }
 
             for (const ledger::ImportId& one : t.import_ids) {
@@ -729,6 +819,14 @@ public:
         if (!counter.run()) return fail(counter.why());
 
         if (!detail::exec(db_.get(), "COMMIT", &why)) return fail(why);
+
+        // Only now, and only here. Every way out of this function above is a
+        // refusal that rolled back, and a refused save has to leave this
+        // holding what the file still holds -- otherwise the next save would
+        // believe rows are stored that were never written, and skip them. That
+        // is the "the save fails" line of the rule in Books.spectable.
+        stored_ = std::move(wanted);
+        stored_known_ = true;
         return {};
     }
 
@@ -887,8 +985,136 @@ public:
     }
 
 private:
+    // Everything the file holds about one transaction, in one string: its own
+    // row, its split lines in the order they are in, and its import marks.
+    // Two saves of an unchanged transaction produce the same string, and a
+    // difference in any field produces a different one.
+    //
+    // Each part is written with its length in front of it, so no run of
+    // characters inside a memo can imitate the start of the next field. A memo
+    // of "5:x" would otherwise be able to make two different transactions look
+    // alike, and looking alike here means an edit is not written.
+    static std::string state_of(const ledger::Transaction& t,
+                                const std::vector<const ledger::TransactionSplit*>& lines) {
+        std::string out;
+        const auto add = [&out](const std::string& value) {
+            out += std::to_string(value.size());
+            out += ':';
+            out += value;
+        };
+        add(t.ref.value());
+        add(t.date.iso());
+        add(t.payee.value());
+        add(t.raw_name);
+        add(t.check_no.value());
+        add(t.memo);
+        add(t.tag);
+        add(std::to_string(t.source_account.value()));
+        add(std::to_string(t.destination.value()));
+        add(std::to_string(t.amount.cents()));
+        add(types::to_string(t.cleared));
+        for (const ledger::TransactionSplit* s : lines) {
+            add(std::to_string(s->destination.value()));
+            add(std::to_string(s->amount.cents()));
+            add(s->memo);
+        }
+        // Between the lines and the marks, because a line writes three fields
+        // and a mark writes two: without it, a transaction with one line and
+        // no marks could spell the same string as one with no lines and marks.
+        out += '|';
+        // By source rather than in the order the book happens to hold them,
+        // which is the order they come back in. A set of marks that is the
+        // same set must read as the same string, or the first save after
+        // opening would rewrite the transaction for no reason.
+        std::vector<std::string> marks;
+        marks.reserve(t.import_ids.size());
+        for (const ledger::ImportId& one : t.import_ids)
+            marks.push_back(types::to_string(one.source) + ":" + one.id);
+        std::sort(marks.begin(), marks.end());
+        for (const std::string& one : marks) add(one);
+        return out;
+    }
+
+    // What the file holds, in the same strings a save would produce for it.
+    // Read once, the first time this object writes.
+    //
+    // The rows are read back into the structures the book itself uses and
+    // handed to the same state_of, rather than serialising them a second way
+    // out of SQL. Two serialisers would have to agree forever; if they drifted
+    // apart, every save would silently become a whole-book rewrite again, and
+    // nothing would look wrong except the clock.
+    Failure look_at_what_is_stored() {
+        std::unordered_map<std::string, std::vector<ledger::TransactionSplit>> lines;
+        {
+            detail::Statement s(db_.get(),
+                "SELECT transaction_id, destination_ref, amount_cents, memo "
+                "FROM transaction_splits ORDER BY transaction_id, line");
+            if (!s.ok()) return {true, s.why()};
+            while (s.step_row()) {
+                ledger::TransactionSplit one;
+                one.transaction_id = types::TransactionId(s.text(0));
+                one.destination = chart::Ref(s.integer(1));
+                one.amount = Money::from_cents(s.integer(2));
+                one.memo = s.text(3);
+                lines[one.transaction_id.value()].push_back(one);
+            }
+        }
+
+        std::unordered_map<std::string, std::vector<ledger::ImportId>> marks;
+        {
+            detail::Statement m(db_.get(),
+                "SELECT transaction_id, source, id FROM transaction_import_ids "
+                "ORDER BY transaction_id, source");
+            if (!m.ok()) return {true, m.why()};
+            while (m.step_row())
+                marks[m.text(0)].push_back(ledger::ImportId{
+                    types::import_source_from_string(m.text(1)), m.text(2)});
+        }
+
+        std::unordered_map<std::string, std::string> stored;
+        detail::Statement header(db_.get(),
+            "SELECT id, ref, date, payee, raw_name, check_no, memo, tag, "
+            "source_ref, destination_ref, amount_cents, cleared FROM transactions");
+        if (!header.ok()) return {true, header.why()};
+        while (header.step_row()) {
+            ledger::Transaction t;
+            t.id = types::TransactionId(header.text(0));
+            t.ref = types::TransactionRef(header.text(1));
+            const auto on = types::Date::from_iso(header.text(2));
+            if (!on) return {true, header.text(2) + " is not a date"};
+            t.date = *on;
+            t.payee = types::PayeeName(header.text(3));
+            t.raw_name = header.text(4);
+            t.check_no = types::CheckNumber(header.text(5));
+            t.memo = header.text(6);
+            t.tag = header.text(7);
+            t.source_account = chart::Ref(header.integer(8));
+            t.destination = chart::Ref(header.integer(9));
+            t.amount = Money::from_cents(header.integer(10));
+            t.cleared = types::cleared_status_from_string(header.text(11));
+            const auto mark = marks.find(t.id.value());
+            if (mark != marks.end()) t.import_ids = mark->second;
+
+            std::vector<const ledger::TransactionSplit*> of_this;
+            const auto line = lines.find(t.id.value());
+            if (line != lines.end())
+                for (const ledger::TransactionSplit& one : line->second)
+                    of_this.push_back(&one);
+            stored.emplace(t.id.value(), state_of(t, of_this));
+        }
+
+        stored_ = std::move(stored);
+        stored_known_ = true;
+        return {};
+    }
+
     detail::Handle db_;
     std::string path_;
+    // What this object last saw in the file, by transaction id. Empty and not
+    // yet known on a book just opened; filled on the first save and kept in
+    // step by every save after it.
+    std::unordered_map<std::string, std::string> stored_;
+    bool stored_known_ = false;
 };
 
 }  // namespace store
