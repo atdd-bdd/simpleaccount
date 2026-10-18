@@ -118,7 +118,7 @@ Description Assigning the other account of a transfer by hand, in the register.
 # Money from outside the book
 # ---------------------------------------------------------------------------
 
-$WIP
+$TBD
 BusinessRule Whether the other side is an account or a category
 Description The other side of a downloaded row is an account when the money came
 # from or went to something this book keeps, and a category when it did
@@ -180,7 +180,7 @@ Then balances are : AccountBalance CompareOnly
 # Matching an entry in another register by hand
 # ---------------------------------------------------------------------------
 
-$WIP
+$TBD
 BusinessRule Assigning an account asks whether the other entry already exists
 Description Assigning a real account to an Unassigned side says where the money
 # went. It does not say whether that account already has a row for it.
@@ -256,7 +256,7 @@ Attributes OfferedEntry
 # Naming a transaction
 # ---------------------------------------------------------------------------
 
-$WIP
+$TBD
 BusinessRule A transaction is named when it is created and keeps that name
 Description The name is the moment it was created: the date and the time to the
 # millisecond. The generator waits if the clock has not moved since the
@@ -638,7 +638,7 @@ Then rejected because : Rejection
 | Reason                                     |
 | The split is 30.00 short of 184.50         |
 
-$WIP
+$TBD
 BusinessRule A split is saved only when its lines match the total it was opened on
 Description A split is edited in a window of its own, on a transaction that
 # already has an amount, so the window knows what its lines are
@@ -694,7 +694,7 @@ Attributes SplitSaveCheck
 | Remainder | Money  | 0.00    |
 | Saved     | String |         |
 
-$WIP
+$TBD
 DataType SplitMismatchChoice
 Description What the user answers when a split does not match its total.
 Examples: EnumerationValues
@@ -703,7 +703,7 @@ Examples: EnumerationValues
 | EditSplit    | Back to the window with the lines as typed; nothing saved   |
 | AddRemainder | The difference becomes a line under Expenses:Uncategorized  |
 
-$WIP
+$TBD
 Scenario Saving a split whose lines do not match the total says so
 Description The window is opened on a split of 184.50 and one of its lines is
 # taken out, so the lines now come to 154.50. The save says what the
@@ -747,7 +747,7 @@ Attributes SplitMismatch
 | Remainder | Money | 0.00    |
 | Options   | Text  |         |
 
-$WIP
+$TBD
 Scenario Cancelling the save leaves the stored split as it was
 Description Nothing is written, so the split is still the three lines it was
 # opened on, and the window has gone with the typed lines in it. The
@@ -789,7 +789,7 @@ Attributes SplitMismatchAnswer
 | Attribute | Type                | Default |
 | Choice    | SplitMismatchChoice |         |
 
-$WIP
+$TBD
 Scenario Choosing to edit the split goes back to the lines as they were typed
 Description The answer for somebody who has now seen the two figures and knows
 # which of them is wrong. Nothing is written and nothing is thrown
@@ -832,7 +832,7 @@ Then split lines are : TransactionSplit
 | Expenses:Home:Garden      | 54.50  | Compost      |
 | Expenses:Auto:Repairs     | 30.00  | Wiper blades |
 
-$WIP
+$TBD
 Scenario Adding the remainder balances the split and saves it
 Description The 30.00 that was taken out comes back as a line of its own under
 # Uncategorized. The transaction's own amount does not move -- what
@@ -872,7 +872,7 @@ Then transaction is : Transaction Vertical CompareOnly
 | Destination | Split   |
 | Amount      | -184.50 |
 
-$WIP
+$TBD
 Scenario A split whose lines come to more than the total is the same question
 Description Over by thirty rather than short by thirty, and the remainder is
 # negative. Adding it is still the honest answer: a line of -30.00
@@ -906,7 +906,7 @@ Then not matching is said : SplitMismatch Vertical
 | Remainder | -30.00                                           |
 | Options   | Cancel save, Edit the split, Add the remainder   |
 
-$WIP
+$TBD
 Scenario A split whose lines match the total is saved without a word
 Description The ordinary case, stated so that the dialog above is known to be
 # the exception rather than a step in saving a split.

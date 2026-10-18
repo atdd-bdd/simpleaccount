@@ -16,7 +16,7 @@ pass.
 ```
 spec/*.spectable          the specification -- worked examples, in tables
       |
-      |  AlignThree (SpecTableConverter), --tag-filter "NOT WIP"
+      |  AlignThree (SpecTableConverter), --tag-filter "NOT TBD"
       v
 generated/test_*.cpp      one test per Scenario, BusinessRule or DataType
       |                   rewritten on every generation; not tracked
@@ -323,7 +323,7 @@ nobody mentioned; and `book.last_id_used` is updated rather than reinserted.
 
 `tools/rebuild.sh` analyses the specification (target: 0 diagnostics),
 regenerates, builds and runs. The suite is **449 tests from 13 suites**, and it
-is green by design: a block the program does not implement yet is tagged `$WIP`
+is green by design: a block the program does not implement yet is tagged `$TBD`
 and generates no test, so **a failing test is a regression, not unfinished
 work**. `TAGS="" tools/rebuild.sh` generates the whole specification, tags and
 all, which is how to see what is still owed.

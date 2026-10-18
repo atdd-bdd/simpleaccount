@@ -20,14 +20,14 @@ echo "== generate =="
 # Only test_*.cpp is rewritten; *_glue.h is written once and then left alone, so
 # generating never destroys hand-written glue.
 #
-# NOT WIP leaves out every block marked $WIP in the spec -- the behaviour that
+# NOT TBD leaves out every block marked $TBD in the spec -- the behaviour that
 # is specified and not yet built. So the suite that gets compiled is the one
 # that should be green, and a failure means a regression rather than a feature
-# nobody has written yet. Glue stubs are still written for a $WIP block's
+# nobody has written yet. Glue stubs are still written for a $TBD block's
 # steps, so implementing one is a matter of taking the tag off.
 #
 # To see the whole specification, tags and all: TAGS="" tools/rebuild.sh
-TAGS="${TAGS-NOT WIP}"
+TAGS="${TAGS-NOT TBD}"
 CTX=""
 for f in "$ROOT"/spec/*.spectable; do CTX="$CTX --context $f"; done
 for f in "$ROOT"/spec/*.spectable; do
@@ -40,14 +40,45 @@ echo "== build =="
 # tests run and report a result that belongs to the specification of an hour
 # ago. That has been read as a passing suite twice.
 BUILD_LOG="$ROOT/build/last-build.log"
+BIN="$ROOT/build/Debug/spec_tests.exe"
 "$CMAKE" --build build --config Debug -- -m:1 -p:CL_MPCount=1 > "$BUILD_LOG" 2>&1
 BUILT=$?
 grep -E "error C|error MSB|warning C4|spec_tests.vcxproj ->" "$BUILD_LOG" | head -20
-if [ $BUILT -ne 0 ]; then
+
+# The question is not what msbuild returned, it is whether the binary about to
+# be run was built from what is on disk now. They are different questions, and
+# the exit code answers the wrong one: vcpkg's applocal step runs pwsh.exe,
+# which is not installed here, so it exits 9009 and falls back to
+# powershell.exe -- the fallback works, the binary is linked, and msbuild still
+# reports failure. Trusting the code meant a green build looked like a broken
+# one and the tests did not run at all.
+#
+# So: a compile error in the log is a failure, and a binary older than anything
+# it is compiled from is a failure. Nothing else is. src and generated are what
+# the binary is made of; the spec reaches it through generation, which has
+# already happened above.
+STALE=""
+if [ ! -f "$BIN" ]; then
+  STALE="there is no binary at $BIN"
+elif NEWER=$(find "$ROOT/src" "$ROOT/generated" -type f \
+               \( -name '*.h' -o -name '*.cpp' \) -newer "$BIN" -print -quit) \
+     && [ -n "$NEWER" ]; then
+  STALE="the binary is older than ${NEWER#$ROOT/}"
+fi
+if grep -qE "error C[0-9]|error MSB[0-9]|fatal error" "$BUILD_LOG"; then
   echo "== BUILD FAILED -- not running the tests =="
-  echo "   the binary on disk is older than the spec; see $BUILD_LOG"
+  echo "   the compiler reported errors; see $BUILD_LOG"
   exit 1
+fi
+if [ -n "$STALE" ]; then
+  echo "== BUILD FAILED -- not running the tests =="
+  echo "   $STALE; see $BUILD_LOG"
+  exit 1
+fi
+if [ $BUILT -ne 0 ]; then
+  echo "   (msbuild exited $BUILT, but the binary is current and no compiler"
+  echo "    error was logged -- see the note above this check in $0)"
 fi
 
 echo "== run =="
-"$ROOT/build/Debug/spec_tests.exe" "$@" 2>&1 | tail -4
+"$BIN" "$@" 2>&1 | tail -4

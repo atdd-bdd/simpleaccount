@@ -9,6 +9,7 @@
 #include "chart.h"
 #include "date.h"
 #include "find.h"
+#include "import_target.h"
 #include "ledger.h"
 #include "money.h"
 #include "posting.h"
@@ -270,6 +271,18 @@ struct Tab {
     std::string account;
     std::string base;
     std::string name;
+    // Which book the figures on a report tab were worked out from, as a count
+    // of changes, and how many times this tab has been worked out. A register
+    // tab needs neither: it is read from the book on every redraw.
+    long long worked_out_at = -1;
+    int times = 0;
+};
+
+// How many times the report on one tab has been worked out. Register tabs
+// are not listed. See the report-worked-out section of UserInterface.spectable.
+struct ReportWorkRow {
+    int position = 1;
+    int times = 0;
 };
 
 // One row of the open-tabs listing.
@@ -369,6 +382,35 @@ public:
     // copy of the chart.
     const chart::Chart& accounts() const { return accounts_; }
 
+    // The book has changed under the workspace. What is being read stays as it
+    // is -- which registers are open, which report is on which tab, which of
+    // them is in front -- and everything that was about the book as it was
+    // goes, because the book it was about is not there any more. The count of
+    // changes moves on, which is what tells a report tab that the figures on
+    // it were totalled from a book that no longer exists.
+    void book_is_now(const chart::Chart& accounts, const ledger::Ledger& book,
+                     const std::vector<ledger::Transaction>& transactions,
+                     const std::vector<ledger::TransactionSplit>& splits) {
+        accounts_ = accounts;
+        book_ = book;
+        transactions_ = transactions;
+        splits_ = splits;
+        close_review();
+        review_.clear();
+        accepted_.clear();
+        committed_ = false;
+        results_.clear();
+        selected_.clear();
+        listing_ = Listing::None;
+        editor_ = Editor();
+        ++changes_;
+    }
+
+    // How many times the book has changed under this workspace. It is not a
+    // version and nothing is stored against it: the only thing it is ever
+    // compared with is the reading a report tab kept.
+    long long changes() const { return changes_; }
+
     // --------------------------------------------------------------- tabs
 
     // Opens the register of this account in a tab, or returns to it if one is
@@ -453,6 +495,45 @@ public:
         return out;
     }
 
+    // ------------------------------------------- working a report out again
+
+    // Whether the report on this tab has to be worked out: it is the tab being
+    // shown, and the figures on it were totalled from a book that has changed
+    // since. Asked on every redraw -- a tab click, an account selected, a
+    // column resized -- which is why the answer is two numbers compared and
+    // not a walk of anything.
+    bool report_wants_working_out(int position_one_based) const {
+        const std::size_t index = static_cast<std::size_t>(position_one_based - 1);
+        if (index >= tabs_.size()) return false;
+        if (tabs_[index].kind != TabKind::Report) return false;
+        // A report nobody is looking at has no figure on screen to be wrong,
+        // so the work waits for the click that brings it forward.
+        if (index != active_tab_) return false;
+        return tabs_[index].worked_out_at != changes_;
+    }
+
+    // Said by whoever worked it out, once it has. The count it was worked out
+    // at is the book the figures on it are now of.
+    void report_worked_out(int position_one_based) {
+        const std::size_t index = static_cast<std::size_t>(position_one_based - 1);
+        if (index >= tabs_.size()) return;
+        if (tabs_[index].kind != TabKind::Report) return;
+        tabs_[index].worked_out_at = changes_;
+        ++tabs_[index].times;
+    }
+
+    std::vector<ReportWorkRow> reports_worked_out() const {
+        std::vector<ReportWorkRow> out;
+        for (std::size_t i = 0; i < tabs_.size(); ++i) {
+            if (tabs_[i].kind != TabKind::Report) continue;
+            ReportWorkRow row;
+            row.position = static_cast<int>(i) + 1;
+            row.times = tabs_[i].times;
+            out.push_back(row);
+        }
+        return out;
+    }
+
     // --------------------------------------------------------- import review
 
     // Whether there is a register to import into -- the active tab, if it is
@@ -473,7 +554,70 @@ public:
         return {false, std::string(), tabs_[active_tab_].account};
     }
 
-    // An import goes into the active tab: the account is not asked for.
+    // ------------------------------------------- where an import is going
+
+    // What the dialog in front of an import says: the file it is about, the
+    // account it proposes, and where that proposal came from. Shown is false
+    // when there is nothing to confirm, which is the refusal below.
+    struct ImportConfirmation {
+        bool shown = false;
+        std::string file_name;
+        std::string account;
+        importing::TargetSource source = importing::TargetSource::NoneOffered;
+    };
+
+    // A file has been chosen and nothing has been read out of it yet. What the
+    // file said about its own account arrives as account_in_file, because what
+    // a QFX can say and a CSV cannot is the import's business and not the
+    // window's. Everything else is here: what the name of the file fits, and
+    // the register in front if one is.
+    //
+    // Refused only when all three have nothing to say. That is the one case
+    // where the window has no account to offer and will not invent one.
+    ActiveRegister choose_import_file(const std::string& file_name,
+                                      const std::string& account_in_file) {
+        const std::string from_name =
+            importing::account_from_file_name(accounts_, file_name);
+        std::string active;
+        if (!tabs_.empty() && tabs_[active_tab_].kind == TabKind::Register)
+            active = tabs_[active_tab_].account;
+
+        const importing::Proposal p = importing::propose(account_in_file, from_name, active);
+        if (p.source == importing::TargetSource::NoneOffered) {
+            confirming_ = ImportConfirmation();
+            return {true, "Open the register this statement is for, then import into it.",
+                    std::string()};
+        }
+        confirming_ = ImportConfirmation{true, file_name, p.account, p.source};
+        return {false, std::string(), p.account};
+    }
+
+    const ImportConfirmation& import_confirmation() const { return confirming_; }
+
+    // The rows of the file, now that the account is settled. Into the account
+    // the dialog proposed, or into another one chosen in it; either way the
+    // rows are stamped with it, that register becomes the active tab, and the
+    // review opens in the panel beneath it.
+    void confirm_import(const std::vector<ReviewRow>& rows) {
+        // By value: the dialog is put away below, and the account it proposed
+        // goes with it.
+        const std::string account = confirming_.account;
+        confirm_import_into(account, rows);
+    }
+
+    void confirm_import_into(const std::string& account,
+                             const std::vector<ReviewRow>& rows) {
+        std::vector<ReviewRow> stamped = rows;
+        for (ReviewRow& r : stamped) r.account = account;
+        review_import(stamped, account);
+        confirming_ = ImportConfirmation();
+    }
+
+    // Cancelled reads nothing: no tab is opened, no panel, no row. The only
+    // thing that happened is that the dialog was up, and now it is not.
+    void cancel_import_confirmation() { confirming_ = ImportConfirmation(); }
+
+    // An import goes into the account confirmed for it.
     void review_import(const std::vector<ReviewRow>& rows, const std::string& into) {
         review_ = rows;
         for (ReviewRow& r : review_)
@@ -523,6 +667,7 @@ public:
             book_.add({r.date, types::AccountPath(r.category), other_amount});
         }
         committed_ = true;
+        ++changes_;
         // The review was there to compare the import against the register
         // above it. There is nothing left to compare, so its tab closes, and
         // the panel with it if that was the only tab -- which leaves the
@@ -1019,6 +1164,7 @@ private:
         ledger::Ledger fresh;
         ledger::add_to_book(&fresh, accounts_, transactions_, splits_);
         book_ = fresh;
+        ++changes_;
     }
 
     chart::Chart accounts_;
@@ -1027,6 +1173,7 @@ private:
     std::vector<ledger::TransactionSplit> splits_;
     std::vector<Tab> tabs_;
     std::size_t active_tab_ = 0;
+    ImportConfirmation confirming_;
     bool review_open_ = false;
     std::string review_account_;
     Listing listing_ = Listing::None;
@@ -1039,6 +1186,7 @@ private:
     std::vector<ledger::Transaction> accepted_;
     std::vector<int> selected_;
     bool committed_ = false;
+    long long changes_ = 0;
 
     void set_accepted(int line, bool accepted) {
         for (ReviewRow& r : review_)

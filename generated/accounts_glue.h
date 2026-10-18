@@ -271,6 +271,11 @@ private:
         s.alias = a.alias.empty() ? "none" : a.alias;
         s.paymentpayee = a.payment_payee.empty() ? "none" : a.payment_payee;
         s.bank = a.bank.empty() ? "none" : a.bank;
+        // Nothing to read back: the program keeps no routing number on an
+        // account yet, so the only honest answer here is that none is known.
+        // The scenarios that state one are $TBD until the field exists, and
+        // this line is what has to change when it does.
+        s.bankid = "none";
         s.accountnumber = a.account_number.empty() ? "none" : a.account_number;
         return s;
     }

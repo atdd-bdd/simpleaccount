@@ -356,10 +356,13 @@ Details Several things stay open at once because the work moves between them. A
 # whether a month was unusual. Closing one to open the other and back
 # again is the work a tab bar does away with.
 #
-# The active tab is where anything that needs a register goes. An import
-# goes into the active tab, and so does a transaction typed on the blank
-# line, so the question "into which account" is answered by what is in
-# front of you rather than by a dialog asking it again.
+# The active tab is where a transaction typed on the blank line goes,
+# without being asked about: the question "into which account" is
+# answered by what is in front of you. An import is the one thing that
+# does ask, because the file may not be the file you think it is and a
+# statement in the wrong account is expensive to undo. The active tab is
+# what it proposes when the file gives it nothing to go on; see where an
+# import is going is said before it goes there, below.
 #
 # One tab per account. Selecting an account already open returns to its
 # tab rather than opening a second: two tabs on one register would show
@@ -595,10 +598,43 @@ Then panes are : PaneState
 # step for a table with no rows yet -- finding 6 -- so for now that line is
 # documentation and the pane assertion is what carries the scenario.
 
-Scenario An import goes into the active tab
-Description The account is not asked for. Whichever register is in front of you
-# is the one the statement is for, which is also how a transaction
-# typed on the blank line knows where it belongs.
+Scenario Opening another book leaves none of the tabs of the one before
+Description A tab is a register of an account, and the accounts of the book now
+# open are not the accounts of the one that was -- a tab left over
+# from the book before names an account this one may not have, and a
+# report tab left over holds totals of transactions that are not in
+# it. So every tab goes when the book goes, whatever kind it is, and
+# the window is as it is when it first opens a book.
+Details Every other change hands the book over and leaves the tabs alone: a
+# transaction entered, a category changed, an import accepted. They are
+# changes to the book that is open, and what is being read is still
+# worth reading. Another book is the one case where it is not.
+Given the chart of accounts is as previous
+Given transactions are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-01-01 |
+| To       | 2026-12-31 |
+| Interval | Whole      |
+When another book is opened
+Then open tabs are : OpenTab
+| Position | Kind | Account | Name | Active |
+Then panes are : PaneState
+| Pane | Showing | Account | Active |
+| 1    | Empty   | none    | true   |
+# A register tab and a report tab, so that both kinds have to go. The empty
+# tab table is documentation again, and the pane is what carries it: nothing
+# is showing, because there is no tab left to show.
+
+Scenario An import with nothing else to go on goes into the active tab
+Description Whichever register is in front is what the confirmation proposes
+# when the file says nothing about itself and its name says nothing
+# either, which is the usual case and was the only case before there
+# was a dialog to say it in. The dialog itself is specified below;
+# here it has been confirmed and the review is open.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -628,11 +664,12 @@ Then bottom panel tabs are : BottomPanelTabRow
 # and the review opens below the register it is about to change. No tab is
 # opened and none is switched to: the answer was already on the screen.
 
-Scenario An import with a report in front is refused
+Scenario An import with nothing to go on and no register in front is refused
 Description There is no register to compare against, so there is nothing to
-# judge a proposed row by. Said rather than guessed at: importing
-# into whichever register happened to be open last is how a
-# statement ends up in the wrong account.
+# judge a proposed row by, and the file offered nothing of its own.
+# Said rather than guessed at: importing into whichever register
+# happened to be open last is how a statement ends up in the wrong
+# account.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run : ReportSpec Vertical
@@ -640,11 +677,778 @@ When report run : ReportSpec Vertical
 | From     | 2026-01-01 |
 | To       | 2026-12-31 |
 | Interval | Whole      |
-When import asked for
+When import file chosen : ImportFileChosen Vertical
+| FileName | download.csv |
+| Format   | Csv          |
 Then the import is refused saying
 """
 Open the register this statement is for, then import into it.
 """
+# Refused once the file has been chosen rather than when the import was asked
+# for, because until the file has been looked at it is not known that there is
+# nothing to go on -- the same keystroke on a QFX has an answer.
+
+# ---------------------------------------------------------------------------
+# Where an import is going is said before it goes there
+# ---------------------------------------------------------------------------
+
+Description A file chosen to import is not read into whichever register happens
+# to be in front. The window says which account it is about to put the
+# statement in, and waits for that to be confirmed.
+Details The account comes from the file wherever the file knows it. A QFX names
+# the institution and the account number it was downloaded for, and the
+# account of this book that carries that number is the answer, so what
+# is in front is beside the point. A CSV names nothing, so the name of
+# the file is all there is to read, and it usually carries the account or
+# its number because the bank wrote it. Neither is certain, which is why
+# it is confirmed rather than acted on.
+#
+# Where the file stated them, the bank id and the account number are
+# shown in the dialog alongside the account. They are the only part of
+# it that did not come from this program, and they are what a person
+# compares against the statement in their hand.
+#
+# When neither the file nor its name says anything, the register in front
+# is proposed, because that is nearly always what is meant -- it is the
+# statement being reconciled. What is new is that it is said before the
+# file is read rather than discovered after.
+#
+# A statement in the wrong account is expensive to undo. Every row of it
+# has to be found and deleted; worse, a row the import called a
+# duplicate of something in the wrong account was never brought in at
+# all, so the account it belonged in is short and nothing says so. One
+# dialog against that is cheap.
+#
+# The dialog is in front of the file, not after it: nothing is read, no
+# tab is opened and the bottom panel stays shut until it is confirmed.
+#
+# Confirming it does two things at once. The register of the account it
+# settled becomes the active tab -- opened if it was not open, brought
+# forward if it was -- and the rows of the file open in the panel
+# beneath that register. So the statement is read against the lines it
+# is about to join, which is the whole reason the review is a panel
+# under a register rather than a dialog of its own.
+
+DataType ImportFileFormat
+Description What kind of file was chosen, and what that kind of file can say
+# about the account it is for.
+Examples: EnumerationValues
+| Value | Notes                                                               |
+| Qfx   | OFX or QFX. Names its institution and account number, so the account is in the file |
+| Qif   | Names an account in an !Account block when it has one, and nothing when it has not |
+| Csv   | Says nothing about itself; the name of the file is all there is      |
+
+Attributes ImportFileChosen
+Description The file the user picked, and what the import made of what is inside
+# it before any of its rows were read.
+Details AccountInFile is the account of this book the file turned out to be
+# for -- for a QFX, the account that carries the number the download
+# was made for; see which account a download is for in ImportOfx. It is
+# blank when the file names nothing, and blank when it names a number no
+# account in this book carries, because an account that is not in the
+# book is not an answer. How it is arrived at is the import's own
+# business and is specified there; here it is given.
+#
+# BankId and AccountNumber are what the file said about itself, whether
+# or not an account was found for them. They are blank for a CSV and for
+# a QIF, which say nothing of the kind, and they are not blank for a QFX
+# whose number is unknown -- that is the case where they matter most,
+# because they are the whole of what the user has to go on when asked
+# which account the download belongs to.
+| Attribute     | Type             | Default |
+| FileName      | Text             |         |
+| Format        | ImportFileFormat | Csv     |
+| AccountInFile | AccountPath      | none    |
+| BankId        | Text             | none    |
+| AccountNumber | Text             | none    |
+
+DataType ImportTargetSource
+Description Where the account in the confirmation came from. It is shown, because
+# "we read this out of the file" and "this is the tab you were on" are
+# worth different amounts of trust.
+Examples: EnumerationValues
+| Value       | Notes                                                         |
+| File        | The file named it and the book has it                         |
+| FileName    | The name of the file fitted one account and only one          |
+| ActiveTab   | Neither did, so the register in front                         |
+| NoneOffered | Nothing to propose. The import is refused rather than guessed |
+
+Attributes ImportConfirmation
+Description The dialog, as it stands. Shown is false before a file is chosen and
+# after the dialog is answered either way.
+Details BankId and AccountNumber are shown because they are the only things in
+# the dialog that come from the bank rather than from this program, and
+# they are what settles the question when the proposed account is wrong.
+# A person who sees the number on their statement knows at once whether
+# the right register is being offered; a file name and an account path
+# are both this program repeating itself back.
+#
+# They are shown as the file wrote them, not reformatted, so that they
+# can be read against a statement. A download that states neither
+# leaves both lines out of the dialog rather than showing an empty one.
+| Attribute     | Type               | Default     |
+| Shown         | Boolean            | true        |
+| FileName      | Text               | none        |
+| Account       | AccountPath        | none        |
+| Source        | ImportTargetSource | NoneOffered |
+| BankId        | Text               | none        |
+| AccountNumber | Text               | none        |
+
+BusinessRule Which account the import proposes
+Description The file first, its name second, the register in front last. Each
+# one is only consulted because the one before it had nothing to say.
+Details A candidate is an account a register can be opened on: not a
+# placeholder, not a category, and not a hidden account. FromName is the
+# one candidate the name of the file fits -- blank if none fits, and
+# blank if two do, because a name that fits two accounts has not named
+# either of them.
+#
+# The last row is the one case with no answer at all: a file that says
+# nothing, read while a report is in front, so there is no register to
+# fall back on. That is refused with the message below rather than
+# proposed, because there is nothing a person could usefully confirm.
+Examples: ImportTargetProposal
+| Format | AccountInFile    | FromName        | ActiveTab        | Proposed         | Source      |
+| Qfx    | Liabilities:Visa | none            | Assets:Checking  | Liabilities:Visa | File        |
+| Qfx    | Liabilities:Visa | Assets:Checking | Assets:Checking  | Liabilities:Visa | File        |
+| Qfx    | Liabilities:Visa | none            | none             | Liabilities:Visa | File        |
+| Qfx    | none             | none            | Assets:Checking  | Assets:Checking  | ActiveTab   |
+| Qif    | Assets:Savings   | none            | Assets:Checking  | Assets:Savings   | File        |
+| Csv    | none             | Assets:Checking | Liabilities:Visa | Assets:Checking  | FileName    |
+| Csv    | none             | none            | Assets:Checking  | Assets:Checking  | ActiveTab   |
+| Csv    | none             | none            | none             | none             | NoneOffered |
+# The second row is the one that says which way round it is: the name of the
+# file disagreed with the inside of the file, and the inside won.
+
+Attributes ImportTargetProposal
+| Attribute     | Type               | Default     |
+| Format        | ImportFileFormat   | Csv         |
+| AccountInFile | AccountPath        | none        |
+| FromName      | AccountPath        | none        |
+| ActiveTab     | AccountPath        | none        |
+| Proposed      | AccountPath        | none        |
+| Source        | ImportTargetSource | NoneOffered |
+
+BusinessRule When the name of a file fits an account
+Description Whether one account is what a file name is talking about. Asked of
+# every candidate; the answer is only used when exactly one says yes.
+Details The extension is dropped, and what is left is cut into words at every
+# run of characters that is not a letter or a digit, and between a
+# letter and a digit, so Visa4455 is two words and 2026-02 is two more.
+#
+# A word, or a run of words next to each other, that reads the same as
+# the account's name once case and the spaces in the name are ignored,
+# fits. So does a word of four digits or more that the account's number
+# ends with. Three digits or fewer never fit anything: they are months,
+# days and sequence numbers, and matching an account number on them
+# would put a statement in the wrong account for a living.
+Examples: FileNameMatch
+| FileName                  | AccountName      | AccountNumber    | Fits  |
+| Checking-2026-02.csv      | Checking         | none             | true  |
+| checking_feb.csv          | Checking         | none             | true  |
+| Visa4455.qfx              | Visa             | none             | true  |
+| Opening~Balances~2026.csv | Opening~Balances | none             | true  |
+| OpeningBalances.csv       | Opening~Balances | none             | true  |
+| stmt_1234567890.csv       | Checking         | 1234567890       | true  |
+| chase_4455.csv            | Visa             | 4000123412344455 | true  |
+| chase_455.csv             | Visa             | 4000123412344455 | false |
+| CheckingAccount.csv       | Checking         | none             | false |
+| savings-feb.csv           | Checking         | none             | false |
+| download.csv              | Checking         | 1234567890       | false |
+# CheckingAccount is one word and that word is not Checking. A bank that names
+# its files that way is handled by the number in them, or by the account being
+# changed in the dialog once.
+
+Attributes FileNameMatch
+| Attribute     | Type    | Default |
+| FileName      | Text    |         |
+| AccountName   | Text    |         |
+| AccountNumber | Text    | none    |
+| Fits          | Boolean | false   |
+
+Scenario A QFX goes to the account it names rather than the tab in front
+Description Checking is the register in front and the file was downloaded for
+# the card. The file is the one that knows, and the card is not even
+# open.
+Given the chart of accounts is as previous
+Given transactions are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import file chosen : ImportFileChosen Vertical
+| FileName      | visa-feb.qfx     |
+| Format        | Qfx              |
+| AccountInFile | Liabilities:Visa |
+Then import confirmation is : ImportConfirmation Vertical
+| Shown    | true             |
+| FileName | visa-feb.qfx     |
+| Account  | Liabilities:Visa |
+| Source   | File             |
+Then open tabs are : OpenTab
+| Position | Kind     | Account         | Name     | Active |
+| 1        | Register | Assets:Checking | Checking | true   |
+Then bottom panel is : BottomPanel Vertical
+| Open      | false |
+| TabCount  | 0     |
+| ActiveTab | 0     |
+# Nothing has happened yet but the asking. The tab in front is still the tab in
+# front and the file has not been read.
+
+$TBD
+Scenario The dialog shows the bank id and the account number the download names
+Description The two lines that come from the bank rather than from this
+# program. The account offered is right, and the numbers are what
+# let the user see that without opening the register first.
+Given the chart of accounts is : ChartOfAccounts
+| Path             | Type       | Placeholder | Bank              | BankId    | AccountNumber |
+| Assets:Checking  | Checking   | false       | First~National    | 053000196 | 1234567890    |
+| Liabilities:Visa | CreditCard | false       | First~National    | 053000196 | 4111111111114 |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import file chosen : ImportFileChosen Vertical
+| FileName      | visa-feb.qfx     |
+| Format        | Qfx              |
+| AccountInFile | Liabilities:Visa |
+| BankId        | 053000196        |
+| AccountNumber | 4111111111114    |
+Then import confirmation is : ImportConfirmation Vertical
+| Shown         | true             |
+| FileName      | visa-feb.qfx     |
+| Account       | Liabilities:Visa |
+| Source        | File             |
+| BankId        | 053000196        |
+| AccountNumber | 4111111111114    |
+# The number shown is the one in the file, which is also the one on the Visa
+# account, because that is how the account was found. Where the two differ --
+# the file naming a number no account carries -- the dialog still shows the
+# file's, since the file is what is being read.
+
+$TBD
+Scenario A CSV states no numbers, so the dialog shows none
+Description A CSV says nothing about the bank or the account, so there is
+# nothing to show and the dialog does not pretend otherwise. The
+# name of the file is all it had to go on, and the Source line is
+# what says so.
+Given the chart of accounts is : ChartOfAccounts
+| Path             | Type       | Placeholder | Bank           | BankId    | AccountNumber |
+| Assets:Checking  | Checking   | false       | First~National | 053000196 | 1234567890    |
+| Liabilities:Visa | CreditCard | false       | First~National | 053000196 | 4111111111114 |
+When account selected : AccountSelect
+| Path             |
+| Liabilities:Visa |
+When import file chosen : ImportFileChosen Vertical
+| FileName | checking-feb.csv |
+| Format   | Csv              |
+Then import confirmation is : ImportConfirmation Vertical
+| Shown         | true             |
+| FileName      | checking-feb.csv |
+| Account       | Assets:Checking  |
+| Source        | FileName         |
+| BankId        | none             |
+| AccountNumber | none             |
+# Checking has a bank id and a number on it, and neither is shown. What the
+# dialog shows is what the file said, and this file said nothing: showing the
+# account's own numbers here would be this program quoting itself back as
+# though the bank had said it.
+
+Scenario Confirming makes that account's register the active tab, with the review beneath it
+Description Which is the arrangement every other import scenario here starts
+# from -- the register of the account being imported into is the
+# active tab, and the rows waiting to be reviewed are in the panel
+# below it, against the lines they are about to join. Confirming the
+# dialog is now the one way to reach it. The account the dialog
+# settled is also what fills the Account column of every row.
+Given the chart of accounts is as previous
+Given transactions are as previous
+Given the file holds : ImportReviewRow
+| Line | Date       | Payee  | Category           | Amount |
+| 1    | 2026-02-02 | Amazon | Expenses:Groceries | -31.00 |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import file chosen : ImportFileChosen Vertical
+| FileName      | visa-feb.qfx     |
+| Format        | Qfx              |
+| AccountInFile | Liabilities:Visa |
+When import confirmed
+Then import confirmation is : ImportConfirmation Vertical
+| Shown | false |
+Then open tabs are : OpenTab
+| Position | Kind     | Account          | Name     | Active |
+| 1        | Register | Assets:Checking  | Checking | false  |
+| 2        | Register | Liabilities:Visa | Visa     | true   |
+Then panes are : PaneState
+| Pane | Showing  | Account          | Active |
+| 1    | Register | Liabilities:Visa | true   |
+Then import review rows are : ImportReviewRow
+| Line | Payee  | Account          | Category           | Amount |
+| 1    | Amazon | Liabilities:Visa | Expenses:Groceries | -31.00 |
+Then bottom panel is : BottomPanel Vertical
+| Open      | true |
+| TabCount  | 1    |
+| ActiveTab | 1    |
+# The card's register was not open at all, so confirming opened it; it is the
+# active tab, and the rows are in the panel beneath that register rather than
+# beneath the one that happened to be in front when the file was chosen.
+
+Scenario Confirming an account already open comes back to its tab rather than opening a second
+Description One tab per account holds here as everywhere else. The card was
+# open and Checking was in front of it; confirming the card brings
+# the card's tab forward, and the review opens under that.
+Given the chart of accounts is as previous
+Given transactions are as previous
+Given the file holds : ImportReviewRow
+| Line | Date       | Payee  | Category           | Amount |
+| 1    | 2026-02-02 | Amazon | Expenses:Groceries | -31.00 |
+When account selected : AccountSelect
+| Path             |
+| Liabilities:Visa |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import file chosen : ImportFileChosen Vertical
+| FileName      | visa-feb.qfx     |
+| Format        | Qfx              |
+| AccountInFile | Liabilities:Visa |
+When import confirmed
+Then open tabs are : OpenTab
+| Position | Kind     | Account          | Name     | Active |
+| 1        | Register | Liabilities:Visa | Visa     | true   |
+| 2        | Register | Assets:Checking  | Checking | false  |
+Then panes are : PaneState
+| Pane | Showing  | Account          | Active |
+| 1    | Register | Liabilities:Visa | true   |
+Then bottom panel is : BottomPanel Vertical
+| Open      | true |
+| TabCount  | 1    |
+| ActiveTab | 1    |
+# The card keeps the position it was opened in. Nothing is reordered; which tab
+# is active is the only thing confirming changed.
+
+Scenario A CSV goes to the account the name of the file fits
+Description The card is in front and the file is the one the bank calls
+# Checking. A CSV says nothing about itself, so its name is all there
+# is -- and it is usually right, because the bank wrote it.
+Given the chart of accounts is as previous
+Given transactions are as previous
+When account selected : AccountSelect
+| Path             |
+| Liabilities:Visa |
+When import file chosen : ImportFileChosen Vertical
+| FileName | Checking-2026-02.csv |
+| Format   | Csv                  |
+Then import confirmation is : ImportConfirmation Vertical
+| Shown    | true                 |
+| FileName | Checking-2026-02.csv |
+| Account  | Assets:Checking      |
+| Source   | FileName             |
+
+Scenario A file whose name says nothing goes to the register in front
+Description Which is what an import did before there was a dialog, and still
+# what it does most of the time. The dialog is worth having anyway,
+# because the times it is wrong are the expensive ones.
+Given the chart of accounts is as previous
+Given transactions are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import file chosen : ImportFileChosen Vertical
+| FileName | download.csv |
+| Format   | Csv          |
+Then import confirmation is : ImportConfirmation Vertical
+| Shown    | true            |
+| FileName | download.csv    |
+| Account  | Assets:Checking |
+| Source   | ActiveTab       |
+
+Scenario A name that fits two accounts fits neither
+Description Both Checking and Visa are in it, so the name has not named an
+# account; it has listed two. The register in front is proposed
+# instead, and it is a third account, which is the point: a name that
+# fits two is worth no more than a name that fits none.
+Given the chart of accounts is as previous
+Given transactions are as previous
+When account selected : AccountSelect
+| Path           |
+| Assets:Savings |
+When import file chosen : ImportFileChosen Vertical
+| FileName | Checking~and~Visa.csv |
+| Format   | Csv                   |
+Then import confirmation is : ImportConfirmation Vertical
+| Shown    | true                  |
+| FileName | Checking~and~Visa.csv |
+| Account  | Assets:Savings        |
+| Source   | ActiveTab             |
+
+Scenario The account can be changed in the dialog and that is where it goes
+Description A proposal is a proposal. The file said nothing, so Checking was
+# offered; the statement is the card's, and saying so once here is
+# the whole of the correction.
+Given the chart of accounts is as previous
+Given transactions are as previous
+Given the file holds : ImportReviewRow
+| Line | Date       | Payee  | Category           | Amount |
+| 1    | 2026-02-02 | Amazon | Expenses:Groceries | -31.00 |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import file chosen : ImportFileChosen Vertical
+| FileName | download.csv |
+| Format   | Csv          |
+When import confirmed into : AccountSelect
+| Path             |
+| Liabilities:Visa |
+Then import review rows are : ImportReviewRow
+| Line | Payee  | Account          | Category           | Amount |
+| 1    | Amazon | Liabilities:Visa | Expenses:Groceries | -31.00 |
+Then panes are : PaneState
+| Pane | Showing  | Account          | Active |
+| 1    | Register | Liabilities:Visa | true   |
+
+Scenario Cancelling the dialog reads nothing at all
+Description Not the same as cancelling the review, which is a decision about
+# rows that have already been read. This is before the file has been
+# opened, so there is nothing to show and nothing to undo.
+Given the chart of accounts is as previous
+Given transactions are as previous
+Given the file holds : ImportReviewRow
+| Line | Date       | Payee  | Category           | Amount |
+| 1    | 2026-02-02 | Amazon | Expenses:Groceries | -31.00 |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import file chosen : ImportFileChosen Vertical
+| FileName      | visa-feb.qfx     |
+| Format        | Qfx              |
+| AccountInFile | Liabilities:Visa |
+When import confirmation cancelled
+Then import confirmation is : ImportConfirmation Vertical
+| Shown    | false       |
+| FileName | none        |
+| Account  | none        |
+| Source   | NoneOffered |
+Then open tabs are : OpenTab
+| Position | Kind     | Account         | Name     | Active |
+| 1        | Register | Assets:Checking | Checking | true   |
+Then bottom panel is : BottomPanel Vertical
+| Open      | false |
+| TabCount  | 0     |
+| ActiveTab | 0     |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Payee         | Balance |
+| T1  | 2026-01-05 | Acme Payroll  | 3000.00 |
+| T2  | 2026-01-15 | Harris Teeter | 2955.00 |
+| T4  | 2026-01-25 | Transfer      | 2455.00 |
+# The card tab was never opened, because the file was never read.
+
+Scenario A file that names its account is imported with a report in front
+Description The refusal is about having nothing to go on, not about what is on
+# the screen. A QFX names its account whether or not a register is
+# open, so there is an answer, and confirming it opens the register
+# the answer names.
+Given the chart of accounts is as previous
+Given transactions are as previous
+Given the file holds : ImportReviewRow
+| Line | Date       | Payee  | Category           | Amount |
+| 1    | 2026-02-02 | Amazon | Expenses:Groceries | -31.00 |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-01-01 |
+| To       | 2026-12-31 |
+| Interval | Whole      |
+When import file chosen : ImportFileChosen Vertical
+| FileName      | visa-feb.qfx     |
+| Format        | Qfx              |
+| AccountInFile | Liabilities:Visa |
+Then import confirmation is : ImportConfirmation Vertical
+| Shown    | true             |
+| FileName | visa-feb.qfx     |
+| Account  | Liabilities:Visa |
+| Source   | File             |
+When import confirmed
+Then open tabs are : OpenTab
+| Position | Kind     | Account          | Name                 | Active |
+| 1        | Report   | none             | Spending by category | false  |
+| 2        | Register | Liabilities:Visa | Visa                 | true   |
+Then bottom panel is : BottomPanel Vertical
+| Open      | true |
+| TabCount  | 1    |
+| ActiveTab | 1    |
+# The report is left where it was, as every other change to the book leaves it.
+
+# ---------------------------------------------------------------------------
+# A report is worked out again when the book has changed
+# ---------------------------------------------------------------------------
+
+Description A report tab holds the figures it was worked out with. It is worked
+# out again when it is shown and the book has changed since it was
+# last worked out, and at no other time.
+Details Every figure in a report is a total of transactions and nothing is
+# stored, which is the rule in Reports and is what makes a report and a
+# register agree. It also means a report is right the moment it is
+# worked out and wrong the moment a transaction moves, so something has
+# to say when to work it out again. Two answers are wrong. Never, and
+# the page shows last week's totals. Always, and a category report over
+# twenty years is totalled again because somebody clicked a tab -- a
+# redraw happens when a tab is clicked, when an account is selected,
+# when a column is resized, and a report that redoes its work on each of
+# those is the slowest thing in the program by a wide margin.
+#
+# So it is the book that decides, not the event: a report is worked out
+# again when the book is not the book it was totalled from. Which change
+# it was does not come into it. A transaction entered outside the
+# report's period still counts as a change, because working out which
+# changes could not possibly have mattered would be a second statement
+# of what a report totals -- in a second place, wrong the first time a
+# period moved.
+#
+# And not until it is shown. A report tab nobody is looking at has no
+# figure on screen to be wrong, so the work waits for the click that
+# brings it forward. Each tab remembers the book it was worked out from
+# on its own: two report tabs with one flag between them would leave the
+# second showing stale totals, which is the shape of this bug wherever
+# it has been written before.
+#
+# A register is not in any of this. It is read from the book every
+# redraw and always was; it costs a sort of one account's lines, not a
+# walk of the whole book.
+
+Attributes ReportWork
+Description How many times the report on one tab has been worked out, counting
+# from when the tab was opened. Register tabs are not listed.
+| Attribute | Type    | Default |
+| Position  | Integer | 1       |
+| Times     | Integer | 1       |
+
+Scenario A change made with the report in front works it out again
+Description The report is what is on the screen, so the new figures have to be
+# on it before the hand leaves the mouse. One transaction changed
+# here, which is the single edit; the step takes a table, and a table
+# of twenty is the same change twenty times over.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Auto      | Expense  | true        |
+| Expenses:Auto:Fuel | Expense  | false       |
+| Expenses:Groceries | Expense  | false       |
+Given transactions are : Transaction
+=FebruaryOnChecking
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-02-01 |
+| To       | 2026-02-28 |
+| Interval | Whole      |
+Then report rows are : ReportRow
+| Account            | Level | Amount | IsSubtotal |
+| Expenses           | 0     | 130.00 | true       |
+| Expenses:Auto      | 1     | 70.00  | true       |
+| Expenses:Auto:Fuel | 2     | 70.00  | false      |
+| Expenses:Groceries | 1     | 60.00  | false      |
+When the transactions are recategorised : TransactionRecategorise
+| Ref | Category           |
+| T2  | Expenses:Auto:Fuel |
+Then report rows are : ReportRow
+| Account            | Level | Amount | IsSubtotal |
+| Expenses           | 0     | 130.00 | true       |
+| Expenses:Auto      | 1     | 130.00 | true       |
+| Expenses:Auto:Fuel | 2     | 130.00 | false      |
+Then reports worked out are : ReportWork
+| Position | Times |
+| 1        | 2     |
+# Twice: once when it was asked for and once when the book under it moved.
+
+Scenario Clicking between tabs works nothing out again
+Description The common case while somebody is reading rather than typing, and
+# the one the first implementation got wrong. Nothing has changed, so
+# there is nothing to do and the report simply is what it was.
+Given the chart of accounts is as previous
+Given transactions are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-01-10 |
+| To       | 2026-01-22 |
+| Interval | Whole      |
+When tab selected : TabSelect Vertical
+| Position | 1 |
+When tab selected : TabSelect Vertical
+| Position | 2 |
+Then report rows are : ReportRow
+| Account            | Level | Amount | IsSubtotal |
+| Expenses           | 0     | 134.99 | true       |
+| Expenses:Groceries | 1     | 134.99 | false      |
+Then reports worked out are : ReportWork
+| Position | Times |
+| 2        | 1     |
+# Once, when it was asked for. Two tab clicks and a redraw of each, and the
+# totals on the page are the ones that were already there.
+
+Scenario A transaction entered behind a report is in it when the report comes forward
+Description The register is in front, which is where a transaction is typed, and
+# the report is a tab away. The work waits for the click.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Auto      | Expense  | true        |
+| Expenses:Auto:Fuel | Expense  | false       |
+| Expenses:Groceries | Expense  | false       |
+Given transactions are : Transaction
+=FebruaryOnChecking
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-02-01 |
+| To       | 2026-02-28 |
+| Interval | Whole      |
+When tab selected : TabSelect Vertical
+| Position | 1 |
+When register entry committed : RegisterEntry Vertical
+| Account  | Assets:Checking    |
+| Date     | 2026-02-12         |
+| Payee    | Harris Teeter      |
+| Category | Expenses:Groceries |
+| Payment  | 20.00              |
+Then reports worked out are : ReportWork
+| Position | Times |
+| 2        | 1     |
+When tab selected : TabSelect Vertical
+| Position | 2 |
+Then report rows are : ReportRow
+| Account            | Level | Amount | IsSubtotal |
+| Expenses           | 0     | 150.00 | true       |
+| Expenses:Auto      | 1     | 70.00  | true       |
+| Expenses:Auto:Fuel | 2     | 70.00  | false      |
+| Expenses:Groceries | 1     | 80.00  | false      |
+Then reports worked out are : ReportWork
+| Position | Times |
+| 2        | 2     |
+# The twenty is in the groceries figure, and the report was totalled once
+# while it was behind the register and once when it was brought forward --
+# which is to say, once each time it was looked at.
+
+Scenario An import accepted behind a report reaches it the same way
+Description An import is always into the register in front of it, so a report
+# open at the time is always the tab behind. Several hundred rows
+# arrive at once, which is the change least worth totalling twice.
+Given the chart of accounts is as previous
+Given transactions are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-01-10 |
+| To       | 2026-02-28 |
+| Interval | Whole      |
+When tab selected : TabSelect Vertical
+| Position | 1 |
+When import reviewed : ImportReviewRow
+| Line | Date       | Payee         | Account         | Category           | Amount | Disposition |
+| 1    | 2026-02-02 | Harris Teeter | Assets:Checking | Expenses:Groceries | -52.10 | New         |
+When import accepted
+When tab selected : TabSelect Vertical
+| Position | 2 |
+Then report rows are : ReportRow
+| Account            | Level | Amount | IsSubtotal |
+| Expenses           | 0     | 187.09 | true       |
+| Expenses:Groceries | 1     | 187.09 | false      |
+Then reports worked out are : ReportWork
+| Position | Times |
+| 2        | 2     |
+
+Scenario A transaction deleted behind a report is gone from it
+Description The other half of the rule a save has to keep as well. A figure
+# whose transaction has been deleted is the one a stale report shows
+# most convincingly, because the amount is a real amount that was
+# really spent.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Auto      | Expense  | true        |
+| Expenses:Auto:Fuel | Expense  | false       |
+| Expenses:Groceries | Expense  | false       |
+Given transactions are : Transaction
+=FebruaryOnChecking
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-02-01 |
+| To       | 2026-02-28 |
+| Interval | Whole      |
+When tab selected : TabSelect Vertical
+| Position | 1 |
+When register lines selected : RegisterSelect
+| Line |
+| 2    |
+When selection deleted
+When tab selected : TabSelect Vertical
+| Position | 2 |
+Then report rows are : ReportRow
+| Account            | Level | Amount | IsSubtotal |
+| Expenses           | 0     | 70.00  | true       |
+| Expenses:Auto      | 1     | 70.00  | true       |
+| Expenses:Auto:Fuel | 2     | 70.00  | false      |
+Then reports worked out are : ReportWork
+| Position | Times |
+| 2        | 2     |
+# The supermarket visit was the second line of February, and its sixty is not
+# in the report any more -- not under groceries, and not in the total either.
+# Groceries has no transaction left in it, so the row is gone rather than
+# showing nothing.
+
+Scenario One report worked out leaves the other to be worked out when it is shown
+Description Two periods side by side is the reason to have two report tabs, and
+# a change belongs to both of them. Each remembers for itself what it
+# was totalled from: one flag between them would leave the tab that
+# was behind showing figures from before the change, with nothing on
+# the page to say so.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Auto      | Expense  | true        |
+| Expenses:Auto:Fuel | Expense  | false       |
+| Expenses:Groceries | Expense  | false       |
+Given transactions are : Transaction
+=FebruaryOnChecking
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-02-01 |
+| To       | 2026-02-28 |
+| Interval | Whole      |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-01-01 |
+| To       | 2026-12-31 |
+| Interval | Whole      |
+When the transactions are recategorised : TransactionRecategorise
+| Ref | Category           |
+| T1  | Expenses:Groceries |
+| T3  | Expenses:Groceries |
+Then reports worked out are : ReportWork
+| Position | Times |
+| 1        | 1     |
+| 2        | 2     |
+When tab selected : TabSelect Vertical
+| Position | 1 |
+Then report rows are : ReportRow
+| Account            | Level | Amount | IsSubtotal |
+| Expenses           | 0     | 130.00 | true       |
+| Expenses:Groceries | 1     | 130.00 | false      |
+Then reports worked out are : ReportWork
+| Position | Times |
+| 1        | 2     |
+| 2        | 2     |
+# The change was made with the second tab in front, so that one was totalled
+# again there and then and the first was totalled when it was clicked. Two
+# transactions in one step, which is the bulk recategorise: it counts as one
+# change, not as two.
 
 # ---------------------------------------------------------------------------
 # The bottom panel

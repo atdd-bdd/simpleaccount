@@ -74,7 +74,7 @@ Examples: BookScope
 | Payees                       | PerBook  | Derived from the transactions of the book  |
 | Payee rules                  | PerBook  | A business payee takes a business category |
 | Remembered splits            | PerBook  |                                           |
-| Account mappings for OFX     | PerBook  | Which account a downloaded number is      |
+| Bank numbers on an account   | PerBook  | They are part of the account, which is per book |
 | Reconciliations              | PerBook  |                                           |
 | Fiscal year start            | PerBook  | A business year need not be a personal one |
 | CSV bank profiles            | PerBook  | Duplicated rather than shared; see above  |
@@ -122,7 +122,7 @@ Then payee rules in force in Personal are : PayeeRules
 | Pattern | MatchType | Payee | Category |
 # No rows.
 
-$WIP
+$TBD
 Scenario A CSV profile set up for one book is not in the other
 Description The headings of a CSV file from a bank are the same whichever
 # account they describe, so a shared profile would save the second
@@ -158,31 +158,34 @@ Attributes CurrentBook
 | Attribute | Type | Default |
 | Name      | Text |         |
 
-$WIP
-Scenario An OFX account mapping is per book
+$TBD
+Scenario A bank number known to one book is unknown to the other
 Description Two accounts at one bank, one business and one personal, have two
-# different numbers and belong in two different books. A mapping in
-# the wrong book would post business money to a personal account.
+# different numbers and belong in two different books. Each book's
+# account carries its own number, and a download is placed by the
+# book that is open. Finding the number in the other book would post
+# business money to a personal account.
 Given books are as previous
-Given account mappings of Business are : AccountMapping
-| BankId    | OfxAccountId | AccountPath     |
-| 053000196 | 1111111111   | Assets:Checking |
-Given account mappings of Personal are : AccountMapping
-| BankId    | OfxAccountId | AccountPath     |
-| 053000196 | 2222222222   | Assets:Checking |
+Given the chart of accounts of Business is : ChartOfAccounts
+| Path            | Type     | Placeholder | BankId    | AccountNumber |
+| Assets:Checking | Checking | false       | 053000196 | 1111111111    |
+Given the chart of accounts of Personal is : ChartOfAccounts
+| Path            | Type     | Placeholder | BankId    | AccountNumber |
+| Assets:Checking | Checking | false       | 053000196 | 2222222222    |
 Given the current book is : CurrentBook Vertical
 | Name | Personal |
 When statement imported : OfxStatement Vertical
 | BankId       | 053000196  |
 | OfxAccountId | 1111111111 |
 | OfxAcctType  | CHECKING   |
-Then asked to choose an account for : UnmappedAccount Vertical
+Then asked to choose an account for : UnknownAccount Vertical
 | BankId       | 053000196  |
 | OfxAccountId | 1111111111 |
 | OfxAcctType  | CHECKING   |
 | Suggestion   | none       |
-# The number is mapped, but in the other book. In this one it is unknown, and
-# the import asks rather than reaching into the business book to find it.
+# The number is on an account, but in the other book. No account in this one
+# claims it, so the import asks, exactly as it would for a number no account
+# anywhere had ever seen. Nothing looks across books.
 
 # ---------------------------------------------------------------------------
 # Each book balances on its own
@@ -212,7 +215,7 @@ Attributes PerBookCheck
 | OutOfBalance        | Integer | 0       |
 | Balanced            | Boolean | false   |
 
-$WIP
+$TBD
 Scenario A transfer may not name an account in another book
 Description A transaction names an account, and the accounts of another book are
 # not in scope. There is no syntax for it and no account picker that
@@ -365,7 +368,6 @@ Examples: EntityStorage
 | Holding           | Holdings            |                       | Not yet     |
 | PayeeRule         | PayeeRules          | payee_rules           | The book    |
 | PayeeSplitRule    |                     | payee_split_rules     | The book    |
-| AccountMapping    |                     | ofx_account_mappings  | The book    |
 | TransferMatchRule | TransferMatchRules  | transfer_match_rules  | The book    |
 | Book              | Books               |                       | The folder  |
 | CsvProfile        |                     | csv_profiles          | The book    |
@@ -443,7 +445,7 @@ Attributes ColumnType
 | Column        | String |         |
 | Notes         | String | none    |
 
-$WIP
+$TBD
 BusinessRule The QIF profiles live in one file beside the books, under a name
 Description Named, so there can be more than one: an export made years ago may
 # have a different date order from one made today, and being able to
@@ -469,7 +471,7 @@ Attributes BesideTheBooks
 | Holds      | String |         |
 | InBookList | String |         |
 
-$WIP
+$TBD
 Scenario A QIF profile is remembered under a name and found again
 Description So that importing the same export twice does not ask twice, and
 # importing from another Quicken book does not ask at all.
@@ -806,7 +808,7 @@ Attributes BookNameRow
 # Opening and working in two books
 # ---------------------------------------------------------------------------
 
-$WIP
+$TBD
 Scenario Two books may be open at once, in two windows
 Description A window is open on one book and every register, report and import
 # in it belongs to that book. Having both open is useful on the day
@@ -830,7 +832,7 @@ Attributes BookWindow
 | Window    | Integer | 0       |
 | Book      | Text    |         |
 
-$WIP
+$TBD
 Scenario Opening the same book twice brings its window forward
 Description Two windows on one book would let the same transaction be edited
 # in two places, and the second edit would silently win.
@@ -868,7 +870,7 @@ Attributes ReportHeading
 # Where the two books come from
 # ---------------------------------------------------------------------------
 
-$WIP
+$TBD
 Scenario Each QIF file migrates into its own book
 Description The two exports in testdata become the two books, and the
 # migration is run twice. Neither run can see the other, so a
@@ -889,7 +891,7 @@ Attributes QifMigration
 | SourceFile | Text |         |
 | BookName   | Text |         |
 
-$WIP
+$TBD
 Scenario A bracketed account naming the other file is created in this book
 Description The business export may name an account that lives in the personal
 # one. The migration cannot reach across, so it creates the account

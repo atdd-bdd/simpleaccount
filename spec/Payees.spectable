@@ -225,7 +225,7 @@ Details A mortgage payment is the case this exists for: the same division of
 | Payee     | PayeeName   |         |                                    |
 | Shape     | SplitShape  | Amounts | How the lines divide the total     |
 
-$WIP
+$TBD
 DataType SplitShape
 Description Whether the remembered split lines are amounts or proportions.
 Examples: EnumerationValues
@@ -240,7 +240,7 @@ Attributes RememberedSplitLine
 | Percent   | Decimal     | 0       |
 | Memo      | Text        | none    |
 
-$WIP
+$TBD
 Scenario A remembered split in fixed amounts is offered
 Description The escrow and principal are the amounts last used. The total of the
 # downloaded transaction differs, so the shortfall is reported rather
@@ -291,7 +291,7 @@ Attributes SplitShortfall
 | Shortfall | Money   | 0.00    |
 | Balanced  | Boolean | false   |
 
-$WIP
+$TBD
 Scenario A remembered split whose amounts no longer add up reports the shortfall
 Description The payment went up by twenty dollars in January, as it does. The
 # remembered amounts are offered unchanged and the difference is
@@ -324,7 +324,7 @@ Then split shortfall is : SplitShortfall Vertical
 | Shortfall | 20.00   |
 | Balanced  | false   |
 
-$WIP
+$TBD
 Scenario A remembered split in percentages divides the total
 Description Percentages are applied to the downloaded total, so the lines always
 # add up. The rounding goes to the largest line, so that the sum is
@@ -359,7 +359,7 @@ Then split shortfall is : SplitShortfall Vertical
 | Shortfall | 0.00    |
 | Balanced  | true    |
 
-$WIP
+$TBD
 BusinessRule How a percentage split rounds
 Description Each line is rounded to the cent, and whatever is left over after
 # that is added to the largest line.

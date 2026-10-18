@@ -202,41 +202,68 @@ Then rejected because : Rejection
 | Reason                                                  |
 | No OFX header found; this looks like a CSV file         |
 
-Scenario A statement for an account that is not yet mapped asks which it is
-Description The first download from an institution names an account number that
-# means nothing yet. The import stops and asks, rather than inventing
-# an account.
-Given account mappings are : AccountMapping
-| BankId | OfxAccountId | AccountPath |
+# ---------------------------------------------------------------------------
+# Which account a download is for
+# ---------------------------------------------------------------------------
+
+Description A download names its account in the bank's own terms -- a routing
+# number, and the number the bank keeps the account under -- and the
+# account itself is where those terms are kept. The account a
+# statement belongs to is the account whose number the statement
+# names.
+Details There is no table of mappings. An account carries the name of its
+# bank, that bank's id and its own number, the three of them together;
+# see what is kept about an account in Accounts. Finding the account
+# for a download is reading those off the chart. A second place to
+# record a bank's numbering would be a second thing to keep in step
+# with the first, and the only question a download asks -- which
+# account is this -- is answered by an account or not at all.
+#
+# A number is kept as a person writes it and a file gives bare digits,
+# so it is the digits of each that are compared; the rule below says
+# how. The routing numbers have to agree whenever both say anything,
+# because two banks number their accounts independently and over
+# twenty years one of them reaches a number the other has used.
+#
+# An account that knows none of this is matched by nothing, and that is
+# the ordinary state of every account brought over from Quicken: a QIF
+# carries no routing number and no account number. The first download
+# into such an account is where they arrive; see what a download
+# teaches an account, below.
+
+$TBD
+Scenario A statement whose number is on no account asks which account it is
+Description The first download from an institution names a number that means
+# nothing yet. The import stops and asks, rather than inventing an
+# account.
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type     | Placeholder | BankId | AccountNumber |
+| Assets:Checking | Checking | false       | none   | none          |
 When statement imported : OfxStatement Vertical
 | BankId       | 053000196  |
 | OfxAccountId | 1234567890 |
 | OfxAcctType  | CHECKING   |
-Then asked to choose an account for : UnmappedAccount Vertical
+Then asked to choose an account for : UnknownAccount Vertical
 | BankId       | 053000196  |
 | OfxAccountId | 1234567890 |
 | OfxAcctType  | CHECKING   |
 | Suggestion   | none       |
 
-Attributes UnmappedAccount
+Attributes UnknownAccount
+Description What the dialog is told about a statement no account claims.
 | Attribute    | Type        | Default  |
 | BankId       | Text        | none     |
 | OfxAccountId | Text        |          |
 | OfxAcctType  | OfxAcctType | CHECKING |
 | Suggestion   | AccountPath | none     |
 
-Entity AccountMapping
-Description Which SimpleAccount account a downloaded account number belongs to.
-Details Recorded once, on the first import, and used silently thereafter.
-| Attribute    | Type        | Default | Notes                            |
-| BankId       | Text        | none    | Absent for a credit card         |
-| OfxAccountId | Text        |         | As the file gives it             |
-| AccountPath  | AccountPath |         | Where its transactions are posted |
-
-Scenario A mapped account imports without asking
-Given account mappings are : AccountMapping
-| BankId    | OfxAccountId | AccountPath     |
-| 053000196 | 1234567890   | Assets:Checking |
+$TBD
+Scenario A download whose number is on an account imports without asking
+Description Which is every month after the first. The account was told the
+# bank's numbers once and nobody is asked again.
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type     | Placeholder | BankId    | AccountNumber |
+| Assets:Checking | Checking | false       | 053000196 | 1234567890    |
 When statement imported : OfxStatement Vertical
 | BankId       | 053000196  |
 | OfxAccountId | 1234567890 |
@@ -249,6 +276,139 @@ Attributes ImportTarget
 | Attribute   | Type        | Default |
 | AccountPath | AccountPath |         |
 | Asked       | Boolean     | false   |
+
+$TBD
+BusinessRule When the number in a download is the number on an account
+Description Asked of every real account in the chart. One account saying yes is
+# the account it goes to; none, and the import asks. Two is also
+# asked, because a number that names two accounts has named neither.
+Details Only the digits of each are compared, because the account's number
+# is kept as somebody wrote it -- 0012-3456, or a card number in
+# groups of four -- and the file gives nothing but digits.
+#
+# Equal digits are the ordinary case. Beyond that, the digits of one
+# ending the digits of the other count, which is what lets an account
+# labelled with the last four of a card meet the full number the
+# download carries. Four digits is the floor, the same floor the
+# file-name rule uses in UserInterface: three digits is a month or a
+# sequence number, and matching an account on three digits would put
+# a statement in the wrong account for a living.
+#
+# The routing numbers have to agree whenever both are stated. A card
+# statement states none, and an account that has not been told its
+# bank's id states none; neither of those is a disagreement, because
+# nothing was claimed.
+Examples: DownloadAccountMatch
+| StatementBankId | StatementAccountId | AccountBankId | AccountNumber        | Matches |
+| 053000196       | 1234567890         | 053000196     | 1234567890           | true    |
+| 053000196       | 1234567890         | none          | 1234567890           | true    |
+| none            | 4111111111114455   | 053000196     | ~4111 1111 1111 4455 | true    |
+| 053000196       | 0012-3456          | 053000196     | 0012 3456            | true    |
+| 053000196       | 4111111111114455   | 053000196     | 4455                 | true    |
+| 053000196       | 4111111111114455   | 053000196     | 455                  | false   |
+| 053000196       | 1234567890         | 053000196     | 0012-3456            | false   |
+| 053000196       | 1234567890         | 021000021     | 1234567890           | false   |
+| 053000196       | 1234567890         | 053000196     | none                 | false   |
+# The third row is a card: no routing number in the file, one on the account,
+# and the number written in groups of four. The second to last is the one the
+# routing number is there for -- the same account number at two banks.
+
+Attributes DownloadAccountMatch
+| Attribute          | Type    | Default |
+| StatementBankId    | Text    | none    |
+| StatementAccountId | Text    |         |
+| AccountBankId      | Text    | none    |
+| AccountNumber      | Text    | none    |
+| Matches            | Boolean | false   |
+
+# ---------------------------------------------------------------------------
+# What a download teaches an account
+# ---------------------------------------------------------------------------
+
+Description An account that was never told the bank's numbers is told them by
+# the first download confirmed for it. Nothing already there is
+# changed.
+Details This is the whole of how the numbers get onto an account without
+# anybody typing them. A history imported from Quicken carries none,
+# so asking once per account is the least that can be asked, and
+# writing down the answer is what makes it once rather than monthly.
+#
+# Only what is blank is filled in. A number a person typed is what the
+# account dialog shows them, and a download that disagreed with it
+# would be rewriting a label they chose, in a place they were not
+# looking, on the strength of their having confirmed something else.
+# So a disagreement leaves the account alone and writes a note, and
+# the account dialog is where it is settled.
+
+$TBD
+Scenario The first download confirmed for an account tells it the bank's numbers
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder | BankId | AccountNumber |
+| Assets:Checking        | Checking | false       | none   | none          |
+| Expenses:Uncategorized | Expense  | false       | none   | none          |
+When statement imported : OfxStatement Vertical
+| BankId       | 053000196  |
+| OfxAccountId | 1234567890 |
+| OfxAcctType  | CHECKING   |
+When import target chosen : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Then account numbering is : AccountNumbering
+| Path            | BankId    | AccountNumber |
+| Assets:Checking | 053000196 | 1234567890    |
+# Asked once. The number the bank uses is on the account now, so the rule
+# above places next month's download without anybody being asked again.
+
+Attributes AccountNumbering
+Description The two things on an account that a download is matched against.
+| Attribute     | Type        | Default |
+| Path          | AccountPath |         |
+| BankId        | Text        | none    |
+| AccountNumber | Text        | none    |
+
+$TBD
+Scenario A number already on the account is left as it is and noted
+Description The account says one number, the file says another, and the person
+# confirmed that account anyway. Which of the two is right is not
+# something an import can know, so it changes neither and says so.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder | BankId    | AccountNumber |
+| Assets:Checking        | Checking | false       | 053000196 | 0012-3456     |
+| Expenses:Uncategorized | Expense  | false       | none      | none          |
+When statement imported : OfxStatement Vertical
+| BankId       | 053000196  |
+| OfxAccountId | 1234567890 |
+| OfxAcctType  | CHECKING   |
+When import target chosen : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Then account numbering is : AccountNumbering
+| Path            | BankId    | AccountNumber |
+| Assets:Checking | 053000196 | 0012-3456     |
+Then import finishes with : ImportCompletion Vertical CompareOnly
+| NoteCount | 1 |
+
+$TBD
+Scenario A bank id arrives for an account that only knew its number
+Description The number was typed in the account dialog and the routing number
+# was not, because nobody reads a routing number off a statement to
+# label an account. The download has one, the account has none, and
+# none is not a disagreement.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder | BankId | AccountNumber |
+| Assets:Checking        | Checking | false       | none   | 1234567890    |
+| Expenses:Uncategorized | Expense  | false       | none   | none          |
+When statement imported : OfxStatement Vertical
+| BankId       | 053000196  |
+| OfxAccountId | 1234567890 |
+| OfxAcctType  | CHECKING   |
+Then import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+| Asked       | false           |
+Then account numbering is : AccountNumbering
+| Path            | BankId    | AccountNumber |
+| Assets:Checking | 053000196 | 1234567890    |
+# Nobody was asked -- the number was enough to place it -- and the routing
+# number was still learned, so a second account at a second bank with the
+# same number can be told from this one later.
 
 # ---------------------------------------------------------------------------
 # Deciding what to do with each transaction
@@ -299,8 +459,37 @@ Description In order. The first test that applies decides.
 Details The FITID test is what makes a second import of the same file do
 # nothing. It is scoped to the account, because two banks may issue the
 # same identifier.
-# The match test is what stops a check appearing twice: once when it was
-# written, and again when it cleared.
+#
+# Below it the tests divide by what the book's transaction is, and
+# cleared status is what says which: everything an import writes is
+# cleared, so an uncleared transaction is one somebody typed. See every
+# imported transaction is cleared, below.
+#
+# A transaction somebody typed carries their date, which is the day they
+# wrote the check or made the payment, and the bank posts it days later.
+# Where there is a check number the number does the identifying and the
+# lag is simply allowed for, which is what the check-number window is.
+# Where there is not, amount and date are the whole of the evidence, and
+# an import that reached across several days on that much would be
+# guessing. So test three is dated to the day as well, and what it
+# produces is a question rather than a decision: the same amount on the
+# same day as something typed is offered as a possible duplicate, and
+# the user says whether it is the same payment.
+#
+# A transaction an import wrote carries the bank's own posting date, and
+# so does the row now being read. Two records of one event from one
+# source agree about the day, so test four needs no window and asks
+# nothing: the same amount in the same account on the same date is that
+# transaction arriving a second time. Allowing days either side would be
+# allowing the bank to disagree with itself, and asking about it would
+# be asking the user to confirm what the program already knows.
+#
+# Reaching further than a day is left to a pass of its own, after the
+# import has been accepted, where the question is a different one:
+# pairing a transaction in this register against one in another
+# register, the two halves of a transfer days apart. That pass has a
+# window because the two dates come from two different places. Nothing
+# in it happens while a row is being judged. See proposing transfers.
 #
 # Tests two to four have no identifier behind them, so they are subject to
 # the claim-pairing rule in ImportCsv: each downloaded transaction claims
@@ -311,8 +500,8 @@ Examples: DispositionRule
 | Test | Condition                                                             | Disposition |
 | 1    | A transaction in this account carries this FITID, from an Ofx import   | Duplicate   |
 | 2    | An uncleared transaction in this account has the same amount and check number, within the book's check-number window | Matched |
-| 3    | An uncleared transaction in this account has the same amount within five days | Matched |
-| 4    | A cleared transaction in this account has the same amount and date, no FITID | Possible |
+| 3    | An uncleared transaction in this account has the same amount on the same date | Possible |
+| 4    | A cleared transaction in this account has the same amount on the same date, and no FITID | Matched |
 | 5    | Nothing above applies                                                 | New         |
 
 Attributes DispositionRule
@@ -325,12 +514,9 @@ Scenario Importing the same file twice imports nothing the second time
 Description The FITID is stored on the transaction in the statement account, which
 # is what makes this test possible at all.
 Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type    | Placeholder |
-| Assets:Checking        | Checking | false       |
-| Expenses:Uncategorized | Expense | false       |
-Given account mappings are : AccountMapping
-| BankId    | OfxAccountId | AccountPath     |
-| 053000196 | 1234567890   | Assets:Checking |
+| Path                   | Type     | Placeholder | BankId    | AccountNumber |
+| Assets:Checking        | Checking | false       | 053000196 | 1234567890    |
+| Expenses:Uncategorized | Expense  | false       | none      | none          |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -431,7 +617,16 @@ Then transactions are : ImportedTransaction
 # The date entered by hand is kept. It is the date the check was written, which
 # is what the register is ordered by; the clearing date belongs to the bank.
 
-Scenario A match within five days on amount alone
+Scenario A typed transaction and a download two days apart are two transactions
+Description T1 was typed, which is what Uncleared says about it. The download
+# is two days later for the same amount, and the import does not
+# join them: an amount and a date is all there is to go on, and
+# reaching across days on that much is guessing.
+Details What a person would have to know to answer this is whether they
+# shopped twice, and the program cannot know it. So it does not
+# decide: the download comes in as a new transaction, and T1 is left
+# alone for the pass that pairs registers later, where the question
+# is asked with two dates from two different places behind it.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -446,15 +641,16 @@ When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name               | Memo | CheckNum |
 | DEBIT   | 2024-01-16 | -45.00 | 20240116009 | HARRIS TEETER #231 | none | none     |
 Then import summary is : ImportSummary Vertical
-| New       | 0 |
+| New       | 1 |
 | Duplicate | 0 |
-| Matched   | 1 |
+| Matched   | 0 |
 | Possible  | 0 |
 
 Scenario The same amount six days apart is not matched
-Description Five days is the window. Beyond it the two are taken to be two
-# separate visits to the same shop for the same amount, which is
-# commoner than a bank taking a week to post.
+Description Six days or two, it makes no difference now: there is no window
+# here to be inside of. The two are taken to be two separate visits
+# to the same shop for the same amount, which is commoner than a
+# bank taking a week to post.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -468,6 +664,68 @@ Given import target is : ImportTarget Vertical
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name               | Memo | CheckNum |
 | DEBIT   | 2024-01-20 | -45.00 | 20240120009 | HARRIS TEETER #231 | none | none     |
+Then import summary is : ImportSummary Vertical
+| New       | 1 |
+| Duplicate | 0 |
+| Matched   | 0 |
+| Possible  | 0 |
+
+Scenario A transaction already imported, with no identifier, is matched on its day
+Description The case a history brought over from Quicken makes ordinary. T1 came
+# in with that history: it is cleared, because the bank had already
+# posted it when Quicken was told about it, and it carries no FITID,
+# because a QIF has none to carry. Downloading the same month from the
+# bank reaches it again.
+Details The dates agree exactly, and they agree because both are the bank's
+# own posting date -- one recorded through Quicken, one read out of
+# the file today. So this is the transaction, not something that looks
+# like it, and the import says Matched.
+#
+# It is the FITID being absent that brings this test into play at all.
+# Where there is one, test one has already settled the question.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Groceries     | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared | FitId |
+| T1  | Assets:Checking | 2024-01-16 | Harris Teeter | Expenses:Groceries | -45.00 | Cleared | none  |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name               | Memo | CheckNum |
+| DEBIT   | 2024-01-16 | -45.00 | 20240116009 | HARRIS TEETER #231 | none | none     |
+Then import summary is : ImportSummary Vertical
+| New       | 0 |
+| Duplicate | 0 |
+| Matched   | 1 |
+| Possible  | 0 |
+Then transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared | FitId       |
+| T1  | Assets:Checking | 2024-01-16 | Harris Teeter | Expenses:Groceries | -45.00 | Cleared | 20240116009 |
+# One transaction, the one that was already there. It keeps the payee and the
+# category it was given and gains the identifier it never had, so the next
+# download of the same month settles on test one and nothing is asked twice.
+
+Scenario The same amount a day either side of an imported transaction is a second transaction
+Description The dates disagree, and between two of the bank's own records that
+# means two postings. Five days would have swallowed this one; the
+# window is not offered here, because there is no lag between a bank
+# and itself to allow for.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Groceries     | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared | FitId |
+| T1  | Assets:Checking | 2024-01-16 | Harris Teeter | Expenses:Groceries | -45.00 | Cleared | none  |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name               | Memo | CheckNum |
+| DEBIT   | 2024-01-17 | -45.00 | 20240117009 | HARRIS TEETER #231 | none | none     |
 Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 0 |
@@ -513,6 +771,45 @@ Then transactions are : ImportedTransaction
 # The payee is the raw NAME from the file. Tidying it is the business of
 # Payees, so that this file has one job.
 
+$TBD
+BusinessRule A download arrives cleared and only a typed transaction is not
+Description Cleared means the bank has said this happened. A download is the
+# bank saying so, so everything read out of one is cleared. A
+# transaction is uncleared only while the only record of it is that
+# somebody typed it.
+Details Which makes cleared status the one thing that says where a
+# transaction came from, and the tests above lean on it: an uncleared
+# transaction is a typed one, so its date is a person's and is allowed
+# to differ from the bank's by a few days. A cleared one came from the
+# bank, so its date is the bank's and has to agree exactly. Neither
+# test would be safe if a download left anything uncleared.
+#
+# A download states a cleared status of its own in some formats, and it
+# is not read. Nothing a bank has sent is uncleared by the time it is
+# in the file, so a flag saying otherwise is either about something
+# else or wrong.
+#
+# A QIF history is the exception, and it is not a download: it is one
+# migration of twenty years of a Quicken file, and the C field in it is
+# the only thing that says which of those invoices were ever paid.
+# Three income figures agree with Quicken to the cent because of it.
+# So a history keeps the marker it carries, which leaves the
+# transactions it brought in cleared where Quicken had cleared them and
+# uncleared where it had not. See the cleared marker rule in ImportQif,
+# and was_paid in qif_import.h for what that marker replaced.
+Examples: ClearedOnArrival
+| HowItArrived              | Cleared          |
+| Read from an OFX download | Cleared          |
+| Read from a CSV download  | Cleared          |
+| Read from a QIF history   | As the file says |
+| Typed into the register   | Uncleared        |
+| Typed as a split          | Uncleared        |
+
+Attributes ClearedOnArrival
+| Attribute     | Type   | Default |
+| HowItArrived  | String |         |
+| Cleared       | String |         |
+
 # ---------------------------------------------------------------------------
 # What a check number is worth, and for how long
 # ---------------------------------------------------------------------------
@@ -536,13 +833,13 @@ Details So a number settles a match only when the two are dated within the
 # matches anything older is more likely a number reused than a check
 # still in the post.
 #
-# At one day the number settles nothing the amount would not have settled
-# on its own, because the window on amount alone is five days and wholly
-# contains it. That is not a defect and the test is not dead: it is what
-# the setting is for. A book that records checks when they are written
-# has checks outstanding for a week or three, and widening the window is
-# what makes the number worth having. Recording a check when it is
-# written is not a thing this program does yet.
+# This is the only window inside an import. Every test below the number
+# asks about one day, so the number is the one thing that reaches further
+# than the day the bank posted, and at one day it reaches exactly one day
+# further. A book that records checks when they are written has checks
+# outstanding for a week or three, and widening the window is what makes
+# the number worth having. Recording a check when it is written is not a
+# thing this program does yet.
 #
 # What happens then is the point of the rule. A number that matched while
 # the dates did not is exactly the case worth seeing: either a check
@@ -561,7 +858,7 @@ Examples: CheckNumberWindow
 | DaysApart | NumberMatches | Matched | NoteWritten | Notes                                              |
 | 0         | Yes           | Yes     | No          | The number settles it                              |
 | 1         | Yes           | Yes     | No          | Still within the day                               |
-| 2         | Yes           | Yes     | Yes         | The number is stale, but the amount still reaches  |
+| 2         | Yes           | No      | Yes         | The number is stale and nothing weaker reaches     |
 | 16        | Yes           | No      | Yes         | Nothing reaches; created, and the note says why    |
 | 16        | No            | No      | No          | A different number, and nothing else reaches       |
 
@@ -569,11 +866,12 @@ Attributes CheckNumberWindow
 Description Whether a check number settles a match, by how far apart the two are
 # dated, and whether the import wrote a note about it.
 Details Matched is the disposition, not the reason for it. The row two days
-# apart is matched on the amount within five days, which is the other
-# window and a weaker thing to match on -- so the note is still written,
+# apart is created rather than matched, because at the default window
+# nothing reaches two days: the number is past its day and the amount
+# never reached beyond the day at all. The note is written all the same,
 # because the number said one check and the dates said another and that
-# is what a person needs to see. The two windows are independent and the
-# table is where they are shown together.
+# is what a person needs to see -- a created transaction is the right
+# answer and still worth being told about.
 | Attribute     | Type    | Default |
 | DaysApart     | Integer | 0       |
 | NumberMatches | Text    | Yes     |
@@ -688,7 +986,14 @@ Description The other three settle themselves. A new transaction is created, a
 # duplicate is ignored, a match clears the one already there. A
 # possible duplicate is the case the program cannot settle, so it is
 # the one that asks, and nothing happens to it until it is answered.
-Details There are two answers and both are ordinary. Either it is the same
+Details Only one test produces it, and it is the test about a transaction
+# somebody typed: the same amount in the same account on the same day,
+# with no check number to settle it. Everything the bank has already
+# told us about is settled without asking, because the dates come from
+# the bank both times. This is the one case where the two dates come
+# from two different hands.
+#
+# There are two answers and both are ordinary. Either it is the same
 # transaction, in which case the one already in the book is the
 # transaction and the downloaded row only tells us the bank has seen it;
 # or it is a second one, in which case the bank is describing something
@@ -712,17 +1017,18 @@ Attributes PossibleAnswer
 | TheDownloadedRow   | String |         |
 
 Scenario Answering that a possible duplicate is the same transaction
-Description The one already in the book is the transaction. It is cleared and
-# stamped, so the next import of the same file knows it outright
-# rather than asking again.
+Description The one already in the book was typed, which is why the import
+# asked at all. Answering TheSame says it is this payment, so it is
+# cleared and stamped, and the next import of the same file knows it
+# outright rather than asking again.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given transactions are : ImportedTransaction
-| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared | FitId |
-| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Cleared | none  |
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared   | FitId |
+| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Uncleared | none  |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -746,16 +1052,17 @@ Description Which offered row is being answered, and what the answer is.
 | Answer    | Text  | TheSame |
 
 Scenario Answering that a possible duplicate is a different transaction
-Description Two genuine visits to one shop on one day for one amount. The bank
-# is describing the second, which the book does not have.
+Description Two genuine visits to one shop on one day for one amount. One was
+# typed, and the bank is describing the other, which the book does
+# not have.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given transactions are : ImportedTransaction
-| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared | FitId |
-| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Cleared | none  |
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared   | FitId |
+| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Uncleared | none  |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -765,25 +1072,28 @@ When the possible duplicate is answered : PossibleResolution Vertical
 | FitId  | F003      |
 | Answer | Different |
 Then transactions are : ImportedTransaction
-| Ref | SourceAccount   | Date       | Payee         | Destination            | Amount | Cleared | FitId |
-| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries     | -88.20 | Cleared | none  |
-| T2  | Assets:Checking | 2026-02-05 | HARRIS TEETER | Expenses:Uncategorized | -88.20 | Cleared | F003  |
-# The second is created like any new row, its category unknown until a payee
-# rule or the user says otherwise. F003 is on the new one and not on T1, so a
-# later file naming F003 is a duplicate of the second visit only.
+| Ref | SourceAccount   | Date       | Payee         | Destination            | Amount | Cleared   | FitId |
+| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries     | -88.20 | Uncleared | none  |
+| T2  | Assets:Checking | 2026-02-05 | HARRIS TEETER | Expenses:Uncategorized | -88.20 | Cleared   | F003  |
+# The second is created like any new row, cleared because it came from the bank,
+# and its category unknown until a payee rule or the user says otherwise. T1 is
+# left exactly as it was typed, uncleared and unstamped: answering Different
+# says the download is not it, which is not a statement about T1 at all. F003 is
+# on the new one only, so a later file naming F003 is a duplicate of the second
+# visit and nothing else.
 
 Scenario An unanswered possible duplicate changes nothing and is asked again
 Description Which is what makes it safe to put an import down and come back to
-# it. Nothing is created and nothing is stamped, so reading the file
-# again reaches the same question.
+# it. Nothing is created, nothing is stamped and nothing is cleared,
+# so reading the file again reaches the same question.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
 Given transactions are : ImportedTransaction
-| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared | FitId |
-| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Cleared | none  |
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared   | FitId |
+| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Uncleared | none  |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
@@ -792,8 +1102,8 @@ When transactions imported : OfxTransactions
 Then import summary is : ImportSummary Vertical
 | Possible | 1 |
 Then transactions are : ImportedTransaction
-| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared | FitId |
-| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Cleared | none  |
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared   | FitId |
+| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Uncleared | none  |
 # Unchanged, and F003 is nowhere, so the same file asks the same question. An
 # import that was not answered is not a decision.
 
@@ -837,14 +1147,16 @@ Description One proposed pairing, with everything the user needs to judge it.
 | DaysApart   | Integer                | 0          |
 | State       | TransferCandidateState | Proposed   |
 
-$WIP
+$TBD
 BusinessRule When two new transactions are proposed as one transfer
 Description All of these, and then it is proposed rather than done.
-Details The window is two days, which is narrower than the five used for
-# matching a download against a transaction already in the book. The two
-# rules are answering different questions. A cheque written by hand can
-# take a week to reach the bank, so five days is right there. Two halves
-# of one electronic transfer are a day or two apart at most, and every
+Details The window is two days, wider than the same day a download is
+# allowed to reach when it is matched against a transaction already in
+# the book. The two rules are answering different questions. There the
+# evidence is an amount and a date, and a date somebody typed is the day
+# they paid rather than the day the bank posted; here both halves are
+# electronic and both dates are the bank's own, so two days is the lag
+# between two postings rather than a guess about one. Even so every
 # extra day of window is another chance to pair two payments that were
 # never one transfer.
 # Borne out by the three files in testdata: of the seven pairs in them,
@@ -1035,13 +1347,36 @@ Then balances are : AccountBalance CompareOnly
 # this book keeps, and that is decided by the payee, not by the type.
 
 
-Description Written down together because having two windows in one importer
+$TBD
+BusinessRule The date windows and why they differ
+Description Written down together because having four windows in one program
 # invites someone to unify them, and unifying them breaks one case or
-# the other.
+# another. Each row is a different question about two dates, and the
+# window follows from whose dates they are.
+Details Nearly all of this is same-day, and deliberately so. While a row is
+# being identified the only window is the check-number one, where a
+# number says the two records are of one payment and the days between
+# them are the bank's lag and nothing else.
+#
+# Everywhere else inside the import the dates agree or they do not. Two
+# records of one posting from one bank agree about the day, so for an
+# already-imported transaction a day's difference is a difference and
+# not a lag. For a typed one the evidence is an amount and a date, which
+# is too little to reach across days on, so the import asks instead of
+# reaching: same day offers, anything further is a new transaction.
+#
+# The last row is the window that used to be inside the import and is
+# not any more. Pairing a transaction in one register against one in
+# another is asked of transactions after the import has been accepted,
+# never of rows while each one is being judged, and it has a window
+# because its two dates come from two different places.
 Examples: DateWindow
-| Rule                                      | Window | Why                                   |
-| A download against a transaction already entered | 5 days | A cheque takes days to clear   |
-| Two new downloads proposed as one transfer | 2 days | Both halves are electronic and near  |
+| Rule                                              | Window   | Why                                        |
+| A download against a typed check                  | 1 day    | The number carries it; see the check rule  |
+| A download against a transaction typed by hand    | Same day | An amount and a date cannot reach further; it asks |
+| A download against a transaction already imported | Same day | Both dates are the bank's own posting date |
+| Two new downloads proposed as one transfer        | 2 days   | Both halves are electronic and near        |
+| One register's transaction against another's      | 5 days   | Asked after the import, of two books' own dates |
 
 Attributes DateWindow
 | Attribute | Type   | Default |
@@ -1058,15 +1393,11 @@ Scenario A transfer between two checking accounts is proposed and approved
 Description The pair observed in the two checking files in testdata: the same
 # amount out of one account and into the other on the same day.
 Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type    | Placeholder |
-| Assets:Checking Prime  | Checking | false       |
-| Assets:Checking        | Checking | false       |
-| Expenses:Uncategorized | Expense | false       |
-| Income:Uncategorized   | Income  | false       |
-Given account mappings are : AccountMapping
-| BankId    | OfxAccountId  | AccountPath           |
-| 053000219 | 1023711843105 | Assets:Checking Prime |
-| 053000219 | 1023711843112 | Assets:Checking       |
+| Path                   | Type     | Placeholder | BankId    | AccountNumber |
+| Assets:Checking Prime  | Checking | false       | 053000219 | 1023711843105 |
+| Assets:Checking        | Checking | false       | 053000219 | 1023711843112 |
+| Expenses:Uncategorized | Expense  | false       | none      | none          |
+| Income:Uncategorized   | Income   | false       | none      | none          |
 When statements imported : OfxImportFile
 | OfxAccountId  | TrnType | DatePosted | Amount   | FitId      | Name                      |
 | 1023711843105 | XFER    | 2026-07-31 | 3000.00  | 2026073101 | FROM PUGH K PRIME CHECKING |
@@ -1110,15 +1441,11 @@ Description The payment left the checking account on 3 August and reached the
 # that sets the window: anything narrower than three days would
 # leave it as two transactions and double the spending.
 Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type       | Placeholder |
-| Assets:Checking Prime  | Checking   | false       |
-| Liabilities:WF Card    | CreditCard | false       |
-| Expenses:Uncategorized | Expense    | false       |
-| Income:Uncategorized   | Income     | false       |
-Given account mappings are : AccountMapping
-| BankId    | OfxAccountId  | AccountPath           |
-| 053000219 | 1023711843105 | Assets:Checking Prime |
-|           | 4111111111111333 | Liabilities:WF Card |
+| Path                   | Type       | Placeholder | BankId    | AccountNumber    |
+| Assets:Checking Prime  | Checking   | false       | 053000219 | 1023711843105    |
+| Liabilities:WF Card    | CreditCard | false       | none      | 4111111111111333 |
+| Expenses:Uncategorized | Expense    | false       | none      | none             |
+| Income:Uncategorized   | Income     | false       | none      | none             |
 When statements imported : OfxImportFile
 | OfxAccountId     | TrnType | DatePosted | Amount   | FitId | Name                     |
 | 1023711843105    | DEBIT   | 2026-08-03 | -3508.09 | C1    | WF Credit Card AUTO PAY  |
@@ -1154,15 +1481,11 @@ Description The boundary. Two days is the window, so a third day makes these
 # a transfer, which is the point: the window is what stops a pair of
 # unrelated payments being merged on the strength of that alone.
 Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type       | Placeholder |
-| Assets:Checking Prime  | Checking   | false       |
-| Liabilities:WF Card    | CreditCard | false       |
-| Expenses:Uncategorized | Expense    | false       |
-| Income:Uncategorized   | Income     | false       |
-Given account mappings are : AccountMapping
-| BankId    | OfxAccountId  | AccountPath           |
-| 053000219 | 1023711843105 | Assets:Checking Prime |
-|           | 4111111111111333 | Liabilities:WF Card |
+| Path                   | Type       | Placeholder | BankId    | AccountNumber    |
+| Assets:Checking Prime  | Checking   | false       | 053000219 | 1023711843105    |
+| Liabilities:WF Card    | CreditCard | false       | none      | 4111111111111333 |
+| Expenses:Uncategorized | Expense    | false       | none      | none             |
+| Income:Uncategorized   | Income     | false       | none      | none             |
 When statements imported : OfxImportFile
 | OfxAccountId     | TrnType | DatePosted | Amount  | FitId | Name       |
 | 1023711843105    | DEBIT   | 2026-08-04 | -250.00 | D1    | A PAYMENT  |
@@ -1179,15 +1502,11 @@ Then import summary is : ImportSummary Vertical
 Scenario Two days apart is proposed
 Description The other side of the boundary, and the real autopay from the files.
 Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type       | Placeholder |
-| Assets:Checking Prime  | Checking   | false       |
-| Liabilities:WF Card    | CreditCard | false       |
-| Expenses:Uncategorized | Expense    | false       |
-| Income:Uncategorized   | Income     | false       |
-Given account mappings are : AccountMapping
-| BankId    | OfxAccountId  | AccountPath           |
-| 053000219 | 1023711843105 | Assets:Checking Prime |
-|           | 4111111111111333 | Liabilities:WF Card |
+| Path                   | Type       | Placeholder | BankId    | AccountNumber    |
+| Assets:Checking Prime  | Checking   | false       | 053000219 | 1023711843105    |
+| Liabilities:WF Card    | CreditCard | false       | none      | 4111111111111333 |
+| Expenses:Uncategorized | Expense    | false       | none      | none             |
+| Income:Uncategorized   | Income     | false       | none      | none             |
 When statements imported : OfxImportFile
 | OfxAccountId     | TrnType | DatePosted | Amount  | FitId | Name       |
 | 1023711843105    | DEBIT   | 2026-08-03 | -250.00 | D3    | A PAYMENT  |
@@ -1204,15 +1523,11 @@ Details A remembered rule can approve a later pair without asking again, and
 # that is the only path that pairs anything silently. It exists because
 # the user said so once, about those two payees in those two accounts.
 Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type       | Placeholder |
-| Assets:Checking Prime  | Checking   | false       |
-| Liabilities:WF Card    | CreditCard | false       |
-| Expenses:Uncategorized | Expense    | false       |
-| Income:Uncategorized   | Income     | false       |
-Given account mappings are : AccountMapping
-| BankId    | OfxAccountId  | AccountPath           |
-| 053000219 | 1023711843105 | Assets:Checking Prime |
-|           | 4111111111111333 | Liabilities:WF Card |
+| Path                   | Type       | Placeholder | BankId    | AccountNumber    |
+| Assets:Checking Prime  | Checking   | false       | 053000219 | 1023711843105    |
+| Liabilities:WF Card    | CreditCard | false       | none      | 4111111111111333 |
+| Expenses:Uncategorized | Expense    | false       | none      | none             |
+| Income:Uncategorized   | Income     | false       | none      | none             |
 When statements imported : OfxImportFile
 | OfxAccountId     | TrnType | DatePosted | Amount   | FitId | Name                        |
 | 1023711843105    | DEBIT   | 2026-08-03 | -3508.09 | C1    | WF Credit Card AUTO PAY     |
@@ -1242,15 +1557,11 @@ Scenario Rejecting a candidate leaves two transactions
 Description The user knows these were two separate payments. Nothing is merged,
 # and each gets the Uncategorized side it would have had anyway.
 Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type       | Placeholder |
-| Assets:Checking Prime  | Checking   | false       |
-| Liabilities:WF Card    | CreditCard | false       |
-| Expenses:Uncategorized | Expense    | false       |
-| Income:Uncategorized   | Income     | false       |
-Given account mappings are : AccountMapping
-| BankId    | OfxAccountId  | AccountPath           |
-| 053000219 | 1023711843105 | Assets:Checking Prime |
-|           | 4111111111111333 | Liabilities:WF Card |
+| Path                   | Type       | Placeholder | BankId    | AccountNumber    |
+| Assets:Checking Prime  | Checking   | false       | 053000219 | 1023711843105    |
+| Liabilities:WF Card    | CreditCard | false       | none      | 4111111111111333 |
+| Expenses:Uncategorized | Expense    | false       | none      | none             |
+| Income:Uncategorized   | Income     | false       | none      | none             |
 When statements imported : OfxImportFile
 | OfxAccountId     | TrnType | DatePosted | Amount   | FitId | Name            |
 | 1023711843105    | DEBIT   | 2026-08-03 | -500.00  | C9    | PAYMENT TO SHOP |
@@ -1274,15 +1585,11 @@ Description Three of 3,000.00 on three month ends and one of 30,000.00, which
 # is what the two checking files hold. Each half pairs with exactly
 # one other half, and a half once proposed is not offered again.
 Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type    | Placeholder |
-| Assets:Checking Prime  | Checking | false       |
-| Assets:Checking        | Checking | false       |
-| Expenses:Uncategorized | Expense | false       |
-| Income:Uncategorized   | Income  | false       |
-Given account mappings are : AccountMapping
-| BankId    | OfxAccountId  | AccountPath           |
-| 053000219 | 1023711843105 | Assets:Checking Prime |
-| 053000219 | 1023711843112 | Assets:Checking       |
+| Path                   | Type     | Placeholder | BankId    | AccountNumber |
+| Assets:Checking Prime  | Checking | false       | 053000219 | 1023711843105 |
+| Assets:Checking        | Checking | false       | 053000219 | 1023711843112 |
+| Expenses:Uncategorized | Expense  | false       | none      | none          |
+| Income:Uncategorized   | Income   | false       | none      | none          |
 When statements imported : OfxImportFile
 | OfxAccountId  | TrnType | DatePosted | Amount    | FitId | Name            |
 | 1023711843105 | XFER    | 2026-07-31 | 3000.00   | A1    | FROM PRIME      |
@@ -1302,7 +1609,7 @@ Then transfer candidates are : TransferCandidate
 # The three 3,000.00 pairs are not interchangeable even though they look
 # alike: each is paired with the half of its own date, closest date first.
 
-$WIP
+$TBD
 BusinessRule Which half pairs with which when several match
 Description Closest date first, and then the order the files were read. A half
 # that has been paired is out of the running for the rest.
@@ -1324,15 +1631,11 @@ Description Two transactions in one account with opposite amounts is a payment
 # The rule in Transactions refuses a transaction transaction twice to one
 # account, and this is where that is kept from arising.
 Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type    | Placeholder |
-| Assets:Checking Prime  | Checking | false       |
-| Assets:Checking        | Checking | false       |
-| Expenses:Uncategorized | Expense | false       |
-| Income:Uncategorized   | Income  | false       |
-Given account mappings are : AccountMapping
-| BankId    | OfxAccountId  | AccountPath           |
-| 053000219 | 1023711843105 | Assets:Checking Prime |
-| 053000219 | 1023711843112 | Assets:Checking       |
+| Path                   | Type     | Placeholder | BankId    | AccountNumber |
+| Assets:Checking Prime  | Checking | false       | 053000219 | 1023711843105 |
+| Assets:Checking        | Checking | false       | 053000219 | 1023711843112 |
+| Expenses:Uncategorized | Expense  | false       | none      | none          |
+| Income:Uncategorized   | Income   | false       | none      | none          |
 When statements imported : OfxImportFile
 | OfxAccountId  | TrnType | DatePosted | Amount  | FitId | Name     |
 | 1023711843105 | DEBIT   | 2026-08-03 | -120.00 | S1    | A SHOP   |
@@ -1341,29 +1644,25 @@ Then transfer candidates are : TransferCandidate
 | FromAccount | FromDate | ToAccount | ToDate | Amount | DaysApart | State |
 # No rows.
 
-# Left $WIP: the card half's OfxAccountId below (4111111111111333) names no
-# AccountMapping row and no account in the chart this scenario declares, so
-# as written it cannot be attributed to any account at all -- yet the Then
-# step expects New=1, which only the card half could supply. Either a mapping
-# row (and the Liabilities:WF Card account) is missing from this scenario, or
-# an unmapped id in a multi-file import is meant to do something other than
+# Left $TBD: the card half's OfxAccountId below (4111111111111333) is the
+# number of no account in the chart this scenario declares, so as written it
+# cannot be attributed to any account at all -- yet the Then step expects
+# New=1, which only the card half could supply. Either Liabilities:WF Card,
+# carrying that number, is missing from this scenario, or a number no account
+# claims is meant in a multi-file import to do something other than
 # contribute nothing, and either way that is a decision for the spec's
 # author, not a glue fix.
-$WIP
+$TBD
 Scenario A candidate is not proposed when one half matches a transaction already there
 Description The matching rules of this file run first. A downloaded transaction
 # that clears something already in the book is accounted for, and is
 # not then also offered as half of a transfer.
 Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type    | Placeholder |
-| Assets:Checking Prime  | Checking | false       |
-| Assets:Checking        | Checking | false       |
-| Expenses:Uncategorized | Expense | false       |
-| Income:Uncategorized   | Income  | false       |
-Given account mappings are : AccountMapping
-| BankId    | OfxAccountId  | AccountPath           |
-| 053000219 | 1023711843105 | Assets:Checking Prime |
-| 053000219 | 1023711843112 | Assets:Checking       |
+| Path                   | Type     | Placeholder | BankId    | AccountNumber |
+| Assets:Checking Prime  | Checking | false       | 053000219 | 1023711843105 |
+| Assets:Checking        | Checking | false       | 053000219 | 1023711843112 |
+| Expenses:Uncategorized | Expense  | false       | none      | none          |
+| Income:Uncategorized   | Income   | false       | none      | none          |
 Given transactions are : ImportedTransaction
 | Ref | SourceAccount         | Date       | Payee     | Destination            | Amount  | Cleared   | FitId |
 | T0  | Assets:Checking Prime | 2026-08-02 | A Payment | Expenses:Uncategorized | -750.00 | Uncleared | none  |
@@ -1431,15 +1730,11 @@ Description The same two names, a different amount and a different month. The
 # candidate is approved automatically and still appears in the import
 # summary, so that it is visible rather than silent.
 Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type       | Placeholder |
-| Assets:Checking Prime  | Checking   | false       |
-| Liabilities:WF Card    | CreditCard | false       |
-| Expenses:Uncategorized | Expense    | false       |
-| Income:Uncategorized   | Income     | false       |
-Given account mappings are : AccountMapping
-| BankId    | OfxAccountId     | AccountPath           |
-| 053000219 | 1023711843105    | Assets:Checking Prime |
-|           | 4111111111111333 | Liabilities:WF Card   |
+| Path                   | Type       | Placeholder | BankId    | AccountNumber    |
+| Assets:Checking Prime  | Checking   | false       | 053000219 | 1023711843105    |
+| Liabilities:WF Card    | CreditCard | false       | none      | 4111111111111333 |
+| Expenses:Uncategorized | Expense    | false       | none      | none             |
+| Income:Uncategorized   | Income     | false       | none      | none             |
 Given transfer match rules are : TransferMatchRules
 | FromAccount           | FromPattern             | ToAccount           | ToPattern         |
 | Assets:Checking Prime | WF Credit Card AUTO PAY | Liabilities:WF Card | AUTOMATIC PAYMENT |
@@ -1460,15 +1755,11 @@ Description The rule says these two payees in these two accounts are worth
 # pairing. It does not say any two transactions between them are one
 # transfer, so the arithmetic is still checked.
 Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type       | Placeholder |
-| Assets:Checking Prime  | Checking   | false       |
-| Liabilities:WF Card    | CreditCard | false       |
-| Expenses:Uncategorized | Expense    | false       |
-| Income:Uncategorized   | Income     | false       |
-Given account mappings are : AccountMapping
-| BankId    | OfxAccountId     | AccountPath           |
-| 053000219 | 1023711843105    | Assets:Checking Prime |
-|           | 4111111111111333 | Liabilities:WF Card   |
+| Path                   | Type       | Placeholder | BankId    | AccountNumber    |
+| Assets:Checking Prime  | Checking   | false       | 053000219 | 1023711843105    |
+| Liabilities:WF Card    | CreditCard | false       | none      | 4111111111111333 |
+| Expenses:Uncategorized | Expense    | false       | none      | none             |
+| Income:Uncategorized   | Income     | false       | none      | none             |
 Given transfer match rules are : TransferMatchRules
 | FromAccount           | FromPattern             | ToAccount           | ToPattern         |
 | Assets:Checking Prime | WF Credit Card AUTO PAY | Liabilities:WF Card | AUTOMATIC PAYMENT |
@@ -1485,15 +1776,11 @@ Description The import is one decision. The candidates, the duplicates and the
 # matches are all presented together, and the file is committed once
 # the user has been through them.
 Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type       | Placeholder |
-| Assets:Checking Prime  | Checking   | false       |
-| Liabilities:WF Card    | CreditCard | false       |
-| Expenses:Uncategorized | Expense    | false       |
-| Income:Uncategorized   | Income     | false       |
-Given account mappings are : AccountMapping
-| BankId    | OfxAccountId     | AccountPath           |
-| 053000219 | 1023711843105    | Assets:Checking Prime |
-|           | 4111111111111333 | Liabilities:WF Card   |
+| Path                   | Type       | Placeholder | BankId    | AccountNumber    |
+| Assets:Checking Prime  | Checking   | false       | 053000219 | 1023711843105    |
+| Liabilities:WF Card    | CreditCard | false       | none      | 4111111111111333 |
+| Expenses:Uncategorized | Expense    | false       | none      | none             |
+| Income:Uncategorized   | Income     | false       | none      | none             |
 When statements imported : OfxImportFile
 | OfxAccountId     | TrnType | DatePosted | Amount   | FitId | Name                        |
 | 1023711843105    | DEBIT   | 2026-09-01 | -2026.95 | C2    | WF Credit Card AUTO PAY     |

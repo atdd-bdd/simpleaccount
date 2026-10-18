@@ -481,7 +481,7 @@ Attributes DateOrderEvidence
 | SecondPartOver12 | Integer   | 0       |
 | Proven           | DateOrder | MDY     |
 
-$WIP
+$TBD
 Scenario A file that contradicts the profile it was given is refused
 Description If the file proves DMY and the profile says MDY, one of them is
 # wrong and importing either way would be a guess.
@@ -799,7 +799,7 @@ Description A record whose category field is an account name in square
 # brackets. Quicken writes one in each of the two accounts, so a
 # transfer appears in the file twice.
 
-$WIP
+$TBD
 BusinessRule When two transfer halves are the same transfer
 Description The accounts must cross-match and the amounts must be equal and
 # opposite. The dates need not agree, and where several halves could
@@ -1128,7 +1128,7 @@ Then migration notes are : MigrationNote
 # Investments
 # ---------------------------------------------------------------------------
 
-$WIP
+$TBD
 DataType InvestmentMode
 Description What to do with twenty years of trades in an investment account.
 Details Replay is the default because the income it posts belongs in a report
@@ -1140,7 +1140,7 @@ Examples: EnumerationValues
 | Replay        | Every action is imported, in order                           |
 | PositionsOnly | Only the resulting holdings, established at the last price   |
 
-$WIP
+$TBD
 DataType QifAction
 Description The N field of an investment record.
 Examples: EnumerationValues
@@ -1168,7 +1168,7 @@ Examples: EnumerationValues
 | XOut      | Cash out to another account                   |
 | Unsupported | Anything else; reported, not imported       |
 
-$WIP
+$TBD
 BusinessRule What each investment action posts
 Description In the terms of Investments: a holding is an account carrying a money
 # balance, income goes to an Income category, and anything that is only
@@ -1204,7 +1204,7 @@ Attributes ActionPosting
 | Credited  | String |         |
 | Notes     | String | none    |
 
-$WIP
+$TBD
 Scenario A buy and a reinvested dividend in an investment account
 Description The security name from the Y field becomes an account under the
 # investment account, named by its symbol when the security list
@@ -1269,7 +1269,7 @@ Then holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 102.5  | 100.0000 | 2024-06-30 |
 
-$WIP
+$TBD
 Scenario A security with no symbol is named by its security name
 Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type   | Placeholder |
@@ -1310,7 +1310,7 @@ Then transactions are : Transaction
 | Ref | SourceAccount                            | Date       | Destination             | Amount  |
 | T1  | Assets:Brokerage:Old Employer Stock Plan | 2005-01-02 | Equity:Opening Balances | 1000.00 |
 
-$WIP
+$TBD
 Scenario A stock split changes the shares and the price but posts nothing
 Description The value of the holding is the same before and after, so there is
 # nothing to post, and transaction a revaluation of zero would clutter
@@ -1362,7 +1362,7 @@ Attributes SplitRatio
 | PriceAfter  | Price   | 0       |
 | Notes       | String  | none    |
 
-$WIP
+$TBD
 Scenario An unsupported action is reported and not imported
 Description Employee stock plan actions carry tax meaning this program does not
 # model. Importing them as something else would be worse than
@@ -1388,7 +1388,7 @@ Then migration notes are : MigrationNote
 | Kind        | Detail                                            |
 | Unsupported | 2024-03-01 action "Vest" is not imported; 1 record |
 
-$WIP
+$TBD
 Scenario PositionsOnly skips the trades and establishes the holdings
 Description For an account whose twenty years of trades are not wanted. The
 # holdings that result are posted once, at the last price in the
@@ -1444,7 +1444,7 @@ Then holdings are : Holdings
 # Prices
 # ---------------------------------------------------------------------------
 
-$WIP
+$TBD
 Scenario The price list sets the last price of each security
 Description The price list is a comma-separated oddity in the middle of a
 # field-per-line format. Only the latest price per security is used:
@@ -1477,7 +1477,7 @@ Then migration notes are : MigrationNote
 | Kind          | Detail                                            |
 | PricesSkipped | 1 earlier price for VTSAX was not used            |
 
-$WIP
+$TBD
 BusinessRule How a price list line is read
 Description Quoted symbol, bare price, quoted date, and the date uses the same
 # apostrophe century marker as everywhere else.
@@ -1501,7 +1501,7 @@ Attributes PriceLine
 # Memorized transactions
 # ---------------------------------------------------------------------------
 
-$WIP
+$TBD
 Scenario Memorized transactions become payee rules
 Description Quicken remembers a payee and the category it takes, which is what
 # a payee rule is. Bringing them over means the categorising that was
@@ -1528,7 +1528,7 @@ Then payee rules created are : PayeeRules
 # The remembered amount is not brought over. A rule that filled in an amount
 # from 2009 would do more harm than good.
 
-$WIP
+$TBD
 Scenario A memorized split becomes a remembered split rule
 Description The mortgage split that Payees exists to handle, arriving ready
 # made.
@@ -1564,7 +1564,7 @@ Then remembered split lines created are : RememberedSplitLine
 # The run as a whole
 # ---------------------------------------------------------------------------
 
-$WIP
+$TBD
 BusinessRule In what order a QIF file is read
 Description Four passes, because a transaction cannot be placed until the
 # accounts and categories it names are known.
@@ -1724,7 +1724,7 @@ Attributes BookCheck
 | OutOfBalance        | Integer | 0       |
 | Balanced            | Boolean | false   |
 
-$WIP
+$TBD
 Scenario Importing the same QIF file twice does not double the book
 Description A migration gets run again: because the first attempt was abandoned,
 # or because a second export was taken. Every record carries a
@@ -1766,7 +1766,7 @@ Description The first round is about spending reports from banking and card
 # accounts. This section says exactly which records that includes,
 # because the answer is not quite "the bank and card sections".
 
-$WIP
+$TBD
 BusinessRule Which sections the first round imports
 Description Every section that carries dated, categorised transactions, which is
 # more than the bank and card ones.
@@ -1803,7 +1803,7 @@ Attributes RoundOneSection
 | InRound1  | Boolean | true    |
 | Why       | String  | none    |
 
-$WIP
+$TBD
 BusinessRule Which investment records the first round imports
 Description Those that move cash to somewhere outside the account, and no
 # others. The securities side is left for a later round.
@@ -1897,9 +1897,9 @@ Then report rows are : ReportRow
 # "A brokerage account only | Expenses:Fees | false | An advisory fee taken
 # from the fund" -- the exact shape of transaction this scenario posts. By
 # that rule, category_report correctly leaves this fee out by default; this
-# scenario's Then step says it should show. Left $WIP pending a decision on
+# scenario's Then step says it should show. Left $TBD pending a decision on
 # which rule is right, rather than resolved by guessing.
-$WIP
+$TBD
 Scenario A categorised investment cash movement does reach the spending report
 Description The twenty-one records that keep the investment sections in scope at
 # all. A fee charged inside the account is an expense wherever it was
@@ -2020,7 +2020,7 @@ Details
 # This section says what the QIF export makes possible, which is less than
 # the rule asks for, and it says so rather than approximating quietly.
 
-$WIP
+$TBD
 BusinessRule How the invoice section is shaped
 Description Two kinds of record share the section, told apart by the L field.
 Details Observed in the business file: 425 records, 212 invoices and 213
@@ -2040,7 +2040,7 @@ Attributes InvoiceRecordKind
 | CarriesCategories | Boolean | false   |
 | Count             | String  |         |
 
-# Left $WIP: five of the seven rows are independently verified against the
+# Left $TBD: five of the seven rows are independently verified against the
 # real pughkilleen.QIF file (payments carry no split lines, 194/212 invoices
 # and 176/213 payments carry N, 37 payments carry none, and the stock-check-
 # number XI flag pattern). The remaining two resist verification rather than
@@ -2060,7 +2060,7 @@ Attributes InvoiceRecordKind
 #     favour of the cleared marker for exactly this reason.
 # Rather than force the stub, or weaken the two rows to something vacuous,
 # this stays tagged with the above on the record.
-$WIP
+$TBD
 BusinessRule What the N field is, and why nothing is posted from it
 Description N on an invoice is the invoice number and N on a payment is the
 # number of the invoice being paid, which an earlier reading of this
@@ -2136,7 +2136,7 @@ Attributes CollectedTest
 | Documents  | Integer | 0       |
 | Recognised | String  |         |
 
-$WIP
+$TBD
 BusinessRule What the cash basis is worth, measured against the all-dates report
 Description Quicken's all-dates report is itself on a cash basis, so the gap
 # between it and an accrual reading is exactly what was invoiced and
@@ -2442,7 +2442,7 @@ Then transactions are : Transaction
 # Both post their expense. T1 is cleared and T2 is not, and it makes no
 # difference here: what the marker decides is whether income is recognised.
 
-# Left $WIP: InvoicesUnpaid (8) reproduces exactly -- a document with no C
+# Left $TBD: InvoicesUnpaid (8) reproduces exactly -- a document with no C
 # field and no payment whose N, suffix stripped, equals its own N -- and so
 # does its composition (the four old income-type ones plus the four recent
 # inter-company reimbursement ones). MatchedExactly/MatchedByPayee/
@@ -2454,8 +2454,8 @@ Then transactions are : Transaction
 # 2006-01-01/2010-12-31 given either. This is the same reconstruction
 # was_paid() in qif_import.h already gave up on for transaction, for the same
 # underlying reason -- see the BusinessRule above this section and its own
-# $WIP note for what was and was not independently verified.
-$WIP
+# $TBD note for what was and was not independently verified.
+$TBD
 Scenario The migration report totals what invoicing left unresolved
 Description Four numbers that say how much of the invoice history did not
 # resolve, so that the size of it is known before the figures are
@@ -2488,7 +2488,7 @@ Attributes InvoiceReconciliation
 | EarliestUnpaid    | Date    | 2006-01-01 |
 | LatestUnpaid      | Date    | 2010-12-31 |
 
-$WIP
+$TBD
 Scenario Invoicing was used in two spells, and the report says so
 Description 180 of the 212 invoices fall between 2006 and 2011, none at all
 # between 2012 and 2016, and 32 from 2017 onwards. The gap is not a
@@ -2561,7 +2561,7 @@ Attributes ContinuationLine
 | Line      | String |         |
 | Reading   | String |         |
 
-$WIP
+$TBD
 BusinessRule What a field code means depends on its section
 Description The same letter is a different field in a different section, which is
 # why the reader tracks the section and never reads a record alone.
@@ -2648,7 +2648,7 @@ Then accounts created are : ChartOfAccounts
 # Assets reads as a receivable here -- a wrinkle of the importer, not of the
 # types, and the roots are renamed afterwards anyway.
 
-$WIP
+$TBD
 Scenario No price list means the last price comes from the last transaction
 Description Neither file has a !Type:Prices section, so there is no price to
 # revalue a holding to. The price carried is the one from the most
@@ -2757,7 +2757,7 @@ Then transactions are : Transaction CompareOnly
 # NCash here -- and it is being kept as the transaction's check number. See the
 # note in TASKS.md; this scenario is about the cash movement, not about that.
 
-$WIP
+$TBD
 Scenario The one stock split in the business file
 Description Read with the ratio rule confirmed below. The holding is iShares US
 # Transportation on 7 March 2024, which was a four-for-one split, and
@@ -2814,7 +2814,7 @@ Then migration notes are : MigrationNote
 # What needs checking against the file being migrated
 # ---------------------------------------------------------------------------
 
-$WIP
+$TBD
 BusinessRule What the two files settled, and what is still assumed
 Description Each point was a place where being wrong would be expensive and
 # quiet. Most are now settled by reading the files in testdata. The

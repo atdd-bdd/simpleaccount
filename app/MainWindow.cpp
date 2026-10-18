@@ -16,6 +16,7 @@
 #include <QFontDialog>
 #include <QSettings>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFont>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -757,34 +758,23 @@ void MainWindow::buildMenus() {
     connect(hidden, &QAction::triggered, this, &MainWindow::toggleHidden);
 }
 
+// The book has changed, so the workspace is handed it. It is not built again:
+// what is being read is no part of the book -- which registers are open, which
+// report sits on which tab, which of the two is in front -- and a new workspace
+// knew none of it. Register tabs used to be re-opened by name afterwards, which
+// put them back one way or another; a report tab had no name to be re-opened by
+// and was simply lost, which is why a recategorise made from a report took the
+// report away with it.
+//
+// A workspace is built once, and again for a book that is not this one -- see
+// newBook() and openBook(), which drop this one first.
 void MainWindow::rebuildWorkspace() {
-    // Which register tabs were open, in order, and which was active, so they
-    // still are afterwards. Rebuilding is how the workspace is handed the
-    // book again after it changes; it is not a request to forget what was
-    // being read. Without this, recording a transaction emptied the register
-    // it was recorded in.
-    //
-    // Report tabs do not survive a rebuild: a report is not modeled in the
-    // workspace at all, and the Qt tab for one is untouched by this (see
-    // syncTabs, which only ever adds and removes, never rebuilds, a report's
-    // own widget).
-    std::vector<std::string> accounts;
-    std::string activeAccount;   // empty if a report tab was the active one
     if (workspace_) {
-        for (const ui::TabRow& row : workspace_->open_tabs()) {
-            if (row.kind != ui::TabKind::Register) continue;
-            accounts.push_back(row.account);
-            if (row.active) activeAccount = row.account;
-        }
+        workspace_->book_is_now(chart_, book_, transactions_, splits_);
+        return;
     }
-
     workspace_ = std::make_unique<ui::Workspace>(chart_, book_, transactions_, splits_);
     workspace_->set_column_widths(columnWidths_);
-    for (const std::string& account : accounts) workspace_->select(account);
-    // select() activates whatever it opens or returns to, so selecting them
-    // back in order leaves the last one active; asking for the one that
-    // really was active undoes that.
-    if (!activeAccount.empty()) workspace_->select(activeAccount);
 }
 
 std::string MainWindow::selectedAccount() const {
@@ -823,6 +813,10 @@ void MainWindow::newBook() {
     book_ = ledger::Ledger();
     transactions_.clear();
     rules_.clear();
+    // Another book: the registers that were open were of accounts this one
+    // does not have, so the workspace starts over rather than being handed
+    // the new book.
+    workspace_.reset();
     rememberRecent(name);
     bookChanged(name);
 }
@@ -872,6 +866,7 @@ void MainWindow::openNamed(const QString& name) {
     rules_ = rules;
     splits_ = splits;
     columnWidths_ = widths;
+    workspace_.reset();   // another book, so another set of tabs
     rememberRecent(name);
     bookChanged(name);
     applyColumnWidths();
@@ -1206,26 +1201,69 @@ void MainWindow::importTransactions() {
                                  "Open a book before importing into it.");
         return;
     }
-    // The account is not asked for: whichever register is the active tab is
-    // the one the statement is for. See the active-tab rule in
-    // UserInterface.spectable.
-    const ui::Workspace::ActiveRegister active = workspace_->active_register();
-    if (active.refused) {
-        QMessageBox::information(this, "SimpleAccount",
-                                 QString::fromStdString(active.reason));
-        return;
-    }
+    // The file is chosen first and the account second, because the file is the
+    // better witness of the two: a QFX knows which account it was downloaded
+    // for and a register in front of you only knows what you last looked at.
+    // See the section on where an import is going in UserInterface.spectable.
     const QString path = QFileDialog::getOpenFileName(
-        this, QString("Import into %1").arg(QString::fromStdString(active.account)), {},
+        this, "Import a statement", {},
         "Downloaded transactions (*.qfx *.QFX *.ofx *.OFX *.csv *.CSV);;All files (*)");
     if (path.isEmpty()) return;
     importTransactionsFrom(path);
 }
 
+// The dialog in front of an import. It proposes the account the file, its name
+// or the tab in front pointed at, says which of the three that was, and lets it
+// be changed -- a proposal is a proposal. Empty means cancelled, and cancelled
+// reads nothing at all.
+std::string MainWindow::confirmImportAccount(
+        const ui::Workspace::ImportConfirmation& proposed) {
+    QDialog dialog(this);
+    dialog.setWindowTitle("Import");
+
+    QString because;
+    switch (proposed.source) {
+        case importing::TargetSource::File:
+            because = "The file says it is for this account.";
+            break;
+        case importing::TargetSource::FileName:
+            because = "The name of the file fits this account.";
+            break;
+        case importing::TargetSource::ActiveTab:
+            because = "The file does not say which account it is for, so this is the "
+                      "register you are in.";
+            break;
+        case importing::TargetSource::NoneOffered:
+            break;
+    }
+
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->addWidget(new QLabel(
+        QString("Import %1 into:").arg(QString::fromStdString(proposed.file_name)), &dialog));
+
+    auto* accounts = new QComboBox(&dialog);
+    for (const std::string& path : importing::candidates(chart_))
+        accounts->addItem(QString::fromStdString(path));
+    const int at = accounts->findText(QString::fromStdString(proposed.account));
+    if (at >= 0) accounts->setCurrentIndex(at);
+    layout->addWidget(accounts);
+
+    auto* why = new QLabel(because, &dialog);
+    why->setWordWrap(true);
+    layout->addWidget(why);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
+                                         &dialog);
+    buttons->button(QDialogButtonBox::Ok)->setText("Import");
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+
+    if (dialog.exec() != QDialog::Accepted) return {};
+    return accounts->currentText().toStdString();
+}
+
 void MainWindow::importTransactionsFrom(const QString& path) {
-    const ui::Workspace::ActiveRegister active = workspace_->active_register();
-    if (active.refused) return;
-    const std::string account = active.account;
     std::ifstream in(path.toStdString(), std::ios::binary);
     if (!in) {
         QMessageBox::warning(this, "SimpleAccount",
@@ -1234,18 +1272,38 @@ void MainWindow::importTransactionsFrom(const QString& path) {
     }
     std::ostringstream buffer;
     buffer << in.rdbuf();
+    const std::string text = buffer.str();
+
+    // What the file knows about itself, before a row of it is read. The mapping
+    // table is not read here yet, so a QFX is placed by the account number
+    // written on the chart; the dialog is what covers the rest.
+    const std::string in_file = review::account_in_file(text, chart_, {});
+    const ui::Workspace::ActiveRegister where = workspace_->choose_import_file(
+        QFileInfo(path).fileName().toStdString(), in_file);
+    if (where.refused) {
+        QMessageBox::information(this, "SimpleAccount",
+                                 QString::fromStdString(where.reason));
+        return;
+    }
+    const std::string account = confirmImportAccount(workspace_->import_confirmation());
+    if (account.empty()) {
+        workspace_->cancel_import_confirmation();
+        return;
+    }
 
     // Everything about reading the file is production code with no Qt in it, so
     // what happens here is the same as what the command line does.
     chart::Chart accounts = chart_;
     const review::Prepared prepared = review::from_file(
-        buffer.str(), account, transactions_, &accounts, rules_);
+        text, account, transactions_, &accounts, rules_);
     if (prepared.refused) {
+        workspace_->cancel_import_confirmation();
         QMessageBox::warning(this, "SimpleAccount",
                              QString::fromStdString(prepared.refusal));
         return;
     }
     if (prepared.rows.empty()) {
+        workspace_->cancel_import_confirmation();
         QMessageBox::information(this, "SimpleAccount",
                                  "There is nothing in that file to review.");
         return;
@@ -1254,11 +1312,13 @@ void MainWindow::importTransactionsFrom(const QString& path) {
     // Categories the import had to invent are needed for the register to resolve
     // them once the rows are accepted.
     chart_ = accounts;
-    // The pane keeps the account it was showing, so the review opens beside the
-    // register it is about to change. That is the whole reason it is shown here
-    // rather than in a dialog of its own.
+    // The register of the account just confirmed becomes the active tab --
+    // opened if it was not open, brought forward if it was -- and the rows open
+    // in the panel beneath it, against the lines they are about to join. That
+    // is the whole reason the review is a panel under a register rather than a
+    // dialog of its own.
     rebuildWorkspace();
-    workspace_->review_import(prepared.rows, prepared.into);
+    workspace_->confirm_import_into(account, prepared.rows);
     refresh();
 
     // Said out loud rather than swallowed. A note nobody is shown is a note
@@ -1359,7 +1419,8 @@ MainWindow::TabWidgets MainWindow::makeReportTab(int tabPosition, const std::str
     QLabel* totals = t.totals;
     std::shared_ptr<std::vector<reports::DetailLine>> shown = t.shown;
 
-    t.run = [this, from, to, detail, quicken, zero, table, totals, shown, indented, bold]() {
+    t.run = [this, container, from, to, detail, quicken, zero, table, totals, shown,
+             indented, bold]() {
         reports::Spec spec;
         spec.from = asDate(from->date());
         spec.to = asDate(to->date());
@@ -1437,6 +1498,15 @@ MainWindow::TabWidgets MainWindow::makeReportTab(int tabPosition, const std::str
                             .arg(money(report.totals.income))
                             .arg(money(report.totals.expenses))
                             .arg(money(report.totals.net)));
+
+        // The figures on this tab are now the book's as it stands, which is
+        // what spares the next redraw the work. Said from inside run() rather
+        // than beside the one call that is gated, because changing the period
+        // or the detail also works the report out -- those go straight to
+        // run() and never through refreshPane(). The tab is found by its own
+        // widget: a position captured when the tab was made goes wrong the
+        // moment a tab to the left of it closes.
+        if (workspace_) workspace_->report_worked_out(tabs_->indexOf(container) + 1);
     };
     std::function<void()> run = t.run;
 
@@ -1510,7 +1580,7 @@ MainWindow::TabWidgets MainWindow::makeReportTab(int tabPosition, const std::str
             }
         }
         QAction* change = menu.addAction("Recategorize...");
-        connect(change, &QAction::triggered, table, [this, refs, run]() {
+        connect(change, &QAction::triggered, table, [this, refs]() {
             CategoryPick pick(this, chart_, book_, std::string());
             if (pick.exec() != QDialog::Accepted) return;
             const std::string into = pick.chosen();
@@ -1521,10 +1591,11 @@ MainWindow::TabWidgets MainWindow::makeReportTab(int tabPosition, const std::str
                 book_ = workspace_->book();
                 save();
                 rebuildWorkspace();
-                refresh();
                 // The figures have moved, which is the one case where
-                // recategorising changes what is on the page.
-                run();
+                // recategorising changes what is on the page -- and the
+                // refresh works the report out again for exactly that
+                // reason, so there is nothing to do here but ask for one.
+                refresh();
             }
             if (done.refused > 0 && !done.reason.empty())
                 QMessageBox::information(this, "Recategorize",
@@ -2032,9 +2103,13 @@ void MainWindow::refreshPane(int tabPosition, const reg::BookIndex& book) {
     TabWidgets& p = tabWidgets_[static_cast<std::size_t>(tabPosition - 1)];
 
     if (p.isReport) {
-        // A report redraws itself from its own controls; what changed is the
-        // book behind it, not anything on this tab's own form.
-        if (p.run) p.run();
+        // A report tab holds the figures it was worked out with, and a redraw
+        // is not a reason to work them out again: this runs on every tab
+        // click and every column resize, and a report over twenty years
+        // totalled on each of those is the slowest thing in the program. The
+        // book says when, and run() says it was done. See the
+        // report-worked-out section of UserInterface.spectable.
+        if (p.run && workspace_->report_wants_working_out(tabPosition)) p.run();
         refreshing_ = was;
         return;
     }

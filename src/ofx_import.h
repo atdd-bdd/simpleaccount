@@ -153,6 +153,15 @@ inline std::vector<detail::Existing> existing_in(
     return out;
 }
 
+// Five days of lag between the day a payment was entered and the day the bank
+// posted it. The Ofx importer no longer reaches across that: inside an import
+// all it has is an amount and a date, and reaching days on that much is
+// guessing, so a same-day likeness is offered to be answered and anything
+// further is a second transaction. The window belongs to the questions asked
+// of two dates from two different places -- the Csv importer, which has no
+// identifier to work with, and the pass that pairs one register's transaction
+// against another's once an import has been accepted. See the date-window rule
+// in ImportOfx.spectable.
 inline constexpr long long kMatchWindow = 5;
 
 // A check number is the strongest thing in a bank file -- it is written on the
@@ -314,16 +323,6 @@ inline Imported decide(const Statement& statement, const std::string& account,
                             " here and " + downloaded.date_posted.iso() + " in the file"});
             }
         }
-        // 3. An uncleared posting with the same amount within five days.
-        if (found == already.end()) {
-            found = std::find_if(already.begin(), already.end(),
-                [&](const detail::Existing& e) {
-                    return unclaimed(e) && e.cleared == types::ClearedStatus::Uncleared &&
-                           e.amount.cents() == downloaded.amount.cents() &&
-                           std::abs(types::Date::days_between(e.date, downloaded.date_posted))
-                               <= kMatchWindow;
-                });
-        }
         if (found != already.end()) {
             found->claimed = true;
             decided.disposition = Disposition::Matched;
@@ -334,15 +333,25 @@ inline Imported decide(const Statement& statement, const std::string& account,
             continue;
         }
 
-        // 4. Something with the same fingerprint already there: offered rather
-        // than skipped, because two genuine visits to one shop on one day for
-        // one amount are not rare.
-        const std::string print =
-            detail::fingerprint(downloaded.date_posted, downloaded.amount, downloaded.name);
+        // Tests three and four are both the same amount on the same day, and
+        // they differ only in what is already here. Cleared status is what
+        // tells them apart: everything an import writes is cleared, so an
+        // uncleared posting is one somebody typed.
+        const auto same_day_and_amount = [&](const detail::Existing& e) {
+            return unclaimed(e) && e.amount.cents() == downloaded.amount.cents() &&
+                   e.date == downloaded.date_posted;
+        };
+
+        // 3. An uncleared posting: typed by hand, with no number to settle it.
+        // Its date is the day the person paid and this one is the day the bank
+        // posted, and the two agreeing is not proof that they are one payment
+        // -- two genuine visits to one shop on one day for one amount are not
+        // rare. An amount and a date are not enough to decide on, so this is
+        // the one case that asks.
         found = std::find_if(already.begin(), already.end(),
             [&](const detail::Existing& e) {
-                return unclaimed(e) && e.ofx_id.empty() &&
-                       detail::fingerprint(e.date, e.amount, e.payee) == print;
+                return same_day_and_amount(e) &&
+                       e.cleared == types::ClearedStatus::Uncleared;
             });
         if (found != already.end()) {
             found->claimed = true;
@@ -350,6 +359,33 @@ inline Imported decide(const Statement& statement, const std::string& account,
             decided.claimed_id = found->id;
             decided.claimed_ref = found->ref;
             ++out.summary.Possible;
+            out.decided.push_back(decided);
+            continue;
+        }
+
+        // 4. A cleared posting carrying no identifier: this transaction
+        // arriving a second time. Both dates are the bank's own posting date
+        // -- one recorded when the transaction was first brought in, through a
+        // Qif history or an earlier download, and one read out of the file
+        // today -- so they agree because they came from the same place, and
+        // that is the whole of the evidence needed. Matched outright: asking
+        // would be asking a person to confirm what is already known.
+        //
+        // The payee is deliberately not compared. A history and a download
+        // spell one payment's name differently -- "Harris Teeter" against
+        // "HARRIS TEETER #231" -- and comparing them would turn every such
+        // transaction into a second copy of itself.
+        found = std::find_if(already.begin(), already.end(),
+            [&](const detail::Existing& e) {
+                return same_day_and_amount(e) && e.ofx_id.empty() &&
+                       e.cleared == types::ClearedStatus::Cleared;
+            });
+        if (found != already.end()) {
+            found->claimed = true;
+            decided.disposition = Disposition::Matched;
+            decided.claimed_id = found->id;
+            decided.claimed_ref = found->ref;
+            ++out.summary.Matched;
             out.decided.push_back(decided);
             continue;
         }

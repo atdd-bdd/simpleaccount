@@ -17,8 +17,8 @@ Description One node of the tree, category or real account alike. Which it is
 # follows from Type: Income, Expense and Equity are categories, and
 # everything else is a real account. One entity rather than two,
 # because almost everything about a node -- its name, where it sits,
-# whether it is hidden -- means the same thing either way; only Bank
-# and AccountNumber mean nothing on a category.
+# whether it is hidden -- means the same thing either way; only Bank,
+# BankId and AccountNumber mean nothing on a category.
 Uses AccountPath and AccountType from CoreTypes
 | Attribute   | Type        | Default | Notes                               |
 | Id          | AccountId   | none    | Identity; given once, never changes. See the identity rule below |
@@ -29,6 +29,7 @@ Uses AccountPath and AccountType from CoreTypes
 | Alias       | Text        | none    | A short way to type it; see finding a category |
 | PaymentPayee | Text       | none    | What a payment to this account is called on the paying account's statement; see ImportOfx |
 | Bank        | Text        | none    | Which institution it is at; see what is kept about an account |
+| BankId      | Text        | none    | What the institution calls itself in a download -- its routing number |
 | AccountNumber | Text      | none    | The number on the statement, kept as written |
 
 Collection ChartOfAccounts
@@ -72,7 +73,7 @@ Given the chart of accounts is : ChartOfAccounts
 # Creating accounts
 # ---------------------------------------------------------------------------
 
-$WIP
+$TBD
 Scenario Adding an account under a parent
 Given the chart of accounts is as previous
 When account added : Account Vertical
@@ -84,7 +85,7 @@ Then account is : Account Vertical
 | Placeholder | false                   |
 | Hidden      | false                   |
 
-$WIP
+$TBD
 Scenario A missing parent is created as a placeholder
 Description Importing twenty years of data names deep categories that were
 # never created by hand, so the missing levels are filled in and
@@ -100,7 +101,7 @@ Then accounts created are : ChartOfAccounts
 | Expenses:Home:Garden:Seeds | Expense | false       |
 # The first two were filled in; the third is the one that was asked for.
 
-$WIP
+$TBD
 Scenario A filled-in parent takes the type of its child
 Description A placeholder created on the way to an Expense is itself an Expense,
 # so the roll-up in a report adds up.
@@ -531,8 +532,8 @@ Then categories show as : AccountDisplay CompareOnly
 # ---------------------------------------------------------------------------
 
 Description Each account has a dialog of its own, holding what is known about
-# the account itself: which bank it is at, and the number on the
-# statement.
+# the account itself: which bank it is at, what that bank calls itself
+# in a download, and the number on the statement.
 Details These are facts about the account and not about any transaction, so
 # they live on the account rather than in a setting shared by the book.
 # Two current accounts at the same bank have to be told apart, and the
@@ -544,16 +545,28 @@ Details These are facts about the account and not about any transaction, so
 # dialog per account rather than another column in the account list.
 #
 # An OFX download names an account in the bank's own terms, a routing
-# number and an account number, and matching those to an account is the
-# mapping in ImportOfx. What is kept here is what a person reads off a
-# statement. The two are kept apart because a routing number is not a
-# bank's name and nobody should have to type one to label an account.
+# number and an account number. Those are these: the three of them sit
+# on the account together, and matching a download to an account is
+# reading them off the account it belongs to. There is no second place
+# where a bank's numbering is recorded, because a second place is a
+# second thing to keep in step, and the one thing a download has to
+# find is an account.
+#
+# Bank is for a person and BankId is for a file, which is why they are
+# two attributes rather than one. Nobody should have to type a routing
+# number to label an account, and nothing reads "First Bank" out of a
+# download. Neither is ever required: an account with none of this works
+# exactly as it always did, and a QIF history carries none of it, so
+# every account migrated from Quicken starts with all three empty. The
+# first download into such an account is where they get filled in; see
+# what a download teaches an account in ImportOfx.
 
 Attributes AccountSettings
 Description What the dialog of one account holds.
 | Attribute     | Type        | Default |
 | Path          | AccountPath |         |
 | Bank          | Text        | none    |
+| BankId        | Text        | none    |
 | AccountNumber | Text        | none    |
 
 Scenario An account starts with nothing known about it but its name
@@ -569,8 +582,13 @@ When account settings opened : AccountSelect
 Then account settings are : AccountSettings Vertical
 | Path          | Assets:Checking |
 | Bank          | none            |
+| BankId        | none            |
 | AccountNumber | none            |
 
+# The bank and the number round-trip today; the routing number has nowhere
+# to be kept yet. Tagged rather than trimmed back to two fields, because
+# what it is here to say is that all three are the account's.
+$TBD
 Scenario The bank and the number are kept with the book
 Description Written when they are entered, because a book is a file and not a
 # session. See the saving rule in Books.
@@ -580,12 +598,18 @@ Given the chart of accounts is : ChartOfAccounts
 When account settings changed : AccountSettings Vertical
 | Path          | Assets:Checking |
 | Bank          | First Bank      |
+| BankId        | 053000196       |
 | AccountNumber | 1234567890      |
 When the book is reopened
 Then account settings are : AccountSettings Vertical
 | Path          | Assets:Checking |
 | Bank          | First Bank      |
+| BankId        | 053000196       |
 | AccountNumber | 1234567890      |
+# All three are the account's, so all three are written with it. The routing
+# number is what the next download will be matched on, and a download that
+# had to ask again every month would be asking for something the book already
+# knew.
 
 Scenario An account number is kept as it is written
 Description A number on a statement is a label and not an amount: it may carry

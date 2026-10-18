@@ -13,6 +13,7 @@
 #include "ledger.h"
 #include "money.h"
 #include "posting.h"
+#include "register_entry.h"
 #include "register_lines.h"
 #include "report.h"
 #include "text_types.h"
@@ -156,7 +157,15 @@ public:
         // is the one the statement is for. See the active-tab rule.
         const ui::Workspace::ActiveRegister active = workspace().active_register();
         ASSERT_FALSE(active.refused) << active.reason;
-        last_review_.clear();
+        rows_from(values, &last_review_);
+        last_into_ = active.account;
+        workspace().review_import(last_review_, last_into_);
+    }
+
+    // The rows a table of them states, with no decision about where they go.
+    void rows_from(const std::vector<ImportReviewRowString>& values,
+                   std::vector<ui::ReviewRow>* into) {
+        into->clear();
         for (const auto& value : values) {
             ui::ReviewRow row;
             row.line = std::stoi(value.line);
@@ -176,10 +185,8 @@ public:
             row.memo = blank(value.memo);
             row.check_no = blank(value.checkno);
             row.cleared = types::cleared_status_from_string(value.cleared);
-            last_review_.push_back(row);
+            into->push_back(row);
         }
-        last_into_ = active.account;
-        workspace().review_import(last_review_, last_into_);
     }
 
     void when_import_reviewed_as_previous() {
@@ -194,7 +201,10 @@ public:
         for (const auto& value : values) workspace().untick(std::stoi(value.line));
     }
 
-    void when_import_accepted() { workspace().accept_import(); }
+    void when_import_accepted() {
+        workspace().accept_import();
+        redraw_reports();
+    }
     void when_import_cancelled() { workspace().cancel_import(); }
 
     // ----------------------------------------------------------------- thens
@@ -268,6 +278,12 @@ public:
             EXPECT_EQ(std::stoi(values[i].line), got[i].line) << "row " << i << " line";
             if (!dnc(values[i].payee))
                 EXPECT_EQ(blank(values[i].payee), got[i].payee) << "row " << i;
+            // Which account the row is for, which a confirmed import fills in
+            // from the dialog rather than from the file. A blank states
+            // nothing: no row is ever for no account, so there is nothing
+            // there to compare against.
+            if (!dnc(values[i].account) && !blank(values[i].account).empty())
+                EXPECT_EQ(values[i].account, got[i].account) << "row " << i << " account";
             if (!dnc(values[i].disposition))
                 EXPECT_EQ(values[i].disposition, got[i].disposition) << "row " << i;
             if (!dnc(values[i].accepted))
@@ -354,6 +370,7 @@ private:
     std::unique_ptr<ui::Workspace> workspace_;
     bool show_hidden_ = false;
     std::vector<ui::ReviewRow> last_review_;
+    std::vector<ui::ReviewRow> file_rows_;
     std::string last_into_;
 
     // The report side of things -- clicking a line, selecting several,
@@ -364,10 +381,58 @@ private:
     // runs an explicit report (recategorising straight from a book that is
     // already open) still sees every posting in it.
     reports::Spec last_report_spec_ = wide_open_spec();
+
+    // What each report tab is showing: the spec it was asked for, and the
+    // figures it was last worked out with. The window keeps these on the tab
+    // widget -- the controls and the table -- and this is the same thing. A
+    // report is not totalled to answer a Then: the figures asserted are the
+    // ones the tab is holding, which is the whole of what the rule is about.
+    std::map<int, reports::Spec> report_spec_at_;
+    std::map<int, reports::CategoryReport> report_rows_at_;
+    int last_report_position_ = 0;
     std::vector<std::string> report_selected_refs_;
     bool report_selection_all_transactions_ = true;
     bool report_mode_ = false;
     int deletion_count_ = 0;
+
+    // What the window does on every redraw: for each report tab, ask the
+    // workspace whether the figures on it are the book's as it stands, and
+    // work it out again only where they are not. See MainWindow::refreshPane.
+    void redraw_reports() {
+        for (const ui::TabRow& row : workspace().open_tabs()) {
+            if (row.kind != ui::TabKind::Report) continue;
+            if (!workspace().report_wants_working_out(row.position)) continue;
+            report_rows_at_[row.position] =
+                reports::category_report(workspace().accounts(), workspace().book(),
+                                         report_spec_at_[row.position]);
+            workspace().report_worked_out(row.position);
+        }
+    }
+
+    // The book has moved. The workspace is handed it rather than built again,
+    // which is what MainWindow::rebuildWorkspace does: a new workspace has no
+    // tabs, and the report tab is the whole of what these scenarios watch.
+    void book_changed() {
+        rebuild_book();
+        if (workspace_) workspace_->book_is_now(chart_, book_, transactions_, splits_);
+        redraw_reports();
+    }
+
+    // Which report tab a Then about report rows is about: the one in front, or
+    // failing that the last one a report was run on -- a line clicked in a
+    // report opens a register, which leaves no report tab active.
+    int report_position_showing() {
+        for (const ui::TabRow& row : workspace().open_tabs())
+            if (row.kind == ui::TabKind::Report && row.active) return row.position;
+        return last_report_position_;
+    }
+
+    reports::CategoryReport report_showing() {
+        const auto found = report_rows_at_.find(report_position_showing());
+        if (found != report_rows_at_.end()) return found->second;
+        return reports::category_report(workspace().accounts(), workspace().book(),
+                                        last_report_spec_);
+    }
 
     static reports::Spec wide_open_spec() {
         reports::Spec s;
@@ -668,7 +733,13 @@ public:
             if (!value.detail.empty() && value.detail != DNCString)
                 s.detail = reports::detail_from_string(value.detail);
             last_report_spec_ = s;
+            // The tab it opened in is the last one, and it is the one in
+            // front. The report itself is worked out by the redraw that
+            // follows, the same as every other time it is worked out.
+            last_report_position_ = static_cast<int>(workspace().open_tabs().size());
+            report_spec_at_[last_report_position_] = s;
         }
+        redraw_reports();
     }
 
     // A transaction line opens its one register, the way the menu's
@@ -801,13 +872,12 @@ public:
             ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
             edit::assign_category(t, chart_, value.category);
         }
-        rebuild_book();
-        workspace_.reset();   // the workspace's own copies are now stale
+        // One step is one change, whether it names one transaction or twenty.
+        book_changed();
     }
 
     void then_report_rows_are(const std::vector<ReportRowString>& values) {
-        const reports::CategoryReport report =
-            reports::category_report(chart_, book_, last_report_spec_);
+        const reports::CategoryReport report = report_showing();
         ASSERT_EQ(values.size(), report.rows.size()) << "number of report rows";
         for (std::size_t i = 0; i < values.size(); ++i) {
             const reports::Row& got = report.rows[i];
@@ -842,7 +912,13 @@ public:
 
 public:
 
-    void when_selection_deleted() { deletion_count_ = workspace().delete_selected(); }
+    // The deletion happens in the workspace's own copies, so a report after it
+    // is worked out from the workspace's book rather than this glue's -- which
+    // is what redraw_reports() reads, and why it is right.
+    void when_selection_deleted() {
+        deletion_count_ = workspace().delete_selected();
+        redraw_reports();
+    }
 
     void then_deletion_count_is(const std::vector<DeletionCountString>& values) {
         for (const auto& value : values)
@@ -852,7 +928,12 @@ public:
 public:
 
     void when_tab_selected(const std::vector<TabSelectString>& values) {
-        for (const auto& value : values) workspace().select_tab(std::stoi(value.position));
+        for (const auto& value : values) {
+            workspace().select_tab(std::stoi(value.position));
+            // A click is a redraw, which is where a report that was behind is
+            // worked out -- and where one that was already right is not.
+            redraw_reports();
+        }
     }
 
 public:
@@ -1051,5 +1132,148 @@ public:
     }
 
 public:
+
+public:
+
+    void then_reports_worked_out_are(const std::vector<ReportWorkString>& values) {
+        const std::vector<ui::ReportWorkRow> got = workspace().reports_worked_out();
+        ASSERT_EQ(values.size(), got.size()) << "number of report tabs";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            EXPECT_EQ(std::stoi(values[i].position), got[i].position)
+                << "report tab " << i + 1;
+            EXPECT_EQ(std::stoi(values[i].times), got[i].times)
+                << "times the report on tab " << got[i].position << " was worked out";
+        }
+    }
+
+    // A line typed into the register and left, which is reg::commit() exactly
+    // as MainWindow::recordBlankLine does it -- and then the book has changed.
+    void when_register_entry_committed(const std::vector<RegisterEntryString>& values) {
+        for (const RegisterEntryString& value : values) {
+            reg::BlankLine line;
+            if (const auto on = types::Date::from_iso(value.date)) line.date = *on;
+            line.payee = blank(value.payee);
+            line.check_no = blank(value.checkno);
+            line.category = blank(value.category);
+            line.payment = Money(value.payment);
+            line.deposit = Money(value.deposit);
+            line.memo = blank(value.memo);
+            const reg::Committed done = reg::commit(
+                line, value.account, ledger::transaction_count(transactions_), &chart_);
+            ASSERT_TRUE(done.committed) << done.reason;
+            transactions_.push_back(done.transaction);
+            if (done.is_transfer) transactions_.push_back(done.other_side);
+            for (const ledger::TransactionSplit& one : done.splits)
+                splits_.push_back(one);
+        }
+        book_changed();
+    }
+
+public:
+
+    // Another book is the one change that is not a change to the book that is
+    // open: MainWindow::openBook throws the workspace away rather than handing
+    // the new book over to it, and a workspace with no tabs is the whole of
+    // what the scenario watches. What is in the other book is beside the point
+    // here, so it is opened empty.
+    void when_another_book_is_opened() {
+        chart_ = chart::Chart();
+        book_ = ledger::Ledger();
+        transactions_.clear();
+        splits_.clear();
+        report_spec_at_.clear();
+        report_rows_at_.clear();
+        last_report_position_ = 0;
+        workspace_.reset();
+    }
+
+    // -------------------------------------- where an import is going
+
+    // A file has been chosen and not a row of it read. The format is in the
+    // table because the dialog says what kind of file it is reading; what the
+    // file knew about its own account is already AccountInFile, which the
+    // import works out and this specification takes as given.
+    void when_import_file_chosen(const std::vector<ImportFileChosenString>& values) {
+        for (const auto& value : values)
+            import_refusal_ =
+                workspace().choose_import_file(value.filename, blank(value.accountinfile));
+    }
+
+    void then_import_confirmation_is(const std::vector<ImportConfirmationString>& values) {
+        const ui::Workspace::ImportConfirmation& got = workspace().import_confirmation();
+        for (const auto& value : values) {
+            EXPECT_EQ(parse_bool_cell(value.shown), got.shown) << "shown";
+            if (!dnc(value.filename))
+                EXPECT_EQ(blank(value.filename), got.file_name) << "file name";
+            if (!dnc(value.account)) EXPECT_EQ(blank(value.account), got.account) << "account";
+            if (!dnc(value.source))
+                EXPECT_EQ(value.source, importing::to_string(got.source)) << "source";
+        }
+    }
+
+    // What the file turns out to hold, stated before it is opened so that
+    // confirming the dialog can be the thing that reads it. The Account column
+    // is left for the dialog to fill: which account these rows are for is the
+    // whole question being settled.
+    void given_the_file_holds(const std::vector<ImportReviewRowString>& values) {
+        rows_from(values, &file_rows_);
+    }
+
+    void when_import_confirmed() { workspace().confirm_import(file_rows_); }
+
+    void when_import_confirmed_into(const std::vector<AccountSelectString>& values) {
+        for (const auto& value : values) workspace().confirm_import_into(value.path, file_rows_);
+    }
+
+    void when_import_confirmation_cancelled() { workspace().cancel_import_confirmation(); }
+
+    void examples_datatype_importfileformat(const std::vector<EnumerationValuesString>& values) {
+        for (const auto& value : values) {
+            const EnumerationValuesTyped v = EnumerationValuesTyped::from_string_struct(value);
+            bool known = false;
+            for (importing::FileFormat f : {importing::FileFormat::Qfx,
+                                            importing::FileFormat::Qif,
+                                            importing::FileFormat::Csv})
+                if (importing::to_string(f) == v.value) known = true;
+            EXPECT_TRUE(known) << "unknown import file format: " << v.value;
+        }
+    }
+
+    void examples_datatype_importtargetsource(const std::vector<EnumerationValuesString>& values) {
+        for (const auto& value : values) {
+            const EnumerationValuesTyped v = EnumerationValuesTyped::from_string_struct(value);
+            bool known = false;
+            for (importing::TargetSource t : {importing::TargetSource::File,
+                                              importing::TargetSource::FileName,
+                                              importing::TargetSource::ActiveTab,
+                                              importing::TargetSource::NoneOffered})
+                if (importing::to_string(t) == v.value) known = true;
+            EXPECT_TRUE(known) << "unknown import target source: " << v.value;
+        }
+    }
+
+    // The precedence on its own, with no window around it: three candidates in,
+    // one answer out, and which of the three answered.
+    void examples_businessrule_which_account_the_import_proposes(
+            const std::vector<ImportTargetProposalString>& values) {
+        for (const auto& value : values) {
+            const importing::Proposal p = importing::propose(
+                blank(value.accountinfile), blank(value.fromname), blank(value.activetab));
+            EXPECT_EQ(blank(value.proposed), p.account)
+                << value.format << " file proposing into " << value.activetab;
+            EXPECT_EQ(value.source, importing::to_string(p.source))
+                << "where " << blank(value.proposed) << " came from";
+        }
+    }
+
+    void examples_businessrule_when_the_name_of_a_file_fits_an_account(
+            const std::vector<FileNameMatchString>& values) {
+        for (const auto& value : values)
+            EXPECT_EQ(parse_bool_cell(value.fits),
+                      importing::name_fits(value.filename, value.accountname,
+                                           blank(value.accountnumber)))
+                << value.filename << " against " << value.accountname
+                << " numbered " << blank(value.accountnumber);
+    }
 
 };

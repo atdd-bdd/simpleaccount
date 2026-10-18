@@ -914,7 +914,7 @@ Then payee report rows are : PayeeReportRow
 | Payee      | Amount | Count |
 | Home Depot | 184.50 | 1     |
 
-$WIP
+$TBD
 Scenario A payee report for one category only
 Description What was spent at the hardware store on the garden, rather than
 # what was spent there altogether.

@@ -148,7 +148,7 @@ public:
         ADD_FAILURE() << "Not implemented: when_statement_imported";
     }
 
-    void then_asked_to_choose_an_account_for(const std::vector<UnmappedAccountString>& values) {
+    void then_asked_to_choose_an_account_for(const std::vector<UnknownAccountString>& values) {
         for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
         ADD_FAILURE() << "Not implemented: then_asked_to_choose_an_account_for";
     }

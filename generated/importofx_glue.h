@@ -56,6 +56,22 @@ public:
             a.payment_payee = blank(value.paymentpayee);
             chart_.put(a);
         }
+        rebuild_mappings(values);
+    }
+
+    // The bank's numbering is three columns of the account now, not a table of
+    // its own, so the chart is where a scenario states it. ofx::account_for_id
+    // and ofx::mapping_for still take a list, so the list is read back out of
+    // the chart here rather than established by a step of its own. An account
+    // with no number contributes nothing, which is what an account no download
+    // has ever been placed in looks like.
+    void rebuild_mappings(const std::vector<AccountString>& values) {
+        mappings_.clear();
+        for (const auto& value : values) {
+            const std::string number = blank(value.accountnumber);
+            if (number.empty()) continue;
+            mappings_.push_back({blank(value.bankid), number, value.path});
+        }
     }
 
     // No scenario in this file reaches these. There is no Background here, so
@@ -397,7 +413,7 @@ public:
         }
     }
 
-    void then_asked_to_choose_an_account_for(const std::vector<UnmappedAccountString>& values) {
+    void then_asked_to_choose_an_account_for(const std::vector<UnknownAccountString>& values) {
         ASSERT_FALSE(values.empty());
         ASSERT_TRUE(was_asked_) << "nothing was asked";
         EXPECT_EQ(values.front(), asked_);
@@ -638,7 +654,7 @@ private:
     std::vector<ofx::AccountMapping> mappings_;
     std::vector<ofx::TransferMatchRule> match_rules_;
     long long check_window_days_ = ofx::kCheckWindow;
-    UnmappedAccountString asked_;
+    UnknownAccountString asked_;
     bool was_asked_ = false;
     bool target_was_asked_ = false;
     std::vector<ofx::TransferProposal> candidates_;
@@ -857,8 +873,9 @@ private:
         return statement;
     }
 
-    // A book holding one cleared transaction of the same date, amount and payee
-    // and no identifier, which is the one case the program cannot settle.
+    // A book holding one transaction of the same date and amount that somebody
+    // typed -- uncleared, no identifier -- which is the one case the program
+    // cannot settle on its own.
     void offer_a_possible() {
         start_fresh("Assets:Checking", types::AccountType::Checking);
         chart_.put(account_of("Expenses:Groceries", types::AccountType::Expense));
@@ -869,7 +886,9 @@ private:
         t.payee = types::PayeeName("Harris Teeter");
         t.source_account = chart_.ref_for_path("Assets:Checking");
         t.amount = Money("-88.20");
-        t.cleared = types::ClearedStatus::Cleared;
+        // Typed, not imported, which is what leaves the import able only to
+        // ask about it: the disposition rule's third test.
+        t.cleared = types::ClearedStatus::Uncleared;
         t.destination = chart_.ref_for_path("Expenses:Groceries");
         transactions_ = {t};
         import(offered_statement());
@@ -905,18 +924,20 @@ private:
         } else if (test == "2") {
             // Uncleared, same amount and check number, inside the window.
             //
-            // At the default window of one day this cannot be told apart from
-            // test three, whose window on amount alone is five days and wholly
-            // contains it. That is what the book's check-number window is for,
-            // and the scenario that widens it to thirty days is where the
-            // number does work the amount cannot. Here the claim is only the
-            // one the rule table makes: this condition yields Matched.
+            // The number is what tells this apart from test three, which is
+            // the same posting without one and can only be asked about. It is
+            // also the only thing here that reaches across days at all, which
+            // is what the book's check-number window is for and why the
+            // scenario widening it to thirty days matters. Here the claim is
+            // only the one the rule table makes: this condition yields
+            // Matched.
             t.date = types::Date(2024, 1, 20);
             t.check_no = types::CheckNumber("2041");
             row.check_num = "2041";
         } else if (test == "3") {
-            // Uncleared, same amount, five days earlier, no check number.
-            t.date = types::Date(2024, 1, 15);
+            // Uncleared, same amount, the same day, no check number: typed by
+            // hand, so the import can only ask.
+            t.date = types::Date(2024, 1, 20);
         } else if (test == "4") {
             // Cleared, same amount and date, no identifier: nothing above can
             // apply, and it is too like the downloaded row to create blindly.
@@ -1142,6 +1163,33 @@ public:
                     << where << " FITID";
             }
         }
+    }
+
+public:
+
+    void when_import_target_chosen(const std::vector<ImportTargetString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_import_target_chosen";
+    }
+
+    void then_account_numbering_is(const std::vector<AccountNumberingString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_account_numbering_is";
+    }
+
+    void examples_businessrule_when_the_number_in_a_download_is_the_number_on_an_account(const std::vector<DownloadAccountMatchString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_when_the_number_in_a_download_is_the_number_on_an_account";
+    }
+
+    void examples_businessrule_a_download_arrives_cleared_and_only_a_typed_transaction_is_not(const std::vector<ClearedOnArrivalString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_a_download_arrives_cleared_and_only_a_typed_transaction_is_not";
+    }
+
+    void examples_businessrule_the_date_windows_and_why_they_differ(const std::vector<DateWindowString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_the_date_windows_and_why_they_differ";
     }
 
 };

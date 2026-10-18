@@ -4,7 +4,9 @@
 #include "chart.h"
 #include "csv_import.h"
 #include "csv_reader.h"
+#include "import_target.h"
 #include "ofx_import.h"
+#include "ofx_reader.h"
 #include "payee_rules.h"
 #include "posting.h"
 #include "ui_model.h"
@@ -207,6 +209,46 @@ inline Prepared from_file(const std::string& text, const std::string& account,
     return looks_like_a_csv(text)
                ? from_csv(text, account, existing, accounts, rules)
                : from_ofx(text, account, existing, accounts, rules);
+}
+
+// What the file itself says about the account it is for, asked before a row of
+// it is read. A QFX names the institution and the account number, and the
+// mappings turn that pair into a path; a CSV names nothing, so the answer is
+// empty and the name of the file is all there will be to go on.
+//
+// An account number written on the chart is the fallback, because a mapping is
+// only made the first time a download is placed by hand -- and the number is
+// often already there from setting the account up. Matched on the tail, since a
+// download gives the last four of a number as often as the whole of it.
+inline std::string account_in_file(const std::string& text, const chart::Chart& accounts,
+                                   const std::vector<ofx::AccountMapping>& mappings) {
+    if (looks_like_a_csv(text)) return {};
+
+    const ofx::Read read = ofx::read(text);
+    if (read.refused || read.statements.empty()) return {};
+    const ofx::Statement& s = read.statements.front();
+
+    if (const ofx::AccountMapping* m = ofx::mapping_for(mappings, s.bank_id, s.account_id))
+        return m->account_path;
+    const std::string by_id = ofx::account_for_id(mappings, s.account_id);
+    if (!by_id.empty()) return by_id;
+
+    const std::string wanted = importing::detail::only_digits(s.account_id);
+    if (wanted.empty()) return {};
+    std::string found;
+    for (const chart::Account& a : accounts.all()) {
+        if (!importing::can_be_imported_into(a)) continue;
+        const std::string digits = importing::detail::only_digits(a.account_number);
+        if (digits.empty()) continue;
+        const std::string& shorter = digits.size() < wanted.size() ? digits : wanted;
+        const std::string& longer = digits.size() < wanted.size() ? wanted : digits;
+        if (shorter.size() < 4) continue;
+        if (longer.compare(longer.size() - shorter.size(), shorter.size(), shorter) != 0)
+            continue;
+        if (!found.empty()) return {};
+        found = a.path.value();
+    }
+    return found;
 }
 
 }  // namespace review

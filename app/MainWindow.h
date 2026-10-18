@@ -53,9 +53,13 @@ public:
     void importHistoryFrom(const QString& path);
 
     // Reads a downloaded QFX or CSV into the review panel, for the account
-    // the active tab is open on. Nothing reaches the book until the review
-    // is accepted.
+    // confirmed in the dialog in front of it. Nothing reaches the book until
+    // the review is accepted.
     void importTransactionsFrom(const QString& path);
+
+    // The dialog in front of an import. Returns the account to import into,
+    // or nothing at all if it was cancelled.
+    std::string confirmImportAccount(const ui::Workspace::ImportConfirmation& proposed);
 
 private slots:
     void newBook();
