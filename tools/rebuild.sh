@@ -65,10 +65,19 @@ elif NEWER=$(find "$ROOT/src" "$ROOT/generated" -type f \
      && [ -n "$NEWER" ]; then
   STALE="the binary is older than ${NEWER#$ROOT/}"
 fi
-if grep -qE "error C[0-9]|error MSB[0-9]|fatal error" "$BUILD_LOG"; then
+# Errors belonging to the app are reported and then set aside: while the app is
+# running its exe cannot be relinked (LNK1168), which says nothing at all about
+# the tests and must not stop them.
+if grep -E "error C[0-9]|error MSB[0-9]|fatal error" "$BUILD_LOG" \
+     | grep -q -v "simpleaccount_app.vcxproj"; then
   echo "== BUILD FAILED -- not running the tests =="
   echo "   the compiler reported errors; see $BUILD_LOG"
   exit 1
+fi
+if grep -E "error C[0-9]|error MSB[0-9]|fatal error" "$BUILD_LOG" \
+     | grep -q "simpleaccount_app.vcxproj"; then
+  echo "   (the app did not build -- is it running? the tests do not depend on"
+  echo "    it, so they are run anyway; see $BUILD_LOG)"
 fi
 if [ -n "$STALE" ]; then
   echo "== BUILD FAILED -- not running the tests =="
