@@ -9,10 +9,14 @@ Details
 # named profile: set up once per bank, recognised by its headings
 # thereafter.
 #
-# A CSV file also has no identifier per transaction, so the duplicate test
-# of ImportOfx cannot be used. What is here instead is a content
-# fingerprint, which is weaker, and that difference is stated rather than
-# hidden.
+# A CSV file usually has no identifier per transaction, so test one of
+# ImportOfx -- the one that makes a second read of a QFX do nothing --
+# has nothing to work on. Everything below it does: the tests are the
+# same tests, over the same date and amount, counted the same way. Where
+# a file does carry a reference of its own it is kept and used, under
+# the name of the source that gave it, exactly as a FITID is. See how a
+# downloaded transaction is identified in ImportOfx; what is here is the
+# same rule read for a file without identifiers.
 
 # ---------------------------------------------------------------------------
 # The mapping
@@ -1023,20 +1027,35 @@ Then transactions are : Transaction
 # ---------------------------------------------------------------------------
 
 DomainTerm Fingerprint : Text
-Description The date, amount, and payee of a row taken together, folded to upper
-# case with runs of blanks collapsed. It stands in for the FITID that a
-# CSV file does not have.
+Description The date and the amount of a row, with the payee compared as the
+# payee rule describes -- the rules first, then loosely. It is the name
+# for what two records of one transaction have in common when neither
+# carries an identifier.
+Details The date and the amount are the key. The payee is not part of it,
+# because the first reconciliation against a history brought over from
+# Quicken would match nothing if it were: Harris Teeter against HARRIS
+# TEETER #231. What the payee decides is the note. See two payees are
+# compared after the rules and then loosely, in ImportOfx.
 
+$TBD
 BusinessRule How a CSV row is tested against what is already there
-Description Weaker than the FITID test of ImportOfx, and it says so: a row that
-# matches is offered rather than skipped, because two genuine visits to
-# one shop on one day for one amount are not rare.
+Description The tests of ImportOfx, less the one about identifiers, which a CSV
+# file usually has nothing for. Where a file does carry a reference of
+# its own, test one applies to it and is scoped to that source.
+Details There was a weaker rule here once, and it was weaker in both
+# directions. It offered a row that matched rather than settling it, so
+# re-reading a file asked about every row of it; and it reached five
+# days on an amount alone, which is a guess about whether somebody
+# shopped twice dressed up as a match. The rule now is the one rule,
+# stated once in ImportOfx and read here for a file without
+# identifiers.
 Examples: CsvDispositionRule
-| Test | Condition                                                         | Disposition |
-| 1    | A transaction in this account has the same fingerprint            | Possible    |
-| 2    | An uncleared transaction in this account has the same amount and check number | Matched |
-| 3    | An uncleared transaction in this account has the same amount within five days | Matched |
-| 4    | Nothing above applies                                             | New         |
+| Test | Condition                                                             | Disposition |
+| 1    | A transaction in this account carries this row's reference, from a Csv import | Duplicate |
+| 2    | This is a checking account, and a transaction in it has the same check number, amount and payee, dated within the book's check-number window | Duplicate |
+| 3    | The rows and the transactions in this account with this date and this amount are equal in number | Duplicate |
+| 4    | There are transactions in this account with this date and this amount, and they are not equal in number to the rows | Possible |
+| 5    | Nothing above applies                                                 | New         |
 
 Attributes CsvDispositionRule
 | Attribute   | Type              | Default |
@@ -1044,16 +1063,28 @@ Attributes CsvDispositionRule
 | Condition   | String            |         |
 | Disposition | ImportDisposition | New     |
 
-BusinessRule A row claims at most one transaction already there
-Description The tests above ask whether something matching is present. That is
-# not enough, because it answers the same way however many there are.
-# Two rows in one file with the same date, amount and payee are two
-# transactions, not one row read twice, so the file and the book are
-# paired off one for one.
-Details Put the other way round: a transaction already in the book can be
-# claimed once. The first matching row claims it; the second finds
-# nothing left and is new. Which of two identical rows does the claiming
-# is not a question, because they are indistinguishable.
+$TBD
+BusinessRule How many rows match how many transactions
+Description The tests above ask whether something matching is there. That is not
+# enough, because it answers the same way however many there are. Two
+# rows in one file with the same date and amount are two transactions,
+# not one row read twice, so the file and the book are counted against
+# each other.
+Details Where the counts agree, every one of them is a duplicate. Two rows
+# and two transactions is one file read twice; nothing is created and
+# both transactions are cleared. Where the counts do not agree, every
+# one of them is a question: nothing says which row goes with which
+# transaction, and there is no reason to prefer one pairing over
+# another.
+#
+# Pairing them off one for one and calling the remainder new was the
+# earlier rule, and it decided the one thing nobody can decide from a
+# file. Two rows against one transaction is either a second visit to
+# the shop or a file that has been read before and a transaction that
+# was missed; the counts say which only when they agree. So the
+# disagreeing case asks, and asks about all of it, because the row that
+# would have been paired off is no better evidenced than the row that
+# would have been left over.
 #
 # The test that asks only "is there one like this?" silently loses the
 # second coffee of the day, the second fuel stop, the second identical
@@ -1062,38 +1093,42 @@ Details Put the other way round: a transaction already in the book can be
 # is the worse one: an extra row is seen and deleted, a missing row is
 # discovered a year later or never.
 #
-# So the comparison is between two multisets rather than a membership
-# test. The pairing is per account, as every other duplicate test here
-# is, and a claimed transaction is removed from what the next row may
-# claim.
+# The counting is per account, as every other duplicate test here is,
+# and over what tests one and two have not already settled: a row whose
+# reference or check number has named its transaction is out of the
+# count, and so is that transaction.
 #
 # The book is never changed to fit the file. Where the book holds more
 # than the file does -- the same amount twice over where the download
 # has it once -- the spare is left alone and nothing is reported about
-# it. The file is a statement of what the bank knows, not an instruction
-# to make the book match.
+# it. The file is a statement of what the bank knows, not an
+# instruction to make the book match.
 Examples: ClaimPairing
-| InFile | AlreadyThere | Possible | New | Notes                                     |
-| 1      | 0            | 0        | 1   | Nothing to claim                          |
-| 1      | 1            | 1        | 0   | The one claims the one                    |
-| 2      | 0            | 0        | 2   | Two genuine visits, neither seen before   |
-| 2      | 1            | 1        | 1   | One claimed; the other is a second visit  |
-| 2      | 2            | 2        | 0   | Both claimed                              |
-| 3      | 2            | 2        | 1   | Two claimed, one left over                |
-| 1      | 2            | 1        | 0   | The spare in the book is left alone        |
+| InFile | AlreadyThere | Duplicate | Possible | New | Notes                                   |
+| 1      | 0            | 0         | 0        | 1   | Nothing to match                        |
+| 1      | 1            | 1         | 0        | 0   | One for one                             |
+| 2      | 0            | 0         | 0        | 2   | Two genuine visits, neither seen before |
+| 2      | 1            | 0         | 2        | 0   | The counts disagree, so both are asked  |
+| 2      | 2            | 2         | 0        | 0   | Two for two: the file read twice        |
+| 3      | 2            | 0         | 3        | 0   | The counts disagree                     |
+| 1      | 2            | 0         | 1        | 0   | The counts disagree; the spare is still left alone |
 
 Attributes ClaimPairing
 | Attribute    | Type    | Default |
 | InFile       | Integer | 0       |
 | AlreadyThere | Integer | 0       |
+| Duplicate    | Integer | 0       |
 | Possible     | Integer | 0       |
 | New          | Integer | 0       |
 | Notes        | String  | none    |
 
+$TBD
 Scenario Two identical rows against one transaction already there
-Description The case the rule exists for, and the one a membership test gets
-# wrong. Two coffees at the same shop on the same day for the same
-# amount, and the book already has one of them.
+Description The case the rule exists for. Two coffees at the same shop on the
+# same day for the same amount, and the book has one of them: either
+# the second was never entered, or this file has been read before and
+# one of the two was missed. Nothing in the file says which, so both
+# rows are asked about.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1117,11 +1152,11 @@ Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When rows imported
 Then import summary is : ImportSummary Vertical
-| Possible | 1 |
-| New      | 1 |
-# One row claims the transaction already there and is offered as a possible
-# duplicate; the other has nothing left to claim and is new. A membership test
-# would have called both of them possible and lost the second coffee.
+| Possible | 2 |
+| New      | 0 |
+# Two rows against one transaction: the counts disagree, so both are offered
+# and neither is decided. Pairing one of them off and calling the other new
+# would be choosing between two readings of the same file on no evidence.
 
 Scenario Two identical rows with nothing already there are both new
 Description The same file into an empty account. Neither row is a duplicate of
@@ -1178,10 +1213,13 @@ Then import summary is : ImportSummary Vertical
 | Possible | 1 |
 # One claim, one spare, and nothing said about the spare.
 
-Scenario Re-importing the same CSV file offers every row rather than skipping it
-Description Nothing is created without being asked, and nothing is discarded
-# without being asked. Over twenty years both mistakes are expensive,
-# and the second is worse.
+$TBD
+Scenario Re-importing the same CSV file does nothing the second time
+Description One row in the file and the one it created in the book: the counts
+# agree, so it is a duplicate and nothing is created. This is the whole
+# point of reading a file twice being safe, and the earlier rule --
+# which offered every row again -- made a monthly download a monthly
+# questionnaire.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1204,27 +1242,32 @@ When rows imported
 Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 0 |
-| Matched   | 0 |
 | Possible  | 0 |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When rows imported
 Then import summary is : ImportSummary Vertical
 | New       | 0 |
-| Duplicate | 0 |
-| Matched   | 0 |
-| Possible  | 1 |
+| Duplicate | 1 |
+| Possible  | 0 |
 
+$TBD
 BusinessRule What a fingerprint ignores
-Description Two rows that differ only in how the payee is spaced or cased are
-# the same row. Two that differ in amount or date are not.
+Description Two rows that differ only in how the payee is spaced, cased or
+# numbered are the same row. Two that differ in amount or date are not.
+Details The last row is the one that moved. A trailing number on a payee is a
+# store number or a terminal number, not a different shop, and treating
+# it as a difference put a payee note on every row of a reconciliation
+# against a Quicken history. See two payees are compared after the
+# rules and then loosely, in ImportOfx: this is that comparison, named
+# from the CSV side.
 Examples: FingerprintMatch
 | DateA      | PayeeA          | AmountA | DateB      | PayeeB          | AmountB | Same  |
 | 2024-01-15 | Harris Teeter   | -45.00  | 2024-01-15 | HARRIS TEETER   | -45.00  | true  |
 | 2024-01-15 | Harris  Teeter  | -45.00  | 2024-01-15 | Harris Teeter   | -45.00  | true  |
 | 2024-01-15 | Harris Teeter   | -45.00  | 2024-01-15 | Harris Teeter   | -45.01  | false |
 | 2024-01-15 | Harris Teeter   | -45.00  | 2024-01-16 | Harris Teeter   | -45.00  | false |
-| 2024-01-15 | Harris Teeter   | -45.00  | 2024-01-15 | Harris Teeter 2 | -45.00  | false |
+| 2024-01-15 | Harris Teeter   | -45.00  | 2024-01-15 | Harris Teeter 2 | -45.00  | true  |
 
 Attributes FingerprintMatch
 | Attribute | Type      | Default    |

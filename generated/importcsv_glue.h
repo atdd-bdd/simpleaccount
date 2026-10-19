@@ -339,7 +339,6 @@ public:
         ImportSummaryString got;
         got.new_ = std::to_string(decided_.summary.New);
         got.duplicate = std::to_string(decided_.summary.Duplicate);
-        got.matched = std::to_string(decided_.summary.Matched);
         got.possible = std::to_string(decided_.summary.Possible);
         EXPECT_EQ(values.front(), got) << "wanted " << values.front().to_string()
                                       << " but the import decided " << got.to_string();
@@ -523,24 +522,6 @@ public:
                 *two_date, Money(value.amountb), blank(value.payeeb));
             EXPECT_EQ(parse_bool_cell(value.same), one == two)
                 << "\"" << value.payeea << "\" against \"" << value.payeeb << "\"";
-        }
-    }
-
-    void examples_businessrule_a_row_claims_at_most_one_transaction_already_there(
-            const std::vector<ClaimPairingString>& values) {
-        for (const auto& value : values) {
-            const int in_file = std::stoi(value.infile);
-            const int in_book = std::stoi(value.alreadythere);
-            a_book_of_identical_transactions(in_book);
-            std::vector<csv::RowRead> rows;
-            for (int i = 0; i < in_file; ++i) rows.push_back(one_identical_row());
-            const csv::Imported got = csv::decide(chart_, rows, kAccount, transactions_);
-            ClaimPairingString back = value;
-            back.possible = std::to_string(got.summary.Possible);
-            back.new_ = std::to_string(got.summary.New);
-            EXPECT_EQ(value, back)
-                << in_file << " rows against " << in_book << " already there -- "
-                << value.notes;
         }
     }
 
@@ -851,6 +832,27 @@ public:
                 EXPECT_EQ(Money(want.amount).cents(), got.amount.cents()) << where << " amount";
             if (want.cleared != DNCString && !want.cleared.empty())
                 EXPECT_EQ(want.cleared, types::to_string(got.cleared)) << where << " cleared";
+        }
+    }
+
+public:
+
+    void examples_businessrule_how_many_rows_match_how_many_transactions(
+            const std::vector<ClaimPairingString>& values) {
+        for (const auto& value : values) {
+            const int in_file = std::stoi(value.infile);
+            const int in_book = std::stoi(value.alreadythere);
+            a_book_of_identical_transactions(in_book);
+            std::vector<csv::RowRead> rows;
+            for (int i = 0; i < in_file; ++i) rows.push_back(one_identical_row());
+            const csv::Imported got = csv::decide(chart_, rows, kAccount, transactions_);
+            ClaimPairingString back = value;
+            back.duplicate = std::to_string(got.summary.Duplicate);
+            back.possible = std::to_string(got.summary.Possible);
+            back.new_ = std::to_string(got.summary.New);
+            EXPECT_EQ(value, back)
+                << in_file << " rows against " << in_book << " already there -- "
+                << value.notes;
         }
     }
 

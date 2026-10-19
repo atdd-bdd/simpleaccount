@@ -872,7 +872,6 @@ Then transactions are : Transaction
 Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 1 |
-| Matched   | 0 |
 | Possible  | 0 |
 # One transaction created, one half recognised as its other side. The payee of
 # the half that was kept is the one from the account the money left.
@@ -933,7 +932,6 @@ Then transactions are : Transaction
 Then import summary is : ImportSummary Vertical
 | New       | 2 |
 | Duplicate | 2 |
-| Matched   | 0 |
 | Possible  | 0 |
 
 Scenario A transfer half with no partner still becomes a whole transfer
@@ -1019,7 +1017,6 @@ When qif file imported
 Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 1 |
-| Matched   | 0 |
 | Possible  | 0 |
 Then transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee        | Destination    | Amount  |
@@ -1749,13 +1746,11 @@ When qif file imported
 Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 0 |
-| Matched   | 0 |
 | Possible  | 0 |
 When qif file imported
 Then import summary is : ImportSummary Vertical
 | New       | 0 |
 | Duplicate | 0 |
-| Matched   | 0 |
 | Possible  | 1 |
 
 # ---------------------------------------------------------------------------

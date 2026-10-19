@@ -193,8 +193,9 @@ public:
         ImportSummaryString got;
         got.new_ = std::to_string(summary_.New);
         got.duplicate = std::to_string(summary_.Duplicate);
-        got.matched = std::to_string(summary_.Matched);
         got.possible = std::to_string(summary_.Possible);
+        // Completed is left at nought: it is the disposition the payment halves
+        // answer with in the specification, and the code has not got it yet.
         EXPECT_EQ(values.front(), got) << "wanted " << values.front().to_string()
                                        << " but the import decided " << got.to_string();
     }
@@ -1010,7 +1011,7 @@ public:
             ASSERT_EQ(1u, decided_.decided.size());
             const bool matched =
                 decided_.decided.front().disposition == ofx::Disposition::Matched;
-            EXPECT_EQ(value.matched == "Yes", matched)
+            EXPECT_EQ(value.duplicate == "Yes", matched)
                 << days << " days apart, number matches " << value.numbermatches
                 << " -- " << value.notes << "; the import decided "
                 << ofx::to_string(decided_.decided.front().disposition);
@@ -1190,6 +1191,33 @@ public:
     void examples_businessrule_the_date_windows_and_why_they_differ(const std::vector<DateWindowString>& values) {
         for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
         ADD_FAILURE() << "Not implemented: examples_businessrule_the_date_windows_and_why_they_differ";
+    }
+
+public:
+
+    void then_transaction_notes_are(const std::vector<TransactionNoteString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_transaction_notes_are";
+    }
+
+    void examples_datatype_duplicatenote(const std::vector<EnumerationValuesString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_datatype_duplicatenote";
+    }
+
+    void examples_businessrule_what_a_duplicate_does_to_the_transaction_already_there(const std::vector<WhatADuplicateDoesString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_what_a_duplicate_does_to_the_transaction_already_there";
+    }
+
+    void examples_businessrule_what_the_note_on_a_duplicate_says(const std::vector<DuplicateNoteRuleString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_what_the_note_on_a_duplicate_says";
+    }
+
+    void examples_businessrule_two_payees_are_compared_after_the_rules_and_then_loosely(const std::vector<PayeeComparisonString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_two_payees_are_compared_after_the_rules_and_then_loosely";
     }
 
 };

@@ -162,7 +162,6 @@ public:
         for (const auto& value : values) {
             EXPECT_EQ(std::stoi(value.new_), result_.summary.created) << "new";
             EXPECT_EQ(std::stoi(value.duplicate), result_.summary.duplicate) << "duplicate";
-            EXPECT_EQ(std::stoi(value.matched), result_.summary.matched) << "matched";
             EXPECT_EQ(std::stoi(value.possible), result_.summary.possible) << "possible";
         }
     }

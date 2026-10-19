@@ -929,8 +929,7 @@ When transactions imported : OfxTransactions
 | DEBIT   | 2026-09-20 | -60.00  | F2    | SHOP C | none | none     |
 Then import summary is : ImportSummary Vertical
 | New       | 1 |
-| Duplicate | 0 |
-| Matched   | 1 |
+| Duplicate | 1 |
 | Possible  | 0 |
 Given the quicken report states : QuickenFigure
 | QuickenLine   | QuickenAmount |

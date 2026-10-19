@@ -414,14 +414,38 @@ Then account numbering is : AccountNumbering
 # Deciding what to do with each transaction
 # ---------------------------------------------------------------------------
 
+$TBD
 DataType ImportDisposition
 Description What the import decided about one downloaded transaction.
+Details There were four of these once, and one of them was the mistake. A
+# Duplicate did nothing at all and a Matched stamped and cleared the
+# transaction it had found, which made them two answers to one
+# question -- is this transaction already here -- distinguished by how
+# the program had come to know it. Nobody reading an import wants that
+# distinction. What they want to know is that the row is already in
+# the book, and then, separately, whether anything about it did not
+# fit. So there are three dispositions and a note.
 Examples: EnumerationValues
-| Value     | Notes                                                       |
-| New       | Not seen before; a transaction is created                   |
-| Duplicate | Same FITID already imported into this account; nothing done  |
-| Matched   | Matches one entered by hand; that one is cleared instead    |
-| Possible  | Looks like one already present, but not certainly; asks     |
+| Value     | Notes                                                           |
+| New       | Not seen before; a transaction is created                       |
+| Duplicate | Already in the book; the one there is cleared and kept, nothing is created |
+| Possible  | The same date and amount is there, but the counts disagree; asks |
+| Completed | Created, and it filled in the other half of a payment already here |
+
+$TBD
+DataType DuplicateNote
+Description What did not fit about a duplicate. Written on the transaction in
+# the book, so it is still there next week when somebody wonders why
+# that row is cleared, and shown against the row while the import is
+# being looked at.
+Examples: EnumerationValues
+| Value           | Notes                                                           |
+| None            | The identifier matched and nothing differed                     |
+| DetailsDiffer   | The identifier matched and the date, the amount or the payee did not |
+| CheckNumberSame | A check number settled it                                       |
+| FitIdAdded      | There was no identifier for this source; one was written        |
+| PayeeUnmatched  | The date and the amount agreed and the payees did not            |
+| Uncleared       | The transaction already there was typed, not downloaded          |
 
 BusinessRule An identifier is only an identifier to the file that gave it
 Description A CSV and a QFX describing the same transaction do not agree on what
@@ -454,61 +478,188 @@ Attributes IdentifierScope
 | TestOneApplies | String |         |
 | Then           | String |         |
 
+$TBD
 BusinessRule How a downloaded transaction is identified
 Description In order. The first test that applies decides.
-Details The FITID test is what makes a second import of the same file do
-# nothing. It is scoped to the account, because two banks may issue the
-# same identifier.
+Details Test one is what makes a second read of the same file do nothing. It
+# is scoped to the account, because two banks may issue the same
+# identifier, and to the source, because a CSV and a QFX do not agree
+# on what to call one transaction. See an identifier is only an
+# identifier to the file that gave it, above.
 #
-# Below it the tests divide by what the book's transaction is, and
-# cleared status is what says which: everything an import writes is
-# cleared, so an uncleared transaction is one somebody typed. See every
-# imported transaction is cleared, below.
+# Test two is the check number, and it is the only test here allowed
+# any tolerance about the date. A check number is written on the check
+# itself, so the book and the download are naming the same piece of
+# paper -- but only within the book's check-number window, because
+# numbers come round again. It asks for the amount and the payee to
+# agree as well, and it is asked only of a checking account: a card
+# reference is not a check number and nothing else in a book is paid
+# by check.
 #
-# A transaction somebody typed carries their date, which is the day they
-# wrote the check or made the payment, and the bank posts it days later.
-# Where there is a check number the number does the identifying and the
-# lag is simply allowed for, which is what the check-number window is.
-# Where there is not, amount and date are the whole of the evidence, and
-# an import that reached across several days on that much would be
-# guessing. So test three is dated to the day as well, and what it
-# produces is a question rather than a decision: the same amount on the
-# same day as something typed is offered as a possible duplicate, and
-# the user says whether it is the same payment.
+# Tests three and four are one test counted two ways. The key is the
+# date and the amount, in this account, over the rows and the
+# transactions that tests one and two have not already settled. Where
+# the file has as many of them as the book does, every one is a
+# duplicate. Where it does not, every one is a question: nothing says
+# which row goes with which transaction, and deciding either way
+# doubles a transaction or loses one. See how many rows match how many
+# transactions, in ImportCsv.
 #
-# A transaction an import wrote carries the bank's own posting date, and
-# so does the row now being read. Two records of one event from one
-# source agree about the day, so test four needs no window and asks
-# nothing: the same amount in the same account on the same date is that
-# transaction arriving a second time. Allowing days either side would be
-# allowing the bank to disagree with itself, and asking about it would
-# be asking the user to confirm what the program already knows.
+# The payee is not part of the key. If it were, the first reconciliation
+# against a history brought over from Quicken would match nothing --
+# Harris Teeter against HARRIS TEETER #231 -- and a month would import
+# twice. So the payee is compared afterwards, and what it decides is
+# the note rather than the disposition. See two payees are compared
+# after the rules and then loosely, below.
 #
-# Reaching further than a day is left to a pass of its own, after the
-# import has been accepted, where the question is a different one:
-# pairing a transaction in this register against one in another
-# register, the two halves of a transfer days apart. That pass has a
-# window because the two dates come from two different places. Nothing
-# in it happens while a row is being judged. See proposing transfers.
+# Every other date comparison is to the day. Reaching further is left
+# to a pass of its own, after the import has been accepted, where the
+# question is a different one: pairing a transaction in this register
+# against one in another register, the two halves of a transfer days
+# apart. That pass has a window because the two dates come from two
+# different places. Nothing in it happens while a row is being judged.
+# See proposing transfers.
 #
-# Tests two to four have no identifier behind them, so they are subject to
-# the claim-pairing rule in ImportCsv: each downloaded transaction claims
-# at most one of those already there, and a claimed one is not available
-# to claim again. Test one needs none of that, because a FITID is unique
-# within the account and cannot be claimed twice.
+# Cleared status decides nothing here. It used to: an uncleared
+# transaction was taken to be one somebody typed and was asked about
+# rather than matched, and a cleared one was taken to be a second
+# reading of a download and matched silently. Both are the same
+# transaction arriving again, so both are duplicates now, and the fact
+# that one of them was typed is recorded as a note instead of changing
+# the answer.
 Examples: DispositionRule
 | Test | Condition                                                             | Disposition |
 | 1    | A transaction in this account carries this FITID, from an Ofx import   | Duplicate   |
-| 2    | An uncleared transaction in this account has the same amount and check number, within the book's check-number window | Matched |
-| 3    | An uncleared transaction in this account has the same amount on the same date | Possible |
-| 4    | A cleared transaction in this account has the same amount on the same date, and no FITID | Matched |
-| 5    | Nothing above applies                                                 | New         |
+| 2    | This is a checking account, and a transaction in it has the same check number, amount and payee, dated within the book's check-number window | Duplicate |
+| 3    | The rows and the transactions in this account with this date and this amount are equal in number | Duplicate |
+| 4    | There are transactions in this account with this date and this amount, and they are not equal in number to the rows | Possible |
+| 5    | This row is the other half of a payment already here, waiting with its own side unassigned | Completed |
+| 6    | Nothing above applies                                                 | New         |
 
 Attributes DispositionRule
 | Attribute   | Type              | Default |
 | Test        | Integer           | 0       |
 | Condition   | String            |         |
 | Disposition | ImportDisposition | New     |
+
+$TBD
+BusinessRule What a duplicate does to the transaction already there
+Description Nothing is created. The transaction already in the book is the
+# transaction, and the import brings it up to date rather than
+# replacing it: cleared, given the identifier the row carried if it
+# had none for this source, and otherwise left exactly as it is.
+Details Keeping the book's own date, payee, category, memo and check number
+# is the point of the whole exercise. A history brought over from
+# Quicken has twenty years of categorising in it and a download knows
+# none of it: the bank's name for a payee is HARRIS TEETER #231 and
+# its category is nothing at all. An import that overwrote what it
+# recognised would undo that work a month at a time.
+#
+# Cleared is the exception, because cleared is not something a person
+# chose. It is the bank saying the transaction happened, and the row
+# being read is the bank saying it. So a duplicate clears what it
+# recognised, and a transaction that was typed and never cleared is
+# cleared now -- with a note, because that is the one case where the
+# import has changed something a person could be surprised by.
+#
+# The identifier is written for the source that gave it and alongside
+# any the transaction already has, which is what lets the same
+# transaction be recognised by a QFX after a CSV. See an identifier is
+# only an identifier to the file that gave it.
+Examples: WhatADuplicateDoes
+| Property         | WhatHappens                                              |
+| The date         | The book's is kept                                       |
+| The payee        | The book's is kept                                       |
+| The category     | The book's is kept                                       |
+| The memo         | The book's is kept                                       |
+| The check number | The book's is kept                                       |
+| The amount       | The book's is kept, and is equal in any case             |
+| Cleared          | Set to cleared                                           |
+| The identifier   | Written, if the transaction had none for this source     |
+| The note         | Added to the transaction, where there is one to add      |
+
+Attributes WhatADuplicateDoes
+| Attribute    | Type   | Default |
+| Property     | String |         |
+| WhatHappens  | String |         |
+
+$TBD
+BusinessRule What the note on a duplicate says
+Description A duplicate is not always a plain one, and the note is where
+# whatever did not fit is said. It is written on the transaction in
+# the book rather than against the import, because the question it
+# answers -- why is this cleared, why is it spelt like that -- is
+# asked long after the import has been put away.
+Details Several can be true of one duplicate: a transaction that was typed,
+# whose payee the download spells differently, and which had no
+# identifier until now. All of them are kept, and each is kept once.
+# A later import that reaches the same transaction and sees the same
+# thing adds nothing, so re-reading a file does not grow a list.
+#
+# None of them changes the disposition. Every row below is a duplicate;
+# the note is what a person reads to decide whether to look at it.
+Examples: DuplicateNoteRule
+| WhatWasSeen                                                           | Note            |
+| The identifier matched and the date, amount and payee agree            | None            |
+| The identifier matched and the date, the amount or the payee differs   | DetailsDiffer   |
+| A check number settled it                                              | CheckNumberSame |
+| The transaction had no identifier for this source and now has one      | FitIdAdded      |
+| The date and the amount agree and the payees do not                    | PayeeUnmatched  |
+| The transaction already there was uncleared                            | Uncleared       |
+
+Attributes DuplicateNoteRule
+| Attribute   | Type          | Default |
+| WhatWasSeen | String        |         |
+| Note        | DuplicateNote | None    |
+
+Attributes TransactionNote
+Description A note an import left on a transaction. It is a row rather than a
+# field because several can be true of one transaction, and it is on
+# the transaction rather than against the import because the question
+# it answers is asked long after the import was put away.
+| Attribute | Type           | Default |
+| Ref       | TransactionRef |         |
+| Note      | DuplicateNote  | None    |
+
+$TBD
+BusinessRule Two payees are compared after the rules and then loosely
+Description The book says Harris Teeter and the download says HARRIS TEETER
+# #231. They are the same shop, and a comparison that says otherwise
+# puts a note on every row of the first reconciliation against a
+# Quicken history, which is a note on nothing.
+Details So the download's payee goes through the payee rules first -- the
+# same rules that rename it when a transaction is created, and the
+# only thing that can know AMZN Mktp US*2X4 is Amazon. If a rule
+# renames it, the renamed name is what is compared. See Payees.
+#
+# If no rule applies, the two names are compared loosely: folded to
+# upper case, runs of blanks collapsed, punctuation dropped, and a
+# trailing run of digits or a store number taken off. What is left is
+# compared for equality. It is deliberately not a resemblance score:
+# a number saying two names are eighty per cent alike is not something
+# a person can check or a specification can state.
+#
+# A payee that still does not agree does not stop the duplicate. The
+# same date and the same amount in one account is enough to say this is
+# the same transaction; what the payee decides is whether the book's
+# name for it is worth a second look. So the duplicate stands and the
+# note says the payee was not matched.
+Examples: PayeeComparison
+| InTheBook     | InTheFile          | Agree | Why                                             |
+| Harris Teeter | HARRIS TEETER      | Yes   | Case alone                                      |
+| Harris Teeter | HARRIS~~TEETER     | Yes   | Runs of blanks collapse                         |
+| Harris Teeter | HARRIS TEETER #231 | Yes   | A store number is not part of the name          |
+| Joe Coffee    | JOE COFFEE 02      | Yes   | A trailing number comes off                     |
+| Shell         | SHELL OIL 57444692 | No    | OIL is not a number; a rule is what joins these |
+| Amazon        | AMZN~Mktp~US*2X4   | No    | Nothing but a rule could know this              |
+| Harris Teeter | Costco             | No    | Two different shops                             |
+
+Attributes PayeeComparison
+| Attribute | Type      | Default |
+| InTheBook | PayeeName | none    |
+| InTheFile | PayeeName | none    |
+| Agree     | Text      | No      |
+| Why       | String    | none    |
 
 Scenario Importing the same file twice imports nothing the second time
 Description The FITID is stored on the transaction in the statement account, which
@@ -525,7 +676,6 @@ When transactions imported : OfxTransactions
 Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 0 |
-| Matched   | 0 |
 | Possible  | 0 |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
@@ -535,7 +685,6 @@ When transactions imported : OfxTransactions
 Then import summary is : ImportSummary Vertical
 | New       | 0 |
 | Duplicate | 1 |
-| Matched   | 0 |
 | Possible  | 0 |
 Then balances are : AccountBalance
 | Account         | RawBalance | DisplayBalance | Notes                  |
@@ -545,8 +694,8 @@ Attributes ImportSummary
 | Attribute | Type    | Default |
 | New       | Integer | 0       |
 | Duplicate | Integer | 0       |
-| Matched   | Integer | 0       |
 | Possible  | Integer | 0       |
+| Completed | Integer | 0       |
 
 Scenario The same FITID in a different account is not a duplicate
 Description Two institutions may number their transactions alike. The test is
@@ -567,7 +716,6 @@ When transactions imported : OfxTransactions
 Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 0 |
-| Matched   | 0 |
 | Possible  | 0 |
 
 Attributes ImportedTransaction
@@ -586,7 +734,8 @@ Description A transaction that also carries the identifier it was imported with.
 | CheckNo       | CheckNumber    | none       |
 | FitId         | FitId          | none       |
 
-Scenario A check entered by hand is matched when it clears
+$TBD
+Scenario A check entered by hand is cleared when the bank reports it
 Description The check was written on the second and reached the bank on the
 # third. One day, so the check number is trusted and the two are the
 # same check.
@@ -608,14 +757,24 @@ When transactions imported : OfxTransactions
 | CHECK   | 2024-01-03 | -1250.00 | 20240103002 | COUNTY TAX OFFICE | none | 2041     |
 Then import summary is : ImportSummary Vertical
 | New       | 0 |
-| Duplicate | 0 |
-| Matched   | 1 |
+| Duplicate | 1 |
 | Possible  | 0 |
 Then transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee             | CheckNo | Destination         | Amount   | Cleared | FitId       |
 | T1  | Assets:Checking | 2024-01-02 | County Tax Office | 2041    | Expenses:Home:Rates | -1250.00 | Cleared | 20240103002 |
+Then transaction notes are : TransactionNote
+| Ref | Note            |
+| T1  | CheckNumberSame |
+| T1  | Uncleared       |
+| T1  | FitIdAdded      |
 # The date entered by hand is kept. It is the date the check was written, which
 # is what the register is ordered by; the clearing date belongs to the bank.
+#
+# Three notes, all of them true of this one transaction: the check number is
+# what recognised it, it was typed rather than downloaded, and it had no
+# identifier until this import gave it one. The dates differ, which is the
+# ordinary case for a check and the reason the window exists, so nothing is
+# said about that.
 
 Scenario A typed transaction and a download two days apart are two transactions
 Description T1 was typed, which is what Uncleared says about it. The download
@@ -643,10 +802,9 @@ When transactions imported : OfxTransactions
 Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 0 |
-| Matched   | 0 |
 | Possible  | 0 |
 
-Scenario The same amount six days apart is not matched
+Scenario The same amount six days apart is not a duplicate
 Description Six days or two, it makes no difference now: there is no window
 # here to be inside of. The two are taken to be two separate visits
 # to the same shop for the same amount, which is commoner than a
@@ -667,10 +825,10 @@ When transactions imported : OfxTransactions
 Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 0 |
-| Matched   | 0 |
 | Possible  | 0 |
 
-Scenario A transaction already imported, with no identifier, is matched on its day
+$TBD
+Scenario A transaction already imported, with no identifier, is a duplicate on its day
 Description The case a history brought over from Quicken makes ordinary. T1 came
 # in with that history: it is cleared, because the bank had already
 # posted it when Quicken was told about it, and it carries no FITID,
@@ -679,7 +837,7 @@ Description The case a history brought over from Quicken makes ordinary. T1 came
 Details The dates agree exactly, and they agree because both are the bank's
 # own posting date -- one recorded through Quicken, one read out of
 # the file today. So this is the transaction, not something that looks
-# like it, and the import says Matched.
+# like it, and the import says Duplicate.
 #
 # It is the FITID being absent that brings this test into play at all.
 # Where there is one, test one has already settled the question.
@@ -698,8 +856,7 @@ When transactions imported : OfxTransactions
 | DEBIT   | 2024-01-16 | -45.00 | 20240116009 | HARRIS TEETER #231 | none | none     |
 Then import summary is : ImportSummary Vertical
 | New       | 0 |
-| Duplicate | 0 |
-| Matched   | 1 |
+| Duplicate | 1 |
 | Possible  | 0 |
 Then transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared | FitId       |
@@ -729,7 +886,6 @@ When transactions imported : OfxTransactions
 Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 0 |
-| Matched   | 0 |
 | Possible  | 0 |
 
 Scenario Two identical downloaded transactions both import
@@ -749,7 +905,6 @@ When transactions imported : OfxTransactions
 Then import summary is : ImportSummary Vertical
 | New       | 2 |
 | Duplicate | 0 |
-| Matched   | 0 |
 | Possible  | 0 |
 
 Scenario A new transaction is created uncategorised and cleared
@@ -777,12 +932,14 @@ Description Cleared means the bank has said this happened. A download is the
 # bank saying so, so everything read out of one is cleared. A
 # transaction is uncleared only while the only record of it is that
 # somebody typed it.
-Details Which makes cleared status the one thing that says where a
-# transaction came from, and the tests above lean on it: an uncleared
-# transaction is a typed one, so its date is a person's and is allowed
-# to differ from the bank's by a few days. A cleared one came from the
-# bank, so its date is the bank's and has to agree exactly. Neither
-# test would be safe if a download left anything uncleared.
+Details Which makes cleared status the one thing in a book that says where a
+# transaction came from. The matching tests above used to turn on it --
+# an uncleared transaction was asked about and a cleared one was
+# matched silently -- and they do not any more: both are the same
+# transaction arriving again, and which it was is recorded as a note
+# instead of changing the answer. What cleared status is for is the
+# reconciliation and the balance the bank states, which is the job it
+# was always doing.
 #
 # A download states a cleared status of its own in some formats, and it
 # is not read. Nothing a bank has sent is uncleared by the time it is
@@ -814,6 +971,7 @@ Attributes ClearedOnArrival
 # What a check number is worth, and for how long
 # ---------------------------------------------------------------------------
 
+$TBD
 BusinessRule A check number is trusted for a day and no longer
 Description A check number is the strongest thing in a bank file: it is written
 # on the check itself, so the book and the download are naming the
@@ -825,6 +983,11 @@ Details So a number settles a match only when the two are dated within the
 # book's check-number window of each other. Beyond that the number is
 # treated as coincidence and the weaker tests decide, which usually means
 # the transaction is created.
+#
+# It asks for the amount and the payee to agree as well -- a number on
+# its own is a number, and the three together are a check -- and it is
+# asked only of a checking account. A card's reference number is not a
+# check number and nothing else in a book is paid by check.
 #
 # The window is a setting on the book, a whole number of days, and it is
 # one day unless it is changed. One day is right for a book whose checks
@@ -855,7 +1018,7 @@ Details So a number settles a match only when the two are dated within the
 # statement.
 # Every row here is at the default window of one day.
 Examples: CheckNumberWindow
-| DaysApart | NumberMatches | Matched | NoteWritten | Notes                                              |
+| DaysApart | NumberMatches | Duplicate | NoteWritten | Notes                                              |
 | 0         | Yes           | Yes     | No          | The number settles it                              |
 | 1         | Yes           | Yes     | No          | Still within the day                               |
 | 2         | Yes           | No      | Yes         | The number is stale and nothing weaker reaches     |
@@ -865,7 +1028,7 @@ Examples: CheckNumberWindow
 Attributes CheckNumberWindow
 Description Whether a check number settles a match, by how far apart the two are
 # dated, and whether the import wrote a note about it.
-Details Matched is the disposition, not the reason for it. The row two days
+Details Duplicate is the disposition, not the reason for it. The row two days
 # apart is created rather than matched, because at the default window
 # nothing reaches two days: the number is past its day and the amount
 # never reached beyond the day at all. The note is written all the same,
@@ -875,11 +1038,11 @@ Details Matched is the disposition, not the reason for it. The row two days
 | Attribute     | Type    | Default |
 | DaysApart     | Integer | 0       |
 | NumberMatches | Text    | Yes     |
-| Matched       | Text    | No      |
+| Duplicate     | Text    | No      |
 | NoteWritten   | Text    | No      |
 | Notes         | String  | none    |
 
-Scenario A check number that matches too long afterwards is not matched
+Scenario A check number that matches too long afterwards does not settle it
 Description The same number sixteen days later. The number alone is not enough
 # to reconcile a check across that gap, so the transaction is created
 # and a note says what was seen -- leaving a person to decide whether
@@ -899,7 +1062,6 @@ When transactions imported : OfxTransactions
 | CHECK   | 2024-01-18 | -1250.00 | 20240118002 | COUNTY TAX OFFICE | none | 2041     |
 Then import summary is : ImportSummary Vertical
 | New      | 1 |
-| Matched  | 0 |
 Then import notes are : ImportNote
 | Kind             | Detail                                                       |
 | CheckNumberStale | Check 2041 is dated 2024-01-02 here and 2024-01-18 in the file |
@@ -916,6 +1078,7 @@ Description Something the import saw and could not decide, kept against the
 | Kind      | Text |         |
 | Detail    | Text |         |
 
+$TBD
 Scenario A wider check-number window reaches a check that took a fortnight
 Description The same check sixteen days later, in a book whose window is thirty
 # days. The number settles it, so the one entered by hand is cleared
@@ -937,13 +1100,13 @@ When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount   | FitId       | Name              | Memo | CheckNum |
 | CHECK   | 2024-01-18 | -1250.00 | 20240118002 | COUNTY TAX OFFICE | none | 2041     |
 Then import summary is : ImportSummary Vertical
-| New      | 0 |
-| Matched  | 1 |
+| New       | 0 |
+| Duplicate | 1 |
 Then import notes are : ImportNote
 | Kind | Detail |
 # No note: inside the window the number is trusted, so there is nothing a
-# person needs to decide. This is the one test the amount window cannot do --
-# sixteen days is well past its five.
+# person needs to decide. This is the one thing no other test can do -- every
+# one of them wants the dates to agree, and these are sixteen days apart.
 
 Attributes BookSetting
 Description A setting the book carries, in its own single row. Defaulted here as
@@ -983,27 +1146,28 @@ Description What the import says when it is done.
 
 BusinessRule A possible duplicate is the only disposition that waits
 Description The other three settle themselves. A new transaction is created, a
-# duplicate is ignored, a match clears the one already there. A
-# possible duplicate is the case the program cannot settle, so it is
-# the one that asks, and nothing happens to it until it is answered.
-Details Only one test produces it, and it is the test about a transaction
-# somebody typed: the same amount in the same account on the same day,
-# with no check number to settle it. Everything the bank has already
-# told us about is settled without asking, because the dates come from
-# the bank both times. This is the one case where the two dates come
-# from two different hands.
+# duplicate clears the one already in the book and creates nothing, a
+# completed payment fills in the half that was waiting. A possible
+# duplicate is the case the program cannot settle, so it is the one
+# that asks, and nothing happens to it until it is answered.
+Details One thing produces it: the file and the book disagreeing about how
+# many. Where the same date and amount is in the file twice and in the
+# book once, or in the file once and in the book twice, nothing says
+# which row goes with which transaction. The counts are the whole of
+# the evidence and they do not add up.
 #
-# There are two answers and both are ordinary. Either it is the same
-# transaction, in which case the one already in the book is the
-# transaction and the downloaded row only tells us the bank has seen it;
-# or it is a second one, in which case the bank is describing something
-# the book does not have.
+# What a person needs to know to answer it is whether they shopped
+# twice, and the program cannot know that. So it does not decide. Every
+# row of the disagreeing set is offered, and each is answered on its
+# own: this one is the transaction already there, or this one is
+# another the book does not have.
 #
-# An import left unanswered changes nothing, which is what makes it safe
-# to put down and come back to. A possible duplicate quietly created
-# would double a transaction and one quietly discarded would lose it.
-# Over twenty years both happen, and the second is worse: an extra row is
-# seen and deleted, a missing one is found a year later or never.
+# An import left unanswered changes nothing, which is what makes it
+# safe to put it down and come back to it. A possible duplicate quietly
+# created would double a transaction and one quietly discarded would
+# lose it. Over twenty years both happen, and the second is worse: an
+# extra row is seen and deleted, a missing one is found a year later or
+# never.
 Examples: PossibleAnswer
 | Answer     | TheOneAlreadyThere                       | TheDownloadedRow            |
 | TheSame    | Cleared, and stamped with the identifier | Nothing is created          |
@@ -1016,11 +1180,13 @@ Attributes PossibleAnswer
 | TheOneAlreadyThere | String |         |
 | TheDownloadedRow   | String |         |
 
-Scenario Answering that a possible duplicate is the same transaction
-Description The one already in the book was typed, which is why the import
-# asked at all. Answering TheSame says it is this payment, so it is
-# cleared and stamped, and the next import of the same file knows it
-# outright rather than asking again.
+$TBD
+Scenario Answering that one of two offered rows is the transaction already there
+Description Two coffees, or one coffee entered by hand and read back. The file
+# has the same amount twice on the same day and the book has it once,
+# so the counts disagree and both rows are offered. Answering says
+# which is which: F003 is the one already there, F004 is the second
+# visit.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1034,16 +1200,23 @@ Given import target is : ImportTarget Vertical
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name          | Memo | CheckNum |
 | DEBIT   | 2026-02-05 | -88.20 | F003  | HARRIS TEETER | none | none     |
+| DEBIT   | 2026-02-05 | -88.20 | F004  | HARRIS TEETER | none | none     |
+Then import summary is : ImportSummary Vertical
+| Possible | 2 |
 When the possible duplicate is answered : PossibleResolution Vertical
 | FitId  | F003    |
 | Answer | TheSame |
+When the possible duplicate is answered : PossibleResolution Vertical
+| FitId  | F004      |
+| Answer | Different |
 Then transactions are : ImportedTransaction
-| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared | FitId |
-| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Cleared | F003  |
-# No transaction was created. T1 now carries F003 on the transaction in the account
-# the statement was for, so reading the same file again reports a duplicate and
-# asks nothing. The other side carries none: the bank has never heard of the
-# category.
+| Ref | SourceAccount   | Date       | Payee         | Destination            | Amount | Cleared | FitId |
+| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries     | -88.20 | Cleared | F003  |
+| T2  | Assets:Checking | 2026-02-05 | HARRIS TEETER | Expenses:Uncategorized | -88.20 | Cleared | F004  |
+# T1 keeps the payee and the category it was given and gains the identifier it
+# never had, so reading the same file again settles on test one and asks
+# nothing. T2 is created like any new row, cleared because it came from the
+# bank and uncategorised until a payee rule or the user says otherwise.
 
 Attributes PossibleResolution
 Description Which offered row is being answered, and what the answer is.
@@ -1051,9 +1224,10 @@ Description Which offered row is being answered, and what the answer is.
 | FitId     | FitId |         |
 | Answer    | Text  | TheSame |
 
-Scenario Answering that a possible duplicate is a different transaction
-Description Two genuine visits to one shop on one day for one amount. One was
-# typed, and the bank is describing the other, which the book does
+$TBD
+Scenario Answering that both offered rows are different transactions
+Description Three genuine visits to one shop on one day for one amount: one
+# typed, two downloaded, and the bank is describing two the book does
 # not have.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
@@ -1068,20 +1242,24 @@ Given import target is : ImportTarget Vertical
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name          | Memo | CheckNum |
 | DEBIT   | 2026-02-05 | -88.20 | F003  | HARRIS TEETER | none | none     |
+| DEBIT   | 2026-02-05 | -88.20 | F004  | HARRIS TEETER | none | none     |
 When the possible duplicate is answered : PossibleResolution Vertical
 | FitId  | F003      |
+| Answer | Different |
+When the possible duplicate is answered : PossibleResolution Vertical
+| FitId  | F004      |
 | Answer | Different |
 Then transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee         | Destination            | Amount | Cleared   | FitId |
 | T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries     | -88.20 | Uncleared | none  |
 | T2  | Assets:Checking | 2026-02-05 | HARRIS TEETER | Expenses:Uncategorized | -88.20 | Cleared   | F003  |
-# The second is created like any new row, cleared because it came from the bank,
-# and its category unknown until a payee rule or the user says otherwise. T1 is
-# left exactly as it was typed, uncleared and unstamped: answering Different
-# says the download is not it, which is not a statement about T1 at all. F003 is
-# on the new one only, so a later file naming F003 is a duplicate of the second
-# visit and nothing else.
+| T3  | Assets:Checking | 2026-02-05 | HARRIS TEETER | Expenses:Uncategorized | -88.20 | Cleared   | F004  |
+# T1 is left exactly as it was typed, uncleared and unstamped: answering
+# Different says the download is not it, which is not a statement about T1 at
+# all. The identifiers are on the new ones only, so a later file naming F003 is
+# a duplicate of the second visit and nothing else.
 
+$TBD
 Scenario An unanswered possible duplicate changes nothing and is asked again
 Description Which is what makes it safe to put an import down and come back to
 # it. Nothing is created, nothing is stamped and nothing is cleared,
@@ -1099,13 +1277,14 @@ Given import target is : ImportTarget Vertical
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name          | Memo | CheckNum |
 | DEBIT   | 2026-02-05 | -88.20 | F003  | HARRIS TEETER | none | none     |
+| DEBIT   | 2026-02-05 | -88.20 | F004  | HARRIS TEETER | none | none     |
 Then import summary is : ImportSummary Vertical
-| Possible | 1 |
+| Possible | 2 |
 Then transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared   | FitId |
 | T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Uncleared | none  |
-# Unchanged, and F003 is nowhere, so the same file asks the same question. An
-# import that was not answered is not a decision.
+# Unchanged, and neither identifier is anywhere, so the same file asks the same
+# question. An import that was not answered is not a decision.
 
 # ---------------------------------------------------------------------------
 # Two downloaded transactions that are one transfer
@@ -1256,6 +1435,7 @@ Then transactions are : ImportedTransaction
 # Unassigned rather than Uncategorized: this is not a question about which
 # expense it was, it is a question about which account the money went to.
 
+$TBD
 Scenario The card import completes the payment the bank import recorded
 Description The card is read a week later. It finds the payment already there with
 # its other side unassigned, and completes it rather than recording the
@@ -1274,8 +1454,8 @@ When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount  | FitId  | Name             | Memo | CheckNum |
 | XFER    | 2026-04-11 | 1200.00 | CC-901 | PAYMENT RECEIVED | none | none     |
 Then import summary is : ImportSummary Vertical
-| New     | 0 |
-| Matched | 1 |
+| New       | 0 |
+| Completed | 1 |
 Then transactions are : ImportedTransaction
 | Ref | SourceAccount          | Date       | Payee            | Destination            | Amount   | Cleared | FitId  |
 | T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | Liabilities:Chase Visa | -1200.00 | Cleared | BNK-77 |
@@ -1287,6 +1467,7 @@ Then transactions are : ImportedTransaction
 # account it is in actually heard, and its own identifier, which is why an
 # identifier belongs to a transaction now rather than to a transaction.
 
+$TBD
 Scenario Two cards from one bank are told apart by the amount
 Description Both cards say CHASEBANK, so the payee narrows the search to both and
 # the amount decides between them.
@@ -1306,8 +1487,8 @@ When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId  | Name             | Memo | CheckNum |
 | XFER    | 2026-04-11 | 340.00 | CC-902 | PAYMENT RECEIVED | none | none     |
 Then import summary is : ImportSummary Vertical
-| New     | 0 |
-| Matched | 1 |
+| New       | 0 |
+| Completed | 1 |
 Then transactions are : ImportedTransaction
 | Ref | SourceAccount            | Date       | Payee            | Destination              | Amount   | Cleared | FitId  |
 | T1  | Assets:Checking          | 2026-04-10 | CHASEBANK        | Unassigned               | -1200.00 | Cleared | BNK-77 |
@@ -1358,12 +1539,14 @@ Details Nearly all of this is same-day, and deliberately so. While a row is
 # number says the two records are of one payment and the days between
 # them are the bank's lag and nothing else.
 #
-# Everywhere else inside the import the dates agree or they do not. Two
-# records of one posting from one bank agree about the day, so for an
-# already-imported transaction a day's difference is a difference and
-# not a lag. For a typed one the evidence is an amount and a date, which
-# is too little to reach across days on, so the import asks instead of
-# reaching: same day offers, anything further is a new transaction.
+# Everywhere else inside the import the dates agree or they do not, and
+# it makes no difference how the transaction already there was come by.
+# Two records of one posting from one bank agree about the day, so a
+# day's difference is a difference and not a lag. A transaction somebody
+# typed carries their date rather than the bank's, and an amount and a
+# date is too little evidence to reach across days on -- so nothing
+# reaches, and what the import has instead of a window is the count: as
+# many as the book has is a duplicate, any other number is a question.
 #
 # The last row is the window that used to be inside the import and is
 # not any more. Pairing a transaction in one register against one in
@@ -1372,9 +1555,8 @@ Details Nearly all of this is same-day, and deliberately so. While a row is
 # because its two dates come from two different places.
 Examples: DateWindow
 | Rule                                              | Window   | Why                                        |
-| A download against a typed check                  | 1 day    | The number carries it; see the check rule  |
-| A download against a transaction typed by hand    | Same day | An amount and a date cannot reach further; it asks |
-| A download against a transaction already imported | Same day | Both dates are the bank's own posting date |
+| A download against a check already in the book    | 1 day    | The number carries it; see the check rule  |
+| A download against anything else in the book      | Same day | Two records of one posting agree about the day, and an amount and a date cannot reach further |
 | Two new downloads proposed as one transfer        | 2 days   | Both halves are electronic and near        |
 | One register's transaction against another's      | 5 days   | Asked after the import, of two books' own dates |
 
@@ -1417,7 +1599,6 @@ Then transactions are : ImportedTransaction
 Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 0 |
-| Matched   | 0 |
 | Possible  | 0 |
 # Two transactions, one per account, and no Uncategorized transaction on either
 # side. Each keeps the identifier and the payee of the file it came from, so
@@ -1496,7 +1677,6 @@ Then transfer candidates are : TransferCandidate
 Then import summary is : ImportSummary Vertical
 | New       | 2 |
 | Duplicate | 0 |
-| Matched   | 0 |
 | Possible  | 0 |
 
 Scenario Two days apart is proposed
@@ -1577,7 +1757,6 @@ Then transactions are : ImportedTransaction
 Then import summary is : ImportSummary Vertical
 | New       | 2 |
 | Duplicate | 0 |
-| Matched   | 0 |
 | Possible  | 0 |
 
 Scenario Four transfers of the same shape are proposed as four pairs
@@ -1665,15 +1844,14 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Uncategorized   | Income   | false       | none      | none          |
 Given transactions are : ImportedTransaction
 | Ref | SourceAccount         | Date       | Payee     | Destination            | Amount  | Cleared   | FitId |
-| T0  | Assets:Checking Prime | 2026-08-02 | A Payment | Expenses:Uncategorized | -750.00 | Uncleared | none  |
+| T0  | Assets:Checking Prime | 2026-08-03 | A Payment | Expenses:Uncategorized | -750.00 | Uncleared | none  |
 When statements imported : OfxImportFile
 | OfxAccountId     | TrnType | DatePosted | Amount  | FitId | Name       |
 | 1023711843105    | DEBIT   | 2026-08-03 | -750.00 | P1    | A PAYMENT  |
 | 4111111111111333 | CREDIT  | 2026-08-03 | 750.00  | P2    | SOME CREDIT |
 Then import summary is : ImportSummary Vertical
 | New       | 1 |
-| Duplicate | 0 |
-| Matched   | 1 |
+| Duplicate | 1 |
 | Possible  | 0 |
 Then transfer candidates are : TransferCandidate
 | FromAccount | FromDate | ToAccount | ToDate | Amount | DaysApart | State |
