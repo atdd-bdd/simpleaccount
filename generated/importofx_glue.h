@@ -194,8 +194,11 @@ public:
         got.new_ = std::to_string(summary_.New);
         got.duplicate = std::to_string(summary_.Duplicate);
         got.possible = std::to_string(summary_.Possible);
-        // Completed is left at nought: it is the disposition the payment halves
-        // answer with in the specification, and the code has not got it yet.
+        // Completed is reported as nought rather than left unset, which is the
+        // truth: it is the disposition the payment halves answer with in the
+        // specification, and the code has not got it yet, so no import decides
+        // it. An unset field would compare as blank against the table's 0.
+        got.completed = "0";
         EXPECT_EQ(values.front(), got) << "wanted " << values.front().to_string()
                                        << " but the import decided " << got.to_string();
     }

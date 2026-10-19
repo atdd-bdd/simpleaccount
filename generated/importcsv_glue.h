@@ -340,6 +340,7 @@ public:
         got.new_ = std::to_string(decided_.summary.New);
         got.duplicate = std::to_string(decided_.summary.Duplicate);
         got.possible = std::to_string(decided_.summary.Possible);
+        got.completed = "0";  // see the note in importofx_glue.h
         EXPECT_EQ(values.front(), got) << "wanted " << values.front().to_string()
                                       << " but the import decided " << got.to_string();
     }
