@@ -1537,6 +1537,7 @@ Description One row of an import waiting to be reviewed. Account is where the
 | Memo        | Text              | none       |
 | CheckNo     | CheckNumber       | none       |
 | Cleared     | ClearedStatus     | Cleared    |
+| Note        | DuplicateNote     | None       |
 
 Define AnImportOfThree
 Description The import the next several scenarios all read. A scenario cannot
@@ -2109,11 +2110,37 @@ Description Find looks across transactions for ones matching what was typed,
 \ performing a find again replaces that tab's results rather than
 \ opening a second one.
 Details A blank field in FindCriteria is not a filter: Text blank matches
-\ every payee and memo, a blank date or amount bound is open-ended, and
-\ a blank Account matches every account. AmountFrom and AmountTo bound
-\ the amount's absolute value, so a search for 80.00 to 100.00 finds
-\ both a payment of -89.99 and a deposit of 89.99 -- a person recalling
-\ a transaction rarely remembers which side of it they are thinking of.
+\ every payee and memo, a blank date bound is open-ended, a blank
+\ Amount matches every amount, and a blank Account matches every
+\ account.
+\
+\ Amount is exact unless a range is asked for. It used to be a pair of
+\ bounds and nothing else, and a pair of bounds with the upper one left
+\ blank matches everything above the number typed -- which is how a
+\ find for 69.38 on the author's own book answered with hundreds of
+\ rows, not one of them for 69.38. A person who remembers an amount
+\ remembers the amount, not an interval around it, so exact is what the
+\ dialog opens on and what one field means.
+\
+\ A range is still worth having, because somewhere between four and
+\ five hundred is a real thing to remember. So AmountMatch chooses
+\ between the two, and the second field is there only when Range is
+\ chosen -- see the second amount field is only there for a range. A
+\ range includes both of its ends, and a blank end is open-ended: the
+\ behaviour that was a trap while it was the only behaviour is a fair
+\ answer once somebody has said the word Range.
+\
+\ Amount is compared on the absolute value, so 89.99 finds both a
+\ payment of -89.99 and a deposit of 89.99: whoever is looking rarely
+\ remembers which column it was in. A range compares that same
+\ absolute value against its ends, so 40.00 to 100.00 finds the
+\ payment of -89.99 as readily as a deposit of it. It is also compared against each
+\ line of a split, because the amount that is remembered is as often
+\ the one on the receipt as the total the register shows. A split
+\ matched by one of its lines is still one result -- the transaction as
+\ the register reads it, with --Split-- for its category -- because the
+\ line is not a thing a register can be scrolled to.
+\
 \ Account matches a category the same way a real account's, and
 \ matches a transaction if either side of it is the named account or
 \ anything beneath it.
@@ -2133,15 +2160,31 @@ Examples: EnumerationValues
 | CurrentRegister | Only the register open in the active tab |
 | AllRegisters   | Every account in the book                 |
 
+DataType AmountMatch
+Description Whether the amount typed is the amount wanted or one end of an
+\ interval it falls in.
+Examples: EnumerationValues
+| Value | Notes                                               |
+| Exact | One field, and the amount matches it                |
+| Range | Two fields, and the amount falls between them        |
+
 Attributes FindCriteria
-| Attribute  | Type        | Default         |
-| Text       | Text        | none            |
-| DateFrom   | Text        | none            |
-| DateTo     | Text        | none            |
-| AmountFrom | Money       | none            |
-| AmountTo   | Money       | none            |
-| Account    | AccountPath | none            |
-| Scope      | FindScope   | CurrentRegister |
+| Attribute   | Type        | Default         |
+| Text        | Text        | none            |
+| DateFrom    | Text        | none            |
+| DateTo      | Text        | none            |
+| AmountMatch | AmountMatch | Exact           |
+| Amount      | Money       | none            |
+| AmountTo    | Money       | none            |
+| Account     | AccountPath | none            |
+| Scope       | FindScope   | CurrentRegister |
+
+Attributes AmountFieldsShown
+| Attribute   | Type        | Default |
+| Match       | AmountMatch | Exact   |
+| FieldsShown | Integer     | 1       |
+| FirstLabel  | Text        | Amount  |
+| SecondLabel | Text        | none    |
 
 Attributes FindResultRow
 | Attribute | Type           | Default    |
@@ -2196,25 +2239,160 @@ Then find results are : FindResultRow
 | Ref | Date       | Payee         | Account         | Category           | Amount |
 | T2  | 2026-01-15 | Harris Teeter | Assets:Checking | Expenses:Groceries | -45.00 |
 
-Scenario A find with an amount range matches either sign
+$TBD
+BusinessRule The second amount field is only there for a range
+Description The dropdown is beside the amount, and it says Exact or Range.
+\ On Exact there is one field, labelled Amount. On Range there are
+\ two, and the first one's label changes to say which end it is.
+Details A rule rather than a scenario, because whether a field is on the
+\ screen is not something the model holds -- FindCriteria is what was
+\ asked for, not what the dialog looked like when it was asked.
+\
+\ A dropdown rather than two fields that are always there. Two fields
+\ always visible is what the dialog had, and the reason it misbehaved
+\ was that nothing on the screen said what leaving one of them blank
+\ would do. Choosing Range is the sentence that says it.
+\
+\ Switching back to Exact hides the second field and clears it, so a
+\ number left behind cannot narrow a later find that no longer shows
+\ it. Switching to Range leaves the first field alone, since the
+\ amount already typed is the sensible lower end.
+Examples: AmountFieldsShown
+| Match | FieldsShown | FirstLabel   | SecondLabel |
+| Exact | 1           | Amount       | none        |
+| Range | 2           | Amount~from  | to          |
+
+$TBD
+Scenario A find by amount matches either sign
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
 When find performed : FindCriteria Vertical
-| AmountFrom | 80.00        |
-| AmountTo   | 100.00       |
-| Scope      | AllRegisters |
+| Amount | 89.99        |
+| Scope  | AllRegisters |
 Then find results are : FindResultRow
 | Ref | Date       | Payee  | Account          | Category           | Amount |
 | T3  | 2026-01-20 | Amazon | Liabilities:Visa | Expenses:Groceries | -89.99 |
-# The bounds are positive and the transaction is a payment of -89.99, which is
-# the point: the absolute value is what is bounded. The row is read under Visa
-# rather than under Groceries, because Visa is where Amazon's own side of the
-# transaction posts. See the Account/Category note above. The scope has to be
-# said here -- the active tab is Checking, and this transaction is in neither
-# side of that register.
+# The amount typed is positive and the transaction is a payment of -89.99,
+# which is the point: the absolute value is what is compared. The row is read
+# under Visa rather than under Groceries, because Visa is where Amazon's own
+# side of the transaction posts. See the Account/Category note above. The
+# scope has to be said here -- the active tab is Checking, and this
+# transaction is in neither side of that register.
+
+$TBD
+Scenario A find by amount is exact and not a lower bound
+Description The defect this replaced, and the reason Exact is what the dialog
+\ opens on. 45.00 is in the book once; so are 3000.00, 500.00 and
+\ 89.99, and a lower bound would have answered with all four. One
+\ row is the whole of the answer.
+Given the chart of accounts is as previous
+Given transactions are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| AmountMatch | Exact        |
+| Amount      | 45.00        |
+| Scope       | AllRegisters |
+Then find results are : FindResultRow
+| Ref | Date       | Payee         | Account         | Category           | Amount |
+| T2  | 2026-01-15 | Harris Teeter | Assets:Checking | Expenses:Groceries | -45.00 |
+
+$TBD
+Scenario A find by a range matches every amount between its ends
+Description Both ends count, and the absolute value is what falls between
+\ them, so the two payments in the interval are found and the
+\ deposit of 3000.00 and the transfer of -500.00 are not.
+Given the chart of accounts is as previous
+Given transactions are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| AmountMatch | Range        |
+| Amount      | 40.00        |
+| AmountTo    | 100.00       |
+| Scope       | AllRegisters |
+Then find results are : FindResultRow
+| Ref | Date       | Payee         | Account          | Category           | Amount |
+| T2  | 2026-01-15 | Harris Teeter | Assets:Checking  | Expenses:Groceries | -45.00 |
+| T3  | 2026-01-20 | Amazon        | Liabilities:Visa | Expenses:Groceries | -89.99 |
+
+$TBD
+Scenario A range with one end blank is open at that end
+Description What the old dialog did by accident is what this one does on
+\ purpose. 500.00 and upwards is the question, and the transfer of
+\ -500.00 is in the answer because both ends count.
+Given the chart of accounts is as previous
+Given transactions are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| AmountMatch | Range        |
+| Amount      | 500.00       |
+| Scope       | AllRegisters |
+Then find results are : FindResultRow
+| Ref | Date       | Payee        | Account         | Category        | Amount  |
+| T1  | 2026-01-05 | Acme Payroll | Assets:Checking | Income:Salary   | 3000.00 |
+| T4  | 2026-01-25 | Transfer     | Assets:Checking | Assets:Savings  | -500.00 |
+
+$TBD
+Scenario A find by amount matches a line of a split and shows the transaction
+Description The receipt says 60.00 for the groceries, and that is the number
+\ somebody has in front of them. The transaction is 90.00 and is
+\ what the register holds, so the result is the transaction -- found
+\ by a number that appears nowhere in its own row.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+| Expenses:Auto:Fuel | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination | Amount |
+| T1  | Assets:Checking | 2026-02-08 | COSTCO | Split       | -90.00 |
+Given split lines are : TransactionSplit
+| Destination        | Amount |
+| Expenses:Groceries | 60.00  |
+| Expenses:Auto:Fuel | 30.00  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| Amount | 60.00 |
+Then find results are : FindResultRow
+| Ref | Date       | Payee  | Account         | Category  | Amount |
+| T1  | 2026-02-08 | COSTCO | Assets:Checking | --Split-- | -90.00 |
+
+$TBD
+Scenario A split matched by its total and by one of its lines is still one result
+Description A find for the total and a find for a line answer with the same
+\ single row, and a find for a number that is both -- which happens
+\ when two lines of one split are equal -- does not list it twice.
+\ The result is the transaction; the split is how it was reached.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+| Expenses:Auto:Fuel | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination | Amount |
+| T1  | Assets:Checking | 2026-02-08 | COSTCO | Split       | -90.00 |
+Given split lines are : TransactionSplit
+| Destination        | Amount |
+| Expenses:Groceries | 45.00  |
+| Expenses:Auto:Fuel | 45.00  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| Amount | 45.00 |
+Then find results are : FindResultRow
+| Ref | Date       | Payee  | Account         | Category  | Amount |
+| T1  | 2026-02-08 | COSTCO | Assets:Checking | --Split-- | -90.00 |
 
 Scenario A find by account matches a category the same as a real account
 Given the chart of accounts is as previous
@@ -2325,6 +2503,95 @@ Then the register line selected is : RegisterSelect
 | 2    |
 # No second tab: the register is the one already open. Harris Teeter is the
 # fifteenth of January, the second of the three lines Checking holds.
+
+Description A result has a menu on it, and what is on the menu depends on the
+\ transaction the result names. Going to the transaction is there
+\ because a menu that cannot do the obvious thing is a surprise, and
+\ Show split is there when the transaction is a split -- which is the
+\ one thing a result row cannot say for itself. The row reads
+\ --Split-- and nothing more, and a find that reached it by one of
+\ its lines reached it by a number the row does not show, so the
+\ question "which line was that" is the question a split result
+\ raises.
+Details Show split is left off a transaction that is not a split rather than
+\ offered and refused. The account tree greys Delete because an
+\ account that cannot be deleted raises a question the reason answers;
+\ a transaction with one category raises no question about its split.
+\
+\ Recategorize will join this menu. It is not here yet because
+\ recategorising from a find has to decide what a selection of results
+\ from several registers means, and that is a separate piece of work.
+
+$TBD
+Scenario The menu on a split result offers to show the split
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+| Expenses:Auto:Fuel | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination | Amount |
+| T1  | Assets:Checking | 2026-02-08 | COSTCO | Split       | -90.00 |
+Given split lines are : TransactionSplit
+| Destination        | Amount |
+| Expenses:Groceries | 60.00  |
+| Expenses:Auto:Fuel | 30.00  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| Amount | 60.00 |
+When find result right clicked : FindResultChoice Vertical
+| Line | 1 |
+Then menu items are : MenuItem
+| Item                  | Enabled |
+| Go to the transaction... | true    |
+| Show split...            | true    |
+
+$TBD
+Scenario The menu on a result that is not a split does not offer to show one
+Given the chart of accounts is as previous
+Given transactions are as previous
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| Text | Harris |
+When find result right clicked : FindResultChoice Vertical
+| Line | 1 |
+Then menu items are : MenuItem
+| Item                     | Enabled |
+| Go to the transaction... | true    |
+
+$TBD
+Scenario Showing the split lists its lines
+Description The answer to "which line was that": the split as it was typed,
+\ which is where the 60.00 the find was given actually is. The
+\ amounts are positive for money leaving the account, the same as
+\ the split window reads them -- see Transactions.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+| Expenses:Auto:Fuel | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination | Amount |
+| T1  | Assets:Checking | 2026-02-08 | COSTCO | Split       | -90.00 |
+Given split lines are : TransactionSplit
+| Destination        | Amount | Memo        |
+| Expenses:Groceries | 60.00  | Food        |
+| Expenses:Auto:Fuel | 30.00  | Filled~up   |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When find performed : FindCriteria Vertical
+| Amount | 60.00 |
+When find result split shown : FindResultChoice Vertical
+| Line | 1 |
+Then the split shown is : SplitLineShown
+| Category           | Amount | Memo      |
+| Expenses:Groceries | 60.00  | Food      |
+| Expenses:Auto:Fuel | 30.00  | Filled up |
 
 # ---------------------------------------------------------------------------
 # What accepting an import keeps
@@ -3395,3 +3662,363 @@ When register column resized : RegisterColumnWidth Vertical
 Then register column widths are : RegisterColumnWidth CompareOnly
 | Column  | Width |
 | CheckNo | 20    |
+
+# ---------------------------------------------------------------------------
+# The scroll bar
+# ---------------------------------------------------------------------------
+
+Attributes ScrollBarClick
+| Attribute     | Type | Default |
+| WhereClicked  | Text |         |
+| WhatHappens   | Text |         |
+
+$TBD
+BusinessRule Clicking the scroll bar beside the indicator pages the view
+Description A register of thirty thousand lines is reached by its scroll bar
+\ more than by anything else, and the click a person makes most is
+\ the one in the empty part of the bar -- above the indicator to go
+\ back a screen, below it to go on a screen. Dragging the indicator
+\ in a register that long moves a hundred lines to the pixel, which
+\ is no way to read a month.
+Details A rule rather than a scenario because there is nothing in the model
+\ to assert on. This specification describes a register as the lines
+\ it holds and a report as the lines it holds; which of them is on
+\ screen at this moment is not one of them. The behaviour is the
+\ window's, and it is the same in a report as in a register.
+\
+\ A page is one screenful less a line, so the line that was at the top
+\ before a page back is at the bottom after it. The overlap is what
+\ keeps a reader's place: a page that moved a whole screenful would
+\ leave nothing in common between the two views, and the eye would
+\ have to start again.
+Examples: ScrollBarClick
+| WhereClicked           | WhatHappens                              |
+| Above~the~indicator    | The~view~pages~back~one~screenful~less~a~line |
+| Below~the~indicator    | The~view~pages~on~one~screenful~less~a~line |
+| On~the~indicator       | Nothing~until~it~is~dragged              |
+| On~an~arrow~at~the~end | The~view~moves~one~line                  |
+
+# ---------------------------------------------------------------------------
+# Setting up a new book
+# ---------------------------------------------------------------------------
+
+Description A book is asked one question when it is made, and never again: is
+\ there a Quicken history to bring in, or does this book start from
+\ nothing? Both answers leave a book with a chart in it, because a
+\ book with no accounts cannot be typed into and the first thing
+\ anybody does with a new book is type into it.
+Details Importing a history was an item on the File menu, next to Open, and
+\ it had no business being there. It is the one import that can only
+\ ever happen once, before anything else is in the book -- running it
+\ over a book already in use would double twenty years of history --
+\ and a menu that offers it every day is a menu that offers it on the
+\ wrong day. Asked once, when the book is made, it cannot be asked at
+\ the wrong time.
+\
+\ The history is a QIF. That is what Quicken exports and it is the only
+\ format this question accepts: a QFX or a CSV is a statement for one
+\ account, which is the ordinary import and belongs on the File menu
+\ where it is. There is no second book to point at either -- a
+\ SimpleAccount book is opened, not imported.
+\
+\ Declining the history is an answer rather than an escape. The book is
+\ already made and named by the time the question is asked, so there is
+\ nothing to back out of; the blank answer is the one that gives the
+\ standard chart.
+
+Attributes NewBookSetup
+Description The question, as it stands. Shown is false before a book is made
+\ and after the question is answered either way.
+| Attribute   | Type    | Default |
+| Shown       | Boolean | true    |
+| BookName    | Text    | none    |
+| HistoryFile | Text    | none    |
+
+Attributes NewBookAnswer
+Description What was answered. A blank HistoryFile is the answer "this is an
+\ entirely new book"; it is not a cancellation.
+| Attribute   | Type | Default |
+| HistoryFile | Text | none    |
+
+$TBD
+Scenario Naming a new book asks whether there is a history to bring in
+Description The question arrives on its own, after the name and before
+\ anything is in the book.
+When a new book is made named : BookName Vertical
+| Name | Household |
+Then the new book question is : NewBookSetup Vertical
+| Shown       | true      |
+| BookName    | Household |
+| HistoryFile | none      |
+
+$TBD
+Scenario A book that starts from nothing starts with the standard chart
+Description Three accounts somebody can type into on the first day, and a
+\ category list taken from Quicken's own, because a stranger opening
+\ this program expects the categories they have used for twenty
+\ years. The real accounts are plain top-level names -- the account
+\ list groups them by type already, so Assets would be a word on the
+\ page saying what the heading beside it says. The categories are
+\ under their fixed roots, because the rest of the program finds a
+\ category by that literal path; see the account window in this file.
+Details Uncategorized is in the list and is not Quicken's. It is this
+\ program's answer to "what was the money for, nobody said", and an
+\ import puts rows in it from the first file onwards, so a new book
+\ that lacked it would create it on the first import instead.
+\
+\ Every parent is a placeholder. A placeholder has no register of its
+\ own and its total is what is underneath it, which is what Auto or
+\ Utilities is for. The leaves are the categories a transaction is
+\ actually posted to.
+When a new book is made named : BookName Vertical
+| Name | Household |
+When the new book question is answered : NewBookAnswer Vertical
+| HistoryFile | none |
+Then the chart of accounts is : ChartOfAccounts
+| Path                           | Type       | Placeholder |
+| Checking                       | Checking   | false       |
+| Savings                        | Savings    | false       |
+| Credit~Card                    | CreditCard | false       |
+| Expenses                       | Expense    | true        |
+| Expenses:Auto                  | Expense    | true        |
+| Expenses:Auto:Fuel             | Expense    | false       |
+| Expenses:Auto:Insurance        | Expense    | false       |
+| Expenses:Auto:Registration     | Expense    | false       |
+| Expenses:Auto:Service          | Expense    | false       |
+| Expenses:Bank~Charge           | Expense    | false       |
+| Expenses:Charity               | Expense    | false       |
+| Expenses:Childcare             | Expense    | false       |
+| Expenses:Clothing              | Expense    | false       |
+| Expenses:Dining                | Expense    | false       |
+| Expenses:Education             | Expense    | false       |
+| Expenses:Entertainment         | Expense    | false       |
+| Expenses:Gifts~Given           | Expense    | false       |
+| Expenses:Groceries             | Expense    | false       |
+| Expenses:Home~Repair           | Expense    | false       |
+| Expenses:Household             | Expense    | false       |
+| Expenses:Insurance             | Expense    | false       |
+| Expenses:Interest~Expense      | Expense    | false       |
+| Expenses:Medical               | Expense    | true        |
+| Expenses:Medical:Dentist       | Expense    | false       |
+| Expenses:Medical:Doctor        | Expense    | false       |
+| Expenses:Medical:Medicine      | Expense    | false       |
+| Expenses:Miscellaneous         | Expense    | false       |
+| Expenses:Mortgage~Interest     | Expense    | false       |
+| Expenses:Personal~Care         | Expense    | false       |
+| Expenses:Pet~Care              | Expense    | false       |
+| Expenses:Recreation            | Expense    | false       |
+| Expenses:Subscriptions         | Expense    | false       |
+| Expenses:Taxes                 | Expense    | true        |
+| Expenses:Taxes:Federal         | Expense    | false       |
+| Expenses:Taxes:Property        | Expense    | false       |
+| Expenses:Taxes:Social~Security | Expense    | false       |
+| Expenses:Taxes:State           | Expense    | false       |
+| Expenses:Telephone             | Expense    | false       |
+| Expenses:Travel                | Expense    | false       |
+| Expenses:Uncategorized         | Expense    | false       |
+| Expenses:Utilities             | Expense    | true        |
+| Expenses:Utilities:Cable       | Expense    | false       |
+| Expenses:Utilities:Electric    | Expense    | false       |
+| Expenses:Utilities:Gas         | Expense    | false       |
+| Expenses:Utilities:Water       | Expense    | false       |
+| Income                         | Income     | true        |
+| Income:Bonus                   | Income     | false       |
+| Income:Dividend                | Income     | false       |
+| Income:Gifts~Received          | Income     | false       |
+| Income:Interest                | Income     | false       |
+| Income:Other~Income            | Income     | false       |
+| Income:Salary                  | Income     | false       |
+
+$TBD
+Scenario A book that starts from a history starts with the history own chart
+Description The standard list is not added to a history. Twenty years of
+\ Quicken has its own categories, they are the ones the imported
+\ transactions name, and a standard list beside them would be forty
+\ empty categories in every picker for the rest of the book life. So
+\ the answer to the question decides which chart the book gets -- not
+\ whether a chart is added to.
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Given the file contains
+"""
+!Type:Cat
+NGroceries
+E
+^
+NSalary
+I
+^
+!Type:Bank
+D01/15/2026
+T-45.00
+PHarris Teeter
+LGroceries
+^
+"""
+When a new book is made named : BookName Vertical
+| Name | Household |
+When the new book question is answered : NewBookAnswer Vertical
+| HistoryFile | household.qif |
+Then the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+| Income:Salary      | Income   | false       |
+# Expenses:Uncategorized is not here: nothing in this file is uncategorized,
+# and the category this program adds for itself is added when something needs
+# it. The checking account is the one the !Type:Bank section is read into; see
+# ImportQif for how an account is named when the file does not name one.
+
+# ---------------------------------------------------------------------------
+# One item for every file a transaction can arrive in
+# ---------------------------------------------------------------------------
+
+Description There is one way transactions arrive from outside, and it is one
+\ menu item: Import transactions. What the file happens to be --- a
+\ CSV from a bank that offers nothing else, a QFX from one that
+\ does, a QIF from an old statement someone kept --- is a detail of
+\ the file, settled by reading it, and not a question to put to
+\ somebody who only wants last month in the register.
+Details There used to be three items. Import history from Quicken has moved
+\ to the question a new book is asked; see the section above. Import
+\ QIF for review was the same operation as Import transactions with
+\ one format spelled out in its name, and having both meant choosing
+\ the right item before choosing the file --- two decisions where the
+\ file answers one of them.
+\
+\ So the dialog offers CSV, QFX and QIF together, and what is read is
+\ decided by what was chosen. The formats are already separate below
+\ this point: see ImportCsv, ImportOfx and ImportQif, each of which
+\ reads its own and none of which cares how it was reached.
+
+Attributes FileMenuItem
+Description One item of the File menu, in the order shown. Separators are not
+\ named: they group what is here and change nothing.
+| Attribute | Type    | Default |
+| Item      | Text    |         |
+| Enabled   | Boolean | true    |
+
+$TBD
+Scenario The File menu has one import on it
+Description Open recent is a submenu and is named here as the item that opens
+\ it. The two imports that used to sit between Open and this one are
+\ gone: one to the new book question, one into this item.
+When the file menu is shown
+Then file menu items are : FileMenuItem
+| Item                   | Enabled |
+| New~book...            | true    |
+| Open~book...           | true    |
+| Open~recent            | true    |
+| Import~transactions... | true    |
+| Exit                   | true    |
+
+Attributes ImportFileOffered
+Description One file the import dialog lists, and when it was last written. The
+\ dialog shows more than this; these are the two things the order and
+\ the filtering are about.
+| Attribute | Type | Default    |
+| Name      | Text |            |
+| Modified  | Date | 2024-01-01 |
+
+$TBD
+Scenario The import dialog lists the three formats, newest first
+Description Newest first because the file wanted is almost always the one just
+\ downloaded. Alphabetical order puts it wherever its bank name
+\ falls, which in a folder holding a year of downloads from four
+\ banks is nowhere near the top.
+Given the folder contains : ImportFileOffered
+| Name              | Modified   |
+| crown-2026-01.csv | 2026-02-02 |
+| visa-2026-01.qfx  | 2026-02-05 |
+| statement.qif     | 2026-01-20 |
+When the import file dialog is shown
+Then the files offered are : ImportFileOffered
+| Name              | Modified   |
+| visa-2026-01.qfx  | 2026-02-05 |
+| crown-2026-01.csv | 2026-02-02 |
+| statement.qif     | 2026-01-20 |
+
+$TBD
+Scenario The import dialog leaves out a file of any other kind
+Description A book, a spreadsheet and a PDF statement live in the same folder
+\ as the downloads, and none of them is something this program reads.
+Given the folder contains : ImportFileOffered
+| Name              | Modified   |
+| crown-2026-01.csv | 2026-02-02 |
+| household.sadb    | 2026-02-06 |
+| budget.xlsx       | 2026-02-04 |
+| statement.pdf     | 2026-02-03 |
+When the import file dialog is shown
+Then the files offered are : ImportFileOffered
+| Name              | Modified   |
+| crown-2026-01.csv | 2026-02-02 |
+
+$TBD
+BusinessRule The import dialog is the program own, not the one Windows provides
+Description Newest first is the whole reason. The order a native file dialog
+\ sorts in belongs to the shell, not to the program that opened it,
+\ and there is no asking it for a different one.
+Details The trade is a dialog that looks like this program rather than like
+\ the rest of the machine, which is a real loss and a small one next to
+\ scrolling a year of downloads to find yesterday. Stated as a rule
+\ because there is nothing in the model to assert on: which dialog was
+\ opened is not a fact about the book.
+Examples: DialogChoice
+| WhatIsWanted              | NativeDialog                  | OwnDialog     |
+| Newest~first              | Not~ours~to~set               | Set~by~us     |
+| CSV,~QFX~and~QIF~together | Yes                           | Yes           |
+| Looks~like~Windows        | Yes                           | No            |
+
+Attributes DialogChoice
+| Attribute    | Type | Default |
+| WhatIsWanted | Text |         |
+| NativeDialog | Text |         |
+| OwnDialog    | Text |         |
+
+# ---------------------------------------------------------------------------
+# What the disposition column reads
+# ---------------------------------------------------------------------------
+
+Attributes DispositionReading
+| Attribute   | Type              | Default |
+| Disposition | ImportDisposition | New     |
+| Note        | DuplicateNote     | None    |
+| Reads       | Text              |         |
+
+$TBD
+BusinessRule The disposition column reads the disposition and then the note
+Description One column, because the note is never anything but a qualification
+\ of the disposition, and two columns would leave one of them empty on
+\ every row. A plain duplicate reads Duplicate; a duplicate with
+\ something to say says it after a dash.
+Details The note is the whole of what the old Matched disposition used to
+\ carry, and this is why losing it cost nothing: a row that reads
+\ "Duplicate - identifier added" says what Matched said, in words,
+\ beside the answer that actually matters. See the disposition list in
+\ ImportOfx.
+\
+\ This is the reading of the row in front of somebody. The same note is
+\ written on the transaction the duplicate found and stays there: the
+\ row goes away when the import is accepted, and the question "why is
+\ this cleared" does not. See a note an import left on a transaction.
+\
+\ A New or a Completed row has no note, because neither of them found
+\ a transaction to disagree with. A Possible has none either --- what
+\ is unresolved about a Possible is which row goes with which
+\ transaction, and that is the disposition itself rather than a detail
+\ of it.
+\
+\ Several notes can be true of one duplicate, as the check scenario in
+\ ImportOfx shows. The row reads them in the order the note list
+\ declares them, separated by commas after the one dash.
+Examples: DispositionReading
+| Disposition | Note            | Reads                             |
+| New         | None            | New                               |
+| Completed   | None            | Completed                         |
+| Possible    | None            | Possible                          |
+| Duplicate   | None            | Duplicate                         |
+| Duplicate   | DetailsDiffer   | Duplicate~-~details~differ        |
+| Duplicate   | CheckNumberSame | Duplicate~-~check~number~the~same |
+| Duplicate   | FitIdAdded      | Duplicate~-~identifier~added      |
+| Duplicate   | PayeeUnmatched  | Duplicate~-~payee~unmatched       |
+| Duplicate   | Uncleared       | Duplicate~-~uncleared             |

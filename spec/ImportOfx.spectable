@@ -769,6 +769,45 @@ Then transaction notes are : TransactionNote
 # ordinary case for a check and the reason the window exists, so nothing is
 # said about that.
 
+$TBD
+Scenario A duplicate the payees disagree about is still a duplicate, with a note
+Description The one note that has no worked example above. No payee rule covers
+\ this name and the loose comparison cannot join it either --- OIL is
+\ not a store number --- so the two names stand as different. The date
+\ and the amount in one account are enough to say this is the same
+\ transaction, so nothing is created; the note is what says the book's
+\ name for it is worth a second look. See two payees are compared
+\ after the rules and then loosely.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Auto:Fuel     | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee | Destination        | Amount | Cleared | FitId |
+| T1  | Assets:Checking | 2024-01-15 | Shell | Expenses:Auto:Fuel | -45.00 | Cleared | none  |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name               | Memo | CheckNum |
+| DEBIT   | 2024-01-15 | -45.00 | 20240115001 | SHELL OIL 57444692 | none | none     |
+Then import summary is : ImportSummary Vertical
+| New       | 0 |
+| Duplicate | 1 |
+| Possible  | 0 |
+Then transactions are : ImportedTransaction
+| Ref | SourceAccount   | Date       | Payee | Destination        | Amount | Cleared | FitId       |
+| T1  | Assets:Checking | 2024-01-15 | Shell | Expenses:Auto:Fuel | -45.00 | Cleared | 20240115001 |
+Then transaction notes are : TransactionNote
+| Ref | Note           |
+| T1  | PayeeUnmatched |
+| T1  | FitIdAdded     |
+# Shell is kept. Twenty years of calling it Shell is what the book is for, and
+# the bank's name for it is not an improvement -- see what a duplicate does to
+# the transaction already there. Two notes: the payees did not agree, and the
+# transaction had no identifier until this import gave it one. Nothing about
+# the cleared status, because it was already cleared.
+
 Scenario A typed transaction and a download two days apart are two transactions
 Description T1 was typed, which is what Uncleared says about it. The download
 \ is two days later for the same amount, and the import does not
@@ -946,13 +985,22 @@ Details Which makes cleared status the one thing in a book that says where a
 \ transactions it brought in cleared where Quicken had cleared them and
 \ uncleared where it had not. See the cleared marker rule in ImportQif,
 \ and was_paid in qif_import.h for what that marker replaced.
+\
+\ A QIF chosen as an ordinary import is not that. It is a statement
+\ that happens to be in Quicken's format -- one account, one period,
+\ reviewed in the pane beside its register like any other download --
+\ and it arrives cleared with the rest of them. The two cases are told
+\ apart by which question asked for the file: the history is asked for
+\ once, when the book is made, and nowhere else. See the new book
+\ question in UserInterface.
 Examples: ClearedOnArrival
-| HowItArrived              | Cleared          |
-| Read from an OFX download | Cleared          |
-| Read from a CSV download  | Cleared          |
-| Read from a QIF history   | As the file says |
-| Typed into the register   | Uncleared        |
-| Typed as a split          | Uncleared        |
+| HowItArrived               | Cleared          |
+| Read from an OFX download  | Cleared          |
+| Read from a CSV download   | Cleared          |
+| Read from a QIF statement  | Cleared          |
+| Read from a QIF history    | As the file says |
+| Typed into the register    | Uncleared        |
+| Typed as a split           | Uncleared        |
 
 Attributes ClearedOnArrival
 | Attribute     | Type   | Default |
