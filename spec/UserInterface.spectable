@@ -2262,7 +2262,6 @@ Examples: AmountFieldsShown
 | Exact | 1           | Amount       | none        |
 | Range | 2           | Amount~from  | to          |
 
-$TBD
 Scenario A find by amount matches either sign
 Given the chart of accounts is as previous
 Given transactions are as previous
@@ -2282,7 +2281,6 @@ Then find results are : FindResultRow
 # scope has to be said here -- the active tab is Checking, and this
 # transaction is in neither side of that register.
 
-$TBD
 Scenario A find by amount is exact and not a lower bound
 Description The defect this replaced, and the reason Exact is what the dialog
 \ opens on. 45.00 is in the book once; so are 3000.00, 500.00 and
@@ -2301,7 +2299,6 @@ Then find results are : FindResultRow
 | Ref | Date       | Payee         | Account         | Category           | Amount |
 | T2  | 2026-01-15 | Harris Teeter | Assets:Checking | Expenses:Groceries | -45.00 |
 
-$TBD
 Scenario A find by a range matches every amount between its ends
 Description Both ends count, and the absolute value is what falls between
 \ them, so the two payments in the interval are found and the
@@ -2321,11 +2318,15 @@ Then find results are : FindResultRow
 | T2  | 2026-01-15 | Harris Teeter | Assets:Checking  | Expenses:Groceries | -45.00 |
 | T3  | 2026-01-20 | Amazon        | Liabilities:Visa | Expenses:Groceries | -89.99 |
 
-$TBD
 Scenario A range with one end blank is open at that end
 Description What the old dialog did by accident is what this one does on
 \ purpose. 500.00 and upwards is the question, and the transfer of
 \ -500.00 is in the answer because both ends count.
+\
+\ The transfer is two of the three rows. Every register is in scope and
+\ the transfer is in two of them, so it is read once under each, which
+\ is what the Account and Category note above says happens to a
+\ transfer nobody has said which side of they meant.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -2339,8 +2340,8 @@ Then find results are : FindResultRow
 | Ref | Date       | Payee        | Account         | Category        | Amount  |
 | T1  | 2026-01-05 | Acme Payroll | Assets:Checking | Income:Salary   | 3000.00 |
 | T4  | 2026-01-25 | Transfer     | Assets:Checking | Assets:Savings  | -500.00 |
+| T4  | 2026-01-25 | Transfer     | Assets:Savings  | Assets:Checking | 500.00  |
 
-$TBD
 Scenario A find by amount matches a line of a split and shows the transaction
 Description The receipt says 60.00 for the groceries, and that is the number
 \ somebody has in front of them. The transaction is 90.00 and is
@@ -2367,7 +2368,6 @@ Then find results are : FindResultRow
 | Ref | Date       | Payee  | Account         | Category  | Amount |
 | T1  | 2026-02-08 | COSTCO | Assets:Checking | --Split-- | -90.00 |
 
-$TBD
 Scenario A split matched by its total and by one of its lines is still one result
 Description A find for the total and a find for a line answer with the same
 \ single row, and a find for a number that is both -- which happens

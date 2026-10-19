@@ -26,6 +26,7 @@ class QDateEdit;
 class QCheckBox;
 class QDialog;
 class QLineEdit;
+class QFormLayout;
 
 // The window. Three regions: the account list on the left, a tab bar of
 // registers and reports on the right, and -- only while an import is waiting
@@ -87,6 +88,7 @@ private slots:
     // UserInterface.spectable.
     void showFind();
     void performFind();
+    void findAmountMatchChanged();
     void chooseFont();
 
 private:
@@ -234,7 +236,13 @@ private:
     QLineEdit* findText_ = nullptr;
     QLineEdit* findDateFrom_ = nullptr;
     QLineEdit* findDateTo_ = nullptr;
-    QLineEdit* findAmountFrom_ = nullptr;
+    // The amount is one field until Range is chosen, and the dropdown is what
+    // says which is meant -- two fields always on the screen is what this had,
+    // and nothing on it said what leaving the second one blank would do.
+    QFormLayout* findForm_ = nullptr;
+    QComboBox* findAmountMatch_ = nullptr;
+    QLabel* findAmountLabel_ = nullptr;
+    QLineEdit* findAmount_ = nullptr;
     QLineEdit* findAmountTo_ = nullptr;
     QLineEdit* findAccount_ = nullptr;
     QComboBox* findScope_ = nullptr;

@@ -2353,10 +2353,12 @@ void MainWindow::buildFindDialog() {
     findDialog_ = new QDialog(this);
     findDialog_->setWindowTitle("Find");
     auto* form = new QFormLayout(findDialog_);
+    findForm_ = form;
     findText_ = new QLineEdit;
     findDateFrom_ = new QLineEdit;
     findDateTo_ = new QLineEdit;
-    findAmountFrom_ = new QLineEdit;
+    findAmountMatch_ = new QComboBox;
+    findAmount_ = new QLineEdit;
     findAmountTo_ = new QLineEdit;
     findAccount_ = new QLineEdit;
     findScope_ = new QComboBox;
@@ -2365,18 +2367,30 @@ void MainWindow::buildFindDialog() {
     findText_->setPlaceholderText("any payee or memo");
     findDateFrom_->setPlaceholderText("yyyy-mm-dd, or blank for no earliest");
     findDateTo_->setPlaceholderText("yyyy-mm-dd, or blank for no latest");
-    findAmountFrom_->setPlaceholderText("any amount");
-    findAmountTo_->setPlaceholderText("any amount");
+    findAmount_->setPlaceholderText("any amount");
+    findAmountTo_->setPlaceholderText("no upper end");
     findAccount_->setPlaceholderText("any account or category");
+    findAmountMatch_->addItem("Exact", QString("Exact"));
+    findAmountMatch_->addItem("Range", QString("Range"));
     findScope_->addItem("This register", QString("CurrentRegister"));
     findScope_->addItem("Every register", QString("AllRegisters"));
     form->addRow("Text", findText_);
     form->addRow("Date from", findDateFrom_);
     form->addRow("Date to", findDateTo_);
-    // The bound is on the amount itself rather than on the sign of it:
-    // somebody recalling a transaction rarely remembers which way it went.
-    form->addRow("Amount from", findAmountFrom_);
-    form->addRow("Amount to", findAmountTo_);
+    // The dropdown sits beside the amount, and the comparison is on the
+    // amount itself rather than on the sign of it: somebody recalling a
+    // transaction rarely remembers which way it went.
+    auto* amountRow = new QWidget;
+    auto* amountBox = new QHBoxLayout(amountRow);
+    amountBox->setContentsMargins(0, 0, 0, 0);
+    amountBox->addWidget(findAmountMatch_);
+    amountBox->addWidget(findAmount_, 1);
+    form->addRow("Amount", amountRow);
+    findAmountLabel_ = qobject_cast<QLabel*>(form->labelForField(amountRow));
+    form->addRow("to", findAmountTo_);
+    form->setRowVisible(findAmountTo_, false);
+    connect(findAmountMatch_, &QComboBox::currentIndexChanged,
+            this, &MainWindow::findAmountMatchChanged);
     form->addRow("Account", findAccount_);
     form->addRow("Look in", findScope_);
     auto* buttons = new QDialogButtonBox;
@@ -2399,6 +2413,19 @@ void MainWindow::showFind() {
     findText_->selectAll();
 }
 
+// Switching back to Exact hides the second field and clears it, so a number
+// left behind cannot narrow a later find that no longer shows it. Switching to
+// Range leaves the first field alone: the amount already typed is the sensible
+// lower end.
+void MainWindow::findAmountMatchChanged() {
+    const bool range =
+        findAmountMatch_->currentData().toString() == QStringLiteral("Range");
+    if (!range) findAmountTo_->clear();
+    findForm_->setRowVisible(findAmountTo_, range);
+    if (findAmountLabel_ != nullptr)
+        findAmountLabel_->setText(range ? "Amount from" : "Amount");
+}
+
 void MainWindow::performFind() {
     ui::FindCriteria criteria;
     criteria.text = findText_->text().trimmed().toStdString();
@@ -2415,7 +2442,10 @@ void MainWindow::performFind() {
     };
     criteria.date_from = date(findDateFrom_);
     criteria.date_to = date(findDateTo_);
-    criteria.amount_from = amount(findAmountFrom_);
+    const std::optional<ui::AmountMatch> match =
+        ui::amount_match_from(findAmountMatch_->currentData().toString().toStdString());
+    criteria.amount_match = match ? *match : ui::AmountMatch::Exact;
+    criteria.amount = amount(findAmount_);
     criteria.amount_to = amount(findAmountTo_);
     const std::optional<ui::FindScope> scope =
         ui::find_scope_from(findScope_->currentData().toString().toStdString());

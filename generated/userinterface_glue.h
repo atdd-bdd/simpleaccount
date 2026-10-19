@@ -612,9 +612,16 @@ public:
 private:
     std::string tree_node_;
 
+    // The splits go in too. They are the fourth argument and it has a default,
+    // so leaving them out compiled and read as a workspace over the same book
+    // -- but a workspace with no split lines answers a find for the amount on
+    // one of them with nothing, and shows a register line that says --Split--
+    // and stands for nothing. The register reads the destination ref, which is
+    // why this was invisible until a find looked past it.
     ui::Workspace& workspace() {
         if (!workspace_)
-            workspace_ = std::make_unique<ui::Workspace>(chart_, book_, transactions_);
+            workspace_ =
+                std::make_unique<ui::Workspace>(chart_, book_, transactions_, splits_);
         return *workspace_;
     }
 
@@ -970,8 +977,14 @@ public:
                 criteria.date_from = types::Date::from_iso(blank(value.datefrom));
             if (!blank(value.dateto).empty())
                 criteria.date_to = types::Date::from_iso(blank(value.dateto));
-            if (!blank(value.amountfrom.value).empty())
-                criteria.amount_from = Money(blank(value.amountfrom.value));
+            const std::string match = blank(value.amountmatch.value);
+            if (!match.empty()) {
+                const auto which = ui::amount_match_from(match);
+                ASSERT_TRUE(which.has_value()) << "unknown amount match: " << match;
+                criteria.amount_match = *which;
+            }
+            if (!blank(value.amount.value).empty())
+                criteria.amount = Money(blank(value.amount.value));
             if (!blank(value.amountto.value).empty())
                 criteria.amount_to = Money(blank(value.amountto.value));
             const std::string scope = blank(value.scope.value);
@@ -1036,6 +1049,14 @@ public:
             const EnumerationValuesTyped v = EnumerationValuesTyped::from_string_struct(value);
             EXPECT_TRUE(ui::find_scope_from(v.value).has_value())
                 << "unknown find scope: " << v.value;
+        }
+    }
+
+    void examples_datatype_amountmatch(const std::vector<EnumerationValuesString>& values) {
+        for (const auto& value : values) {
+            const EnumerationValuesTyped v = EnumerationValuesTyped::from_string_struct(value);
+            EXPECT_TRUE(ui::amount_match_from(v.value).has_value())
+                << "unknown amount match: " << v.value;
         }
     }
 
@@ -1395,6 +1416,96 @@ public:
                                            blank(value.accountnumber)))
                 << value.filename << " against " << value.accountname
                 << " numbered " << blank(value.accountnumber);
+    }
+
+public:
+
+    void when_find_result_right_clicked(const std::vector<FindResultChoiceString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_find_result_right_clicked";
+    }
+
+    void when_find_result_split_shown(const std::vector<FindResultChoiceString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_find_result_split_shown";
+    }
+
+    void then_the_split_shown_is(const std::vector<SplitLineShownString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_the_split_shown_is";
+    }
+
+    void when_a_new_book_is_made_named(const std::vector<BookNameString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_a_new_book_is_made_named";
+    }
+
+    void then_the_new_book_question_is(const std::vector<NewBookSetupString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_the_new_book_question_is";
+    }
+
+    void when_the_new_book_question_is_answered(const std::vector<NewBookAnswerString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: when_the_new_book_question_is_answered";
+    }
+
+    void then_the_chart_of_accounts_is(const std::vector<AccountString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_the_chart_of_accounts_is";
+    }
+
+    void given_import_target_is(const std::vector<ImportTargetString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: given_import_target_is";
+    }
+
+    void given_the_file_contains(const std::string& value) {
+        std::cout << value << "\n";
+        ADD_FAILURE() << "Not implemented: given_the_file_contains";
+    }
+
+    void when_the_file_menu_is_shown() {
+        ADD_FAILURE() << "Not implemented: when_the_file_menu_is_shown";
+    }
+
+    void then_file_menu_items_are(const std::vector<FileMenuItemString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_file_menu_items_are";
+    }
+
+    void given_the_folder_contains(const std::vector<ImportFileOfferedString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: given_the_folder_contains";
+    }
+
+    void when_the_import_file_dialog_is_shown() {
+        ADD_FAILURE() << "Not implemented: when_the_import_file_dialog_is_shown";
+    }
+
+    void then_the_files_offered_are(const std::vector<ImportFileOfferedString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: then_the_files_offered_are";
+    }
+
+    void examples_businessrule_the_second_amount_field_is_only_there_for_a_range(const std::vector<AmountFieldsShownString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_the_second_amount_field_is_only_there_for_a_range";
+    }
+
+    void examples_businessrule_clicking_the_scroll_bar_beside_the_indicator_pages_the_view(const std::vector<ScrollBarClickString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_clicking_the_scroll_bar_beside_the_indicator_pages_the_view";
+    }
+
+    void examples_businessrule_the_import_dialog_is_the_program_own_not_the_one_windows_provides(const std::vector<DialogChoiceString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_the_import_dialog_is_the_program_own_not_the_one_windows_provides";
+    }
+
+    void examples_businessrule_the_disposition_column_reads_the_disposition_and_then_the_note(const std::vector<DispositionReadingString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: examples_businessrule_the_disposition_column_reads_the_disposition_and_then_the_note";
     }
 
 };

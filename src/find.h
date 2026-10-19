@@ -31,17 +31,40 @@ inline std::optional<FindScope> find_scope_from(const std::string& text) {
     return std::nullopt;
 }
 
+// Whether the amount typed is the amount wanted or one end of an interval it
+// falls in.
+enum class AmountMatch { Exact, Range };
+
+inline std::string to_string(AmountMatch m) {
+    return m == AmountMatch::Exact ? "Exact" : "Range";
+}
+
+inline std::optional<AmountMatch> amount_match_from(const std::string& text) {
+    if (text == "Exact") return AmountMatch::Exact;
+    if (text == "Range") return AmountMatch::Range;
+    return std::nullopt;
+}
+
 // What was typed into the dialog. A field left out is not a filter: no text
-// matches every payee and memo, a missing bound is open-ended, and no account
-// matches every account. The amounts bound the absolute value, because
-// somebody recalling a transaction rarely remembers which side of it they are
-// thinking of -- a search from 80 to 100 finds a payment of 89.99 and a
-// deposit of 89.99 alike.
+// matches every payee and memo, a missing date bound is open-ended, no amount
+// matches every amount, and no account matches every account.
+//
+// The amount is exact unless Range was chosen. A pair of bounds was all this
+// had, and a pair with the upper one blank is a lower bound -- which is how a
+// find for 69.38 on the author's book answered with hundreds of rows, not one
+// of them for 69.38. Somebody who remembers an amount remembers the amount.
+// A range is still worth having, so the dropdown says which is meant, and an
+// open end is a fair answer once Range has been said out loud.
+//
+// Either way the absolute value is compared, because somebody recalling a
+// transaction rarely remembers which side of it they are thinking of -- 89.99
+// finds a payment of 89.99 and a deposit of it alike.
 struct FindCriteria {
     std::string text;
     std::optional<types::Date> date_from;
     std::optional<types::Date> date_to;
-    std::optional<Money> amount_from;
+    AmountMatch amount_match = AmountMatch::Exact;
+    std::optional<Money> amount;
     std::optional<Money> amount_to;
     std::string account;
     FindScope scope = FindScope::CurrentRegister;
@@ -99,6 +122,31 @@ inline std::vector<std::string> other_sides(const reg::BookIndex& book,
     return out;
 }
 
+// The amount of each line of a split, for comparing against what was typed.
+// The number somebody has in front of them is as often the one on the receipt
+// as the total the register shows.
+inline std::vector<Money> split_amounts(const reg::BookIndex& book,
+                                        const reg::Line& line) {
+    if (line.category != "--Split--") return {};
+    const std::size_t where = book.position_of(types::TransactionId(line.id));
+    if (where == reg::BookIndex::nowhere) return {};
+    std::vector<Money> out;
+    for (const ledger::TransactionSplit* s : book.split_parts(where))
+        out.push_back(s->amount);
+    return out;
+}
+
+// Does what was typed describe this amount? The absolute value is what is
+// compared, and a range includes both of its ends.
+inline bool amount_matches(const FindCriteria& criteria, const Money& value) {
+    const Money size = value.cents() < 0 ? -value : value;
+    if (criteria.amount_match == AmountMatch::Exact)
+        return !criteria.amount || size == *criteria.amount;
+    if (criteria.amount && size < *criteria.amount) return false;
+    if (criteria.amount_to && *criteria.amount_to < size) return false;
+    return true;
+}
+
 }  // namespace detail
 
 // The registers a find looks through, in path order. A placeholder is left
@@ -143,9 +191,20 @@ inline std::vector<FindResultRow> find(const chart::Chart& accounts,
             if (criteria.date_to && *criteria.date_to < line.date) continue;
 
             const Money amount = line.deposit - line.payment;
-            const Money size = amount.cents() < 0 ? -amount : amount;
-            if (criteria.amount_from && size < *criteria.amount_from) continue;
-            if (criteria.amount_to && *criteria.amount_to < size) continue;
+            // A split reached by one of its lines is still one result -- the
+            // transaction as the register reads it -- because the line is not
+            // a thing a register can be scrolled to. Matching is a question
+            // asked of the line, so two equal lines answer it once.
+            if (criteria.amount || criteria.amount_to) {
+                bool sized = detail::amount_matches(criteria, amount);
+                if (!sized)
+                    for (const Money& part : detail::split_amounts(book, line))
+                        if (detail::amount_matches(criteria, part)) {
+                            sized = true;
+                            break;
+                        }
+                if (!sized) continue;
+            }
 
             if (!criteria.account.empty()) {
                 bool named = chart::Chart::is_descendant_or_self(account, criteria.account);
