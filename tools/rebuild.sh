@@ -9,7 +9,13 @@ set -u
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 export PATH="$PATH:/c/Qt/6.10.0/msvc2022_64/bin"
-CONV="$ROOT/../SpecStudio/dist/AlignThree-0.9.1-windows-x64/SpecTableConverter.exe"
+# 0.9.2 or later, and not by preference: the spec writes its wrapped
+# Descriptions as continuation lines, which 0.9.1 reads as an unrecognized
+# keyword per line. That ends the block the comment belonged to, so its
+# Examples: table is no longer part of it and the tests it would have made
+# are never generated -- Payees alone comes out 24 tests instead of 29, with
+# nothing but warnings to say so.
+CONV="$ROOT/../SpecStudio/dist/AlignThree-0.9.2-windows-x64/SpecTableConverter.exe"
 CMAKE="/c/Qt/Tools/CMake_64/bin/cmake.exe"
 ANALYZE="$ROOT/../SpecStudio/build/tools/analyze_cli/Release/analyze_cli.exe"
 
