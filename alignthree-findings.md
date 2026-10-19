@@ -559,6 +559,37 @@ To reproduce: take a project whose glue compares a cell to an expected value --
 any `Then` that checks a table -- generate it with 0.9.1, confirm it builds,
 then generate the same spec with 0.9.2 and build again.
 
+### 11a. What the migration took, for whoever does it next
+
+Driven by the compiler's log it is guesswork, because the log names a line and
+not which of its two operands is the cell. In
+`EXPECT_EQ(want.cleared, types::to_string(got.cleared))` the left side is a
+`ClearedStatusString` and the right an enum of the production code, and a
+greedy pass that appends `.value` to both compiles neither.
+
+The generated struct says it exactly, so the migration is mechanical after
+all: a field declared `XTyped` reads through `.text`, one declared `XString`
+through `.value`, and a field the generator left as `std::string`, `bool` or
+`double` is the value itself and takes no accessor. Note that one row struct
+now mixes the three -- `QifDateParseTyped` has a plain `std::string text` and
+a `bool valid` beside a `DateOrderTyped dateorder` -- so the rule has to be
+read per field, not per struct.
+
+`tools/accessors.py` in this project is that pass: it reads
+`generated/common/*.h`, resolves each glue variable's type from its
+declaration, and rewrites only what the structs account for. An expression
+whose root is not a known cell variable is left alone, which is what keeps
+`got.cleared`, `blank_.payee` and the two plain doubles of `AveragedHolding`
+out of it.
+
+Two things cost rounds rather than minutes. The compiler reports one template
+instantiation failure per translation unit and suppresses the rest of a
+cascading line, so each repair exposes the next site: 214 sites came out as
+163, then 45, 45, 14, 8, 2, 2 over seven builds. And it attributes a
+multi-line statement to the line it starts on, so a site carries the rest of
+its statement with it -- `Money(t.knownamount)` two lines below the
+`EXPECT_EQ(` that was named.
+
 **Why it was upgraded here.** Not for this; for finding 10. The continuation
 marker arrived in 0.9.2 and the spec's 2,851 continuation lines were converted
 to it, which makes 0.9.2 the only converter that reads this spec correctly --
