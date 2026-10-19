@@ -152,7 +152,7 @@ public:
         for (const auto& value : values) {
             const bool found = std::any_of(
                 offered.begin(), offered.end(),
-                [&](const chart::Account& a) { return a.path.value() == value.path; });
+                [&](const chart::Account& a) { return a.path.value() == value.path.value; });
             EXPECT_TRUE(found) << value.path << " should be offered";
         }
         // The scenario this belongs to is about a hidden account being kept out,
@@ -167,11 +167,11 @@ public:
         for (const auto& value : values) {
             const chart::Account* a = chart_.find(value.account);
             ASSERT_NE(nullptr, a) << "no account " << value.account;
-            if (value.rawbalance != DNCString)
+            if (value.rawbalance.value != DNCString)
                 EXPECT_EQ(Money(value.rawbalance).cents(),
                           ledger_.raw_balance(value.account).cents())
                     << value.account << " raw -- " << value.notes;
-            if (value.displaybalance != DNCString)
+            if (value.displaybalance.value != DNCString)
                 EXPECT_EQ(Money(value.displaybalance).cents(),
                           ledger_.display_balance(value.account, a->type).cents())
                     << value.account << " display -- " << value.notes;
@@ -216,9 +216,9 @@ public:
         for (const auto& value : values) {
             const AccountNameDerivationTyped t =
                 AccountNameDerivationTyped::from_string_struct(value);
-            const types::AccountPath path{t.path};
-            EXPECT_EQ(t.name, types::name_of(path)) << t.path << " name";
-            EXPECT_EQ(t.parent, types::parent_of(path)) << t.path << " parent";
+            const types::AccountPath path{t.path.text};
+            EXPECT_EQ(t.name.text, types::name_of(path)) << t.path.text << " name";
+            EXPECT_EQ(t.parent, types::parent_of(path)) << t.path.text << " parent";
         }
     }
 
@@ -226,8 +226,8 @@ public:
             const std::vector<DisplaySignOfString>& values) {
         for (const auto& value : values) {
             const DisplaySignOfTyped t = DisplaySignOfTyped::from_string_struct(value);
-            const types::AccountType type = types::account_type_from_string(t.accounttype);
-            EXPECT_EQ(t.displaysign, types::display_sign(type)) << t.accounttype;
+            const types::AccountType type = types::account_type_from_string(t.accounttype.text);
+            EXPECT_EQ(t.displaysign, types::display_sign(type)) << t.accounttype.text;
         }
     }
 
@@ -304,7 +304,7 @@ public:
 
     void when_account_moved_under(const std::vector<AccountMoveString>& values) {
         for (const auto& value : values) {
-            const std::string to = value.newparent + ":" + types::name_of(
+            const std::string to = value.newparent.value + ":" + types::name_of(
                 types::AccountPath(value.path));
             // The ledger first, while "from" still names the account it is
             // moving postings away from; chart_.move() then does the same
@@ -553,8 +553,8 @@ public:
     void then_categories_are(const std::vector<CategoryString>& values) {
         ASSERT_EQ(values.size(), categories_from_raw_.size()) << "number of categories";
         for (std::size_t i = 0; i < values.size(); ++i) {
-            if (values[i].path != DNCString)
-                EXPECT_EQ(values[i].path, categories_from_raw_[i].path.value())
+            if (values[i].path.value != DNCString)
+                EXPECT_EQ(values[i].path.value, categories_from_raw_[i].path.value())
                     << "category " << i;
         }
     }
@@ -698,13 +698,13 @@ public:
             const std::string where = "transaction " + std::to_string(i + 1);
             if (want.date != DNCString)
                 EXPECT_EQ(want.date, own.date.iso()) << where << " date";
-            if (want.sourceaccount != DNCString)
+            if (want.sourceaccount.value != DNCString)
                 EXPECT_EQ(blank(want.sourceaccount), own.account.value())
                     << where << " source account";
-            if (want.destination != DNCString)
+            if (want.destination.value != DNCString)
                 EXPECT_EQ(blank(want.destination), other.account.value())
                     << where << " destination";
-            if (want.amount != DNCString)
+            if (want.amount.value != DNCString)
                 EXPECT_EQ(Money(want.amount).cents(), own.amount.cents())
                     << where << " amount";
         }

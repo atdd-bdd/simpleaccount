@@ -48,8 +48,8 @@ public:
         chart_ = chart::Chart();
         for (const auto& value : values) {
             chart::Account a;
-            a.path = types::AccountPath(value.path);
-            a.type = types::account_type_from_string(value.type);
+            a.path = types::AccountPath(value.path.value);
+            a.type = types::account_type_from_string(value.type.value);
             a.placeholder = parse_bool_cell(value.placeholder);
             a.hidden = parse_bool_cell(value.hidden);
             a.alias = blank(value.alias);
@@ -70,7 +70,7 @@ public:
         for (const auto& value : values) {
             const std::string number = blank(value.accountnumber);
             if (number.empty()) continue;
-            mappings_.push_back({blank(value.bankid), number, value.path});
+            mappings_.push_back({blank(value.bankid), number, value.path.value});
         }
     }
 
@@ -84,7 +84,7 @@ public:
 
     void given_import_target_is(const std::vector<ImportTargetString>& values) {
         ASSERT_FALSE(values.empty());
-        target_ = values.front().accountpath;
+        target_ = values.front().accountpath.value;
     }
 
     void given_account_mappings_are(const std::vector<AccountMappingString>& values) {
@@ -100,7 +100,7 @@ public:
     void given_transfer_match_rules_are(const std::vector<TransferMatchRuleString>& values) {
         match_rules_.clear();
         for (const auto& v : values)
-            match_rules_.push_back({v.fromaccount, blank(v.frompattern), v.toaccount,
+            match_rules_.push_back({v.fromaccount.value, blank(v.frompattern), v.toaccount.value,
                                     blank(v.topattern), parse_bool_cell(v.enabled)});
     }
 
@@ -120,16 +120,16 @@ public:
             const ofx::Decided* offered = nullptr;
             for (const ofx::Decided& one : decided_.decided)
                 if (one.disposition == ofx::Disposition::Possible &&
-                    one.downloaded.fit_id == value.fitid)
+                    one.downloaded.fit_id == value.fitid.value)
                     offered = &one;
-            ASSERT_NE(nullptr, offered) << "nothing possible was offered for " << value.fitid;
+            ASSERT_NE(nullptr, offered) << "nothing possible was offered for " << value.fitid.value;
             if (value.answer == "TheSame") {
                 EXPECT_TRUE(ofx::answer_the_same(chart_, *offered, target_, &transactions_))
                     << "could not clear " << offered->claimed_ref;
             } else if (value.answer == "Different") {
                 const ledger::Transaction made = ofx::answer_different(
                     *offered, target_, ledger::transaction_count(transactions_), &chart_);
-                ASSERT_FALSE(made.source_account.is_none()) << "nothing was created for " << value.fitid;
+                ASSERT_FALSE(made.source_account.is_none()) << "nothing was created for " << value.fitid.value;
                 transactions_.push_back(made);
             } else {
                 FAIL() << "there is no answer called " << value.answer;
@@ -148,12 +148,12 @@ public:
             EXPECT_EQ(blank(want.bankid), got.bank_id) << "statement " << i << " BANKID";
             EXPECT_EQ(blank(want.ofxaccountid), got.account_id)
                 << "statement " << i << " ACCTID";
-            EXPECT_EQ(want.ofxaccttype, ofx::to_string(got.acct_type))
+            EXPECT_EQ(want.ofxaccttype.value, ofx::to_string(got.acct_type))
                 << "statement " << i << " ACCTTYPE";
             EXPECT_EQ(want.currency, got.currency) << "statement " << i << " CURDEF";
             EXPECT_EQ(want.startdate, got.start_date.iso()) << "statement " << i << " DTSTART";
             EXPECT_EQ(want.enddate, got.end_date.iso()) << "statement " << i << " DTEND";
-            EXPECT_EQ(Money(want.ledgerbal).cents(), got.ledger_balance.cents())
+            EXPECT_EQ(Money(want.ledgerbal.value).cents(), got.ledger_balance.cents())
                 << "statement " << i << " BALAMT";
             EXPECT_EQ(want.ledgerbalat, got.ledger_balance_at.iso())
                 << "statement " << i << " DTASOF";
@@ -166,15 +166,15 @@ public:
         const std::vector<ofx::Transaction>& got = read_.statements.front().transactions;
         ASSERT_EQ(values.size(), got.size()) << "transactions in the statement";
         for (std::size_t i = 0; i < values.size(); ++i) {
-            EXPECT_EQ(values[i].trntype, got[i].trn_type) << "transaction " << i << " TRNTYPE";
+            EXPECT_EQ(values[i].trntype.value, got[i].trn_type) << "transaction " << i << " TRNTYPE";
             EXPECT_EQ(values[i].dateposted, got[i].date_posted.iso())
                 << "transaction " << i << " DTPOSTED";
-            EXPECT_EQ(Money(values[i].amount).cents(), got[i].amount.cents())
+            EXPECT_EQ(Money(values[i].amount.value).cents(), got[i].amount.cents())
                 << "transaction " << i << " TRNAMT";
-            EXPECT_EQ(blank(values[i].fitid), got[i].fit_id) << "transaction " << i << " FITID";
+            EXPECT_EQ(blank(values[i].fitid.value), got[i].fit_id) << "transaction " << i << " FITID";
             EXPECT_EQ(blank(values[i].name), got[i].name) << "transaction " << i << " NAME";
             EXPECT_EQ(blank(values[i].memo), got[i].memo) << "transaction " << i << " MEMO";
-            EXPECT_EQ(blank(values[i].checknum), got[i].check_num)
+            EXPECT_EQ(blank(values[i].checknum.value), got[i].check_num)
                 << "transaction " << i << " CHECKNUM";
         }
     }
@@ -205,7 +205,7 @@ public:
 
     void then_import_target_is(const std::vector<ImportTargetString>& values) {
         ASSERT_FALSE(values.empty());
-        EXPECT_EQ(values.front().accountpath, target_);
+        EXPECT_EQ(values.front().accountpath.value, target_);
         if (values.front().asked != DNCString)
             EXPECT_EQ(parse_bool_cell(values.front().asked), target_was_asked_) << "asked";
     }
@@ -216,15 +216,15 @@ public:
     void then_balances_are(const std::vector<AccountBalanceString>& values) {
         const ledger::Ledger ledger = as_ledger();
         for (const auto& value : values) {
-            const chart::Account* a = chart_.find(value.account);
-            ASSERT_NE(nullptr, a) << "no account " << value.account;
-            if (value.rawbalance != DNCString)
-                EXPECT_EQ(Money(value.rawbalance), ledger.raw_balance(value.account))
-                    << value.account << " raw -- " << value.notes;
-            if (value.displaybalance != DNCString)
-                EXPECT_EQ(Money(value.displaybalance),
-                          ledger.display_balance(value.account, a->type))
-                    << value.account << " display -- " << value.notes;
+            const chart::Account* a = chart_.find(value.account.value);
+            ASSERT_NE(nullptr, a) << "no account " << value.account.value;
+            if (value.rawbalance.value != DNCString)
+                EXPECT_EQ(Money(value.rawbalance.value), ledger.raw_balance(value.account.value))
+                    << value.account.value << " raw -- " << value.notes;
+            if (value.displaybalance.value != DNCString)
+                EXPECT_EQ(Money(value.displaybalance.value),
+                          ledger.display_balance(value.account.value, a->type))
+                    << value.account.value << " display -- " << value.notes;
         }
     }
 
@@ -273,25 +273,25 @@ public:
     void examples_businessrule_the_amount_in_an_ofx_file_is_used_as_the_transaction_amount(
             const std::vector<OfxAmountToPostingString>& values) {
         for (const auto& value : values) {
-            const bool card = value.ofxaccttype == "CREDITCARD";
+            const bool card = value.ofxaccttype.value == "CREDITCARD";
             const std::string account = card ? "Liabilities:Card" : "Assets:Account";
             start_fresh(account, card ? types::AccountType::CreditCard
                                       : types::AccountType::Checking);
             ofx::Statement statement;
-            statement.acct_type = ofx::acct_type_from(value.ofxaccttype);
+            statement.acct_type = ofx::acct_type_from(value.ofxaccttype.value);
             ofx::Transaction t;
             t.date_posted = types::Date(2024, 1, 15);
-            t.amount = Money(value.trnamt);
+            t.amount = Money(value.trnamt.value);
             t.fit_id = "AMT1";
             t.name = "WHOEVER";
             statement.transactions.push_back(t);
             import(statement);
 
             const ledger::Transaction* here = transaction_in(account);
-            ASSERT_NE(nullptr, here) << value.ofxaccttype << " " << value.trnamt
+            ASSERT_NE(nullptr, here) << value.ofxaccttype.value << " " << value.trnamt.value
                                      << " produced no posting in " << account;
-            EXPECT_EQ(Money(value.postingamount).cents(), here->amount.cents())
-                << value.ofxaccttype << " " << value.trnamt << " -- " << value.notes;
+            EXPECT_EQ(Money(value.postingamount.value).cents(), here->amount.cents())
+                << value.ofxaccttype.value << " " << value.trnamt.value << " -- " << value.notes;
         }
     }
 
@@ -301,7 +301,7 @@ public:
     void examples_businessrule_how_a_downloaded_transaction_is_identified(
             const std::vector<DispositionRuleString>& values) {
         for (const auto& value : values)
-            EXPECT_EQ(value.disposition, ofx::to_string(disposition_reaching_test(value.test)))
+            EXPECT_EQ(value.disposition.value, ofx::to_string(disposition_reaching_test(value.test)))
                 << "test " << value.test << ": " << value.condition;
     }
 
@@ -410,7 +410,7 @@ public:
         } else {
             asked_.bankid = bank_id.empty() ? "none" : bank_id;
             asked_.ofxaccountid = account_id;
-            asked_.ofxaccttype = value.ofxaccttype;
+            asked_.ofxaccttype = value.ofxaccttype.value;
             asked_.suggestion = "none";
             was_asked_ = true;
             target_was_asked_ = true;
@@ -427,15 +427,15 @@ public:
 
     static ofx::Transaction downloaded_from_file(const OfxImportFileString& value) {
         ofx::Transaction t;
-        t.trn_type = value.trntype;
+        t.trn_type = value.trntype.value;
         const auto on = types::Date::from_iso(value.dateposted);
         EXPECT_TRUE(on.has_value()) << value.dateposted;
         if (on.has_value()) t.date_posted = *on;
-        t.amount = Money(value.amount);
-        t.fit_id = blank(value.fitid);
+        t.amount = Money(value.amount.value);
+        t.fit_id = blank(value.fitid.value);
         t.name = blank(value.name);
         t.memo = blank(value.memo);
-        t.check_num = blank(value.checknum);
+        t.check_num = blank(value.checknum.value);
         return t;
     }
 
@@ -466,14 +466,14 @@ public:
         ASSERT_EQ(values.size(), candidates_.size()) << "candidates proposed: " << candidate_listing();
         for (std::size_t i = 0; i < values.size(); ++i) {
             const ofx::TransferCandidate& c = candidates_[i].candidate;
-            EXPECT_EQ(values[i].fromaccount, c.from_account) << "candidate " << i << " from account";
+            EXPECT_EQ(values[i].fromaccount.value, c.from_account) << "candidate " << i << " from account";
             EXPECT_EQ(values[i].fromdate, c.from_date.iso()) << "candidate " << i << " from date";
-            EXPECT_EQ(values[i].toaccount, c.to_account) << "candidate " << i << " to account";
+            EXPECT_EQ(values[i].toaccount.value, c.to_account) << "candidate " << i << " to account";
             EXPECT_EQ(values[i].todate, c.to_date.iso()) << "candidate " << i << " to date";
-            EXPECT_EQ(Money(values[i].amount), c.amount) << "candidate " << i << " amount";
+            EXPECT_EQ(Money(values[i].amount.value), c.amount) << "candidate " << i << " amount";
             EXPECT_EQ(std::stoll(values[i].daysapart), c.days_apart)
                 << "candidate " << i << " days apart";
-            EXPECT_EQ(values[i].state, ofx::to_string(c.state)) << "candidate " << i << " state";
+            EXPECT_EQ(values[i].state.value, ofx::to_string(c.state)) << "candidate " << i << " state";
         }
     }
 
@@ -483,9 +483,9 @@ public:
     // every field.
     static bool candidate_matches(const TransferCandidateString& v,
                                   const ofx::TransferCandidate& c) {
-        if (v.fromaccount != DNCString && v.fromaccount != c.from_account) return false;
-        if (v.toaccount != DNCString && v.toaccount != c.to_account) return false;
-        if (v.amount != DNCString && Money(v.amount) != c.amount) return false;
+        if (v.fromaccount.value != DNCString && v.fromaccount.value != c.from_account) return false;
+        if (v.toaccount.value != DNCString && v.toaccount.value != c.to_account) return false;
+        if (v.amount.value != DNCString && Money(v.amount.value) != c.amount) return false;
         if (v.fromname != DNCString && blank(v.fromname) != c.from_name) return false;
         if (v.toname != DNCString && blank(v.toname) != c.to_name) return false;
         return true;
@@ -508,11 +508,11 @@ public:
             // about the rule an approval offers, built straight from what the
             // table itself says.
             ofx::TransferCandidate c;
-            c.from_account = v.fromaccount;
+            c.from_account = v.fromaccount.value;
             c.from_name = blank(v.fromname);
-            c.to_account = v.toaccount;
+            c.to_account = v.toaccount.value;
             c.to_name = blank(v.toname);
-            c.amount = v.amount == DNCString ? Money() : Money(v.amount);
+            c.amount = v.amount.value == DNCString ? Money() : Money(v.amount.value);
             offered_rule_ = ofx::rule_offered_for(c);
         }
     }
@@ -533,9 +533,9 @@ public:
     void then_rule_offered_is(const std::vector<TransferMatchRuleString>& values) {
         ASSERT_FALSE(values.empty());
         const TransferMatchRuleString& v = values.front();
-        EXPECT_EQ(v.fromaccount, offered_rule_.from_account) << "offered rule from account";
+        EXPECT_EQ(v.fromaccount.value, offered_rule_.from_account) << "offered rule from account";
         EXPECT_EQ(blank(v.frompattern), offered_rule_.from_pattern) << "offered rule from pattern";
-        EXPECT_EQ(v.toaccount, offered_rule_.to_account) << "offered rule to account";
+        EXPECT_EQ(v.toaccount.value, offered_rule_.to_account) << "offered rule to account";
         EXPECT_EQ(blank(v.topattern), offered_rule_.to_pattern) << "offered rule to pattern";
         EXPECT_EQ(parse_bool_cell(v.enabled), offered_rule_.enabled) << "offered rule enabled";
     }
@@ -549,11 +549,11 @@ public:
         ASSERT_EQ(values.size(), pending.size()) << "candidates offered: " << candidate_listing();
         for (std::size_t i = 0; i < values.size(); ++i) {
             const ofx::TransferCandidate& c = pending[i]->candidate;
-            EXPECT_EQ(values[i].fromaccount, c.from_account) << "row " << i << " from account";
+            EXPECT_EQ(values[i].fromaccount.value, c.from_account) << "row " << i << " from account";
             EXPECT_EQ(blank(values[i].fromname), c.from_name) << "row " << i << " from name";
-            EXPECT_EQ(values[i].toaccount, c.to_account) << "row " << i << " to account";
+            EXPECT_EQ(values[i].toaccount.value, c.to_account) << "row " << i << " to account";
             EXPECT_EQ(blank(values[i].toname), c.to_name) << "row " << i << " to name";
-            EXPECT_EQ(Money(values[i].amount), c.amount) << "row " << i << " amount";
+            EXPECT_EQ(Money(values[i].amount.value), c.amount) << "row " << i << " amount";
             EXPECT_EQ(std::stoll(values[i].daysapart), c.days_apart) << "row " << i << " days apart";
             EXPECT_EQ(values[i].choices, "Approve, Reject, ApproveAndRemember")
                 << "row " << i << " choices";
@@ -576,15 +576,15 @@ public:
     void when_ledger_balance_checked(const std::vector<LedgerBalanceCheckString>& values) {
         ASSERT_FALSE(values.empty());
         const LedgerBalanceCheckString& v = values.front();
-        balance_check_ = ofx::check_ledger_balance(chart_, transactions_, v.account, Money(v.statedbal));
+        balance_check_ = ofx::check_ledger_balance(chart_, transactions_, v.account.value, Money(v.statedbal.value));
     }
 
     void then_balance_check_is(const std::vector<LedgerBalanceResultString>& values) {
         ASSERT_FALSE(values.empty());
         const LedgerBalanceResultString& v = values.front();
-        EXPECT_EQ(Money(v.clearedbalance), balance_check_.cleared_balance) << "cleared balance";
-        EXPECT_EQ(Money(v.statedbal), balance_check_.stated_bal) << "stated balance";
-        EXPECT_EQ(Money(v.difference), balance_check_.difference) << "difference";
+        EXPECT_EQ(Money(v.clearedbalance.value), balance_check_.cleared_balance) << "cleared balance";
+        EXPECT_EQ(Money(v.statedbal.value), balance_check_.stated_bal) << "stated balance";
+        EXPECT_EQ(Money(v.difference.value), balance_check_.difference) << "difference";
         EXPECT_EQ(parse_bool_cell(v.agrees), balance_check_.agrees) << "agrees";
     }
 
@@ -605,9 +605,9 @@ public:
         ASSERT_EQ(values.size(), report_.rows.size())
             << "report rows: " << report_.rows.size() << " produced";
         for (std::size_t i = 0; i < values.size(); ++i) {
-            EXPECT_EQ(values[i].account, report_.rows[i].account) << "row " << i;
+            EXPECT_EQ(values[i].account.value, report_.rows[i].account) << "row " << i;
             EXPECT_EQ(std::stoi(values[i].level), report_.rows[i].level) << "row " << i << " level";
-            EXPECT_EQ(Money(values[i].amount), report_.rows[i].amount) << "row " << i << " amount";
+            EXPECT_EQ(Money(values[i].amount.value), report_.rows[i].amount) << "row " << i << " amount";
             EXPECT_EQ(parse_bool_cell(values[i].issubtotal), report_.rows[i].is_subtotal)
                 << "row " << i << " subtotal";
         }
@@ -701,15 +701,15 @@ private:
 
     static ofx::Transaction downloaded(const OfxTransactionString& value) {
         ofx::Transaction t;
-        t.trn_type = value.trntype;
+        t.trn_type = value.trntype.value;
         const auto on = types::Date::from_iso(value.dateposted);
         EXPECT_TRUE(on.has_value()) << value.dateposted;
         if (on.has_value()) t.date_posted = *on;
-        t.amount = Money(value.amount);
-        t.fit_id = blank(value.fitid);
+        t.amount = Money(value.amount.value);
+        t.fit_id = blank(value.fitid.value);
         t.name = blank(value.name);
         t.memo = blank(value.memo);
-        t.check_num = blank(value.checknum);
+        t.check_num = blank(value.checknum.value);
         return t;
     }
 
@@ -1143,17 +1143,17 @@ public:
         for (const auto& value : values) {
             ledger::Transaction t;
             t.id = ledger::new_id();
-            t.ref = types::TransactionRef(value.ref);
+            t.ref = types::TransactionRef(value.ref.value);
             const auto on = types::Date::from_iso(value.date);
             if (on) t.date = *on;
-            t.payee = types::PayeeName(blank(value.payee));
-            t.check_no = types::CheckNumber(blank(value.checkno));
-            t.source_account = chart_.ref_for_path(blank(value.sourceaccount));
-            t.destination = chart_.ref_for_path(blank(value.destination));
-            t.amount = Money(value.amount);
-            if (value.cleared != DNCString && !value.cleared.empty())
-                t.cleared = types::cleared_status_from_string(value.cleared);
-            const std::string fit_id = blank(value.fitid);
+            t.payee = types::PayeeName(blank(value.payee.value));
+            t.check_no = types::CheckNumber(blank(value.checkno.value));
+            t.source_account = chart_.ref_for_path(blank(value.sourceaccount.value));
+            t.destination = chart_.ref_for_path(blank(value.destination.value));
+            t.amount = Money(value.amount.value);
+            if (value.cleared.value != DNCString && !value.cleared.value.empty())
+                t.cleared = types::cleared_status_from_string(value.cleared.value);
+            const std::string fit_id = blank(value.fitid.value);
             if (!fit_id.empty()) ledger::stamp(&t, types::ImportSource::Ofx, fit_id);
             transactions_.push_back(t);
         }
@@ -1166,27 +1166,27 @@ public:
             const ledger::Transaction& got = transactions_[i];
             const ImportedTransactionString& want = values[i];
             const std::string where = "transaction " + std::to_string(i + 1);
-            if (want.ref != DNCString)
-                EXPECT_EQ(want.ref, got.ref.value()) << where << " ref";
+            if (want.ref.value != DNCString)
+                EXPECT_EQ(want.ref.value, got.ref.value()) << where << " ref";
             if (want.date != DNCString)
                 EXPECT_EQ(want.date, got.date.iso()) << where << " date";
-            if (want.payee != DNCString)
-                EXPECT_EQ(blank(want.payee), got.payee.value()) << where << " payee";
-            if (want.checkno != DNCString)
-                EXPECT_EQ(blank(want.checkno), got.check_no.value()) << where << " check number";
-            if (want.sourceaccount != DNCString)
-                EXPECT_EQ(blank(want.sourceaccount), chart_.path_for_ref(got.source_account))
+            if (want.payee.value != DNCString)
+                EXPECT_EQ(blank(want.payee.value), got.payee.value()) << where << " payee";
+            if (want.checkno.value != DNCString)
+                EXPECT_EQ(blank(want.checkno.value), got.check_no.value()) << where << " check number";
+            if (want.sourceaccount.value != DNCString)
+                EXPECT_EQ(blank(want.sourceaccount.value), chart_.path_for_ref(got.source_account))
                     << where << " source account";
-            if (want.destination != DNCString)
-                EXPECT_EQ(blank(want.destination), chart_.path_for_ref(got.destination))
+            if (want.destination.value != DNCString)
+                EXPECT_EQ(blank(want.destination.value), chart_.path_for_ref(got.destination))
                     << where << " destination";
-            if (want.amount != DNCString)
-                EXPECT_EQ(Money(want.amount).cents(), got.amount.cents()) << where << " amount";
-            if (want.cleared != DNCString && !want.cleared.empty())
-                EXPECT_EQ(want.cleared, types::to_string(got.cleared)) << where << " cleared";
-            if (want.fitid != DNCString) {
+            if (want.amount.value != DNCString)
+                EXPECT_EQ(Money(want.amount.value).cents(), got.amount.cents()) << where << " amount";
+            if (want.cleared.value != DNCString && !want.cleared.value.empty())
+                EXPECT_EQ(want.cleared.value, types::to_string(got.cleared)) << where << " cleared";
+            if (want.fitid.value != DNCString) {
                 const std::string* id = ledger::id_from(got, types::ImportSource::Ofx);
-                EXPECT_EQ(blank(want.fitid), id == nullptr ? std::string() : *id)
+                EXPECT_EQ(blank(want.fitid.value), id == nullptr ? std::string() : *id)
                     << where << " FITID";
             }
         }
@@ -1272,12 +1272,12 @@ public:
     void then_transaction_notes_are(const std::vector<TransactionNoteString>& values) {
         std::vector<std::string> refs;
         for (const auto& value : values)
-            if (std::find(refs.begin(), refs.end(), value.ref) == refs.end())
-                refs.push_back(value.ref);
+            if (std::find(refs.begin(), refs.end(), value.ref.value) == refs.end())
+                refs.push_back(value.ref.value);
         for (const std::string& ref : refs) {
             std::vector<std::string> wanted;
             for (const auto& value : values)
-                if (value.ref == ref) wanted.push_back(value.note);
+                if (value.ref.value == ref) wanted.push_back(value.note.value);
             const ledger::Transaction* here = nullptr;
             for (const ledger::Transaction& one : transactions_)
                 if (one.ref.value() == ref) here = &one;
@@ -1389,25 +1389,25 @@ public:
             row.fit_id = "F100";
             row.name = "HARRIS TEETER #231";
 
-            if (value.note == "None") {
+            if (value.note.value == "None") {
                 // The identifier settles it and nothing else is out of place.
                 ledger::stamp(&t, types::ImportSource::Ofx, "F100");
-            } else if (value.note == "DetailsDiffer") {
+            } else if (value.note.value == "DetailsDiffer") {
                 // The identifier settles it and the day does not agree.
                 t.date = types::Date(2024, 1, 13);
                 ledger::stamp(&t, types::ImportSource::Ofx, "F100");
-            } else if (value.note == "CheckNumberSame") {
+            } else if (value.note.value == "CheckNumberSame") {
                 t.date = types::Date(2024, 1, 15);
                 t.check_no = types::CheckNumber("2041");
                 row.check_num = "2041";
-            } else if (value.note == "FitIdAdded") {
+            } else if (value.note.value == "FitIdAdded") {
                 // The same day and amount, and no identifier until now.
-            } else if (value.note == "PayeeUnmatched") {
+            } else if (value.note.value == "PayeeUnmatched") {
                 t.payee = types::PayeeName("Costco");
-            } else if (value.note == "Uncleared") {
+            } else if (value.note.value == "Uncleared") {
                 t.cleared = types::ClearedStatus::Uncleared;
             } else {
-                FAIL() << "there is no note called " << value.note;
+                FAIL() << "there is no note called " << value.note.value;
                 continue;
             }
 
@@ -1422,14 +1422,14 @@ public:
                 << value.whatwasseen << " -- every row here is a duplicate";
             std::string written;
             for (ofx::DuplicateNote note : one.notes) written += ofx::to_string(note) + " ";
-            if (value.note == "None") {
+            if (value.note.value == "None") {
                 EXPECT_TRUE(one.notes.empty())
                     << value.whatwasseen << " -- notes written: " << written;
                 continue;
             }
             bool found = false;
             for (ofx::DuplicateNote note : one.notes)
-                if (ofx::to_string(note) == value.note) found = true;
+                if (ofx::to_string(note) == value.note.value) found = true;
             EXPECT_TRUE(found) << value.whatwasseen << " -- notes written: " << written;
         }
     }
@@ -1441,8 +1441,8 @@ public:
             const std::vector<PayeeComparisonString>& values) {
         for (const auto& value : values)
             EXPECT_EQ(value.agree == "Yes",
-                      ofx::detail::payees_agree(value.inthebook, value.inthefile, {}))
-                << "\"" << value.inthebook << "\" against \"" << value.inthefile
+                      ofx::detail::payees_agree(value.inthebook.value, value.inthefile.value, {}))
+                << "\"" << value.inthebook.value << "\" against \"" << value.inthefile.value
                 << "\" -- " << value.why;
     }
 

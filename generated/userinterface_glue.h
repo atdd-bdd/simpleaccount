@@ -34,8 +34,8 @@ public:
         chart_ = chart::Chart();
         for (const auto& value : values) {
             chart::Account a;
-            a.path = types::AccountPath(value.path);
-            a.type = types::account_type_from_string(value.type);
+            a.path = types::AccountPath(value.path.value);
+            a.type = types::account_type_from_string(value.type.value);
             a.placeholder = parse_bool_cell(value.placeholder);
             a.hidden = parse_bool_cell(value.hidden);
             chart_.put(a);
@@ -149,7 +149,7 @@ public:
     void when_hidden_accounts_shown() { show_hidden_ = true; }
 
     void when_account_selected(const std::vector<AccountSelectString>& values) {
-        for (const auto& value : values) workspace().select(value.path);
+        for (const auto& value : values) workspace().select(value.path.value);
     }
 
     void when_import_reviewed(const std::vector<ImportReviewRowString>& values) {
@@ -173,19 +173,19 @@ public:
             const auto date = types::Date::from_iso(value.date);
             ASSERT_TRUE(date.has_value()) << value.date;
             row.date = *date;
-            row.payee = blank(value.payee);
-            row.account = value.account;
-            row.category = value.category;
-            row.amount = Money(value.amount);
-            row.disposition = value.disposition;
+            row.payee = blank(value.payee.value);
+            row.account = value.account.value;
+            row.category = value.category.value;
+            row.amount = Money(value.amount.value);
+            row.disposition = value.disposition.value;
             // What the file called the row, which the review carries through to
             // the posting rather than losing on the way.
-            row.identifier = blank(value.identifier);
-            row.source = types::import_source_from_string(value.source);
+            row.identifier = blank(value.identifier.value);
+            row.source = types::import_source_from_string(value.source.value);
             row.raw_name = blank(value.rawname);
             row.memo = blank(value.memo);
-            row.check_no = blank(value.checkno);
-            row.cleared = types::cleared_status_from_string(value.cleared);
+            row.check_no = blank(value.checkno.value);
+            row.cleared = types::cleared_status_from_string(value.cleared.value);
             into->push_back(row);
         }
     }
@@ -215,10 +215,10 @@ public:
         ASSERT_EQ(values.size(), got.size()) << "number of account list rows";
         for (std::size_t i = 0; i < values.size(); ++i) {
             EXPECT_EQ(blank(values[i].group), got[i].group) << "row " << i << " group";
-            EXPECT_EQ(blank(values[i].account), got[i].account) << "row " << i << " account";
+            EXPECT_EQ(blank(values[i].account.value), got[i].account) << "row " << i << " account";
             EXPECT_EQ(blank(values[i].name), got[i].name) << "row " << i << " name";
             EXPECT_EQ(std::stoi(values[i].indent), got[i].indent) << "row " << i << " indent";
-            EXPECT_EQ(Money(values[i].balance).cents(), got[i].balance.cents())
+            EXPECT_EQ(Money(values[i].balance.value).cents(), got[i].balance.cents())
                 << "row " << i << " balance";
             EXPECT_EQ(parse_bool_cell(values[i].isheading), got[i].is_heading)
                 << "row " << i << " heading";
@@ -240,9 +240,9 @@ public:
         for (std::size_t i = 0; i < values.size(); ++i) {
             const int pane = std::stoi(values[i].pane);
             ASSERT_EQ(static_cast<int>(i) + 1, pane) << "panes are listed in order";
-            EXPECT_EQ(values[i].showing, ui::to_string(got[i].showing))
+            EXPECT_EQ(values[i].showing.value, ui::to_string(got[i].showing))
                 << "pane " << pane << " showing";
-            EXPECT_EQ(blank(values[i].account), got[i].account) << "pane " << pane;
+            EXPECT_EQ(blank(values[i].account.value), got[i].account) << "pane " << pane;
             EXPECT_EQ(parse_bool_cell(values[i].active), workspace().active_pane() == pane)
                 << "pane " << pane << " active";
         }
@@ -255,19 +255,19 @@ public:
         ASSERT_EQ(values.size(), got.size()) << "number of register lines";
         for (std::size_t i = 0; i < values.size(); ++i) {
             const RegisterLineString& want = values[i];
-            if (!dnc(want.ref)) EXPECT_EQ(want.ref, got[i].ref) << "line " << i << " ref";
+            if (!dnc(want.ref.value)) EXPECT_EQ(want.ref.value, got[i].ref) << "line " << i << " ref";
             if (!dnc(want.date)) EXPECT_EQ(want.date, got[i].date.iso()) << "line " << i;
-            if (!dnc(want.payee)) EXPECT_EQ(blank(want.payee), got[i].payee) << "line " << i;
+            if (!dnc(want.payee.value)) EXPECT_EQ(blank(want.payee.value), got[i].payee) << "line " << i;
             if (!dnc(want.category))
                 EXPECT_EQ(blank(want.category), got[i].category) << "line " << i << " category";
-            if (!dnc(want.payment))
-                EXPECT_EQ(Money(want.payment).cents(), got[i].payment.cents())
+            if (!dnc(want.payment.value))
+                EXPECT_EQ(Money(want.payment.value).cents(), got[i].payment.cents())
                     << "line " << i << " payment";
-            if (!dnc(want.deposit))
-                EXPECT_EQ(Money(want.deposit).cents(), got[i].deposit.cents())
+            if (!dnc(want.deposit.value))
+                EXPECT_EQ(Money(want.deposit.value).cents(), got[i].deposit.cents())
                     << "line " << i << " deposit";
-            if (!dnc(want.balance))
-                EXPECT_EQ(Money(want.balance).cents(), got[i].balance.cents())
+            if (!dnc(want.balance.value))
+                EXPECT_EQ(Money(want.balance.value).cents(), got[i].balance.cents())
                     << "line " << i << " balance";
         }
     }
@@ -277,16 +277,16 @@ public:
         ASSERT_EQ(values.size(), got.size()) << "number of review rows";
         for (std::size_t i = 0; i < values.size(); ++i) {
             EXPECT_EQ(std::stoi(values[i].line), got[i].line) << "row " << i << " line";
-            if (!dnc(values[i].payee))
-                EXPECT_EQ(blank(values[i].payee), got[i].payee) << "row " << i;
+            if (!dnc(values[i].payee.value))
+                EXPECT_EQ(blank(values[i].payee.value), got[i].payee) << "row " << i;
             // Which account the row is for, which a confirmed import fills in
             // from the dialog rather than from the file. A blank states
             // nothing: no row is ever for no account, so there is nothing
             // there to compare against.
-            if (!dnc(values[i].account) && !blank(values[i].account).empty())
-                EXPECT_EQ(values[i].account, got[i].account) << "row " << i << " account";
-            if (!dnc(values[i].disposition))
-                EXPECT_EQ(values[i].disposition, got[i].disposition) << "row " << i;
+            if (!dnc(values[i].account.value) && !blank(values[i].account.value).empty())
+                EXPECT_EQ(values[i].account.value, got[i].account) << "row " << i << " account";
+            if (!dnc(values[i].disposition.value))
+                EXPECT_EQ(values[i].disposition.value, got[i].disposition) << "row " << i;
             if (!dnc(values[i].accepted))
                 EXPECT_EQ(parse_bool_cell(values[i].accepted), got[i].accepted)
                     << "row " << i << " accepted";
@@ -346,14 +346,14 @@ public:
             const std::vector<GroupOfTypeString>& values) {
         for (const auto& value : values) {
             const GroupOfTypeTyped t = GroupOfTypeTyped::from_string_struct(value);
-            const auto got = ui::group_of(types::account_type_from_string(t.accounttype));
-            EXPECT_EQ(t.listed, got.has_value()) << t.accounttype << " listed";
+            const auto got = ui::group_of(types::account_type_from_string(t.accounttype.text));
+            EXPECT_EQ(t.listed, got.has_value()) << t.accounttype.text << " listed";
             // The group and its heading only mean anything for a type that is
             // listed; the table carries the default in the other rows, and an
             // empty heading, which is what a category has.
             if (!t.listed || !got) continue;
-            EXPECT_EQ(t.accountgroup, types::to_string(*got)) << t.accounttype;
-            EXPECT_EQ(t.heading, types::heading_of(*got)) << t.accounttype << " heading";
+            EXPECT_EQ(t.accountgroup.text, types::to_string(*got)) << t.accounttype.text;
+            EXPECT_EQ(t.heading, types::heading_of(*got)) << t.accounttype.text << " heading";
         }
     }
 
@@ -539,23 +539,23 @@ public:
         ASSERT_EQ(values.size(), got.size()) << "number of lines in the account listing";
         for (std::size_t i = 0; i < values.size(); ++i) {
             const AccountListingRowString& want = values[i];
-            EXPECT_EQ(want.path, got[i].path) << "line " << i + 1;
-            if (!dnc(want.type))
-                EXPECT_EQ(want.type, types::to_string(got[i].type)) << want.path << " type";
+            EXPECT_EQ(want.path.value, got[i].path) << "line " << i + 1;
+            if (!dnc(want.type.value))
+                EXPECT_EQ(want.type.value, types::to_string(got[i].type)) << want.path.value << " type";
             if (!dnc(want.placeholder))
                 EXPECT_EQ(parse_bool_cell(want.placeholder), got[i].placeholder)
-                    << want.path << " placeholder";
+                    << want.path.value << " placeholder";
             if (!dnc(want.hidden))
                 EXPECT_EQ(parse_bool_cell(want.hidden), got[i].hidden)
-                    << want.path << " hidden";
+                    << want.path.value << " hidden";
             if (!dnc(want.bank))
-                EXPECT_EQ(blank(want.bank), got[i].bank) << want.path << " bank";
+                EXPECT_EQ(blank(want.bank), got[i].bank) << want.path.value << " bank";
             if (!dnc(want.accountnumber))
                 EXPECT_EQ(blank(want.accountnumber), got[i].account_number)
-                    << want.path << " account number";
-            if (!dnc(want.balance))
-                EXPECT_EQ(Money(want.balance).cents(), got[i].balance.cents())
-                    << want.path << " balance";
+                    << want.path.value << " account number";
+            if (!dnc(want.balance.value))
+                EXPECT_EQ(Money(want.balance.value).cents(), got[i].balance.cents())
+                    << want.path.value << " balance";
         }
     }
 
@@ -564,23 +564,23 @@ public:
         ASSERT_EQ(values.size(), got.size()) << "number of lines in the category listing";
         for (std::size_t i = 0; i < values.size(); ++i) {
             const CategoryListingRowString& want = values[i];
-            EXPECT_EQ(want.path, got[i].path) << "line " << i + 1;
-            if (!dnc(want.type))
-                EXPECT_EQ(want.type, types::to_string(got[i].type)) << want.path << " type";
+            EXPECT_EQ(want.path.value, got[i].path) << "line " << i + 1;
+            if (!dnc(want.type.value))
+                EXPECT_EQ(want.type.value, types::to_string(got[i].type)) << want.path.value << " type";
             if (!dnc(want.placeholder))
                 EXPECT_EQ(parse_bool_cell(want.placeholder), got[i].placeholder)
-                    << want.path << " placeholder";
+                    << want.path.value << " placeholder";
             if (!dnc(want.hidden))
                 EXPECT_EQ(parse_bool_cell(want.hidden), got[i].hidden)
-                    << want.path << " hidden";
+                    << want.path.value << " hidden";
             if (!dnc(want.alias))
-                EXPECT_EQ(blank(want.alias), got[i].alias) << want.path << " alias";
+                EXPECT_EQ(blank(want.alias), got[i].alias) << want.path.value << " alias";
         }
     }
 
     void when_listing_row_clicked(const std::vector<ListingRowSelectString>& values) {
         ASSERT_FALSE(values.empty());
-        workspace().click_listing_row(values.front().path);
+        workspace().click_listing_row(values.front().path.value);
     }
 
     void when_account_list_node_right_clicked(const std::vector<TreeNodeString>& values) {
@@ -605,7 +605,7 @@ public:
     // so that the listing has something to show beside the account.
     void when_account_settings_changed(const std::vector<AccountSettingsString>& values) {
         for (const AccountSettingsString& value : values)
-            workspace().change_account_settings(value.path, blank(value.bank),
+            workspace().change_account_settings(value.path.value, blank(value.bank),
                                                 blank(value.accountnumber));
     }
 
@@ -686,7 +686,7 @@ public:
 
     void when_selection_recategorised(const std::vector<CategoryChoiceString>& values) {
         ASSERT_FALSE(values.empty());
-        recategorised_ = workspace().recategorise_selection(values.front().category);
+        recategorised_ = workspace().recategorise_selection(values.front().category.value);
     }
 
     void then_recategorising_reported_is(const std::vector<RecategorisedString>& values) {
@@ -706,11 +706,11 @@ public:
         ASSERT_FALSE(values.empty());
         const PayeeRuleString& want = values.front();
         EXPECT_EQ(want.pattern, offered_.pattern) << "pattern";
-        EXPECT_EQ(want.matchtype, payees::to_string(offered_.match_type)) << "match type";
-        EXPECT_EQ(want.payee, offered_.payee) << "payee";
+        EXPECT_EQ(want.matchtype.value, payees::to_string(offered_.match_type)) << "match type";
+        EXPECT_EQ(want.payee.value, offered_.payee) << "payee";
         // An offer with no category reads as none, which is what the table says
         // when there is nothing worth repeating in a rule.
-        EXPECT_EQ(want.category,
+        EXPECT_EQ(want.category.value,
                   offered_.category.empty() ? std::string("none") : offered_.category)
             << "category";
         EXPECT_EQ(parse_bool_cell(want.enabled), offered_.enabled) << "enabled";
@@ -724,15 +724,15 @@ public:
     // number landed on.
     void when_report_run(const std::vector<ReportSpecString>& values) {
         for (const auto& value : values) {
-            const std::string title = value.groupby == "Account"
+            const std::string title = value.groupby.value == "Account"
                                           ? "Balance sheet"
                                           : "Spending by category";
             workspace().open_report(title);
             reports::Spec s;
             if (const auto f = types::Date::from_iso(value.from)) s.from = *f;
             if (const auto t = types::Date::from_iso(value.to)) s.to = *t;
-            if (!value.detail.empty() && value.detail != DNCString)
-                s.detail = reports::detail_from_string(value.detail);
+            if (!value.detail.value.empty() && value.detail.value != DNCString)
+                s.detail = reports::detail_from_string(value.detail.value);
             last_report_spec_ = s;
             // The tab it opened in is the last one, and it is the one in
             // front. The report itself is worked out by the redraw that
@@ -773,23 +773,23 @@ public:
         for (const auto& value : values) {
             const ledger::Transaction* t = nullptr;
             for (const ledger::Transaction& one : transactions_)
-                if (one.date.iso() == value.date && one.payee.value() == value.payee) {
+                if (one.date.iso() == value.date && one.payee.value() == value.payee.value) {
                     t = &one;
                     break;
                 }
-            ASSERT_NE(nullptr, t) << value.date << " " << value.payee;
+            ASSERT_NE(nullptr, t) << value.date << " " << value.payee.value;
             const reports::DetailLine* on_report = nullptr;
             for (const reports::DetailLine& l : lines)
                 if (l.kind == reports::LineKind::Transaction && l.date.iso() == value.date &&
-                    l.payee == value.payee) {
+                    l.payee == value.payee.value) {
                     on_report = &l;
                     break;
                 }
-            ASSERT_NE(nullptr, on_report) << value.date << " " << value.payee;
+            ASSERT_NE(nullptr, on_report) << value.date << " " << value.payee.value;
             EXPECT_EQ(parse_bool_cell(value.blank), t->id.value().empty())
-                << value.date << " " << value.payee;
+                << value.date << " " << value.payee.value;
             EXPECT_EQ(parse_bool_cell(value.thesame), t->id.value() == on_report->id)
-                << value.date << " " << value.payee;
+                << value.date << " " << value.payee.value;
         }
     }
 
@@ -801,9 +801,9 @@ public:
         for (std::size_t i = 0; i < values.size(); ++i) {
             EXPECT_EQ(std::stoi(values[i].position), got[i].position)
                 << "tab " << i + 1 << " position";
-            EXPECT_EQ(values[i].kind, ui::to_string(got[i].kind))
+            EXPECT_EQ(values[i].kind.value, ui::to_string(got[i].kind))
                 << "tab " << i + 1 << " kind";
-            EXPECT_EQ(blank(values[i].account), got[i].account)
+            EXPECT_EQ(blank(values[i].account.value), got[i].account)
                 << "tab " << i + 1 << " account";
             EXPECT_EQ(values[i].name, got[i].name) << "tab " << i + 1 << " name";
             EXPECT_EQ(parse_bool_cell(values[i].active), got[i].active)
@@ -862,16 +862,16 @@ public:
     // of the two outcomes was wanted.
     void when_the_transaction_is_opened(const std::vector<TransactionSelectString>& values) {
         ASSERT_FALSE(values.empty());
-        opened_ = values.front().ref;
+        opened_ = values.front().ref.value;
         workspace().go_to_transaction(opened_);
     }
 
     void when_the_transactions_are_recategorised(
             const std::vector<TransactionRecategoriseString>& values) {
         for (const auto& value : values) {
-            ledger::Transaction* t = find_by_ref(value.ref);
-            ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
-            edit::assign_category(t, chart_, value.category);
+            ledger::Transaction* t = find_by_ref(value.ref.value);
+            ASSERT_NE(nullptr, t) << "no transaction " << value.ref.value;
+            edit::assign_category(t, chart_, value.category.value);
         }
         // One step is one change, whether it names one transaction or twenty.
         book_changed();
@@ -882,9 +882,9 @@ public:
         ASSERT_EQ(values.size(), report.rows.size()) << "number of report rows";
         for (std::size_t i = 0; i < values.size(); ++i) {
             const reports::Row& got = report.rows[i];
-            EXPECT_EQ(values[i].account, got.account) << "row " << i;
+            EXPECT_EQ(values[i].account.value, got.account) << "row " << i;
             EXPECT_EQ(std::stoi(values[i].level), got.level) << got.account << " level";
-            EXPECT_EQ(Money(values[i].amount).cents(), got.amount.cents())
+            EXPECT_EQ(Money(values[i].amount.value).cents(), got.amount.cents())
                 << got.account << " amount";
             EXPECT_EQ(parse_bool_cell(values[i].issubtotal), got.is_subtotal)
                 << got.account << " subtotal";
@@ -897,17 +897,17 @@ public:
         const std::vector<std::string> got = workspace().registers_offered(opened_);
         ASSERT_EQ(values.size(), got.size()) << "number of registers offered";
         for (std::size_t i = 0; i < values.size(); ++i)
-            EXPECT_EQ(values[i].account, got[i]) << "offer " << i + 1;
+            EXPECT_EQ(values[i].account.value, got[i]) << "offer " << i + 1;
     }
 
     void when_the_transaction_is_opened_in(const std::vector<RegisterChoiceString>& values) {
         ASSERT_FALSE(values.empty());
-        opened_ = values.front().ref;
+        opened_ = values.front().ref.value;
         std::string offered;
         for (const std::string& one : workspace().registers_offered(opened_))
             offered += (offered.empty() ? "" : ", ") + one;
-        EXPECT_TRUE(workspace().go_to_transaction_in(opened_, values.front().account))
-            << values.front().account << " does not hold " << opened_
+        EXPECT_TRUE(workspace().go_to_transaction_in(opened_, values.front().account.value))
+            << values.front().account.value << " does not hold " << opened_
             << "; offered: " << (offered.empty() ? "nothing" : offered);
     }
 
@@ -955,7 +955,7 @@ public:
             const int tab = std::stoi(values[i].tab);
             ASSERT_EQ(static_cast<int>(i) + 1, tab) << "tabs are listed in the order opened";
             EXPECT_EQ(tab, got[i].tab) << "tab " << tab;
-            EXPECT_EQ(values[i].kind, ui::to_string(got[i].kind)) << "tab " << tab << " kind";
+            EXPECT_EQ(values[i].kind.value, ui::to_string(got[i].kind)) << "tab " << tab << " kind";
             EXPECT_EQ(parse_bool_cell(values[i].active), got[i].active)
                 << "tab " << tab << " active";
         }
@@ -965,16 +965,16 @@ public:
         for (const FindCriteriaString& value : values) {
             ui::FindCriteria criteria;
             criteria.text = blank(value.text);
-            criteria.account = blank(value.account);
+            criteria.account = blank(value.account.value);
             if (!blank(value.datefrom).empty())
                 criteria.date_from = types::Date::from_iso(blank(value.datefrom));
             if (!blank(value.dateto).empty())
                 criteria.date_to = types::Date::from_iso(blank(value.dateto));
-            if (!blank(value.amountfrom).empty())
-                criteria.amount_from = Money(blank(value.amountfrom));
-            if (!blank(value.amountto).empty())
-                criteria.amount_to = Money(blank(value.amountto));
-            const std::string scope = blank(value.scope);
+            if (!blank(value.amountfrom.value).empty())
+                criteria.amount_from = Money(blank(value.amountfrom.value));
+            if (!blank(value.amountto.value).empty())
+                criteria.amount_to = Money(blank(value.amountto.value));
+            const std::string scope = blank(value.scope.value);
             if (!scope.empty()) {
                 const auto which = ui::find_scope_from(scope);
                 ASSERT_TRUE(which.has_value()) << "unknown find scope: " << scope;
@@ -1010,12 +1010,12 @@ public:
         ASSERT_EQ(values.size(), got.size()) << "number of find results";
         for (std::size_t i = 0; i < values.size(); ++i) {
             const FindResultRowString& want = values[i];
-            EXPECT_EQ(want.ref, got[i].ref) << "result " << i << " ref";
+            EXPECT_EQ(want.ref.value, got[i].ref) << "result " << i << " ref";
             EXPECT_EQ(want.date, got[i].date.iso()) << "result " << i << " date";
-            EXPECT_EQ(blank(want.payee), got[i].payee) << "result " << i << " payee";
-            EXPECT_EQ(want.account, got[i].account) << "result " << i << " account";
+            EXPECT_EQ(blank(want.payee.value), got[i].payee) << "result " << i << " payee";
+            EXPECT_EQ(want.account.value, got[i].account) << "result " << i << " account";
             EXPECT_EQ(blank(want.category), got[i].category) << "result " << i << " category";
-            EXPECT_EQ(Money(want.amount).cents(), got[i].amount.cents())
+            EXPECT_EQ(Money(want.amount.value).cents(), got[i].amount.cents())
                 << "result " << i << " amount";
         }
     }
@@ -1050,17 +1050,17 @@ public:
         for (const auto& value : values) {
             ledger::Transaction t;
             t.id = ledger::new_id();
-            t.ref = types::TransactionRef(value.ref);
+            t.ref = types::TransactionRef(value.ref.value);
             const auto on = types::Date::from_iso(value.date);
             if (on) t.date = *on;
-            t.payee = types::PayeeName(blank(value.payee));
-            t.check_no = types::CheckNumber(blank(value.checkno));
+            t.payee = types::PayeeName(blank(value.payee.value));
+            t.check_no = types::CheckNumber(blank(value.checkno.value));
             t.memo = blank(value.memo);
-            t.source_account = chart_.ref_for_path(blank(value.sourceaccount));
-            t.destination = chart_.ref_for_path(blank(value.destination));
-            t.amount = Money(value.amount);
-            if (value.cleared != DNCString && !value.cleared.empty())
-                t.cleared = types::cleared_status_from_string(value.cleared);
+            t.source_account = chart_.ref_for_path(blank(value.sourceaccount.value));
+            t.destination = chart_.ref_for_path(blank(value.destination.value));
+            t.amount = Money(value.amount.value);
+            if (value.cleared.value != DNCString && !value.cleared.value.empty())
+                t.cleared = types::cleared_status_from_string(value.cleared.value);
             transactions_.push_back(t);
         }
         rebuild_book();
@@ -1082,8 +1082,8 @@ public:
         for (const auto& value : values) {
             ledger::TransactionSplit s;
             s.transaction_id = owner;
-            s.destination = chart_.ref_for_path(blank(value.destination));
-            s.amount = Money(value.amount);
+            s.destination = chart_.ref_for_path(blank(value.destination.value));
+            s.amount = Money(value.amount.value);
             s.memo = blank(value.memo);
             splits_.push_back(s);
         }
@@ -1103,32 +1103,32 @@ public:
             const ledger::Transaction& made = got[i];
             const AcceptedTransactionString& want = values[i];
             const std::string where = "accepted transaction " + std::to_string(i + 1);
-            if (want.sourceaccount != DNCString)
-                EXPECT_EQ(blank(want.sourceaccount),
+            if (want.sourceaccount.value != DNCString)
+                EXPECT_EQ(blank(want.sourceaccount.value),
                           workspace().accounts().path_for_ref(made.source_account))
                     << where << " source account";
-            if (want.destination != DNCString)
-                EXPECT_EQ(blank(want.destination),
+            if (want.destination.value != DNCString)
+                EXPECT_EQ(blank(want.destination.value),
                           workspace().accounts().path_for_ref(made.destination))
                     << where << " destination";
-            if (want.amount != DNCString)
-                EXPECT_EQ(Money(want.amount).cents(), made.amount.cents()) << where << " amount";
-            if (want.identifier != DNCString)
-                EXPECT_EQ(blank(want.identifier),
+            if (want.amount.value != DNCString)
+                EXPECT_EQ(Money(want.amount.value).cents(), made.amount.cents()) << where << " amount";
+            if (want.identifier.value != DNCString)
+                EXPECT_EQ(blank(want.identifier.value),
                           made.import_ids.empty() ? std::string()
                                                   : made.import_ids.front().id)
                     << where << " identifier";
-            if (want.source != DNCString && !made.import_ids.empty())
-                EXPECT_EQ(want.source, types::to_string(made.import_ids.front().source))
+            if (want.source.value != DNCString && !made.import_ids.empty())
+                EXPECT_EQ(want.source.value, types::to_string(made.import_ids.front().source))
                     << where << " source";
             if (want.rawname != DNCString)
                 EXPECT_EQ(blank(want.rawname), made.raw_name) << where << " raw name";
             if (want.memo != DNCString)
                 EXPECT_EQ(blank(want.memo), made.memo) << where << " memo";
-            if (want.checkno != DNCString)
-                EXPECT_EQ(blank(want.checkno), made.check_no.value()) << where << " check number";
-            if (want.cleared != DNCString && !want.cleared.empty())
-                EXPECT_EQ(want.cleared, types::to_string(made.cleared)) << where << " cleared";
+            if (want.checkno.value != DNCString)
+                EXPECT_EQ(blank(want.checkno.value), made.check_no.value()) << where << " check number";
+            if (want.cleared.value != DNCString && !want.cleared.value.empty())
+                EXPECT_EQ(want.cleared.value, types::to_string(made.cleared)) << where << " cleared";
         }
     }
 
@@ -1153,14 +1153,14 @@ public:
         for (const RegisterEntryString& value : values) {
             reg::BlankLine line;
             if (const auto on = types::Date::from_iso(value.date)) line.date = *on;
-            line.payee = blank(value.payee);
-            line.check_no = blank(value.checkno);
-            line.category = blank(value.category);
-            line.payment = Money(value.payment);
-            line.deposit = Money(value.deposit);
+            line.payee = blank(value.payee.value);
+            line.check_no = blank(value.checkno.value);
+            line.category = blank(value.category.value);
+            line.payment = Money(value.payment.value);
+            line.deposit = Money(value.deposit.value);
             line.memo = blank(value.memo);
             const reg::Committed done = reg::commit(
-                line, value.account, ledger::transaction_count(transactions_), &chart_);
+                line, value.account.value, ledger::transaction_count(transactions_), &chart_);
             ASSERT_TRUE(done.committed) << done.reason;
             transactions_.push_back(done.transaction);
             if (done.is_transfer) transactions_.push_back(done.other_side);
@@ -1197,7 +1197,7 @@ public:
     void when_import_file_chosen(const std::vector<ImportFileChosenString>& values) {
         for (const auto& value : values)
             import_refusal_ =
-                workspace().choose_import_file(value.filename, blank(value.accountinfile));
+                workspace().choose_import_file(value.filename, blank(value.accountinfile.value));
     }
 
     void then_import_confirmation_is(const std::vector<ImportConfirmationString>& values) {
@@ -1206,9 +1206,9 @@ public:
             EXPECT_EQ(parse_bool_cell(value.shown), got.shown) << "shown";
             if (!dnc(value.filename))
                 EXPECT_EQ(blank(value.filename), got.file_name) << "file name";
-            if (!dnc(value.account)) EXPECT_EQ(blank(value.account), got.account) << "account";
-            if (!dnc(value.source))
-                EXPECT_EQ(value.source, importing::to_string(got.source)) << "source";
+            if (!dnc(value.account.value)) EXPECT_EQ(blank(value.account.value), got.account) << "account";
+            if (!dnc(value.source.value))
+                EXPECT_EQ(value.source.value, importing::to_string(got.source)) << "source";
         }
     }
 
@@ -1223,7 +1223,7 @@ public:
     void when_import_confirmed() { workspace().confirm_import(file_rows_); }
 
     void when_import_confirmed_into(const std::vector<AccountSelectString>& values) {
-        for (const auto& value : values) workspace().confirm_import_into(value.path, file_rows_);
+        for (const auto& value : values) workspace().confirm_import_into(value.path.value, file_rows_);
     }
 
     void when_import_confirmation_cancelled() { workspace().cancel_import_confirmation(); }
@@ -1259,11 +1259,11 @@ public:
             const std::vector<ImportTargetProposalString>& values) {
         for (const auto& value : values) {
             const importing::Proposal p = importing::propose(
-                blank(value.accountinfile), blank(value.fromname), blank(value.activetab));
-            EXPECT_EQ(blank(value.proposed), p.account)
-                << value.format << " file proposing into " << value.activetab;
-            EXPECT_EQ(value.source, importing::to_string(p.source))
-                << "where " << blank(value.proposed) << " came from";
+                blank(value.accountinfile.value), blank(value.fromname.value), blank(value.activetab.value));
+            EXPECT_EQ(blank(value.proposed.value), p.account)
+                << value.format.value << " file proposing into " << value.activetab.value;
+            EXPECT_EQ(value.source.value, importing::to_string(p.source))
+                << "where " << blank(value.proposed.value) << " came from";
         }
     }
 
@@ -1276,7 +1276,7 @@ public:
     void given_import_claims_are(const std::vector<ImportReviewClaimString>& values) {
         claims_.clear();
         for (const auto& value : values)
-            claims_.push_back(std::make_pair(std::stoi(value.line), value.ref));
+            claims_.push_back(std::make_pair(std::stoi(value.line), value.ref.value));
     }
 
     void claim_onto(std::vector<ui::ReviewRow>* rows) {
@@ -1318,24 +1318,24 @@ public:
         for (std::size_t i = 0; i < values.size(); ++i) {
             const auto& value = values[i];
             const ui::DuplicateRow& got = look_.rows[i];
-            EXPECT_EQ(value.ref, got.ref) << "transaction " << i + 1;
+            EXPECT_EQ(value.ref.value, got.ref) << "transaction " << i + 1;
             EXPECT_EQ(value.date, got.date.iso()) << got.ref << " date";
-            EXPECT_EQ(blank(value.payee), got.payee) << got.ref << " payee";
-            EXPECT_EQ(blank(value.account), got.account) << got.ref << " account";
-            EXPECT_EQ(blank(value.category), got.category) << got.ref << " category";
-            EXPECT_EQ(Money(value.amount).cents(), got.amount.cents()) << got.ref << " amount";
-            EXPECT_EQ(blank(value.checkno), got.check_no) << got.ref << " check number";
-            EXPECT_EQ(value.cleared, types::to_string(got.cleared)) << got.ref << " cleared";
+            EXPECT_EQ(blank(value.payee.value), got.payee) << got.ref << " payee";
+            EXPECT_EQ(blank(value.account.value), got.account) << got.ref << " account";
+            EXPECT_EQ(blank(value.category.value), got.category) << got.ref << " category";
+            EXPECT_EQ(Money(value.amount.value).cents(), got.amount.cents()) << got.ref << " amount";
+            EXPECT_EQ(blank(value.checkno.value), got.check_no) << got.ref << " check number";
+            EXPECT_EQ(value.cleared.value, types::to_string(got.cleared)) << got.ref << " cleared";
         }
     }
 
     void examples_businessrule_what_the_menu_on_an_import_row_offers(
             const std::vector<DuplicateMenuRuleString>& values) {
         for (const auto& value : values) {
-            a_review_of_one_row(value.disposition);
+            a_review_of_one_row(value.disposition.value);
             const std::vector<ui::MenuEntry> got = workspace().review_menu_items();
-            ASSERT_EQ(1u, got.size()) << value.disposition << " menu";
-            EXPECT_EQ(blank(value.item), got.front().item) << value.disposition;
+            ASSERT_EQ(1u, got.size()) << value.disposition.value << " menu";
+            EXPECT_EQ(blank(value.item), got.front().item) << value.disposition.value;
             EXPECT_EQ(parse_bool_cell(value.enabled), got.front().enabled)
                 << got.front().item << " enabled";
         }

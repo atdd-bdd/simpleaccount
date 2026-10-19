@@ -141,7 +141,7 @@ public:
             << "number of report rows. Got:" << "\n" << listing();
         for (std::size_t i = 0; i < values.size(); ++i) {
             const reports::Row& got = report_.rows[i];
-            EXPECT_EQ(values[i].account, got.account) << "row " << i;
+            EXPECT_EQ(values[i].account.value, got.account) << "row " << i;
             EXPECT_EQ(std::stoi(values[i].level), got.level) << got.account << " level";
             EXPECT_EQ(Money(values[i].amount).cents(), got.amount.cents())
                 << got.account << " amount";
@@ -205,23 +205,23 @@ private:
         one.name = value.name;
         if (value.hasheader != DNCString && !value.hasheader.empty())
             one.has_header = parse_bool_cell(value.hasheader);
-        if (value.delimiter != DNCString && !value.delimiter.empty())
+        if (value.delimiter.value != DNCString && !value.delimiter.value.empty())
             one.delimiter = value.delimiter;
         if (value.skiprows != DNCString && !value.skiprows.empty())
             one.skip_rows = std::stoi(value.skiprows);
         one.date_column = blank(value.datecolumn);
-        if (value.dateorder != DNCString && !value.dateorder.empty())
+        if (value.dateorder.value != DNCString && !value.dateorder.value.empty())
             one.date_order = types::date_order_from_string(value.dateorder);
         one.payee_column = blank(value.payeecolumn);
         one.memo_column = blank(value.memocolumn);
         one.check_column = blank(value.checkcolumn);
         one.category_column = blank(value.categorycolumn);
-        if (value.amountstyle != DNCString && !value.amountstyle.empty())
+        if (value.amountstyle.value != DNCString && !value.amountstyle.value.empty())
             one.amount_style = csv::amount_style_from_string(value.amountstyle);
         one.amount_column = blank(value.amountcolumn);
         one.debit_column = blank(value.debitcolumn);
         one.credit_column = blank(value.creditcolumn);
-        if (value.outwardsign != DNCString && !value.outwardsign.empty())
+        if (value.outwardsign.value != DNCString && !value.outwardsign.value.empty())
             one.outward_sign = csv::outward_sign_from_string(value.outwardsign);
         return one;
     }

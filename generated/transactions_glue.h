@@ -188,14 +188,14 @@ public:
             // because Ref is a device of these tables and the register has
             // no such thing to type in.
             const ledger::Transaction* t =
-                value.ref == DNCString ? (transactions_.empty() ? nullptr
+                value.ref.value == DNCString ? (transactions_.empty() ? nullptr
                                                                 : &transactions_.back())
                                        : find_by_ref(value.ref);
             ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
             TransactionString got = as_string(*t);
             // Compared by value, not by text: in_register() adds a
             // thousands separator a table cell may not have written.
-            if (value.amount != DNCString &&
+            if (value.amount.value != DNCString &&
                 Money(value.amount).cents() == Money(got.amount).cents())
                 got.amount = value.amount;
             EXPECT_EQ(value, got) << "wanted " << value.to_string()
@@ -225,10 +225,10 @@ public:
         for (const auto& value : values) {
             const chart::Account* a = chart_.find(value.account);
             ASSERT_NE(nullptr, a) << "no account " << value.account;
-            if (value.rawbalance != DNCString)
+            if (value.rawbalance.value != DNCString)
                 EXPECT_EQ(Money(value.rawbalance).cents(), book_.raw_balance(value.account).cents())
                     << value.account << " raw -- " << value.notes;
-            if (value.displaybalance != DNCString)
+            if (value.displaybalance.value != DNCString)
                 EXPECT_EQ(Money(value.displaybalance).cents(),
                           book_.display_balance(value.account, a->type).cents())
                     << value.account << " display -- " << value.notes;
@@ -252,7 +252,7 @@ public:
     void then_entries_offered_are(const std::vector<OfferedEntryString>& values) {
         ASSERT_EQ(values.size(), offered_.size()) << "entries offered";
         for (std::size_t i = 0; i < values.size(); ++i) {
-            EXPECT_EQ(values[i].ref, offered_[i].ref) << "entry " << i;
+            EXPECT_EQ(values[i].ref.value, offered_[i].ref) << "entry " << i;
             EXPECT_EQ(values[i].date, offered_[i].date.iso()) << "entry " << i << " date";
             EXPECT_EQ(blank(values[i].payee), offered_[i].payee) << "entry " << i << " payee";
             EXPECT_EQ(Money(values[i].amount).cents(), offered_[i].amount.cents())
@@ -321,12 +321,12 @@ public:
         for (const auto& value : values) {
             const RegisterEntryToTransactionTyped t =
                 RegisterEntryToTransactionTyped::from_string_struct(value);
-            const Money payment{t.payment};
-            const Money deposit{t.deposit};
+            const Money payment{t.payment.text};
+            const Money deposit{t.deposit.text};
             // One amount now, not two: the deposit less the payment, carried
             // against the register's own account. The destination takes the
             // opposite of it by construction, so there is nothing else to check.
-            EXPECT_EQ(Money(t.amount).cents(),
+            EXPECT_EQ(Money(t.amount.text).cents(),
                       ledger::account_amount_of(payment, deposit).cents()) << t.notes;
         }
     }
@@ -336,9 +336,9 @@ public:
         for (const auto& value : values) {
             const UncategorizedChoiceTyped t =
                 UncategorizedChoiceTyped::from_string_struct(value);
-            EXPECT_EQ(t.otheraccount,
-                      ledger::uncategorized_for(Money(t.knownamount)).value())
-                << t.knownamount << " -- " << t.notes;
+            EXPECT_EQ(t.otheraccount.text,
+                      ledger::uncategorized_for(Money(t.knownamount.text)).value())
+                << t.knownamount.text << " -- " << t.notes;
         }
     }
 
@@ -432,7 +432,7 @@ private:
         t.source_account = chart_.ref_for_path(blank(value.sourceaccount));
         t.destination = chart_.ref_for_path(blank(value.destination));
         t.amount = Money(value.amount);
-        if (value.cleared != DNCString && !value.cleared.empty())
+        if (value.cleared.value != DNCString && !value.cleared.value.empty())
             t.cleared = types::cleared_status_from_string(value.cleared);
         return t;
     }
@@ -540,7 +540,7 @@ public:
         for (const auto& value : values) {
             int n = 0;
             for (const ledger::Transaction& t : transactions_)
-                if (chart_.path_for_ref(t.source_account) == value.account) ++n;
+                if (chart_.path_for_ref(t.source_account) == value.account.value) ++n;
             EXPECT_EQ(std::stoi(value.count), n) << value.account;
         }
     }
@@ -619,10 +619,10 @@ public:
             // two rows belong together, and a register entry is committed
             // without the scenario naming one.
             const ledger::Transaction* t =
-                value.ref == DNCString ? &transactions_[i] : find_by_ref(value.ref);
+                value.ref.value == DNCString ? &transactions_[i] : find_by_ref(value.ref.value);
             ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
             TransactionString got = as_string(*t);
-            if (value.amount != DNCString &&
+            if (value.amount.value != DNCString &&
                 Money(value.amount).cents() == Money(got.amount).cents())
                 got.amount = value.amount;
             EXPECT_EQ(value, got) << "wanted " << value.to_string()

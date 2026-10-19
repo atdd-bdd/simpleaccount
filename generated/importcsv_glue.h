@@ -261,7 +261,7 @@ public:
             EXPECT_EQ(blank(values[i].memo), row.memo) << "row " << i << " memo";
             EXPECT_EQ(blank(values[i].checkno), row.check_no) << "row " << i << " check";
             EXPECT_EQ(blank(values[i].category), row.category) << "row " << i << " category";
-            if (values[i].amount != DNCString)
+            if (values[i].amount.value != DNCString)
                 EXPECT_EQ(Money(values[i].amount), row.amount) << "row " << i << " amount";
         }
     }
@@ -329,8 +329,8 @@ public:
         for (const auto& value : values) {
             const chart::Account* a = chart_.find(value.path);
             ASSERT_NE(nullptr, a) << value.path << " was not created";
-            if (value.type != DNCString)
-                EXPECT_EQ(value.type, types::to_string(a->type)) << value.path << " type";
+            if (value.type.value != DNCString)
+                EXPECT_EQ(value.type.value, types::to_string(a->type)) << value.path.value << " type";
         }
     }
 
@@ -446,7 +446,7 @@ public:
             const auto found = csv::field_for_heading(value.normalised);
             ASSERT_TRUE(found.has_value())
                 << value.normalised << " is in the rule and not in the table";
-            EXPECT_EQ(value.field, csv::to_string(*found)) << value.normalised;
+            EXPECT_EQ(value.field.value, csv::to_string(*found)) << value.normalised;
             // Already normalised in the rule, so normalising again changes
             // nothing -- which is what makes the table readable as data.
             EXPECT_EQ(value.normalised, csv::normalise_heading(value.normalised))
@@ -505,7 +505,7 @@ public:
     void examples_businessrule_how_a_csv_row_is_tested_against_what_is_already_there(
             const std::vector<CsvDispositionRuleString>& values) {
         for (const auto& value : values)
-            EXPECT_EQ(value.disposition,
+            EXPECT_EQ(value.disposition.value,
                       ofx::to_string(disposition_reaching_test(value.test)))
                 << "test " << value.test << ": " << value.condition;
     }
@@ -670,12 +670,12 @@ private:
         one.name = value.name;
         if (value.hasheader != DNCString && !value.hasheader.empty())
             one.has_header = parse_bool_cell(value.hasheader);
-        if (value.delimiter != DNCString && !value.delimiter.empty())
+        if (value.delimiter.value != DNCString && !value.delimiter.value.empty())
             one.delimiter = value.delimiter;
         if (value.skiprows != DNCString && !value.skiprows.empty())
             one.skip_rows = std::stoi(value.skiprows);
         one.date_column = blank(value.datecolumn);
-        if (value.dateorder != DNCString && !value.dateorder.empty())
+        if (value.dateorder.value != DNCString && !value.dateorder.value.empty())
             one.date_order = types::date_order_from_string(value.dateorder);
         one.payee_column = blank(value.payeecolumn);
         one.memo_column = blank(value.memocolumn);
@@ -685,12 +685,12 @@ private:
         // stated in a table cannot say which column it is. One recognised by its
         // signature can, because the alias table places it. Worth raising: a
         // profile ought to be able to name every column of its file.
-        if (value.amountstyle != DNCString && !value.amountstyle.empty())
+        if (value.amountstyle.value != DNCString && !value.amountstyle.value.empty())
             one.amount_style = csv::amount_style_from_string(value.amountstyle);
         one.amount_column = blank(value.amountcolumn);
         one.debit_column = blank(value.debitcolumn);
         one.credit_column = blank(value.creditcolumn);
-        if (value.outwardsign != DNCString && !value.outwardsign.empty())
+        if (value.outwardsign.value != DNCString && !value.outwardsign.value.empty())
             one.outward_sign = csv::outward_sign_from_string(value.outwardsign);
         return one;
     }
@@ -801,7 +801,7 @@ public:
             t.source_account = chart_.ref_for_path(blank(value.sourceaccount));
             t.destination = chart_.ref_for_path(blank(value.destination));
             t.amount = Money(value.amount);
-            if (value.cleared != DNCString && !value.cleared.empty())
+            if (value.cleared.value != DNCString && !value.cleared.value.empty())
                 t.cleared = types::cleared_status_from_string(value.cleared);
             transactions_.push_back(t);
         }
@@ -816,26 +816,26 @@ public:
             const ledger::Transaction& got = transactions_[i];
             const TransactionString& want = values[i];
             const std::string where = "transaction " + std::to_string(i + 1);
-            if (want.ref != DNCString)
-                EXPECT_EQ(want.ref, got.ref.value()) << where << " ref";
+            if (want.ref.value != DNCString)
+                EXPECT_EQ(want.ref.value, got.ref.value()) << where << " ref";
             if (want.date != DNCString)
                 EXPECT_EQ(want.date, got.date.iso()) << where << " date";
-            if (want.payee != DNCString)
+            if (want.payee.value != DNCString)
                 EXPECT_EQ(blank(want.payee), got.payee.value()) << where << " payee";
-            if (want.checkno != DNCString)
+            if (want.checkno.value != DNCString)
                 EXPECT_EQ(blank(want.checkno), got.check_no.value()) << where << " check number";
             if (want.memo != DNCString)
                 EXPECT_EQ(blank(want.memo), got.memo) << where << " memo";
-            if (want.sourceaccount != DNCString)
+            if (want.sourceaccount.value != DNCString)
                 EXPECT_EQ(blank(want.sourceaccount), chart_.path_for_ref(got.source_account))
                     << where << " source account";
-            if (want.destination != DNCString)
+            if (want.destination.value != DNCString)
                 EXPECT_EQ(blank(want.destination), chart_.path_for_ref(got.destination))
                     << where << " destination";
-            if (want.amount != DNCString)
+            if (want.amount.value != DNCString)
                 EXPECT_EQ(Money(want.amount).cents(), got.amount.cents()) << where << " amount";
-            if (want.cleared != DNCString && !want.cleared.empty())
-                EXPECT_EQ(want.cleared, types::to_string(got.cleared)) << where << " cleared";
+            if (want.cleared.value != DNCString && !want.cleared.value.empty())
+                EXPECT_EQ(want.cleared.value, types::to_string(got.cleared)) << where << " cleared";
         }
     }
 

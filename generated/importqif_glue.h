@@ -110,7 +110,7 @@ public:
         ASSERT_EQ(values.size(), result_.records.size()) << "number of records read";
         for (std::size_t i = 0; i < values.size(); ++i) {
             const qif::ReadRecord& got = result_.records[i];
-            EXPECT_EQ(values[i].account, got.account) << "record " << i << " account";
+            EXPECT_EQ(values[i].account.value, got.account) << "record " << i << " account";
             EXPECT_EQ(values[i].date, got.date.iso()) << "record " << i << " date";
             EXPECT_EQ(Money(values[i].amount).cents(), got.amount.cents())
                 << "record " << i << " amount";
@@ -125,9 +125,9 @@ public:
             << "number of accounts created";
         for (std::size_t i = 0; i < values.size(); ++i) {
             const chart::Account& a = result_.accounts_created[i];
-            EXPECT_EQ(values[i].path, a.path.value()) << "account " << i;
-            if (values[i].type != DNCString)
-                EXPECT_EQ(values[i].type, types::to_string(a.type)) << a.path.value() << " type";
+            EXPECT_EQ(values[i].path.value, a.path.value()) << "account " << i;
+            if (values[i].type.value != DNCString)
+                EXPECT_EQ(values[i].type.value, types::to_string(a.type)) << a.path.value() << " type";
             if (values[i].placeholder != DNCString)
                 EXPECT_EQ(parse_bool_cell(values[i].placeholder), a.placeholder)
                     << a.path.value() << " placeholder";
@@ -197,7 +197,7 @@ public:
     void then_report_rows_are(const std::vector<ReportRowString>& values) {
         ASSERT_EQ(values.size(), report_.rows.size()) << "number of report rows";
         for (std::size_t i = 0; i < values.size(); ++i) {
-            EXPECT_EQ(values[i].account, report_.rows[i].account) << "row " << i;
+            EXPECT_EQ(values[i].account.value, report_.rows[i].account) << "row " << i;
             EXPECT_EQ(Money(values[i].amount).cents(), report_.rows[i].amount.cents())
                 << report_.rows[i].account;
         }
@@ -210,7 +210,7 @@ public:
             EXPECT_EQ(std::stoi(value.secondpartover12), got.second_part_over_12) << "second";
             const auto proven = got.proven();
             ASSERT_TRUE(proven.has_value()) << "the file proves no order";
-            EXPECT_EQ(value.proven, types::to_string(*proven));
+            EXPECT_EQ(value.proven.value, types::to_string(*proven));
         }
     }
 
@@ -226,7 +226,7 @@ public:
             const std::vector<SectionHeaderString>& values) {
         for (const auto& value : values) {
             const SectionHeaderTyped t = SectionHeaderTyped::from_string_struct(value);
-            EXPECT_EQ(t.section, qif::to_string(qif::section_of(t.line)))
+            EXPECT_EQ(t.section.text, qif::to_string(qif::section_of(t.line)))
                 << "[" << t.line << "] -- " << t.notes;
         }
     }
@@ -235,7 +235,7 @@ public:
             const std::vector<ClearedMappingString>& values) {
         for (const auto& value : values) {
             const ClearedMappingTyped t = ClearedMappingTyped::from_string_struct(value);
-            EXPECT_EQ(t.cleared, types::to_string(qif::cleared_of(t.text)))
+            EXPECT_EQ(t.cleared.text, types::to_string(qif::cleared_of(t.text)))
                 << "[" << t.text << "] -- " << t.notes;
         }
     }
@@ -245,9 +245,9 @@ public:
         for (const auto& value : values) {
             const QifDateParseTyped t = QifDateParseTyped::from_string_struct(value);
             const auto got = dates::parse_qif(t.text,
-                                              types::date_order_from_string(t.dateorder));
+                                              types::date_order_from_string(t.dateorder.text));
             EXPECT_EQ(t.valid, got.has_value())
-                << "[" << t.text << "] read as " << t.dateorder
+                << "[" << t.text << "] read as " << t.dateorder.text
                 << (t.notes.empty() ? "" : " -- " + t.notes);
             if (t.valid && got) EXPECT_EQ(t.date, got->iso()) << "[" << t.text << "]";
         }
@@ -260,7 +260,7 @@ public:
             const auto got = qif::parse_amount(t.text, t.decimalcomma);
             EXPECT_EQ(t.valid, got.has_value()) << "[" << t.text << "] -- " << t.notes;
             if (t.valid && got)
-                EXPECT_EQ(Money(t.amount).cents(), got->cents()) << "[" << t.text << "]";
+                EXPECT_EQ(Money(t.amount.text).cents(), got->cents()) << "[" << t.text << "]";
         }
     }
 
@@ -268,7 +268,7 @@ public:
             const std::vector<SplitLineSignString>& values) {
         for (const auto& value : values) {
             const SplitLineSignTyped t = SplitLineSignTyped::from_string_struct(value);
-            EXPECT_EQ(Money(t.t).cents(), Money(t.accountposting).cents()) << t.notes;
+            EXPECT_EQ(Money(t.t.text).cents(), Money(t.accountposting.text).cents()) << t.notes;
             const std::string dollars[3] = {value.dollar1, value.dollar2, value.dollar3};
             const std::string postings[3] = {value.posting1, value.posting2, value.posting3};
             for (int i = 0; i < 3; ++i) {
@@ -287,9 +287,9 @@ public:
                 QifAccountMappingTyped::from_string_struct(value);
             const auto mapping = qif::account_mapping_of(t.qiftype);
             ASSERT_TRUE(mapping.has_value()) << "unmapped QIF type: " << t.qiftype;
-            EXPECT_EQ(t.accounttype, types::to_string(mapping->type)) << t.qiftype;
-            EXPECT_EQ(t.root, mapping->root) << t.qiftype;
-            EXPECT_EQ(t.examplepath, qif::account_path_of(t.qiftype, t.examplename))
+            EXPECT_EQ(t.accounttype.text, types::to_string(mapping->type)) << t.qiftype;
+            EXPECT_EQ(t.root.text, mapping->root) << t.qiftype;
+            EXPECT_EQ(t.examplepath.text, qif::account_path_of(t.qiftype, t.examplename.text))
                 << t.qiftype;
         }
     }
@@ -300,11 +300,11 @@ public:
             const SplitRatioTyped t = SplitRatioTyped::from_string_struct(value);
             const double ratio = qif::split_ratio_of(t.qfield);
             EXPECT_DOUBLE_EQ(t.ratio, ratio) << "Q of " << t.qfield << " -- " << t.notes;
-            const double held_before = std::stod(t.heldbefore);
-            const double price_before = std::stod(t.pricebefore);
-            EXPECT_DOUBLE_EQ(std::stod(t.heldafter),
+            const double held_before = std::stod(t.heldbefore.text);
+            const double price_before = std::stod(t.pricebefore.text);
+            EXPECT_DOUBLE_EQ(std::stod(t.heldafter.text),
                              qif::shares_after_split(held_before, ratio)) << t.notes;
-            EXPECT_DOUBLE_EQ(std::stod(t.priceafter),
+            EXPECT_DOUBLE_EQ(std::stod(t.priceafter.text),
                              qif::price_after_split(price_before, ratio)) << t.notes;
             EXPECT_DOUBLE_EQ(held_before * price_before,
                              qif::shares_after_split(held_before, ratio) *
@@ -484,9 +484,9 @@ public:
             const UnpaidInvoiceString& want = values[i];
             const qif::UncollectedInvoice& got = result_.uncollected[i];
             EXPECT_EQ(want.date, got.date.iso()) << "date " << i;
-            EXPECT_EQ(want.payee, got.payee) << "payee " << i;
+            EXPECT_EQ(want.payee.value, got.payee) << "payee " << i;
             EXPECT_EQ(Money(want.amount).cents(), got.amount.cents()) << "amount " << i;
-            EXPECT_EQ(want.category, got.category)
+            EXPECT_EQ(want.category.value, got.category)
                 << "category " << i;
             EXPECT_EQ(want.note, got.note) << "note " << i;
         }
@@ -584,7 +584,7 @@ public:
             const std::vector<CategoryMappingString>& values) {
         for (const auto& value : values) {
             const CategoryMappingTyped t = CategoryMappingTyped::from_string_struct(value);
-            std::string text = "!Type:Bank\nD01/15/2024\nT" + value.amount + "\n";
+            std::string text = "!Type:Bank\nD01/15/2024\nT" + value.amount.value + "\n";
             if (!t.categorytext.empty()) text += "L" + t.categorytext + "\n";
             text += "^\n";
             if (t.inlist != "Absent") {
@@ -599,7 +599,7 @@ public:
             ASSERT_EQ(1u, out.transactions.size());
             const ledger::Transaction& made = out.transactions.front();
             ASSERT_FALSE(chart::is_split(made.destination));
-            EXPECT_EQ(t.accountpath, out.accounts.path_for_ref(made.destination)) << t.categorytext;
+            EXPECT_EQ(t.accountpath.text, out.accounts.path_for_ref(made.destination)) << t.categorytext;
             const bool guessed = std::any_of(
                 out.notes.begin(), out.notes.end(),
                 [](const qif::Note& n) { return n.kind == "CategoryGuessed"; });
@@ -952,30 +952,30 @@ public:
             const ledger::Transaction& got = result_.transactions[i];
             const TransactionString& want = values[i];
             const std::string where = "transaction " + std::to_string(i + 1);
-            if (want.ref != DNCString)
-                EXPECT_EQ(want.ref, got.ref.value()) << where << " ref";
+            if (want.ref.value != DNCString)
+                EXPECT_EQ(want.ref.value, got.ref.value()) << where << " ref";
             if (want.date != DNCString)
                 EXPECT_EQ(want.date, got.date.iso()) << where << " date";
-            if (want.payee != DNCString)
+            if (want.payee.value != DNCString)
                 EXPECT_EQ(blank(want.payee), got.payee.value()) << where << " payee";
-            if (want.checkno != DNCString)
+            if (want.checkno.value != DNCString)
                 EXPECT_EQ(blank(want.checkno), got.check_no.value()) << where << " check number";
             if (want.memo != DNCString)
                 EXPECT_EQ(blank(want.memo), got.memo) << where << " memo";
             if (want.tag != DNCString)
                 EXPECT_EQ(blank(want.tag), got.tag) << where << " tag";
-            if (want.sourceaccount != DNCString)
+            if (want.sourceaccount.value != DNCString)
                 EXPECT_EQ(blank(want.sourceaccount),
                           result_.accounts.path_for_ref(got.source_account))
                     << where << " source account";
-            if (want.destination != DNCString)
+            if (want.destination.value != DNCString)
                 EXPECT_EQ(blank(want.destination),
                           result_.accounts.path_for_ref(got.destination))
                     << where << " destination";
-            if (want.amount != DNCString)
+            if (want.amount.value != DNCString)
                 EXPECT_EQ(Money(want.amount).cents(), got.amount.cents()) << where << " amount";
-            if (want.cleared != DNCString && !want.cleared.empty())
-                EXPECT_EQ(want.cleared, types::to_string(got.cleared)) << where << " cleared";
+            if (want.cleared.value != DNCString && !want.cleared.value.empty())
+                EXPECT_EQ(want.cleared.value, types::to_string(got.cleared)) << where << " cleared";
         }
     }
 

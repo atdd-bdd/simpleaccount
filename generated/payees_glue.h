@@ -150,8 +150,8 @@ public:
         ASSERT_FALSE(values.empty());
         const PayeeRuleString& want = values.front();
         EXPECT_EQ(want.pattern, offered_rule_.pattern) << "pattern";
-        EXPECT_EQ(want.matchtype, payees::to_string(offered_rule_.match_type)) << "match type";
-        EXPECT_EQ(want.payee, offered_rule_.payee) << "payee";
+        EXPECT_EQ(want.matchtype.value, payees::to_string(offered_rule_.match_type)) << "match type";
+        EXPECT_EQ(want.payee.value, offered_rule_.payee) << "payee";
         EXPECT_EQ(blank(want.category), offered_rule_.category) << "category";
         EXPECT_EQ(parse_bool_cell(want.enabled), offered_rule_.enabled) << "enabled";
     }
@@ -182,7 +182,7 @@ public:
         const std::vector<payees::PayeeListEntry> got = payees::payee_list(transactions_);
         ASSERT_EQ(values.size(), got.size()) << "number of payees";
         for (std::size_t i = 0; i < values.size(); ++i) {
-            EXPECT_EQ(values[i].payee, got[i].payee) << "payee " << i;
+            EXPECT_EQ(values[i].payee.value, got[i].payee) << "payee " << i;
             EXPECT_EQ(values[i].lastused, got[i].last_used.iso()) << got[i].payee << " last used";
             EXPECT_EQ(std::stoi(values[i].count), got[i].count) << got[i].payee << " count";
         }
@@ -452,7 +452,7 @@ public:
             t.source_account = chart_.ref_for_path(blank(value.sourceaccount));
             t.destination = chart_.ref_for_path(blank(value.destination));
             t.amount = Money(value.amount);
-            if (value.cleared != DNCString && !value.cleared.empty())
+            if (value.cleared.value != DNCString && !value.cleared.value.empty())
                 t.cleared = types::cleared_status_from_string(value.cleared);
             transactions_.push_back(t);
         }
@@ -467,26 +467,26 @@ public:
             const ledger::Transaction& got = transactions_[i];
             const TransactionString& want = values[i];
             const std::string where = "transaction " + std::to_string(i + 1);
-            if (want.ref != DNCString)
-                EXPECT_EQ(want.ref, got.ref.value()) << where << " ref";
+            if (want.ref.value != DNCString)
+                EXPECT_EQ(want.ref.value, got.ref.value()) << where << " ref";
             if (want.date != DNCString)
                 EXPECT_EQ(want.date, got.date.iso()) << where << " date";
-            if (want.payee != DNCString)
+            if (want.payee.value != DNCString)
                 EXPECT_EQ(blank(want.payee), got.payee.value()) << where << " payee";
-            if (want.checkno != DNCString)
+            if (want.checkno.value != DNCString)
                 EXPECT_EQ(blank(want.checkno), got.check_no.value()) << where << " check number";
             if (want.memo != DNCString)
                 EXPECT_EQ(blank(want.memo), got.memo) << where << " memo";
-            if (want.sourceaccount != DNCString)
+            if (want.sourceaccount.value != DNCString)
                 EXPECT_EQ(blank(want.sourceaccount), chart_.path_for_ref(got.source_account))
                     << where << " source account";
-            if (want.destination != DNCString)
+            if (want.destination.value != DNCString)
                 EXPECT_EQ(blank(want.destination), chart_.path_for_ref(got.destination))
                     << where << " destination";
-            if (want.amount != DNCString)
+            if (want.amount.value != DNCString)
                 EXPECT_EQ(Money(want.amount).cents(), got.amount.cents()) << where << " amount";
-            if (want.cleared != DNCString && !want.cleared.empty())
-                EXPECT_EQ(want.cleared, types::to_string(got.cleared)) << where << " cleared";
+            if (want.cleared.value != DNCString && !want.cleared.value.empty())
+                EXPECT_EQ(want.cleared.value, types::to_string(got.cleared)) << where << " cleared";
         }
     }
 
@@ -494,15 +494,15 @@ public:
         for (const auto& value : values) {
             const ledger::Transaction* t = find_by_ref(value.ref);
             ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
-            if (value.payee != DNCString)
+            if (value.payee.value != DNCString)
                 EXPECT_EQ(blank(value.payee), t->payee.value()) << value.ref << " payee";
-            if (value.destination != DNCString)
+            if (value.destination.value != DNCString)
                 EXPECT_EQ(blank(value.destination), chart_.path_for_ref(t->destination))
                     << value.ref << " destination";
-            if (value.sourceaccount != DNCString)
+            if (value.sourceaccount.value != DNCString)
                 EXPECT_EQ(blank(value.sourceaccount), chart_.path_for_ref(t->source_account))
                     << value.ref << " source account";
-            if (value.amount != DNCString)
+            if (value.amount.value != DNCString)
                 EXPECT_EQ(Money(value.amount).cents(), t->amount.cents())
                     << value.ref << " amount";
         }

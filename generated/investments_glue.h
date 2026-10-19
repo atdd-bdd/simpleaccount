@@ -284,10 +284,10 @@ public:
         for (const auto& value : values) {
             const chart::Account* a = chart_.find(value.account);
             ASSERT_NE(nullptr, a) << "no account " << value.account;
-            if (value.rawbalance != DNCString)
+            if (value.rawbalance.value != DNCString)
                 EXPECT_EQ(Money(value.rawbalance).cents(), ledger_.raw_balance(value.account).cents())
                     << value.account << " raw -- " << value.notes;
-            if (value.displaybalance != DNCString)
+            if (value.displaybalance.value != DNCString)
                 EXPECT_EQ(Money(value.displaybalance).cents(),
                           ledger_.display_balance(value.account, a->type).cents())
                     << value.account << " display -- " << value.notes;
@@ -341,7 +341,7 @@ public:
         ASSERT_EQ(values.size(), report_.rows.size()) << "number of report rows";
         for (std::size_t i = 0; i < values.size(); ++i) {
             const reports::Row& got = report_.rows[i];
-            EXPECT_EQ(values[i].account, got.account) << "row " << i;
+            EXPECT_EQ(values[i].account.value, got.account) << "row " << i;
             EXPECT_EQ(std::stoi(values[i].level), got.level) << got.account << " level";
             EXPECT_EQ(Money(values[i].amount).cents(), got.amount.cents())
                 << got.account << " amount";
@@ -366,18 +366,18 @@ public:
         for (const auto& value : values) {
             const HoldingAccountNameTyped t =
                 HoldingAccountNameTyped::from_string_struct(value);
-            EXPECT_EQ(t.accountname,
-                      holdings::account_name_for(t.securityname, t.symbol))
-                << t.securityname;
+            EXPECT_EQ(t.accountname.text,
+                      holdings::account_name_for(t.securityname.text, t.symbol.text))
+                << t.securityname.text;
         }
     }
 
     void examples_businessrule_the_value_of_a_holding_is_its_shares_times_its_price(const std::vector<HoldingValueString>& values) {
         for (const auto& value : values) {
             const HoldingValueTyped t = HoldingValueTyped::from_string_struct(value);
-            EXPECT_EQ(Money(t.value).cents(),
-                      holdings::value_of(std::stod(t.shares), std::stod(t.price)).cents())
-                << t.shares << " at " << t.price << " -- " << t.notes;
+            EXPECT_EQ(Money(t.value.text).cents(),
+                      holdings::value_of(std::stod(t.shares.text), std::stod(t.price.text)).cents())
+                << t.shares.text << " at " << t.price.text << " -- " << t.notes;
         }
     }
 
@@ -385,11 +385,11 @@ public:
         for (const auto& value : values) {
             const AveragePriceTyped t = AveragePriceTyped::from_string_struct(value);
             const holdings::AveragedHolding got = holdings::after_buying(
-                std::stod(t.heldshares), Money(t.heldvalue),
-                std::stod(t.boughtshares), std::stod(t.boughtprice));
-            EXPECT_DOUBLE_EQ(std::stod(t.newshares), got.shares) << t.notes;
-            EXPECT_EQ(Money(t.newvalue).cents(), got.value.cents()) << t.notes;
-            EXPECT_DOUBLE_EQ(std::stod(t.newprice), got.price) << t.notes;
+                std::stod(t.heldshares.text), Money(t.heldvalue.text),
+                std::stod(t.boughtshares.text), std::stod(t.boughtprice.text));
+            EXPECT_DOUBLE_EQ(std::stod(t.newshares.text), got.shares) << t.notes;
+            EXPECT_EQ(Money(t.newvalue.text).cents(), got.value.cents()) << t.notes;
+            EXPECT_DOUBLE_EQ(std::stod(t.newprice.text), got.price) << t.notes;
         }
     }
 
@@ -489,7 +489,7 @@ public:
             t.source_account = chart_.ref_for_path(blank(value.sourceaccount));
             t.destination = chart_.ref_for_path(blank(value.destination));
             t.amount = Money(value.amount);
-            if (value.cleared != DNCString && !value.cleared.empty())
+            if (value.cleared.value != DNCString && !value.cleared.value.empty())
                 t.cleared = types::cleared_status_from_string(value.cleared);
             transactions_.push_back(t);
             // The balances in this file are read from the ledger, so both
@@ -508,17 +508,17 @@ public:
             const ledger::Transaction& got = last_made_[i];
             const TransactionString& want = values[i];
             const std::string where = "transaction " + std::to_string(i + 1);
-            if (want.ref != DNCString)
-                EXPECT_EQ(want.ref, got.ref.value()) << where << " ref";
+            if (want.ref.value != DNCString)
+                EXPECT_EQ(want.ref.value, got.ref.value()) << where << " ref";
             if (want.date != DNCString)
                 EXPECT_EQ(want.date, got.date.iso()) << where << " date";
-            if (want.sourceaccount != DNCString)
+            if (want.sourceaccount.value != DNCString)
                 EXPECT_EQ(blank(want.sourceaccount), chart_.path_for_ref(got.source_account))
                     << where << " source account";
-            if (want.destination != DNCString)
+            if (want.destination.value != DNCString)
                 EXPECT_EQ(blank(want.destination), chart_.path_for_ref(got.destination))
                     << where << " destination";
-            if (want.amount != DNCString)
+            if (want.amount.value != DNCString)
                 EXPECT_EQ(Money(want.amount).cents(), got.amount.cents()) << where << " amount";
         }
     }

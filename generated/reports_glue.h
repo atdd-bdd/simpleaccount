@@ -142,7 +142,7 @@ public:
         ASSERT_EQ(values.size(), report_.rows.size()) << "number of report rows";
         for (std::size_t i = 0; i < values.size(); ++i) {
             const reports::Row& got = report_.rows[i];
-            EXPECT_EQ(values[i].account, got.account) << "row " << i;
+            EXPECT_EQ(values[i].account.value, got.account) << "row " << i;
             EXPECT_EQ(std::stoi(values[i].level), got.level) << got.account << " level";
             EXPECT_EQ(Money(values[i].amount).cents(), got.amount.cents())
                 << got.account << " amount";
@@ -169,7 +169,7 @@ public:
             reports::payee_report(chart_, transactions_, splits_, spec_, only);
         ASSERT_EQ(values.size(), got.size()) << "number of payee rows";
         for (std::size_t i = 0; i < values.size(); ++i) {
-            EXPECT_EQ(values[i].payee, got[i].payee) << "row " << i;
+            EXPECT_EQ(values[i].payee.value, got[i].payee) << "row " << i;
             EXPECT_EQ(Money(values[i].amount).cents(), got[i].amount.cents())
                 << got[i].payee << " amount";
             EXPECT_EQ(std::stoi(values[i].count), got[i].count) << got[i].payee << " count";
@@ -196,9 +196,9 @@ public:
         }
         ASSERT_EQ(values.size(), got.size()) << "number of transactions behind the figure";
         for (std::size_t i = 0; i < values.size(); ++i) {
-            EXPECT_EQ(values[i].ref, got[i].ref) << "row " << i;
+            EXPECT_EQ(values[i].ref.value, got[i].ref.value) << "row " << i;
             EXPECT_EQ(values[i].date, got[i].date) << "row " << i;
-            EXPECT_EQ(values[i].account, got[i].account) << "row " << i;
+            EXPECT_EQ(values[i].account.value, got[i].account.value) << "row " << i;
             EXPECT_EQ(Money(values[i].amount).cents(), Money(got[i].amount).cents())
                 << "row " << i;
         }
@@ -282,7 +282,7 @@ public:
         ASSERT_EQ(values.size(), report_.rows.size()) << "number of rows";
         for (std::size_t i = 0; i < values.size(); ++i) {
             const reports::Row& row = report_.rows[i];
-            EXPECT_EQ(values[i].account, row.account) << "row " << i;
+            EXPECT_EQ(values[i].account.value, row.account) << "row " << i;
             EXPECT_EQ(std::stoi(values[i].level), row.level) << row.account << " level";
 
             Money years[3];
@@ -332,7 +332,7 @@ public:
         for (const auto& value : values) {
             const reports::Row* row = nullptr;
             for (const reports::Row& one : report_.rows)
-                if (one.account == value.account) { row = &one; break; }
+                if (one.account == value.account.value) { row = &one; break; }
             ASSERT_NE(nullptr, row) << "no row for " << value.account;
             EXPECT_EQ(Money(value.total).cents(), row->amount.cents())
                 << value.account << " total";
@@ -420,11 +420,11 @@ public:
             put("Assets:Checking", "Bank");
             put("Assets:Brokerage", "Investment");
             put("Assets:Ken IRA", "Investment");
-            put(value.category, value.category.rfind("Income", 0) == 0 ? "Income" : "Expense");
+            put(value.category.value, value.category.value.rfind("Income", 0) == 0 ? "Income" : "Expense");
 
             // The category takes a credit for income and a debit for an expense,
             // and the real accounts take the other side.
-            const bool is_income = value.category.rfind("Income", 0) == 0;
+            const bool is_income = value.category.value.rfind("Income", 0) == 0;
             const Money hundred{"100.00"};
             const types::Date on{2024, 5, 1};
             book_ = ledger::Ledger();
@@ -515,15 +515,15 @@ public:
             const reports::DetailLine& got = lines_[i];
             const std::string where = "line " + std::to_string(i + 1) + " (" +
                                       got.account + ")";
-            EXPECT_EQ(want.kind, reports::to_string(got.kind)) << where << " kind";
-            EXPECT_EQ(want.account, got.account) << where;
+            EXPECT_EQ(want.kind.value, reports::to_string(got.kind)) << where << " kind";
+            EXPECT_EQ(want.account.value, got.account) << where;
             EXPECT_EQ(std::stoi(want.level), got.level) << where << " level";
             // A date and a payee belong to a transaction line and to nothing
             // else: a category carries neither.
             const bool entry = got.kind == reports::LineKind::Transaction;
             EXPECT_EQ(want.date, entry ? got.date.iso() : std::string())
                 << where << " date";
-            EXPECT_EQ(want.payee, entry ? got.payee : std::string())
+            EXPECT_EQ(want.payee.value, entry ? got.payee : std::string())
                 << where << " payee";
             expect_column(want.each, got.has_each, got.each, where + " each");
             expect_column(want.amount, got.has_amount, got.amount, where + " amount");
@@ -603,7 +603,7 @@ public:
         for (std::size_t i = 0; i < values.size(); ++i) {
             const reports::BalanceSheetRow& got = balance_sheet_.rows[i];
             const std::string where = "row " + std::to_string(i);
-            EXPECT_EQ(values[i].section, reports::to_string(got.section)) << where << " section";
+            EXPECT_EQ(values[i].section.value, reports::to_string(got.section)) << where << " section";
             EXPECT_EQ(blank(values[i].group), got.group) << where << " group";
             EXPECT_EQ(blank(values[i].account), got.account) << where << " account";
             EXPECT_EQ(std::stoi(values[i].level), got.level) << where << " level";

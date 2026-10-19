@@ -151,13 +151,13 @@ public:
             const auto on = types::Date::from_iso(value.date);
             if (on.has_value()) blank_.date = *on;
         }
-        if (value.payee != DNCString) blank_.payee = blank(value.payee);
+        if (value.payee.value != DNCString) blank_.payee = blank(value.payee.value);
         if (value.category != DNCString) blank_.category = blank(value.category);
         if (value.memo != DNCString) blank_.memo = blank(value.memo);
-        if (value.checkno != DNCString) blank_.check_no = blank(value.checkno);
-        if (value.payment != DNCString && !value.payment.empty())
+        if (value.checkno.value != DNCString) blank_.check_no = blank(value.checkno.value);
+        if (value.payment.value != DNCString && !value.payment.value.empty())
             blank_.payment = Money(value.payment);
-        if (value.deposit != DNCString && !value.deposit.empty())
+        if (value.deposit.value != DNCString && !value.deposit.value.empty())
             blank_.deposit = Money(value.deposit);
         filled_ = true;
     }
@@ -189,13 +189,13 @@ public:
             got.cleared = types::to_string(lines_[i].cleared);
             // Amounts through Money, so a figure written either way is the same
             // figure, and a column the table did not name stays unasserted.
-            if (values[i].payment != DNCString)
+            if (values[i].payment.value != DNCString)
                 EXPECT_EQ(Money(values[i].payment), lines_[i].payment)
                     << "line " << i << " payment";
-            if (values[i].deposit != DNCString)
+            if (values[i].deposit.value != DNCString)
                 EXPECT_EQ(Money(values[i].deposit), lines_[i].deposit)
                     << "line " << i << " deposit";
-            if (values[i].balance != DNCString)
+            if (values[i].balance.value != DNCString)
                 EXPECT_EQ(Money(values[i].balance), lines_[i].balance)
                     << "line " << i << " balance";
             got.payment = values[i].payment;
@@ -212,9 +212,9 @@ public:
         RegisterLineString got = values.front();
         got.date = line.date.iso();
         got.payee = line.payee.empty() ? "none" : line.payee;
-        if (values.front().payment != DNCString)
+        if (values.front().payment.value != DNCString)
             EXPECT_EQ(Money(values.front().payment), line.payment) << "blank payment";
-        if (values.front().deposit != DNCString)
+        if (values.front().deposit.value != DNCString)
             EXPECT_EQ(Money(values.front().deposit), line.deposit) << "blank deposit";
         got.payment = values.front().payment;
         got.deposit = values.front().deposit;
@@ -238,7 +238,7 @@ public:
             SplitLineShownString got = values[i];
             got.category = split_[i].category;
             got.memo = split_[i].memo.empty() ? "none" : split_[i].memo;
-            if (values[i].amount != DNCString)
+            if (values[i].amount.value != DNCString)
                 EXPECT_EQ(Money(values[i].amount), split_[i].amount)
                     << "split line " << i << " amount";
             got.amount = values[i].amount;
@@ -252,10 +252,10 @@ public:
         TodayMarkerString got = values.front();
         got.afterref = got_marker.after_ref.empty() ? "none" : got_marker.after_ref;
         got.futurecount = std::to_string(got_marker.future_count);
-        if (values.front().balancetoday != DNCString)
+        if (values.front().balancetoday.value != DNCString)
             EXPECT_EQ(Money(values.front().balancetoday), got_marker.balance_today)
                 << "the balance today";
-        if (values.front().futuretotal != DNCString)
+        if (values.front().futuretotal.value != DNCString)
             EXPECT_EQ(Money(values.front().futuretotal), got_marker.future_total)
                 << "the total below the line";
         got.balancetoday = values.front().balancetoday;
@@ -283,7 +283,7 @@ public:
         ASSERT_FALSE(values.empty());
         OpeningLineString got = values.front();
         got.asat = filtered_.opening_as_at.iso();
-        if (values.front().balance != DNCString)
+        if (values.front().balance.value != DNCString)
             EXPECT_EQ(Money(values.front().balance), filtered_.opening)
                 << "the opening balance of the range";
         got.balance = values.front().balance;
@@ -491,7 +491,7 @@ public:
             t.source_account = chart_.ref_for_path(blank(value.sourceaccount));
             t.destination = chart_.ref_for_path(blank(value.destination));
             t.amount = Money(value.amount);
-            if (value.cleared != DNCString && !value.cleared.empty())
+            if (value.cleared.value != DNCString && !value.cleared.value.empty())
                 t.cleared = types::cleared_status_from_string(value.cleared);
             transactions_.push_back(t);
         }

@@ -129,9 +129,9 @@ public:
             const std::vector<AccountClassOfString>& values) {
         for (const auto& value : values) {
             const AccountClassOfTyped t = AccountClassOfTyped::from_string_struct(value);
-            const types::AccountType type = types::account_type_from_string(t.accounttype);
-            EXPECT_EQ(t.accountclass, types::to_string(types::class_of(type)))
-                << t.accounttype;
+            const types::AccountType type = types::account_type_from_string(t.accounttype.text);
+            EXPECT_EQ(t.accountclass.text, types::to_string(types::class_of(type)))
+                << t.accounttype.text;
         }
     }
 public:
@@ -151,16 +151,16 @@ public:
             const std::vector<BalanceSideOfString>& values) {
         for (const auto& value : values) {
             const BalanceSideOfTyped t = BalanceSideOfTyped::from_string_struct(value);
-            const types::AccountType type = types::account_type_from_string(t.accounttype);
-            EXPECT_EQ(t.balanceside, types::to_string(types::balance_side(type)))
-                << t.accounttype << " side";
+            const types::AccountType type = types::account_type_from_string(t.accounttype.text);
+            EXPECT_EQ(t.balanceside.text, types::to_string(types::balance_side(type)))
+                << t.accounttype.text << " side";
             EXPECT_EQ(t.shownonthebalancesheet, types::on_balance_sheet(type))
-                << t.accounttype << " shown";
+                << t.accounttype.text << " shown";
             // And the sign follows the side, which is the whole reason a type
             // that is never on the sheet still has one.
             EXPECT_EQ(types::balance_side(type) == types::BalanceSide::Asset ? 1 : -1,
                       types::display_sign(type))
-                << t.accounttype << " display sign";
+                << t.accounttype.text << " display sign";
         }
     }
 
@@ -177,15 +177,15 @@ public:
         for (const auto& value : values) {
             const DefaultTypeOfTyped t = DefaultTypeOfTyped::from_string_struct(value);
             const types::AccountGroup group =
-                types::account_group_from_string(t.accountgroup);
-            EXPECT_EQ(t.accounttype,
+                types::account_group_from_string(t.accountgroup.text);
+            EXPECT_EQ(t.accounttype.text,
                       types::to_string(types::default_type_for(group)))
-                << t.accountgroup;
+                << t.accountgroup.text;
             // And what it starts as is in the group it was chosen from, which
             // is the one thing that would make the dialog lie.
-            EXPECT_EQ(t.accountgroup,
+            EXPECT_EQ(t.accountgroup.text,
                       types::to_string(types::group_of(types::default_type_for(group))))
-                << t.accountgroup << " starts outside its own group";
+                << t.accountgroup.text << " starts outside its own group";
         }
     }
 
