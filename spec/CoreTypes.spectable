@@ -2,7 +2,7 @@ Specification CoreTypes
 
 Description The types every other specification in SimpleAccount is written in.
 Details Declared once here because the analyzer treats a spec folder as one
-# namespace; the other files refer to these names without redeclaring them.
+\ namespace; the other files refer to these names without redeclaring them.
 
 # ---------------------------------------------------------------------------
 # Money
@@ -11,8 +11,8 @@ Details Declared once here because the analyzer treats a spec folder as one
 DataType Money
 Description A signed amount in the currency of the book.
 Details Two decimal places, held as whole cents so that sums are exact.
-# A leading dollar sign and thousands separators may be written and are
-# accepted on input; the stored value is the number.
+\ A leading dollar sign and thousands separators may be written and are
+\ accepted on input; the stored value is the number.
 Uses Decimal
 Examples: ValidValues
 | Value     | IsValid | Notes                              |
@@ -29,7 +29,7 @@ Examples: ValidValues
 BusinessRule Money is held as whole cents
 Description Parsing text into a stored integer number of cents.
 Details Rounding is not applied: a third decimal place is rejected rather than
-# rounded, so that no cent is ever invented by an import.
+\ rounded, so that no cent is ever invented by an import.
 Examples: MoneyParse
 | Text      | Cents  | Notes                              |
 | 0.00      | 0      |                                    |
@@ -50,7 +50,7 @@ Attributes MoneyParse
 BusinessRule Money formats for display
 Description How a stored amount is written back out.
 Details Negative amounts show a leading minus in the register and parentheses
-# in reports, which is the convention each place is read in.
+\ in reports, which is the convention each place is read in.
 Examples: MoneyFormat
 | Cents  | InRegister | InReport | Notes                    |
 | 0      | 0.00     | 0.00     |                            |
@@ -72,8 +72,8 @@ Attributes MoneyFormat
 DataType AccountName
 Description The name of one account, being one segment of its path.
 Details A colon separates the segments of a path, so a name may not contain one.
-# Blanks around a name are trimmed before it is checked, so they can never
-# make a name invalid; " Checking" and "Checking" are the same name.
+\ Blanks around a name are trimmed before it is checked, so they can never
+\ make a name invalid; " Checking" and "Checking" are the same name.
 Uses Text
 Examples: ValidValues
 | Value         | IsValid | Notes                          |
@@ -112,9 +112,9 @@ Examples: ValidValues
 DataType Symbol
 Description The ticker symbol of a security, where one is known.
 Details May be empty. A QIF export carries a security name and often no symbol
-# at all: of the 44 securities in the business file in testdata, not one
-# has a symbol. A holding is identified by its SecurityName, and the
-# symbol is an optional shorthand. See Investments.
+\ at all: of the 44 securities in the business file in testdata, not one
+\ has a symbol. A holding is identified by its SecurityName, and the
+\ symbol is an optional shorthand. See Investments.
 Uses Text
 Examples: ValidValues
 | Value  | IsValid | Notes                               |
@@ -127,7 +127,7 @@ Examples: ValidValues
 DataType SecurityName
 Description The name of a security, which is what a QIF export always gives.
 Details Up to 76 characters in the business file in testdata, and all but one
-# of the 44 names contain spaces.
+\ of the 44 names contain spaces.
 Uses Text
 Examples: ValidValues
 | Value                          | IsValid | Notes                          |
@@ -139,7 +139,7 @@ Examples: ValidValues
 DataType Shares
 Description A number of shares or units held.
 Details Six decimal places, which is what fund statements report.
-# Never negative: this release does not model short positions.
+\ Never negative: this release does not model short positions.
 Uses Decimal
 Examples: ValidValues
 | Value      | IsValid | Notes                         |
@@ -185,21 +185,21 @@ Examples: ValidValues
 
 DataType AccountType
 Description What kind of account a node in the tree is: the type a person
-# chooses, within the group it is chosen from.
+\ chooses, within the group it is chosen from.
 Details The group is not stored anywhere. It follows from the type, so an
-# account filed once cannot drift out of the heading it is listed under;
-# see the group rule in UserInterface.
-#
-# Income and Expense are what Quicken calls categories, and modelling
-# them as accounts is what makes every transaction balance. Equity holds
-# the opening balances that start the book. None of the three is in a
-# group, because the account list does not show them.
-#
-# The names Bank, Asset, Liability and Investment were the whole of this
-# list before it was split into groups. They are still read, so that a
-# book written by an earlier build still opens, and are never written
-# again: Bank reads as Checking, Asset as OtherAsset, Liability as
-# OtherDebt and Investment as Brokerage.
+\ account filed once cannot drift out of the heading it is listed under;
+\ see the group rule in UserInterface.
+\
+\ Income and Expense are what Quicken calls categories, and modelling
+\ them as accounts is what makes every transaction balance. Equity holds
+\ the opening balances that start the book. None of the three is in a
+\ group, because the account list does not show them.
+\
+\ The names Bank, Asset, Liability and Investment were the whole of this
+\ list before it was split into groups. They are still read, so that a
+\ book written by an earlier build still opens, and are never written
+\ again: Bank reads as Checking, Asset as OtherAsset, Liability as
+\ OtherDebt and Investment as Brokerage.
 Examples: EnumerationValues
 | Value              | Notes                                                   |
 | Checking           | A current account, written on and paid into             |
@@ -236,7 +236,7 @@ Examples: EnumerationValues
 
 BusinessRule Account class follows from account type
 Description Which types are real and which are nominal. Every type that is in
-# a group is real, and the three that are in none are the categories.
+\ a group is real, and the three that are in none are the categories.
 Examples: AccountClassOf
 | AccountType        | AccountClass | Notes                             |
 | Checking           | Real         |                                   |
@@ -271,18 +271,18 @@ Attributes AccountClassOf
 
 BusinessRule The type an account starts as when its group is chosen
 Description Making an account is choosing one of the seven groups, not one of
-# twenty-three types. Banking is the question a person can answer
-# while opening an account; whether it is a checking or a savings
-# account is a detail of the same answer, and it is settled afterwards
-# in the account's own dialog.
+\ twenty-three types. Banking is the question a person can answer
+\ while opening an account; whether it is a checking or a savings
+\ account is a detail of the same answer, and it is settled afterwards
+\ in the account's own dialog.
 Details So each group has the type an account takes when only the group has
-# been said. Six of the seven have an obvious one -- the plainest member,
-# or the only one anybody opens by hand.
-#
-# Business is the exception and is worth knowing about: a receivable and
-# a payable are opposite sides of the sheet and neither is the plain one,
-# so an account made under Business starts as a receivable and a payable
-# has to be changed afterwards.
+\ been said. Six of the seven have an obvious one -- the plainest member,
+\ or the only one anybody opens by hand.
+\
+\ Business is the exception and is worth knowing about: a receivable and
+\ a payable are opposite sides of the sheet and neither is the plain one,
+\ so an account made under Business starts as a receivable and a payable
+\ has to be changed afterwards.
 Examples: DefaultTypeOf
 | AccountGroup     | AccountType        | Notes                              |
 | Banking          | Checking           | Savings is chosen afterwards       |
@@ -302,8 +302,8 @@ Attributes DefaultTypeOf
 DataType BalanceSide
 Description Which column of a balance sheet an account belongs in.
 Details Asked only by the balance sheet. The account list says nothing about it
-# -- the words Asset and Liability are not headings there, the seven
-# groups are.
+\ -- the words Asset and Liability are not headings there, the seven
+\ groups are.
 Examples: EnumerationValues
 | Value     | Notes            |
 | Asset     | What is owned    |
@@ -311,17 +311,17 @@ Examples: EnumerationValues
 
 BusinessRule Which side of a balance sheet a type is on, and whether it is shown
 Description Every real type has a side, because the side is also what says
-# which way round the account reads on screen. Being shown on the
-# balance sheet is a separate question, and the Transfer group
-# answers it differently from every other group.
+\ which way round the account reads on screen. Being shown on the
+\ balance sheet is a separate question, and the Transfer group
+\ answers it differently from every other group.
 Details A transfer account holds money on its way between two accounts that
-# are both already on the sheet, so counting it would count the same
-# money twice. It still has a side -- in reads as money held, out as
-# money owed -- which is what gives it a display sign.
-#
-# Business is the group that proves the side has to follow the type and
-# not the group: a receivable is owed to the business and a payable is
-# owed by it, and they sit in one group.
+\ are both already on the sheet, so counting it would count the same
+\ money twice. It still has a side -- in reads as money held, out as
+\ money owed -- which is what gives it a display sign.
+\
+\ Business is the group that proves the side has to follow the type and
+\ not the group: a receivable is owed to the business and a payable is
+\ owed by it, and they sit in one group.
 Examples: BalanceSideOf
 | AccountType        | BalanceSide | ShownOnTheBalanceSheet |
 | Checking           | Asset       | true                   |
@@ -354,7 +354,7 @@ Attributes BalanceSideOf
 DataType ClearedStatus
 Description How far a transaction has got through the records of the bank.
 Details Held on the transaction rather than the transaction, because a transfer
-# between two accounts clears on each statement separately.
+\ between two accounts clears on each statement separately.
 Examples: EnumerationValues
 | Value      | Notes                                           |
 | Uncleared  | Entered here, not yet seen at the bank          |
@@ -366,12 +366,12 @@ Examples: EnumerationValues
 # ---------------------------------------------------------------------------
 
 Description A step that names a single value still needs an attribute set, so
-# that the generated code has a struct to carry it. These are those
-# sets: one attribute each, named for what the step selects.
+\ that the generated code has a struct to carry it. These are those
+\ sets: one attribute each, named for what the step selects.
 Details The C++ generator emits a typed and a string struct for an Attributes
-# or an Entity block and not for a bare DataType, so a step written as
-# ": AccountPath EveryCell" analyses cleanly and then generates glue that
-# will not compile. These wrappers are the fix.
+\ or an Entity block and not for a bare DataType, so a step written as
+\ ": AccountPath EveryCell" analyses cleanly and then generates glue that
+\ will not compile. These wrappers are the fix.
 
 Attributes AccountSelect
 | Attribute | Type        | Default |

@@ -1,25 +1,25 @@
 Specification UserInterface
 
 Description The windows the program is worked in: a list of accounts, the
-# register of the account selected in it, and an optional second pane
-# that shows either another account or an import waiting to be reviewed.
+\ register of the account selected in it, and an optional second pane
+\ that shows either another account or an import waiting to be reviewed.
 Details
-# The shape is three regions. On the left, every account, grouped by the
-# kind of thing it is. On the right, the register of whichever account is
-# selected. The right may be split in two, so that two accounts can be
-# read at once -- or so that an import can be looked over beside the
-# register it is about to change.
-#
-# What is specified here is what the windows show and what selecting
-# things does. Pixels and fonts are not, and neither is the width a
-# column starts at: those are not worth agreeing in a table, and
-# changing them should not fail a test.
-#
-# Column widths used to be on that list and are not any more. What a
-# column is wide by default is still nobody's business here, but a width
-# a person set by dragging is: it has to outlast the register it was set
-# in and outlast the session, and that is behaviour rather than
-# appearance. See the width of a column, at the end of this file.
+\ The shape is three regions. On the left, every account, grouped by the
+\ kind of thing it is. On the right, the register of whichever account is
+\ selected. The right may be split in two, so that two accounts can be
+\ read at once -- or so that an import can be looked over beside the
+\ register it is about to change.
+\
+\ What is specified here is what the windows show and what selecting
+\ things does. Pixels and fonts are not, and neither is the width a
+\ column starts at: those are not worth agreeing in a table, and
+\ changing them should not fail a test.
+\
+\ Column widths used to be on that list and are not any more. What a
+\ column is wide by default is still nobody's business here, but a width
+\ a person set by dragging is: it has to outlast the register it was set
+\ in and outlast the session, and that is behaviour rather than
+\ appearance. See the width of a column, at the end of this file.
 
 # ---------------------------------------------------------------------------
 # The account list
@@ -27,11 +27,11 @@ Details
 
 DataType AccountGroup
 Description The headings the account list is divided into. One per kind of real
-# account, and the categories are not in the list at all: they are
-# reached through a report, not browsed.
+\ account, and the categories are not in the list at all: they are
+\ reached through a report, not browsed.
 Details The words Asset and Liability are not headings here. Which side of a
-# balance sheet an account is on is a different question, asked by the
-# balance sheet and nowhere else; see the balance-side rule in CoreTypes.
+\ balance sheet an account is on is a different question, asked by the
+\ balance sheet and nowhere else; see the balance-side rule in CoreTypes.
 Examples: EnumerationValues
 | Value            | Notes                                      |
 | Banking          | Checking, savings and cash                 |
@@ -45,12 +45,12 @@ Examples: EnumerationValues
 BusinessRule Which group an account is listed under and how the heading reads
 Description Taken from the account type, so nothing has to be filed by hand.
 Details The nominal types have no group: Income, Expense and Equity are
-# categories and the account list does not show them. Their heading is
-# given here as an empty cell rather than a word, because there is none.
-#
-# The heading on the page is given beside the name because two of them
-# carry an ampersand and a space, and a name in this specification is an
-# identifier.
+\ categories and the account list does not show them. Their heading is
+\ given here as an empty cell rather than a word, because there is none.
+\
+\ The heading on the page is given beside the name because two of them
+\ carry an ampersand and a space, and a name in this specification is an
+\ identifier.
 Examples: GroupOfType
 | AccountType        | AccountGroup     | Heading          | Listed |
 | Checking           | Banking          | Banking          | true   |
@@ -90,12 +90,12 @@ Attributes GroupOfType
 Attributes AccountListRow
 Description One line of the account list.
 Details A group heading carries the total of the accounts under it and names no
-# account; an account names no group. The groups are listed in the order
-# they are declared, and a group with nothing in it is left out rather
-# than shown empty.
-#
-# Indent is the depth on the page: a group heading is 0, an account under
-# it is 1, and a child of that account is 2.
+\ account; an account names no group. The groups are listed in the order
+\ they are declared, and a group with nothing in it is left out rather
+\ than shown empty.
+\
+\ Indent is the depth on the page: a group heading is 0, an account under
+\ it is 1, and a child of that account is 2.
 | Attribute | Type        | Default |
 | Group     | Text        | none    |
 | Account   | AccountPath | none    |
@@ -122,9 +122,9 @@ Given transactions are : Transaction
 
 Scenario The account list groups the real accounts and totals each group
 Description Each balance is the display balance, so a card reads as what is
-# owed. A group heading carries the total of what is under it.
-# The categories are absent: Expenses:Groceries and Income:Salary
-# have transactions and are not accounts to browse.
+\ owed. A group heading carries the total of what is under it.
+\ The categories are absent: Expenses:Groceries and Income:Salary
+\ have transactions and are not accounts to browse.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account list shown
@@ -139,10 +139,10 @@ Then account list rows are : AccountListRow
 
 Scenario Every group that has an account in it is a heading
 Description One heading per kind of account, in the order the groups are
-# declared, and nothing above them. A card is under Credit and a
-# mortgage under Loan & Debt; neither the word Asset nor the word
-# Liability is on the page, because the list is for reaching an
-# account and the balance sheet is where the two sides are read.
+\ declared, and nothing above them. A card is under Credit and a
+\ mortgage under Loan & Debt; neither the word Asset nor the word
+\ Liability is on the page, because the list is for reaching an
+\ account and the balance sheet is where the two sides are read.
 Given the chart of accounts is : ChartOfAccounts
 | Path                 | Type       | Placeholder |
 | Assets:Checking      | Checking   | false       |
@@ -181,7 +181,7 @@ Then account list rows are : AccountListRow
 
 Scenario A group with no accounts is not shown
 Description There is nothing under Investments, Assets or Liabilities in this
-# book, so those headings are left out rather than shown empty.
+\ book, so those headings are left out rather than shown empty.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account list shown
@@ -196,8 +196,8 @@ Attributes GroupShown
 
 Scenario A hidden account is left out until it is asked for
 Description Hiding an account is how it is got out of the way without losing its
-# history, so the list follows that. The total of the group follows
-# the list, so hiding an account changes what the heading says.
+\ history, so the list follows that. The total of the group follows
+\ the list, so hiding an account changes what the heading says.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder | Hidden |
 | Assets:Checking | Checking | false       | false  |
@@ -220,7 +220,7 @@ Then account list rows are : AccountListRow
 
 Scenario A placeholder is a line in the list with its subtree beneath it
 Description A placeholder takes no transactions of its own, so its balance is the
-# roll-up. It is shown because it is how a deep tree is navigated.
+\ roll-up. It is shown because it is how a deep tree is navigated.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type | Placeholder |
 | Assets:Brokerage        | Brokerage  | true  |
@@ -240,12 +240,12 @@ Then account list rows are : AccountListRow
 
 Scenario A legacy root is not a line of its own
 Description Assets and Liabilities were the only heading an account had before
-# groups existed, and adding an account still creates one as an
-# ordinary placeholder above it. Now that the group heading says the
-# same thing, that placeholder would say it twice -- Banking, then
-# Assets, then Checking -- so it has no line of its own. Its balance
-# still counts in the group heading above it, because the money is
-# still there; only the redundant line is gone.
+\ groups existed, and adding an account still creates one as an
+\ ordinary placeholder above it. Now that the group heading says the
+\ same thing, that placeholder would say it twice -- Banking, then
+\ Assets, then Checking -- so it has no line of its own. Its balance
+\ still counts in the group heading above it, because the money is
+\ still there; only the redundant line is gone.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder |
 | Assets          | Checking | true        |
@@ -281,9 +281,9 @@ Description What one pane of the right-hand side is showing.
 DataType PaneContent
 Description What a pane can show.
 Details An import under review and a find's results used to be a second kind
-# of pane, shown beside this one. They are a tab of the bottom panel
-# now, so a pane is always exactly one per open tab; see the bottom-panel
-# section below.
+\ of pane, shown beside this one. They are a tab of the bottom panel
+\ now, so a pane is always exactly one per open tab; see the bottom-panel
+\ section below.
 Examples: EnumerationValues
 | Value    | Notes                                                  |
 | Register | The transactions of one account                        |
@@ -307,9 +307,9 @@ Then register lines are : RegisterLine CompareOnly
 
 Scenario Selecting a placeholder shows everything beneath it
 Description A placeholder has no transactions of its own, so showing an empty
-# register would be useless. It shows the subtree, which is what a
-# reader of a brokerage account wants: the cash and the holdings
-# together.
+\ register would be useless. It shows the subtree, which is what a
+\ reader of a brokerage account wants: the cash and the holdings
+\ together.
 Given the chart of accounts is : ChartOfAccounts
 | Path                  | Type       | Placeholder |
 | Assets:Brokerage      | Brokerage  | true        |
@@ -329,8 +329,8 @@ Then register lines are : RegisterLine CompareOnly
 
 Scenario The other side of a transfer is named in the category column
 Description A transfer appears in both registers, and in each of them the
-# category column names the other account. It is one transaction seen
-# twice, not two.
+\ category column names the other account. It is one transaction seen
+\ twice, not two.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -348,39 +348,39 @@ Then register lines are : RegisterLine CompareOnly
 # ---------------------------------------------------------------------------
 
 Description A bar of tabs, each one a register or a report, and one of them is
-# the active tab.
+\ the active tab.
 Details Several things stay open at once because the work moves between them. A
-# card statement is reconciled against the card; the payment that
-# settles it is in the current account; whether it has cleared is
-# answered by looking at both. Two reports over two periods answer
-# whether a month was unusual. Closing one to open the other and back
-# again is the work a tab bar does away with.
-#
-# The active tab is where a transaction typed on the blank line goes,
-# without being asked about: the question "into which account" is
-# answered by what is in front of you. An import is the one thing that
-# does ask, because the file may not be the file you think it is and a
-# statement in the wrong account is expensive to undo. The active tab is
-# what it proposes when the file gives it nothing to go on; see where an
-# import is going is said before it goes there, below.
-#
-# One tab per account. Selecting an account already open returns to its
-# tab rather than opening a second: two tabs on one register would show
-# the same lines and leave which to believe an open question.
-#
-# Reports are the other way round. Asking for a report opens another tab
-# every time, because the reason to have two is to read two periods side
-# by side, and a report that replaced the one already open could not do
-# that.
-#
-# The import review is not a tab. It is the second pane, beside the
-# register it is about to change, and only while the import is waiting;
-# see the section below. A tab is something to come back to, and the
-# second pane is a comparison that lasts as long as the comparison does.
-#
-# Pane 1 is the tab area and its account is the active tab's, which is
-# why the scenarios here can speak of panes and of tabs at once without
-# the two disagreeing.
+\ card statement is reconciled against the card; the payment that
+\ settles it is in the current account; whether it has cleared is
+\ answered by looking at both. Two reports over two periods answer
+\ whether a month was unusual. Closing one to open the other and back
+\ again is the work a tab bar does away with.
+\
+\ The active tab is where a transaction typed on the blank line goes,
+\ without being asked about: the question "into which account" is
+\ answered by what is in front of you. An import is the one thing that
+\ does ask, because the file may not be the file you think it is and a
+\ statement in the wrong account is expensive to undo. The active tab is
+\ what it proposes when the file gives it nothing to go on; see where an
+\ import is going is said before it goes there, below.
+\
+\ One tab per account. Selecting an account already open returns to its
+\ tab rather than opening a second: two tabs on one register would show
+\ the same lines and leave which to believe an open question.
+\
+\ Reports are the other way round. Asking for a report opens another tab
+\ every time, because the reason to have two is to read two periods side
+\ by side, and a report that replaced the one already open could not do
+\ that.
+\
+\ The import review is not a tab. It is the second pane, beside the
+\ register it is about to change, and only while the import is waiting;
+\ see the section below. A tab is something to come back to, and the
+\ second pane is a comparison that lasts as long as the comparison does.
+\
+\ Pane 1 is the tab area and its account is the active tab's, which is
+\ why the scenarios here can speak of panes and of tabs at once without
+\ the two disagreeing.
 
 DataType TabKind
 Description What one tab holds.
@@ -392,10 +392,10 @@ Examples: EnumerationValues
 Attributes OpenTab
 Description One tab of the tab bar, in the order the tabs are shown.
 Details A register tab is named by the account's own name and not its path: a
-# tab is narrow, and the path is on the account list where there is room
-# for it. A report tab is named by the report; a second tab of the same
-# report has a 2 after it, and so on, because the period is shown on the
-# controls inside the tab where there is room to read it.
+\ tab is narrow, and the path is on the account list where there is room
+\ for it. A report tab is named by the report; a second tab of the same
+\ report has a 2 after it, and so on, because the period is shown on the
+\ controls inside the tab where there is room to read it.
 | Attribute | Type        | Default  |
 | Position  | Integer     | 1        |
 | Kind      | TabKind     | Register |
@@ -422,7 +422,7 @@ Then panes are : PaneState
 
 Scenario Selecting a second account leaves the first one open
 Description This is the whole point. The card and the current account are both
-# open and the eye moves between them.
+\ open and the eye moves between them.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -443,8 +443,8 @@ Then panes are : PaneState
 
 Scenario Selecting an account that is already open returns to its tab
 Description Not a second tab on the same register. Two tabs showing the same
-# lines would leave which of them to believe an open question, and
-# nothing would ever answer it.
+\ lines would leave which of them to believe an open question, and
+\ nothing would ever answer it.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -482,7 +482,7 @@ Then open tabs are : OpenTab
 
 Scenario Asking for the same report again opens a second tab
 Description Two periods side by side is the reason to have two, so a report
-# does not replace the one already open.
+\ does not replace the one already open.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run : ReportSpec Vertical
@@ -504,10 +504,10 @@ Then open tabs are : OpenTab
 
 Scenario Clicking an open tab makes it active, whatever kind it is
 Description A tab bar is clicked by position, not by what is on the tab, so
-# this is the step a click actually produces -- unlike selecting an
-# account, which is also how a tab gets opened in the first place.
-# Without it, clicking back to a report that lost focus has nothing
-# to tell the workspace, and the next redraw puts the register back.
+\ this is the step a click actually produces -- unlike selecting an
+\ account, which is also how a tab gets opened in the first place.
+\ Without it, clicking back to a report that lost focus has nothing
+\ to tell the workspace, and the next redraw puts the register back.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -533,7 +533,7 @@ Then open tabs are : OpenTab
 
 Scenario Closing the active tab moves to the one beside it
 Description The one to its right, or the one to its left when it was the last,
-# so that closing a tab always leaves something showing.
+\ so that closing a tab always leaves something showing.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -557,8 +557,8 @@ Then panes are : PaneState
 
 Scenario Closing another tab leaves the active one where it was
 Description Closing something that is not being read should not change what is
-# being read. The position shifts because a tab before it has gone;
-# the register showing does not.
+\ being read. The position shifts because a tab before it has gone;
+\ the register showing does not.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -600,15 +600,15 @@ Then panes are : PaneState
 
 Scenario Opening another book leaves none of the tabs of the one before
 Description A tab is a register of an account, and the accounts of the book now
-# open are not the accounts of the one that was -- a tab left over
-# from the book before names an account this one may not have, and a
-# report tab left over holds totals of transactions that are not in
-# it. So every tab goes when the book goes, whatever kind it is, and
-# the window is as it is when it first opens a book.
+\ open are not the accounts of the one that was -- a tab left over
+\ from the book before names an account this one may not have, and a
+\ report tab left over holds totals of transactions that are not in
+\ it. So every tab goes when the book goes, whatever kind it is, and
+\ the window is as it is when it first opens a book.
 Details Every other change hands the book over and leaves the tabs alone: a
-# transaction entered, a category changed, an import accepted. They are
-# changes to the book that is open, and what is being read is still
-# worth reading. Another book is the one case where it is not.
+\ transaction entered, a category changed, an import accepted. They are
+\ changes to the book that is open, and what is being read is still
+\ worth reading. Another book is the one case where it is not.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -631,10 +631,10 @@ Then panes are : PaneState
 
 Scenario An import with nothing else to go on goes into the active tab
 Description Whichever register is in front is what the confirmation proposes
-# when the file says nothing about itself and its name says nothing
-# either, which is the usual case and was the only case before there
-# was a dialog to say it in. The dialog itself is specified below;
-# here it has been confirmed and the review is open.
+\ when the file says nothing about itself and its name says nothing
+\ either, which is the usual case and was the only case before there
+\ was a dialog to say it in. The dialog itself is specified below;
+\ here it has been confirmed and the review is open.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -666,10 +666,10 @@ Then bottom panel tabs are : BottomPanelTabRow
 
 Scenario An import with nothing to go on and no register in front is refused
 Description There is no register to compare against, so there is nothing to
-# judge a proposed row by, and the file offered nothing of its own.
-# Said rather than guessed at: importing into whichever register
-# happened to be open last is how a statement ends up in the wrong
-# account.
+\ judge a proposed row by, and the file offered nothing of its own.
+\ Said rather than guessed at: importing into whichever register
+\ happened to be open last is how a statement ends up in the wrong
+\ account.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run : ReportSpec Vertical
@@ -693,45 +693,45 @@ Open the register this statement is for, then import into it.
 # ---------------------------------------------------------------------------
 
 Description A file chosen to import is not read into whichever register happens
-# to be in front. The window says which account it is about to put the
-# statement in, and waits for that to be confirmed.
+\ to be in front. The window says which account it is about to put the
+\ statement in, and waits for that to be confirmed.
 Details The account comes from the file wherever the file knows it. A QFX names
-# the institution and the account number it was downloaded for, and the
-# account of this book that carries that number is the answer, so what
-# is in front is beside the point. A CSV names nothing, so the name of
-# the file is all there is to read, and it usually carries the account or
-# its number because the bank wrote it. Neither is certain, which is why
-# it is confirmed rather than acted on.
-#
-# Where the file stated them, the bank id and the account number are
-# shown in the dialog alongside the account. They are the only part of
-# it that did not come from this program, and they are what a person
-# compares against the statement in their hand.
-#
-# When neither the file nor its name says anything, the register in front
-# is proposed, because that is nearly always what is meant -- it is the
-# statement being reconciled. What is new is that it is said before the
-# file is read rather than discovered after.
-#
-# A statement in the wrong account is expensive to undo. Every row of it
-# has to be found and deleted; worse, a row the import called a
-# duplicate of something in the wrong account was never brought in at
-# all, so the account it belonged in is short and nothing says so. One
-# dialog against that is cheap.
-#
-# The dialog is in front of the file, not after it: nothing is read, no
-# tab is opened and the bottom panel stays shut until it is confirmed.
-#
-# Confirming it does two things at once. The register of the account it
-# settled becomes the active tab -- opened if it was not open, brought
-# forward if it was -- and the rows of the file open in the panel
-# beneath that register. So the statement is read against the lines it
-# is about to join, which is the whole reason the review is a panel
-# under a register rather than a dialog of its own.
+\ the institution and the account number it was downloaded for, and the
+\ account of this book that carries that number is the answer, so what
+\ is in front is beside the point. A CSV names nothing, so the name of
+\ the file is all there is to read, and it usually carries the account or
+\ its number because the bank wrote it. Neither is certain, which is why
+\ it is confirmed rather than acted on.
+\
+\ Where the file stated them, the bank id and the account number are
+\ shown in the dialog alongside the account. They are the only part of
+\ it that did not come from this program, and they are what a person
+\ compares against the statement in their hand.
+\
+\ When neither the file nor its name says anything, the register in front
+\ is proposed, because that is nearly always what is meant -- it is the
+\ statement being reconciled. What is new is that it is said before the
+\ file is read rather than discovered after.
+\
+\ A statement in the wrong account is expensive to undo. Every row of it
+\ has to be found and deleted; worse, a row the import called a
+\ duplicate of something in the wrong account was never brought in at
+\ all, so the account it belonged in is short and nothing says so. One
+\ dialog against that is cheap.
+\
+\ The dialog is in front of the file, not after it: nothing is read, no
+\ tab is opened and the bottom panel stays shut until it is confirmed.
+\
+\ Confirming it does two things at once. The register of the account it
+\ settled becomes the active tab -- opened if it was not open, brought
+\ forward if it was -- and the rows of the file open in the panel
+\ beneath that register. So the statement is read against the lines it
+\ is about to join, which is the whole reason the review is a panel
+\ under a register rather than a dialog of its own.
 
 DataType ImportFileFormat
 Description What kind of file was chosen, and what that kind of file can say
-# about the account it is for.
+\ about the account it is for.
 Examples: EnumerationValues
 | Value | Notes                                                               |
 | Qfx   | OFX or QFX. Names its institution and account number, so the account is in the file |
@@ -740,21 +740,21 @@ Examples: EnumerationValues
 
 Attributes ImportFileChosen
 Description The file the user picked, and what the import made of what is inside
-# it before any of its rows were read.
+\ it before any of its rows were read.
 Details AccountInFile is the account of this book the file turned out to be
-# for -- for a QFX, the account that carries the number the download
-# was made for; see which account a download is for in ImportOfx. It is
-# blank when the file names nothing, and blank when it names a number no
-# account in this book carries, because an account that is not in the
-# book is not an answer. How it is arrived at is the import's own
-# business and is specified there; here it is given.
-#
-# BankId and AccountNumber are what the file said about itself, whether
-# or not an account was found for them. They are blank for a CSV and for
-# a QIF, which say nothing of the kind, and they are not blank for a QFX
-# whose number is unknown -- that is the case where they matter most,
-# because they are the whole of what the user has to go on when asked
-# which account the download belongs to.
+\ for -- for a QFX, the account that carries the number the download
+\ was made for; see which account a download is for in ImportOfx. It is
+\ blank when the file names nothing, and blank when it names a number no
+\ account in this book carries, because an account that is not in the
+\ book is not an answer. How it is arrived at is the import's own
+\ business and is specified there; here it is given.
+\
+\ BankId and AccountNumber are what the file said about itself, whether
+\ or not an account was found for them. They are blank for a CSV and for
+\ a QIF, which say nothing of the kind, and they are not blank for a QFX
+\ whose number is unknown -- that is the case where they matter most,
+\ because they are the whole of what the user has to go on when asked
+\ which account the download belongs to.
 | Attribute     | Type             | Default |
 | FileName      | Text             |         |
 | Format        | ImportFileFormat | Csv     |
@@ -764,8 +764,8 @@ Details AccountInFile is the account of this book the file turned out to be
 
 DataType ImportTargetSource
 Description Where the account in the confirmation came from. It is shown, because
-# "we read this out of the file" and "this is the tab you were on" are
-# worth different amounts of trust.
+\ "we read this out of the file" and "this is the tab you were on" are
+\ worth different amounts of trust.
 Examples: EnumerationValues
 | Value       | Notes                                                         |
 | File        | The file named it and the book has it                         |
@@ -775,17 +775,17 @@ Examples: EnumerationValues
 
 Attributes ImportConfirmation
 Description The dialog, as it stands. Shown is false before a file is chosen and
-# after the dialog is answered either way.
+\ after the dialog is answered either way.
 Details BankId and AccountNumber are shown because they are the only things in
-# the dialog that come from the bank rather than from this program, and
-# they are what settles the question when the proposed account is wrong.
-# A person who sees the number on their statement knows at once whether
-# the right register is being offered; a file name and an account path
-# are both this program repeating itself back.
-#
-# They are shown as the file wrote them, not reformatted, so that they
-# can be read against a statement. A download that states neither
-# leaves both lines out of the dialog rather than showing an empty one.
+\ the dialog that come from the bank rather than from this program, and
+\ they are what settles the question when the proposed account is wrong.
+\ A person who sees the number on their statement knows at once whether
+\ the right register is being offered; a file name and an account path
+\ are both this program repeating itself back.
+\
+\ They are shown as the file wrote them, not reformatted, so that they
+\ can be read against a statement. A download that states neither
+\ leaves both lines out of the dialog rather than showing an empty one.
 | Attribute     | Type               | Default     |
 | Shown         | Boolean            | true        |
 | FileName      | Text               | none        |
@@ -796,17 +796,17 @@ Details BankId and AccountNumber are shown because they are the only things in
 
 BusinessRule Which account the import proposes
 Description The file first, its name second, the register in front last. Each
-# one is only consulted because the one before it had nothing to say.
+\ one is only consulted because the one before it had nothing to say.
 Details A candidate is an account a register can be opened on: not a
-# placeholder, not a category, and not a hidden account. FromName is the
-# one candidate the name of the file fits -- blank if none fits, and
-# blank if two do, because a name that fits two accounts has not named
-# either of them.
-#
-# The last row is the one case with no answer at all: a file that says
-# nothing, read while a report is in front, so there is no register to
-# fall back on. That is refused with the message below rather than
-# proposed, because there is nothing a person could usefully confirm.
+\ placeholder, not a category, and not a hidden account. FromName is the
+\ one candidate the name of the file fits -- blank if none fits, and
+\ blank if two do, because a name that fits two accounts has not named
+\ either of them.
+\
+\ The last row is the one case with no answer at all: a file that says
+\ nothing, read while a report is in front, so there is no register to
+\ fall back on. That is refused with the message below rather than
+\ proposed, because there is nothing a person could usefully confirm.
 Examples: ImportTargetProposal
 | Format | AccountInFile    | FromName        | ActiveTab        | Proposed         | Source      |
 | Qfx    | Liabilities:Visa | none            | Assets:Checking  | Liabilities:Visa | File        |
@@ -831,17 +831,17 @@ Attributes ImportTargetProposal
 
 BusinessRule When the name of a file fits an account
 Description Whether one account is what a file name is talking about. Asked of
-# every candidate; the answer is only used when exactly one says yes.
+\ every candidate; the answer is only used when exactly one says yes.
 Details The extension is dropped, and what is left is cut into words at every
-# run of characters that is not a letter or a digit, and between a
-# letter and a digit, so Visa4455 is two words and 2026-02 is two more.
-#
-# A word, or a run of words next to each other, that reads the same as
-# the account's name once case and the spaces in the name are ignored,
-# fits. So does a word of four digits or more that the account's number
-# ends with. Three digits or fewer never fit anything: they are months,
-# days and sequence numbers, and matching an account number on them
-# would put a statement in the wrong account for a living.
+\ run of characters that is not a letter or a digit, and between a
+\ letter and a digit, so Visa4455 is two words and 2026-02 is two more.
+\
+\ A word, or a run of words next to each other, that reads the same as
+\ the account's name once case and the spaces in the name are ignored,
+\ fits. So does a word of four digits or more that the account's number
+\ ends with. Three digits or fewer never fit anything: they are months,
+\ days and sequence numbers, and matching an account number on them
+\ would put a statement in the wrong account for a living.
 Examples: FileNameMatch
 | FileName                  | AccountName      | AccountNumber    | Fits  |
 | Checking-2026-02.csv      | Checking         | none             | true  |
@@ -868,8 +868,8 @@ Attributes FileNameMatch
 
 Scenario A QFX goes to the account it names rather than the tab in front
 Description Checking is the register in front and the file was downloaded for
-# the card. The file is the one that knows, and the card is not even
-# open.
+\ the card. The file is the one that knows, and the card is not even
+\ open.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -897,8 +897,8 @@ Then bottom panel is : BottomPanel Vertical
 $TBD
 Scenario The dialog shows the bank id and the account number the download names
 Description The two lines that come from the bank rather than from this
-# program. The account offered is right, and the numbers are what
-# let the user see that without opening the register first.
+\ program. The account offered is right, and the numbers are what
+\ let the user see that without opening the register first.
 Given the chart of accounts is : ChartOfAccounts
 | Path             | Type       | Placeholder | Bank              | BankId    | AccountNumber |
 | Assets:Checking  | Checking   | false       | First~National    | 053000196 | 1234567890    |
@@ -927,9 +927,9 @@ Then import confirmation is : ImportConfirmation Vertical
 $TBD
 Scenario A CSV states no numbers, so the dialog shows none
 Description A CSV says nothing about the bank or the account, so there is
-# nothing to show and the dialog does not pretend otherwise. The
-# name of the file is all it had to go on, and the Source line is
-# what says so.
+\ nothing to show and the dialog does not pretend otherwise. The
+\ name of the file is all it had to go on, and the Source line is
+\ what says so.
 Given the chart of accounts is : ChartOfAccounts
 | Path             | Type       | Placeholder | Bank           | BankId    | AccountNumber |
 | Assets:Checking  | Checking   | false       | First~National | 053000196 | 1234567890    |
@@ -954,11 +954,11 @@ Then import confirmation is : ImportConfirmation Vertical
 
 Scenario Confirming makes that account's register the active tab, with the review beneath it
 Description Which is the arrangement every other import scenario here starts
-# from -- the register of the account being imported into is the
-# active tab, and the rows waiting to be reviewed are in the panel
-# below it, against the lines they are about to join. Confirming the
-# dialog is now the one way to reach it. The account the dialog
-# settled is also what fills the Account column of every row.
+\ from -- the register of the account being imported into is the
+\ active tab, and the rows waiting to be reviewed are in the panel
+\ below it, against the lines they are about to join. Confirming the
+\ dialog is now the one way to reach it. The account the dialog
+\ settled is also what fills the Account column of every row.
 Given the chart of accounts is as previous
 Given transactions are as previous
 Given the file holds : ImportReviewRow
@@ -994,8 +994,8 @@ Then bottom panel is : BottomPanel Vertical
 
 Scenario Confirming an account already open comes back to its tab rather than opening a second
 Description One tab per account holds here as everywhere else. The card was
-# open and Checking was in front of it; confirming the card brings
-# the card's tab forward, and the review opens under that.
+\ open and Checking was in front of it; confirming the card brings
+\ the card's tab forward, and the review opens under that.
 Given the chart of accounts is as previous
 Given transactions are as previous
 Given the file holds : ImportReviewRow
@@ -1028,8 +1028,8 @@ Then bottom panel is : BottomPanel Vertical
 
 Scenario A CSV goes to the account the name of the file fits
 Description The card is in front and the file is the one the bank calls
-# Checking. A CSV says nothing about itself, so its name is all there
-# is -- and it is usually right, because the bank wrote it.
+\ Checking. A CSV says nothing about itself, so its name is all there
+\ is -- and it is usually right, because the bank wrote it.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1046,8 +1046,8 @@ Then import confirmation is : ImportConfirmation Vertical
 
 Scenario A file whose name says nothing goes to the register in front
 Description Which is what an import did before there was a dialog, and still
-# what it does most of the time. The dialog is worth having anyway,
-# because the times it is wrong are the expensive ones.
+\ what it does most of the time. The dialog is worth having anyway,
+\ because the times it is wrong are the expensive ones.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1064,9 +1064,9 @@ Then import confirmation is : ImportConfirmation Vertical
 
 Scenario A name that fits two accounts fits neither
 Description Both Checking and Visa are in it, so the name has not named an
-# account; it has listed two. The register in front is proposed
-# instead, and it is a third account, which is the point: a name that
-# fits two is worth no more than a name that fits none.
+\ account; it has listed two. The register in front is proposed
+\ instead, and it is a third account, which is the point: a name that
+\ fits two is worth no more than a name that fits none.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1083,8 +1083,8 @@ Then import confirmation is : ImportConfirmation Vertical
 
 Scenario The account can be changed in the dialog and that is where it goes
 Description A proposal is a proposal. The file said nothing, so Checking was
-# offered; the statement is the card's, and saying so once here is
-# the whole of the correction.
+\ offered; the statement is the card's, and saying so once here is
+\ the whole of the correction.
 Given the chart of accounts is as previous
 Given transactions are as previous
 Given the file holds : ImportReviewRow
@@ -1108,8 +1108,8 @@ Then panes are : PaneState
 
 Scenario Cancelling the dialog reads nothing at all
 Description Not the same as cancelling the review, which is a decision about
-# rows that have already been read. This is before the file has been
-# opened, so there is nothing to show and nothing to undo.
+\ rows that have already been read. This is before the file has been
+\ opened, so there is nothing to show and nothing to undo.
 Given the chart of accounts is as previous
 Given transactions are as previous
 Given the file holds : ImportReviewRow
@@ -1144,9 +1144,9 @@ Then register lines are : RegisterLine CompareOnly
 
 Scenario A file that names its account is imported with a report in front
 Description The refusal is about having nothing to go on, not about what is on
-# the screen. A QFX names its account whether or not a register is
-# open, so there is an answer, and confirming it opens the register
-# the answer names.
+\ the screen. A QFX names its account whether or not a register is
+\ open, so there is an answer, and confirming it opens the register
+\ the answer names.
 Given the chart of accounts is as previous
 Given transactions are as previous
 Given the file holds : ImportReviewRow
@@ -1182,50 +1182,50 @@ Then bottom panel is : BottomPanel Vertical
 # ---------------------------------------------------------------------------
 
 Description A report tab holds the figures it was worked out with. It is worked
-# out again when it is shown and the book has changed since it was
-# last worked out, and at no other time.
+\ out again when it is shown and the book has changed since it was
+\ last worked out, and at no other time.
 Details Every figure in a report is a total of transactions and nothing is
-# stored, which is the rule in Reports and is what makes a report and a
-# register agree. It also means a report is right the moment it is
-# worked out and wrong the moment a transaction moves, so something has
-# to say when to work it out again. Two answers are wrong. Never, and
-# the page shows last week's totals. Always, and a category report over
-# twenty years is totalled again because somebody clicked a tab -- a
-# redraw happens when a tab is clicked, when an account is selected,
-# when a column is resized, and a report that redoes its work on each of
-# those is the slowest thing in the program by a wide margin.
-#
-# So it is the book that decides, not the event: a report is worked out
-# again when the book is not the book it was totalled from. Which change
-# it was does not come into it. A transaction entered outside the
-# report's period still counts as a change, because working out which
-# changes could not possibly have mattered would be a second statement
-# of what a report totals -- in a second place, wrong the first time a
-# period moved.
-#
-# And not until it is shown. A report tab nobody is looking at has no
-# figure on screen to be wrong, so the work waits for the click that
-# brings it forward. Each tab remembers the book it was worked out from
-# on its own: two report tabs with one flag between them would leave the
-# second showing stale totals, which is the shape of this bug wherever
-# it has been written before.
-#
-# A register is not in any of this. It is read from the book every
-# redraw and always was; it costs a sort of one account's lines, not a
-# walk of the whole book.
+\ stored, which is the rule in Reports and is what makes a report and a
+\ register agree. It also means a report is right the moment it is
+\ worked out and wrong the moment a transaction moves, so something has
+\ to say when to work it out again. Two answers are wrong. Never, and
+\ the page shows last week's totals. Always, and a category report over
+\ twenty years is totalled again because somebody clicked a tab -- a
+\ redraw happens when a tab is clicked, when an account is selected,
+\ when a column is resized, and a report that redoes its work on each of
+\ those is the slowest thing in the program by a wide margin.
+\
+\ So it is the book that decides, not the event: a report is worked out
+\ again when the book is not the book it was totalled from. Which change
+\ it was does not come into it. A transaction entered outside the
+\ report's period still counts as a change, because working out which
+\ changes could not possibly have mattered would be a second statement
+\ of what a report totals -- in a second place, wrong the first time a
+\ period moved.
+\
+\ And not until it is shown. A report tab nobody is looking at has no
+\ figure on screen to be wrong, so the work waits for the click that
+\ brings it forward. Each tab remembers the book it was worked out from
+\ on its own: two report tabs with one flag between them would leave the
+\ second showing stale totals, which is the shape of this bug wherever
+\ it has been written before.
+\
+\ A register is not in any of this. It is read from the book every
+\ redraw and always was; it costs a sort of one account's lines, not a
+\ walk of the whole book.
 
 Attributes ReportWork
 Description How many times the report on one tab has been worked out, counting
-# from when the tab was opened. Register tabs are not listed.
+\ from when the tab was opened. Register tabs are not listed.
 | Attribute | Type    | Default |
 | Position  | Integer | 1       |
 | Times     | Integer | 1       |
 
 Scenario A change made with the report in front works it out again
 Description The report is what is on the screen, so the new figures have to be
-# on it before the hand leaves the mouse. One transaction changed
-# here, which is the single edit; the step takes a table, and a table
-# of twenty is the same change twenty times over.
+\ on it before the hand leaves the mouse. One transaction changed
+\ here, which is the single edit; the step takes a table, and a table
+\ of twenty is the same change twenty times over.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -1260,8 +1260,8 @@ Then reports worked out are : ReportWork
 
 Scenario Clicking between tabs works nothing out again
 Description The common case while somebody is reading rather than typing, and
-# the one the first implementation got wrong. Nothing has changed, so
-# there is nothing to do and the report simply is what it was.
+\ the one the first implementation got wrong. Nothing has changed, so
+\ there is nothing to do and the report simply is what it was.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1288,7 +1288,7 @@ Then reports worked out are : ReportWork
 
 Scenario A transaction entered behind a report is in it when the report comes forward
 Description The register is in front, which is where a transaction is typed, and
-# the report is a tab away. The work waits for the click.
+\ the report is a tab away. The work waits for the click.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -1333,8 +1333,8 @@ Then reports worked out are : ReportWork
 
 Scenario An import accepted behind a report reaches it the same way
 Description An import is always into the register in front of it, so a report
-# open at the time is always the tab behind. Several hundred rows
-# arrive at once, which is the change least worth totalling twice.
+\ open at the time is always the tab behind. Several hundred rows
+\ arrive at once, which is the change least worth totalling twice.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1363,9 +1363,9 @@ Then reports worked out are : ReportWork
 
 Scenario A transaction deleted behind a report is gone from it
 Description The other half of the rule a save has to keep as well. A figure
-# whose transaction has been deleted is the one a stale report shows
-# most convincingly, because the amount is a real amount that was
-# really spent.
+\ whose transaction has been deleted is the one a stale report shows
+\ most convincingly, because the amount is a real amount that was
+\ really spent.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -1405,10 +1405,10 @@ Then reports worked out are : ReportWork
 
 Scenario One report worked out leaves the other to be worked out when it is shown
 Description Two periods side by side is the reason to have two report tabs, and
-# a change belongs to both of them. Each remembers for itself what it
-# was totalled from: one flag between them would leave the tab that
-# was behind showing figures from before the change, with nothing on
-# the page to say so.
+\ a change belongs to both of them. Each remembers for itself what it
+\ was totalled from: one flag between them would leave the tab that
+\ was behind showing figures from before the change, with nothing on
+\ the page to say so.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -1455,27 +1455,27 @@ Then reports worked out are : ReportWork
 # ---------------------------------------------------------------------------
 
 Description One pane, showing the register or the report of the selected tab.
-# An optional panel below it holds everything that is not the
-# register itself -- an import waiting to be accepted, or the
-# results of a find -- each in a tab of its own, so more than one can
-# be open and read at once.
+\ An optional panel below it holds everything that is not the
+\ register itself -- an import waiting to be accepted, or the
+\ results of a find -- each in a tab of its own, so more than one can
+\ be open and read at once.
 Details The panel is open exactly when it has a tab in it, and closes itself
-# when the last one does: accepting or cancelling an import closes that
-# tab, closing a find's results closes that one, and the panel is gone
-# once nothing is left. Opening a new one -- a second find, an import
-# started from another register -- adds a tab rather than replacing
-# what is already open, and the one just opened becomes active, the
-# same rule a register tab already follows.
-#
-# There used to be a Split view on the menu, two registers side by side
-# for reading two accounts at once, and before that an import was shown
-# the same way -- as a second pane beside the register, rather than in
-# this panel. Both are gone. A window that can be left in a two-register
-# state shows two registers on the next launch with nothing to say why;
-# the panel's tabs say why for themselves, and more than one thing can
-# wait to be judged at once, which a single second pane could not do
-# either. Reading two registers at once is worth having again one day as
-# two windows, not as a mode this one can be left in.
+\ when the last one does: accepting or cancelling an import closes that
+\ tab, closing a find's results closes that one, and the panel is gone
+\ once nothing is left. Opening a new one -- a second find, an import
+\ started from another register -- adds a tab rather than replacing
+\ what is already open, and the one just opened becomes active, the
+\ same rule a register tab already follows.
+\
+\ There used to be a Split view on the menu, two registers side by side
+\ for reading two accounts at once, and before that an import was shown
+\ the same way -- as a second pane beside the register, rather than in
+\ this panel. Both are gone. A window that can be left in a two-register
+\ state shows two registers on the next launch with nothing to say why;
+\ the panel's tabs say why for themselves, and more than one thing can
+\ wait to be judged at once, which a single second pane could not do
+\ either. Reading two registers at once is worth having again one day as
+\ two windows, not as a mode this one can be left in.
 
 Scenario The bottom panel is closed until something opens it
 Given the chart of accounts is as previous
@@ -1490,7 +1490,7 @@ Then bottom panel is : BottomPanel Vertical
 
 Attributes BottomPanel
 Description Whether the panel below the register is open, and how many tabs
-# are in it.
+\ are in it.
 | Attribute | Type    | Default |
 | Open      | Boolean | false   |
 | TabCount  | Integer | 0       |
@@ -1515,13 +1515,13 @@ Description One tab of the bottom panel, in the order it was opened.
 # ---------------------------------------------------------------------------
 
 Description An import is shown in a tab of the bottom panel rather than in a
-# dialog of its own, so that the register it is about to change stays
-# in view while it is read. Nothing reaches the book until it is
-# accepted.
+\ dialog of its own, so that the register it is about to change stays
+\ in view while it is read. Nothing reaches the book until it is
+\ accepted.
 
 Attributes ImportReviewRow
 Description One row of an import waiting to be reviewed. Account is where the
-# money moved; Category is the other side as the import worked it out.
+\ money moved; Category is the other side as the import worked it out.
 | Attribute   | Type              | Default    |
 | Line        | Integer           | 0          |
 | Date        | Date              | 2026-01-01 |
@@ -1540,8 +1540,8 @@ Description One row of an import waiting to be reviewed. Account is where the
 
 Define AnImportOfThree
 Description The import the next several scenarios all read. A scenario cannot
-# take a table from the scenario before it: every generated test stands
-# alone, so the rows are named here and asked for by name.
+\ take a table from the scenario before it: every generated test stands
+\ alone, so the rows are named here and asked for by name.
 | Line | Date       | Payee         | Account         | Category               | Amount  | Disposition |
 | 1    | 2026-02-02 | Harris Teeter | Assets:Checking | Expenses:Groceries     | -52.10  | New         |
 | 2    | 2026-02-03 | Unknown Shop  | Assets:Checking | Expenses:Uncategorized | -23.75  | New         |
@@ -1549,7 +1549,7 @@ Description The import the next several scenarios all read. A scenario cannot
 
 Scenario An import opens a tab in the bottom panel with every row proposed
 Description The panel opens by itself if it was not open: the point of
-# showing an import here is to have the register still in view.
+\ showing an import here is to have the register still in view.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1584,9 +1584,9 @@ Attributes ImportReviewSummary
 
 Scenario A row the import thinks is a duplicate starts unaccepted
 Description The import has already decided it has seen this one. It is shown
-# rather than hidden, because the decision is worth disagreeing with,
-# and it starts unticked so that accepting everything does not bring
-# it in.
+\ rather than hidden, because the decision is worth disagreeing with,
+\ and it starts unticked so that accepting everything does not bring
+\ it in.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1602,7 +1602,7 @@ Then import review rows are : ImportReviewRow
 
 Scenario Nothing is in the book until the import is accepted
 Description The register in the other pane is unchanged while the review is
-# open, which is what makes it worth having beside it.
+\ open, which is what makes it worth having beside it.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1618,7 +1618,7 @@ Then register lines are : RegisterLine CompareOnly
 
 Scenario Accepting the import adds the ticked rows and closes the review
 Description The two new rows arrive, the duplicate does not, and the panel
-# closes so that the result can be read in the register it changed.
+\ closes so that the result can be read in the register it changed.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1681,7 +1681,7 @@ Attributes ReviewRowSelect
 
 Scenario Ticking a duplicate brings it in after all
 Description The import's decision is a proposal. A user who knows the bank sent
-# the same transaction twice for a real reason can say so.
+\ the same transaction twice for a real reason can say so.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1728,31 +1728,31 @@ Then panes are : PaneState
 # ---------------------------------------------------------------------------
 
 Description A duplicate is a claim about a transaction that is already in the
-# book, and the claim is worth looking at before it is believed. The
-# review shows the row the file sent; this shows what the import
-# decided the row already was, so that the two can be read side by
-# side and the tick changed if the decision was wrong.
+\ book, and the claim is worth looking at before it is believed. The
+\ review shows the row the file sent; this shows what the import
+\ decided the row already was, so that the two can be read side by
+\ side and the tick changed if the decision was wrong.
 
 Attributes ImportReviewSelect
 Description The line of the import review that is selected, counting from one
-# in the order the review is showing.
+\ in the order the review is showing.
 | Attribute | Type    | Default |
 | Line      | Integer | 1       |
 
 Attributes ImportReviewClaim
 Description What the import decided a review line already was. A line can
-# claim more than one transaction -- a Possible claims every
-# transaction it could be -- so this is a row per claim rather than a
-# field on the row. Line is the review line; Ref is the transaction
-# already in the book.
+\ claim more than one transaction -- a Possible claims every
+\ transaction it could be -- so this is a row per claim rather than a
+\ field on the row. Line is the review line; Ref is the transaction
+\ already in the book.
 | Attribute | Type           | Default |
 | Line      | Integer        | 0       |
 | Ref       | TransactionRef |         |
 
 Attributes DuplicateTransactionDialog
 Description What came up. Heading is shown above the transactions because one
-# transaction and three of them mean different things, and the
-# difference is the whole reason the dialog is worth opening.
+\ transaction and three of them mean different things, and the
+\ difference is the whole reason the dialog is worth opening.
 | Attribute | Type    | Default |
 | Shown     | Boolean | false   |
 | Count     | Integer | 0       |
@@ -1760,7 +1760,7 @@ Description What came up. Heading is shown above the transactions because one
 
 Attributes DuplicateTransactionRow
 Description One transaction the import claimed, read off the book rather than
-# off the file: this is what is already there.
+\ off the file: this is what is already there.
 | Attribute | Type           | Default    |
 | Ref       | TransactionRef |            |
 | Date      | Date           | 2026-01-01 |
@@ -1779,13 +1779,13 @@ Attributes DuplicateMenuRule
 
 BusinessRule What the menu on an import row offers
 Description The item reads as the disposition does. A duplicate names one
-# transaction, a possible names several, and a completion names the
-# payment whose other half was waiting -- calling that last one a
-# duplicate would be wrong, because nothing is being refused.
+\ transaction, a possible names several, and a completion names the
+\ payment whose other half was waiting -- calling that last one a
+\ duplicate would be wrong, because nothing is being refused.
 Details A New row claims nothing, so there is nothing to show. The item is
-# still on the menu, disabled, rather than absent: a menu that
-# changes shape from line to line is harder to learn than one item
-# that is sometimes grey.
+\ still on the menu, disabled, rather than absent: a menu that
+\ changes shape from line to line is harder to learn than one item
+\ that is sometimes grey.
 Examples: DuplicateMenuRule
 | Disposition | Item                               | Enabled |
 | New         | Show~duplicate~transaction...      | false   |
@@ -1795,9 +1795,9 @@ Examples: DuplicateMenuRule
 
 Scenario Showing the duplicate brings up the transaction already in the book
 Description The row the bank sent and the transaction the import says it
-# already is. Everything the register would show of it is here,
-# including the cleared status, because an uncleared transaction of
-# the same date and amount is the usual reason to disagree.
+\ already is. Everything the register would show of it is here,
+\ including the cleared status, because an uncleared transaction of
+\ the same date and amount is the usual reason to disagree.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -1828,9 +1828,9 @@ Then duplicate transactions shown are : DuplicateTransactionRow
 
 Scenario A possible duplicate shows every transaction it could be
 Description Two transactions of the same date and amount against the one row
-# that was sent. The import cannot say which, and neither can the
-# dialog -- what it can do is show both, which is what makes the
-# question answerable by somebody who remembers writing them.
+\ that was sent. The import cannot say which, and neither can the
+\ dialog -- what it can do is show both, which is what makes the
+\ question answerable by somebody who remembers writing them.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -1864,8 +1864,8 @@ Then duplicate transactions shown are : DuplicateTransactionRow
 
 Scenario Asking on a new row brings up nothing
 Description The item is disabled, and asking anyway is not an error: there is
-# simply nothing to show. Stated so that a keyboard shortcut or a
-# double click cannot open an empty dialog.
+\ simply nothing to show. Stated so that a keyboard shortcut or a
+\ double click cannot open an empty dialog.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -1890,7 +1890,7 @@ Then duplicate transaction dialog is : DuplicateTransactionDialog Vertical
 
 Scenario Looking at the duplicate changes neither the review nor the book
 Description The dialog is a look, not a decision. The tick is where the
-# decision is made, and it is still where it was afterwards.
+\ decision is made, and it is still where it was afterwards.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -1928,8 +1928,8 @@ Then bottom panel is : BottomPanel Vertical
 # ---------------------------------------------------------------------------
 
 Description An import and a find's results can be open at once, each in its
-# own tab. Closing one leaves the other; the panel itself only
-# closes once nothing is left in it.
+\ own tab. Closing one leaves the other; the panel itself only
+\ closes once nothing is left in it.
 
 Scenario A find opens its own tab in the bottom panel
 Given the chart of accounts is as previous
@@ -1949,7 +1949,7 @@ Then bottom panel tabs are : BottomPanelTabRow
 
 Scenario An import and a find are open in the bottom panel together
 Description Opening the second does not close the first: a find started while
-# an import is still waiting adds a tab rather than taking its place.
+\ an import is still waiting adds a tab rather than taking its place.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -1989,7 +1989,7 @@ Then bottom panel tabs are : BottomPanelTabRow
 
 Scenario Closing the find results tab leaves the import waiting
 Description The panel's own close button, rather than the import being
-# cancelled from its buttons. Closing a tab closes that tab only.
+\ cancelled from its buttons. Closing a tab closes that tab only.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -2019,8 +2019,8 @@ Then import review summary is : ImportReviewSummary Vertical
 
 Scenario Closing the import review tab abandons the import
 Description Closing that tab is cancelling the import. There is nowhere else
-# to accept it from, so leaving it open would be the only way to
-# say yes, and a closed tab has to mean no.
+\ to accept it from, so leaving it open would be the only way to
+\ say yes, and a closed tab has to mean no.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -2104,27 +2104,27 @@ Attributes BottomPanelTabSelect
 # ---------------------------------------------------------------------------
 
 Description Find looks across transactions for ones matching what was typed,
-# and shows the matches in a tab of the bottom panel, beside the
-# register, the same as an import. There is one Find dialog, so
-# performing a find again replaces that tab's results rather than
-# opening a second one.
+\ and shows the matches in a tab of the bottom panel, beside the
+\ register, the same as an import. There is one Find dialog, so
+\ performing a find again replaces that tab's results rather than
+\ opening a second one.
 Details A blank field in FindCriteria is not a filter: Text blank matches
-# every payee and memo, a blank date or amount bound is open-ended, and
-# a blank Account matches every account. AmountFrom and AmountTo bound
-# the amount's absolute value, so a search for 80.00 to 100.00 finds
-# both a payment of -89.99 and a deposit of 89.99 -- a person recalling
-# a transaction rarely remembers which side of it they are thinking of.
-# Account matches a category the same way a real account's, and
-# matches a transaction if either side of it is the named account or
-# anything beneath it.
-#
-# FindResultRow names the transaction the way a register names the
-# other side of a transfer: Account is the side the result is read
-# under, and Category is the other side of it. Scoped to one register,
-# that is always the register searched. Scoped to every register, a
-# transaction that matches on both sides of a transfer is a row under
-# each, because there is no one register it belongs to more than the
-# other.
+\ every payee and memo, a blank date or amount bound is open-ended, and
+\ a blank Account matches every account. AmountFrom and AmountTo bound
+\ the amount's absolute value, so a search for 80.00 to 100.00 finds
+\ both a payment of -89.99 and a deposit of 89.99 -- a person recalling
+\ a transaction rarely remembers which side of it they are thinking of.
+\ Account matches a category the same way a real account's, and
+\ matches a transaction if either side of it is the named account or
+\ anything beneath it.
+\
+\ FindResultRow names the transaction the way a register names the
+\ other side of a transfer: Account is the side the result is read
+\ under, and Category is the other side of it. Scoped to one register,
+\ that is always the register searched. Scoped to every register, a
+\ transaction that matches on both sides of a transfer is a row under
+\ each, because there is no one register it belongs to more than the
+\ other.
 
 DataType FindScope
 Description Which registers a find looks through.
@@ -2245,7 +2245,7 @@ Then find results are : FindResultRow
 
 Scenario A find scoped to all registers matches a transfer under both sides of it
 Description Transfer has no side that is more the transaction's register than
-# the other, so a transfer matched this way is a row under each.
+\ the other, so a transfer matched this way is a row under each.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -2260,23 +2260,23 @@ Then find results are : FindResultRow
 | T4  | 2026-01-25 | Transfer | Assets:Savings  | Assets:Checking | 500.00  |
 
 Description Choosing a result goes to the transaction in the register the
-# result is read under -- the Account column of the result, not
-# whichever register happens to be open. That is the whole use of
-# the column being there: a find scoped to every register lists
-# matches from accounts the reader is not looking at, and a result
-# under Savings has to open Savings. The results stay open while it
-# happens, because a find is usually a list to work down rather
-# than one line to reach.
+\ result is read under -- the Account column of the result, not
+\ whichever register happens to be open. That is the whole use of
+\ the column being there: a find scoped to every register lists
+\ matches from accounts the reader is not looking at, and a result
+\ under Savings has to open Savings. The results stay open while it
+\ happens, because a find is usually a list to work down rather
+\ than one line to reach.
 Details Going to a result is going to the transaction, so it is the same
-# operation the report's "Go to the transaction..." performs: the
-# register opens and the transaction's line in it is selected. A
-# result names its register, so unlike the report's version nothing
-# has to be chosen -- a transfer matched under both of its sides is
-# two results, and each goes to its own.
+\ operation the report's "Go to the transaction..." performs: the
+\ register opens and the transaction's line in it is selected. A
+\ result names its register, so unlike the report's version nothing
+\ has to be chosen -- a transfer matched under both of its sides is
+\ two results, and each goes to its own.
 
 Attributes FindResultChoice
 Description Which result was chosen, counting from one in the order the
-# results are listed.
+\ results are listed.
 | Attribute | Type    | Default |
 | Line      | Integer | 1       |
 
@@ -2331,37 +2331,37 @@ Then the register line selected is : RegisterSelect
 # ---------------------------------------------------------------------------
 
 Description An accepted row keeps what the file called it.
-#
-# A downloaded row arrives with the name the file gave it -- a FITID
-# from a QFX, whatever the bank's CSV uses for a reference -- and that
-# name is the whole reason a second download of the same statement
-# does nothing. So it has to reach the transaction that is stored.
+\
+\ A downloaded row arrives with the name the file gave it -- a FITID
+\ from a QFX, whatever the bank's CSV uses for a reference -- and that
+\ name is the whole reason a second download of the same statement
+\ does nothing. So it has to reach the transaction that is stored.
 Details The review shows a row as date, payee, account, category and amount,
-# because that is what a person reads. Building the transaction back out
-# of those five columns would lose the identifier, and the loss would be
-# silent: the import would look right, the register would look right,
-# and next month's download of the same account would offer every
-# transaction in it again as new.
-#
-# So what the import prepared is what is stored. The columns on the
-# screen are a view of it, not the source of it.
-#
-# The raw name travels the same way and for a related reason: a rule
-# written next year has to be able to match what the bank sent this
-# year, so what the bank sent is kept rather than only what it was
-# turned into. The memo, the check number and whether the bank has
-# settled the row travel with it for no deeper reason than that the file
-# said so and the review is not the place to lose it.
-#
-# Whether a row arrives settled is the import's to say, not the review's:
-# an OFX file's rows are a statement and are cleared, and a CSV says
-# nothing about what the bank has settled. So the review carries what it
-# was given rather than deciding.
+\ because that is what a person reads. Building the transaction back out
+\ of those five columns would lose the identifier, and the loss would be
+\ silent: the import would look right, the register would look right,
+\ and next month's download of the same account would offer every
+\ transaction in it again as new.
+\
+\ So what the import prepared is what is stored. The columns on the
+\ screen are a view of it, not the source of it.
+\
+\ The raw name travels the same way and for a related reason: a rule
+\ written next year has to be able to match what the bank sent this
+\ year, so what the bank sent is kept rather than only what it was
+\ turned into. The memo, the check number and whether the bank has
+\ settled the row travel with it for no deeper reason than that the file
+\ said so and the review is not the place to lose it.
+\
+\ Whether a row arrives settled is the import's to say, not the review's:
+\ an OFX file's rows are a statement and are cleared, and a CSV says
+\ nothing about what the bank has settled. So the review carries what it
+\ was given rather than deciding.
 
 Attributes AcceptedTransaction
 Description A transaction that accepting the review has just added, with the
-# identifier it was imported under. Only the accepted rows are
-# listed; what the book already held is not.
+\ identifier it was imported under. Only the accepted rows are
+\ listed; what the book already held is not.
 | Attribute     | Type          | Default   |
 | SourceAccount | AccountPath   |           |
 | Destination   | AccountPath   | none      |
@@ -2375,7 +2375,7 @@ Description A transaction that accepting the review has just added, with the
 
 Scenario Accepting an import keeps the identifier the file gave each row
 Description The identifier belongs to the side the statement is for. The bank
-# has never heard of the category, so that side carries none.
+\ has never heard of the category, so that side carries none.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -2391,9 +2391,9 @@ Then accepted transactions are : AcceptedTransaction
 
 Scenario A CSV row keeps its reference under its own source
 Description Two files describing one transaction do not agree on what to call
-# it, so the source travels with the identifier. A reference kept
-# under Csv does not make a later QFX of the same account do nothing,
-# and that is deliberate -- see the identifier scope rule.
+\ it, so the source travels with the identifier. A reference kept
+\ under Csv does not make a later QFX of the same account do nothing,
+\ and that is deliberate -- see the identifier scope rule.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -2409,9 +2409,9 @@ Then accepted transactions are : AcceptedTransaction
 
 Scenario A row the file gave no identifier is still accepted
 Description A QIF carries no identifier, and a row read from one is still worth
-# bringing in. It is the weaker tests -- the date, the amount, the
-# check number -- that keep a second reading of the same QIF from
-# duplicating it.
+\ bringing in. It is the weaker tests -- the date, the amount, the
+\ check number -- that keep a second reading of the same QIF from
+\ duplicating it.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -2427,7 +2427,7 @@ Then accepted transactions are : AcceptedTransaction
 
 Scenario An unticked row contributes nothing at all
 Description The identifier of a row that was not accepted must not be stored
-# either, or the row could never be imported again.
+\ either, or the row could never be imported again.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When account selected : AccountSelect
@@ -2450,21 +2450,21 @@ Then accepted transactions are : AcceptedTransaction
 # ---------------------------------------------------------------------------
 
 Description A register is where the work gets done, so what can be done to a
-# line is reached from the line itself.
+\ line is reached from the line itself.
 Details A selection is a set of lines. How it was made is the table's business
-# and not the program's: a click takes one, shift extends the run from
-# the line last clicked, and control adds or removes a single line -- so
-# a run and a scattered set are the same thing once they exist, and
-# nothing below needs to know which gesture was used.
-#
-# Everything on the menu acts on the whole selection. Recategorising
-# twenty lines at once is the reason the selection is worth having: a
-# statement arrives with twenty charges from one shop, and categorising
-# them one at a time is the work the program is supposed to save.
+\ and not the program's: a click takes one, shift extends the run from
+\ the line last clicked, and control adds or removes a single line -- so
+\ a run and a scattered set are the same thing once they exist, and
+\ nothing below needs to know which gesture was used.
+\
+\ Everything on the menu acts on the whole selection. Recategorising
+\ twenty lines at once is the reason the selection is worth having: a
+\ statement arrives with twenty charges from one shop, and categorising
+\ them one at a time is the work the program is supposed to save.
 
 Attributes RegisterSelect
 Description The lines of the register that are selected, counting from one in
-# the order the register is showing.
+\ the order the register is showing.
 | Attribute | Type    | Default |
 | Line      | Integer | 1       |
 
@@ -2480,13 +2480,13 @@ Attributes CategoryChoice
 
 Attributes DeletionCount
 Description How many transactions a delete actually removed, because a
-# selection of twenty is too many to count by eye.
+\ selection of twenty is too many to count by eye.
 | Attribute | Type    | Default |
 | Removed   | Integer | 0       |
 
 Attributes Recategorised
 Description What came of it, counted, because a selection of twenty is too many
-# to check by eye.
+\ to check by eye.
 | Attribute | Type    | Default |
 | Changed   | Integer | 0       |
 | Refused   | Integer | 0       |
@@ -2494,7 +2494,7 @@ Description What came of it, counted, because a selection of twenty is too many
 
 Scenario The menu on a selection offers what can be done to it
 Description Two items to begin with. The menu will grow, and what is already
-# there is what a month of categorising needs.
+\ there is what a month of categorising needs.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -2516,7 +2516,7 @@ Then menu items are : MenuItem
 
 Scenario Recategorising a selection puts every line in the new category
 Description Three visits to the same filling station, selected together and
-# given their category once.
+\ given their category once.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -2552,9 +2552,9 @@ Then register lines are : RegisterLine CompareOnly
 
 Scenario A split in the selection is left alone and said so
 Description A split has more than one category, so there is no single transaction
-# to move and choosing one would be a guess that left the book
-# balanced and silently wrong. The rest of the selection still
-# changes, and the count says what happened.
+\ to move and choosing one would be a guess that left the book
+\ balanced and silently wrong. The rest of the selection still
+\ changes, and the count says what happened.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -2590,8 +2590,8 @@ Then register lines are : RegisterLine CompareOnly
 
 Scenario Deleting a selection removes every transaction in it
 Description Both transactions of each, never one side, because a delete that left
-# the other side standing would leave the book out of balance. The
-# confirmation is the window's business and happens before this.
+\ the other side standing would leave the book out of balance. The
+\ confirmation is the window's business and happens before this.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -2622,9 +2622,9 @@ Then register lines are : RegisterLine CompareOnly
 
 Scenario Add payee rule offers the category the transaction already has
 Description The rule writes itself from a line that is already right: the name
-# gives the pattern, the category is the one sitting on the line.
-# This is the same rule the categorisation offers in Payees, reached
-# from the register instead.
+\ gives the pattern, the category is the one sitting on the line.
+\ This is the same rule the categorisation offers in Payees, reached
+\ from the register instead.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -2651,8 +2651,8 @@ Then rule offered is : PayeeRule Vertical
 
 Scenario Add payee rule on an uncategorised line has no category to offer
 Description Nothing has been chosen yet, so the rule comes up with its category
-# empty and the dialog is where it gets asked for. The name part is
-# still worth offering: it is the half the program can work out.
+\ empty and the dialog is where it gets asked for. The name part is
+\ still worth offering: it is the half the program can work out.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -2682,16 +2682,16 @@ Then rule offered is : PayeeRule Vertical
 # ---------------------------------------------------------------------------
 
 Description A report that shows its transactions should let one be opened. The
-# figure is the question; the register is where the answer is, and
-# where it can be corrected.
+\ figure is the question; the register is where the answer is, and
+\ where it can be corrected.
 Details The register opened is the one of the real account the transaction
-# touches -- the bank or the card side. A category has no register to
-# browse: categories are reached through a report, which is where the
-# click started.
-#
-# The line is selected, and the window scrolls it into view. Twenty years
-# of history is tens of thousands of lines, so a selection nobody can see
-# is the same as no selection at all.
+\ touches -- the bank or the card side. A category has no register to
+\ browse: categories are reached through a report, which is where the
+\ click started.
+\
+\ The line is selected, and the window scrolls it into view. Twenty years
+\ of history is tens of thousands of lines, so a selection nobody can see
+\ is the same as no selection at all.
 
 Attributes ReportLineSelect
 Description Which line of the report was clicked, counting from one.
@@ -2700,8 +2700,8 @@ Description Which line of the report was clicked, counting from one.
 
 Define FebruaryOnChecking
 Description The book the next three scenarios read. Two visits to a filling
-# station and one to a supermarket, so that one category figure has
-# more than one transaction behind it.
+\ station and one to a supermarket, so that one category figure has
+\ more than one transaction behind it.
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
 | T1  | Assets:Checking | 2026-02-01 | Shell         | Expenses:Auto:Fuel | -40.00 |
 | T2  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -60.00 |
@@ -2711,8 +2711,8 @@ Description The book the next three scenarios read. Two visits to a filling
 # window, which is what a report tab needs; see the tabs section above.
 Scenario Clicking a transaction in the report opens its register at that line
 Description The fifth line of the report is the second of the two visits to the
-# filling station. It is the third line of the checking register, and
-# that is where the click lands.
+\ filling station. It is the third line of the checking register, and
+\ that is where the click lands.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -2747,8 +2747,8 @@ Then the register line selected is : RegisterSelect
 
 Scenario Clicking a category line in the report opens nothing
 Description A category figure is made of several transactions, so there is no
-# one of them to go to. The drill-down is what answers that question
-# and it is a different gesture.
+\ one of them to go to. The drill-down is what answers that question
+\ and it is a different gesture.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -2776,14 +2776,14 @@ Then panes are : PaneState
 
 Attributes ReportMenuSelect
 Description The transaction lines of the report that are selected, counting the
-# report's lines from one.
+\ report's lines from one.
 | Attribute | Type    | Default |
 | Line      | Integer | 1       |
 
 Scenario The menu on one transaction in the report offers to go to it
 Description One line selected is one transaction, so it can be opened. The
-# register is where a figure is checked and where it is corrected,
-# and both are on the menu.
+\ register is where a figure is checked and where it is corrected,
+\ and both are on the menu.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false      |
@@ -2808,8 +2808,8 @@ Then menu items are : MenuItem
 
 Scenario The menu on several transactions offers only to recategorise them
 Description There is no one transaction to go to, and recategorising the lot at
-# once is the reason to have selected them. Shift took a run of them
-# or control picked them out; by here they are a set either way.
+\ once is the reason to have selected them. Shift took a run of them
+\ or control picked them out; by here they are a set either way.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false      |
@@ -2834,8 +2834,8 @@ Then menu items are : MenuItem
 
 Scenario A category line in the report has no menu
 Description A category figure is made of several transactions and is not one of
-# them, so there is neither a transaction to go to nor a single
-# category to change.
+\ them, so there is neither a transaction to go to nor a single
+\ category to change.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false      |
@@ -2861,22 +2861,22 @@ Then menu items are : MenuItem
 
 Scenario Going to a transaction opens its register at that line
 Description Which register: the one of the real account the transaction
-# touches. A category has none to browse, and the bank side is where
-# the figure can be checked against a statement and corrected.
+\ touches. A category has none to browse, and the bank side is where
+\ the figure can be checked against a statement and corrected.
 Details The line is selected, and the window scrolls it into view. Twenty
-# years of history is tens of thousands of lines, so a selection nobody
-# can see is the same as none.
-#
-# Named by its ref here because a table has to name it somehow. What the
-# report hands over is the transaction's own id, which is why the id is
-# on both pages; see the scenario below.
-#
-# A transfer touches two real accounts and so has two registers it could
-# be read in. Neither is more right than the other -- a payment to a card
-# is in the current account's register and in the card's, and which one
-# is wanted depends on what is being checked -- so both are offered and
-# nothing is opened until one is chosen. Choosing for the reader would be
-# wrong half the time and silent about it.
+\ years of history is tens of thousands of lines, so a selection nobody
+\ can see is the same as none.
+\
+\ Named by its ref here because a table has to name it somehow. What the
+\ report hands over is the transaction's own id, which is why the id is
+\ on both pages; see the scenario below.
+\
+\ A transfer touches two real accounts and so has two registers it could
+\ be read in. Neither is more right than the other -- a payment to a card
+\ is in the current account's register and in the card's, and which one
+\ is wanted depends on what is being checked -- so both are offered and
+\ nothing is opened until one is chosen. Choosing for the reader would be
+\ wrong half the time and silent about it.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -2899,7 +2899,7 @@ Then the register line selected is : RegisterSelect
 
 Attributes RegisterOffer
 Description A register a transaction could be read in, in the order the
-# transaction's transactions name them.
+\ transaction's transactions name them.
 | Attribute | Type        | Default |
 | Account   | AccountPath |         |
 
@@ -2910,8 +2910,8 @@ Attributes RegisterChoice
 
 Scenario A transfer offers both of its registers and opens neither
 Description The payment is in the current account and in the card, so there is
-# nothing to choose between until the reader chooses. Nothing is
-# opened in the meantime.
+\ nothing to choose between until the reader chooses. Nothing is
+\ opened in the meantime.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type       | Placeholder |
 | Assets:Checking    | Checking   | false       |
@@ -2962,9 +2962,9 @@ Then the register line selected is : RegisterSelect
 
 Scenario Recategorising from the report moves the figures with it
 Description The same operation as in the register, reached from the report. It
-# is the one place where recategorising is expected to change what
-# is on the page: the transaction leaves one category line and joins
-# another, and both totals move.
+\ is the one place where recategorising is expected to change what
+\ is on the page: the transaction leaves one category line and joins
+\ another, and both totals move.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -2992,7 +2992,7 @@ Attributes TransactionRecategorise
 
 Attributes IdShown
 Description Whether the id of one transaction is shown, and whether the two
-# places that show it agree.
+\ places that show it agree.
 | Attribute | Type      | Default |
 | Date      | Date      |         |
 | Payee     | PayeeName |         |
@@ -3001,11 +3001,11 @@ Description Whether the id of one transaction is shown, and whether the two
 
 Scenario The report and the register show the same transaction id
 Description Shown in both places while the click-through is being checked: it
-# is how a line on one page is known to be the line on the other.
-# The id is a clock reading to the millisecond, so no table can write
-# it down -- what is checked is that it is there and that the two
-# agree. Expected to come off both pages once the navigation is
-# trusted; see the naming rule in Transactions for what it is.
+\ is how a line on one page is known to be the line on the other.
+\ The id is a clock reading to the millisecond, so no table can write
+\ it down -- what is checked is that it is there and that the two
+\ agree. Expected to come off both pages once the navigation is
+\ trusted; see the naming rule in Transactions for what it is.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -3034,36 +3034,36 @@ Then the transaction id shown is : IdShown
 # ---------------------------------------------------------------------------
 
 Description Two windows that show the chart itself rather than the work done in
-# it -- one of the accounts, one of the categories -- and the menu
-# reached by right-clicking a line of the tree on the left.
+\ it -- one of the accounts, one of the categories -- and the menu
+\ reached by right-clicking a line of the tree on the left.
 Details The tree answers "where am I working". It groups the real accounts
-# under headings, totals each heading, leaves the hidden ones out until
-# they are asked for, and shows no categories at all. Every one of those
-# is right for working and wrong for maintaining: a category can only be
-# renamed if it can be found, and a hidden account can only be brought
-# back if it can be seen.
-#
-# So each listing is one line per node, every node, in path order, with no
-# headings and nothing left out. The account listing carries the bank and
-# the number from the account's own dialog, because seeing them together
-# is how a statement is matched to the account it belongs to; the
-# category listing carries the alias, because that is the only place it
-# is ever read.
-#
-# Both are windows of their own and not tabs. A tab is something to come
-# back to, and a listing is opened to find one node, change it, and close
-# again. Which menu they are on is not a table's business; that they are
-# reached from a menu rather than from the tree is, because the tree is
-# the thing they exist to get around.
-#
-# Clicking a line opens the editor of the thing on that line, so finding
-# and changing are one gesture rather than two. The menu on the tree
-# opens the same editor, because there would be no sense in one account
-# having two settings windows depending on where it was clicked.
+\ under headings, totals each heading, leaves the hidden ones out until
+\ they are asked for, and shows no categories at all. Every one of those
+\ is right for working and wrong for maintaining: a category can only be
+\ renamed if it can be found, and a hidden account can only be brought
+\ back if it can be seen.
+\
+\ So each listing is one line per node, every node, in path order, with no
+\ headings and nothing left out. The account listing carries the bank and
+\ the number from the account's own dialog, because seeing them together
+\ is how a statement is matched to the account it belongs to; the
+\ category listing carries the alias, because that is the only place it
+\ is ever read.
+\
+\ Both are windows of their own and not tabs. A tab is something to come
+\ back to, and a listing is opened to find one node, change it, and close
+\ again. Which menu they are on is not a table's business; that they are
+\ reached from a menu rather than from the tree is, because the tree is
+\ the thing they exist to get around.
+\
+\ Clicking a line opens the editor of the thing on that line, so finding
+\ and changing are one gesture rather than two. The menu on the tree
+\ opens the same editor, because there would be no sense in one account
+\ having two settings windows depending on where it was clicked.
 
 Attributes AccountListingRow
 Description One line of the account listing, in path order so a parent reads
-# above its children.
+\ above its children.
 | Attribute     | Type        | Default  |
 | Path          | AccountPath |          |
 | Type          | AccountType | Checking |
@@ -3089,23 +3089,23 @@ Description The line clicked, named by the path on it.
 
 Attributes EditorOpened
 Description Which editor came up and what it came up on. What the account
-# settings window holds is specified in Accounts; what is said here
-# is only that clicking a line opens it on the right node.
+\ settings window holds is specified in Accounts; what is said here
+\ is only that clicking a line opens it on the right node.
 | Attribute | Type | Default |
 | Window    | Text |         |
 | Target    | Text | none    |
 
 Attributes TreeNode
 Description A line of the tree on the left, named the way the tree shows it --
-# a group heading by its heading, an account by its path.
+\ a group heading by its heading, an account by its path.
 | Attribute | Type | Default |
 | Node      | Text |         |
 
 Scenario The account listing is every account, one line each
 Description A placeholder is a line, a hidden account is a line, there are no
-# group headings, and the categories are not here at all -- they have
-# a listing of their own. Compare the account list scenarios above,
-# where each of those four is the other way round.
+\ group headings, and the categories are not here at all -- they have
+\ a listing of their own. Compare the account list scenarios above,
+\ where each of those four is the other way round.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type       | Placeholder | Hidden |
 | Assets             | Checking   | true        | false  |
@@ -3125,8 +3125,8 @@ Then account listing rows are : AccountListingRow CompareOnly
 
 Scenario The account listing shows the bank and the number beside each account
 Description The one place they are read together. An account with neither is
-# still a line, because a book where some accounts are labelled and
-# some are not is exactly when the listing is wanted.
+\ still a line, because a book where some accounts are labelled and
+\ some are not is exactly when the listing is wanted.
 Given the chart of accounts is : ChartOfAccounts
 | Path             | Type       | Placeholder | Hidden |
 | Assets:Checking  | Checking   | false       | false  |
@@ -3149,8 +3149,8 @@ Then account listing rows are : AccountListingRow CompareOnly
 
 Scenario The category listing is every category, which no other window shows
 Description The tree shows none of these, so without this window a category
-# hidden by mistake cannot be found again, and one named badly
-# cannot be renamed.
+\ hidden by mistake cannot be found again, and one named badly
+\ cannot be renamed.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder | Hidden |
 | Assets:Checking    | Checking | false       | false  |
@@ -3194,9 +3194,9 @@ Then the editor opened is : EditorOpened Vertical
 
 Scenario The menu on an account in the tree offers what can be done to it
 Description Delete is offered and refused rather than left off, because an
-# account that cannot be deleted raises a question -- why not -- and
-# a greyed item with the reason to hand answers it. Checking has
-# entries, and an account with entries is not deleted; see Accounts.
+\ account that cannot be deleted raises a question -- why not -- and
+\ a greyed item with the reason to hand answers it. Checking has
+\ entries, and an account with entries is not deleted; see Accounts.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder | Hidden |
 | Assets:Checking    | Checking | false       | false  |
@@ -3217,7 +3217,7 @@ Then menu items are : MenuItem
 
 Scenario The menu on an account with nothing in it offers to delete it
 Description The same menu on the same tree, and the only difference is that
-# this account has no entries to lose.
+\ this account has no entries to lose.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder | Hidden |
 | Assets:Checking    | Checking | false       | false  |
@@ -3238,9 +3238,9 @@ Then menu items are : MenuItem
 
 Scenario The menu on a group heading offers only a new account
 Description A heading is not a thing in the book. It is the kind of account
-# written on the page, so there is nothing there to edit, hide or
-# delete -- but it is a perfectly good place to say "another one of
-# these".
+\ written on the page, so there is nothing there to edit, hide or
+\ delete -- but it is a perfectly good place to say "another one of
+\ these".
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder | Hidden |
 | Assets:Checking | Checking | false       | false  |
@@ -3268,41 +3268,41 @@ Then the editor opened is : EditorOpened Vertical
 # ---------------------------------------------------------------------------
 
 Description Dragging the divider between two headings makes a column wider or
-# narrower. The width belongs to the column, is the same in every
-# register, and is kept with the book.
+\ narrower. The width belongs to the column, is the same in every
+\ register, and is kept with the book.
 Details Every register is the same shape -- the same nine columns in the same
-# order, whatever the account -- so a width learned in one of them is
-# right in all of them. Widths held per account would mean widening the
-# payee column once per account, twenty times, for one preference about
-# how long a payee name is. Nobody would do that twice.
-#
-# Kept with the book rather than with the program, for the same reason
-# every other setting is: a book is a file, and a book carried to
-# another machine should look the way it was left. See how a book is
-# stored in Books. The widths are one row per column there, keyed by the
-# column's name as this specification writes it -- not by its heading,
-# because Payment and Deposit are headed differently for different
-# account types and the width is not.
-#
-# Only a column somebody resized is recorded. A column nobody touched
-# keeps whatever width the program gives it, and that number is not
-# stated anywhere here, so changing it does not fail a test. This is the
-# one thing that distinguishes "wide by default", which is appearance,
-# from "wide because I said so", which is not.
+\ order, whatever the account -- so a width learned in one of them is
+\ right in all of them. Widths held per account would mean widening the
+\ payee column once per account, twenty times, for one preference about
+\ how long a payee name is. Nobody would do that twice.
+\
+\ Kept with the book rather than with the program, for the same reason
+\ every other setting is: a book is a file, and a book carried to
+\ another machine should look the way it was left. See how a book is
+\ stored in Books. The widths are one row per column there, keyed by the
+\ column's name as this specification writes it -- not by its heading,
+\ because Payment and Deposit are headed differently for different
+\ account types and the width is not.
+\
+\ Only a column somebody resized is recorded. A column nobody touched
+\ keeps whatever width the program gives it, and that number is not
+\ stated anywhere here, so changing it does not fail a test. This is the
+\ one thing that distinguishes "wide by default", which is appearance,
+\ from "wide because I said so", which is not.
 
 Attributes RegisterColumnWidth
 Description The width of one register column, in pixels. A width is a number
-# only because a drag produces one; see the rule above for why no
-# default width appears in any table.
+\ only because a drag produces one; see the rule above for why no
+\ default width appears in any table.
 | Attribute | Type    | Default |
 | Column    | Text    |         |
 | Width     | Integer | 0       |
 
 BusinessRule A column cannot be dragged away to nothing
 Description A width is clamped to a minimum. A column dragged to no width at
-# all would be invisible, and a column that cannot be seen cannot be
-# dragged back, so the program would have lost it until the book was
-# edited by hand.
+\ all would be invisible, and a column that cannot be seen cannot be
+\ dragged back, so the program would have lost it until the book was
+\ edited by hand.
 Examples: WidthRequested
 | Requested | Stored | Notes                                   |
 | 240       | 240    | Taken as asked                          |
@@ -3318,8 +3318,8 @@ Attributes WidthRequested
 
 Scenario A column widened in one register is that wide in every register
 Description The width is the column's, so moving to another account does not
-# undo it. Both of these registers have a payee column, and after
-# the drag there is one answer to how wide it is.
+\ undo it. Both of these registers have a payee column, and after
+\ the drag there is one answer to how wide it is.
 Given the chart of accounts is : ChartOfAccounts
 | Path             | Type       | Placeholder | Hidden |
 | Assets:Checking  | Checking   | false       | false  |
@@ -3339,9 +3339,9 @@ Then register column widths are : RegisterColumnWidth CompareOnly
 
 Scenario Only the columns somebody resized are recorded
 Description The register has nine columns and one of them was dragged, so one
-# of them is written down. The other eight are whatever the program
-# makes them, which is deliberately not a number this
-# specification knows.
+\ of them is written down. The other eight are whatever the program
+\ makes them, which is deliberately not a number this
+\ specification knows.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder | Hidden |
 | Assets:Checking | Checking | false       | false  |
@@ -3357,7 +3357,7 @@ Then recorded column widths are : RegisterColumnWidth
 
 Scenario A width survives the book being saved and opened again
 Description A preference set once and lost on exit is worse than none, because
-# it has to be set again every time and it looks like a defect.
+\ it has to be set again every time and it looks like a defect.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder | Hidden |
 | Assets:Checking | Checking | false       | false  |
@@ -3381,8 +3381,8 @@ Then register column widths are : RegisterColumnWidth CompareOnly
 
 Scenario A column dragged to nothing keeps the minimum width
 Description The clamp from the rule above, through the window rather than in a
-# table of its own, because this is the case that would otherwise
-# lose a column for good.
+\ table of its own, because this is the case that would otherwise
+\ lose a column for good.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder | Hidden |
 | Assets:Checking | Checking | false       | false  |

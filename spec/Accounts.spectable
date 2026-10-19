@@ -2,11 +2,11 @@ Specification Accounts
 
 Description The chart of accounts, and what an account balance means.
 Details SimpleAccount keeps one tree of accounts. The types that hold money and
-# the types Quicken calls categories are both nodes in that tree, which is
-# what allows every transaction to balance. See Transactions.
-#
-# An account has no Name attribute. The name is the last segment of the
-# path, and is derived by the rule below rather than stored twice.
+\ the types Quicken calls categories are both nodes in that tree, which is
+\ what allows every transaction to balance. See Transactions.
+\
+\ An account has no Name attribute. The name is the last segment of the
+\ path, and is derived by the rule below rather than stored twice.
 
 # ---------------------------------------------------------------------------
 # The account
@@ -14,11 +14,11 @@ Details SimpleAccount keeps one tree of accounts. The types that hold money and
 
 Entity Account
 Description One node of the tree, category or real account alike. Which it is
-# follows from Type: Income, Expense and Equity are categories, and
-# everything else is a real account. One entity rather than two,
-# because almost everything about a node -- its name, where it sits,
-# whether it is hidden -- means the same thing either way; only Bank,
-# BankId and AccountNumber mean nothing on a category.
+\ follows from Type: Income, Expense and Equity are categories, and
+\ everything else is a real account. One entity rather than two,
+\ because almost everything about a node -- its name, where it sits,
+\ whether it is hidden -- means the same thing either way; only Bank,
+\ BankId and AccountNumber mean nothing on a category.
 Uses AccountPath and AccountType from CoreTypes
 | Attribute   | Type        | Default | Notes                               |
 | Id          | AccountId   | none    | Identity; given once, never changes. See the identity rule below |
@@ -88,8 +88,8 @@ Then account is : Account Vertical
 $TBD
 Scenario A missing parent is created as a placeholder
 Description Importing twenty years of data names deep categories that were
-# never created by hand, so the missing levels are filled in and
-# marked as placeholders.
+\ never created by hand, so the missing levels are filled in and
+\ marked as placeholders.
 Given the chart of accounts is as previous
 When account added : Account Vertical
 | Path | Expenses:Home:Garden:Seeds |
@@ -104,7 +104,7 @@ Then accounts created are : ChartOfAccounts
 $TBD
 Scenario A filled-in parent takes the type of its child
 Description A placeholder created on the way to an Expense is itself an Expense,
-# so the roll-up in a report adds up.
+\ so the roll-up in a report adds up.
 Given the chart of accounts is as previous
 When account added : Account Vertical
 | Path | Income:Interest:Bank Interest |
@@ -129,7 +129,7 @@ Attributes Rejection
 
 Scenario The same name under two different parents is fine
 Description Expenses:Auto:Insurance and Expenses:Home:Insurance are two
-# categories, and both are named Insurance.
+\ categories, and both are named Insurance.
 Given the chart of accounts is as previous
 When account added : Account Vertical
 | Path | Expenses:Auto:Insurance |
@@ -148,8 +148,8 @@ Then accounts named Insurance are : ChartOfAccounts CompareOnly
 
 Scenario Renaming an account renames its descendants
 Description The path of a child is built from the path of its parent, so a
-# rename rewrites every path beneath it. Transactions are untouched:
-# they refer to the account, not to the text of its path.
+\ rename rewrites every path beneath it. Transactions are untouched:
+\ they refer to the account, not to the text of its path.
 Given the chart of accounts is as previous
 When account renamed : AccountRename Vertical
 | Path    | Expenses:Auto |
@@ -194,7 +194,7 @@ Then rejected because : Rejection
 
 Scenario An account with entries is not deleted
 Description Twenty years of history is the point of the program, so nothing
-# silently discards a transaction. Hide the account instead.
+\ silently discards a transaction. Hide the account instead.
 Given the chart of accounts is as previous
 Given Expenses:Groceries has entries : EntryCount
 | Count |
@@ -246,29 +246,29 @@ Then category picker offers : ChartOfAccounts CompareOnly
 
 BusinessRule An account is identified by something that is not its path
 Description The path is a label. It is what people read, what they type and what
-# every table in this specification names an account by, and it can
-# change: a category can be renamed, and it can be moved under a
-# different parent. What identifies the account does not change when
-# either of those happens.
+\ every table in this specification names an account by, and it can
+\ change: a category can be renamed, and it can be moved under a
+\ different parent. What identifies the account does not change when
+\ either of those happens.
 Details The identifier is a plain, incrementing number, given once when the
-# account is created. Not the millisecond-clock scheme a transaction's
-# Id uses: an account is created rarely enough, and always by a person
-# rather than an import running flat out, that nothing cleverer than a
-# counter is needed to keep two of them from colliding.
-#
-# It is deliberately absent from every table in this specification. Nobody
-# types it, nobody reads it, and a scenario that stated one would be
-# stating something no scenario controls. Accounts are named here by path,
-# which is what a reader understands.
-#
-# What this buys is that rearranging categories is a small operation. With
-# the path as the identity, moving Auto:Fuel under Vehicle means rewriting
-# every transaction that named it -- tens of thousands of rows for one
-# decision, and a book that refers to a category that no longer exists if
-# it stops half way. With the path derived from the tree, the same move
-# changes which parent the account points at, and the paths are worked out
-# again afterwards. No transaction is touched, because no transaction ever named
-# the path in the first place.
+\ account is created. Not the millisecond-clock scheme a transaction's
+\ Id uses: an account is created rarely enough, and always by a person
+\ rather than an import running flat out, that nothing cleverer than a
+\ counter is needed to keep two of them from colliding.
+\
+\ It is deliberately absent from every table in this specification. Nobody
+\ types it, nobody reads it, and a scenario that stated one would be
+\ stating something no scenario controls. Accounts are named here by path,
+\ which is what a reader understands.
+\
+\ What this buys is that rearranging categories is a small operation. With
+\ the path as the identity, moving Auto:Fuel under Vehicle means rewriting
+\ every transaction that named it -- tens of thousands of rows for one
+\ decision, and a book that refers to a category that no longer exists if
+\ it stops half way. With the path derived from the tree, the same move
+\ changes which parent the account points at, and the paths are worked out
+\ again afterwards. No transaction is touched, because no transaction ever named
+\ the path in the first place.
 Examples: AccountRearranged
 | WhatChanges              | ThePath | TheIdentity | ThePostings |
 | Renaming a category      | Yes     | No          | Untouched   |
@@ -285,9 +285,9 @@ Attributes AccountRearranged
 
 Scenario Moving a category under another parent leaves its transactions alone
 Description The transactions named the account, not the path, so moving it is a
-# change to one account and to nothing else. The paths underneath are
-# worked out again, which is why Fuel reads as Vehicle:Fuel
-# afterwards without anything having rewritten it.
+\ change to one account and to nothing else. The paths underneath are
+\ worked out again, which is why Fuel reads as Vehicle:Fuel
+\ afterwards without anything having rewritten it.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -316,7 +316,7 @@ Attributes AccountMove
 
 DataType AccountId
 Description The identity an account is given once, when it is created, and
-# never afterwards. See the identity rule above.
+\ never afterwards. See the identity rule above.
 Uses Integer
 Examples: ValidValues
 | Value | IsValid | Notes                           |
@@ -329,23 +329,23 @@ Examples: ValidValues
 # ---------------------------------------------------------------------------
 
 Description Account and Category are redone here as two separate entities
-# rather than one Account entity that Type happens to make a
-# category of. They keep almost nothing in common: a category has no
-# bank and no account number, and is offered by typing rather than
-# read off a statement, while an account is never found by typing
-# part of its name. Keeping them apart is what "different data"
-# means in practice.
+\ rather than one Account entity that Type happens to make a
+\ category of. They keep almost nothing in common: a category has no
+\ bank and no account number, and is offered by typing rather than
+\ read off a statement, while an account is never found by typing
+\ part of its name. Keeping them apart is what "different data"
+\ means in practice.
 Details Nothing below removes the Account entity above, and nothing below
-# changes what a ChartOfAccounts table in an existing scenario looks
-# like: Path stays what every table in this specification names a node
-# by, for both kinds, the same as it always has. What changes is what a
-# node is identified and stored by underneath that convenience, which
-# these new rules say and the existing ones did not have to.
+\ changes what a ChartOfAccounts table in an existing scenario looks
+\ like: Path stays what every table in this specification names a node
+\ by, for both kinds, the same as it always has. What changes is what a
+\ node is identified and stored by underneath that convenience, which
+\ these new rules say and the existing ones did not have to.
 
 DataType CategoryId
 Description The identity a category is given once, when it is created, and
-# never afterwards. Drawn from the same counter as AccountId: see
-# the rule below. Zero is "none".
+\ never afterwards. Drawn from the same counter as AccountId: see
+\ the rule below. Zero is "none".
 Uses Integer
 Examples: ValidValues
 | Value | IsValid | Notes                               |
@@ -355,13 +355,13 @@ Examples: ValidValues
 
 BusinessRule An account id and a category id never collide
 Description Accounts and categories are two separate collections, but one
-# number line between them: the counter that hands out an AccountId
-# is the same counter that hands out a CategoryId, so a program
-# handed a bare number and told "look this up" never has to be told
-# which collection to look in first, and never guesses wrong.
+\ number line between them: the counter that hands out an AccountId
+\ is the same counter that hands out a CategoryId, so a program
+\ handed a bare number and told "look this up" never has to be told
+\ which collection to look in first, and never guesses wrong.
 Details This is what makes it safe for a transaction or a split line to name "the
-# other side" by one id with no separate flag saying which kind it is.
-# See Transactions.
+\ other side" by one id with no separate flag saying which kind it is.
+\ See Transactions.
 Examples: IdsGivenOut
 | CreatedInOrder       | Kind     | Id | Notes                        |
 | First account made   | Account  | 1  |                              |
@@ -378,18 +378,18 @@ Attributes IdsGivenOut
 
 BusinessRule An id is never given out a second time
 Description The counter only goes forward. The book records the last id it
-# handed out, and the next id is that number plus one, so deleting
-# an account does not free its number for the next one created.
+\ handed out, and the next id is that number plus one, so deleting
+\ an account does not free its number for the next one created.
 Details Working the next id out from the largest one in use would hand a
-# deleted account's number to the next account made, and anything still
-# naming the old one -- a transaction in a file not yet imported, a
-# report somebody saved, a backup opened a year later -- would read as
-# naming the new one. The counter is recorded, not computed. Where it is
-# recorded is in Books.
-# Each row below creates one node, so the group is made first and the
-# accounts under it afterwards. A path whose parent is missing creates
-# that parent as well, and takes an id for it too -- which is the adding
-# rule above, not this one.
+\ deleted account's number to the next account made, and anything still
+\ naming the old one -- a transaction in a file not yet imported, a
+\ report somebody saved, a backup opened a year later -- would read as
+\ naming the new one. The counter is recorded, not computed. Where it is
+\ recorded is in Books.
+\ Each row below creates one node, so the group is made first and the
+\ accounts under it afterwards. A path whose parent is missing creates
+\ that parent as well, and takes an id for it too -- which is the adding
+\ rule above, not this one.
 Examples: CounterOnlyGoesForward
 | WhatHappens                     | LastIdUsed | NextIdGivenOut |
 | A new book, nothing created yet | 0          | 1              |
@@ -406,9 +406,9 @@ Attributes CounterOnlyGoesForward
 
 Entity Category
 Description A node Quicken calls a category -- Income, Expense or Equity --
-# kept apart from Account because almost nothing else about it is
-# shared. See the business rule above for why its id still cannot
-# collide with an account's.
+\ kept apart from Account because almost nothing else about it is
+\ shared. See the business rule above for why its id still cannot
+\ collide with an account's.
 Uses AccountPath and AccountType from CoreTypes
 | Attribute     | Type        | Default | Notes                               |
 | Id            | CategoryId  | none    | Identity; given once, never changes |
@@ -426,8 +426,8 @@ Description Every category in the book, in one tree, separate from Accounts.
 
 Attributes CategoryRow
 Description A raw row as it would be read from storage, before its path is
-# derived -- named by id and parent id, the way the database holds
-# it, rather than by the path a person types.
+\ derived -- named by id and parent id, the way the database holds
+\ it, rather than by the path a person types.
 | Attribute     | Type        | Default |
 | Id            | Integer     | 0       |
 | SubcategoryOf | Integer     | 0       |
@@ -436,9 +436,9 @@ Description A raw row as it would be read from storage, before its path is
 
 Scenario A category's path is derived from its parent chain when it is read
 Description Nothing stores Expenses:Auto:Fuel as text. SubcategoryOf points at
-# the category above, and the path is walked out from that, the same
-# way an account's path already is worked out from the tree for
-# display. See the identity rule above.
+\ the category above, and the path is walked out from that, the same
+\ way an account's path already is worked out from the tree for
+\ display. See the identity rule above.
 Given raw category rows are : CategoryRow
 | Id | SubcategoryOf | Name     | Type    |
 | 1  | 0              | Expenses | Expense |
@@ -457,27 +457,27 @@ Then categories are : Category CompareOnly
 
 BusinessRule Converting an account to the one line it is shown as
 Description Everywhere a payee rule, a register's category column, or a
-# category picker needs one piece of text for an account or a
-# category, it is built the same way and it is never stored: it is
-# worked out from the tree, the moment it is needed, the same as a
-# path is.
+\ category picker needs one piece of text for an account or a
+\ category, it is built the same way and it is never stored: it is
+\ worked out from the tree, the moment it is needed, the same as a
+\ path is.
 Details A category shows as its name, and the name of everything between it
-# and its section, joined with colons -- Auto:Fuel, not
-# Expenses:Auto:Fuel. The section itself is never part of the text: it is
-# shown afterwards, in parentheses, which is the Quicken convention these
-# reports are checked against. Two categories that read the same but sit
-# in different sections -- an Auto under Income and one under Expenses,
-# unlikely as that is -- are told apart by it.
-#
-# A real account shows as its own name in square brackets, with nothing
-# of its ancestors in it: a card under no particular group reads
-# [Visa], not [Liabilities:Visa]. This is the bracket convention the
-# register already uses for the other side of a transfer; converting an
-# account is how every other place that needs the same text gets it.
-#
-# Placeholder is not part of this: a placeholder is converted exactly
-# the same way as any other node, because something still has to be
-# shown for it on a picker that lets a parent be chosen too.
+\ and its section, joined with colons -- Auto:Fuel, not
+\ Expenses:Auto:Fuel. The section itself is never part of the text: it is
+\ shown afterwards, in parentheses, which is the Quicken convention these
+\ reports are checked against. Two categories that read the same but sit
+\ in different sections -- an Auto under Income and one under Expenses,
+\ unlikely as that is -- are told apart by it.
+\
+\ A real account shows as its own name in square brackets, with nothing
+\ of its ancestors in it: a card under no particular group reads
+\ [Visa], not [Liabilities:Visa]. This is the bracket convention the
+\ register already uses for the other side of a transfer; converting an
+\ account is how every other place that needs the same text gets it.
+\
+\ Placeholder is not part of this: a placeholder is converted exactly
+\ the same way as any other node, because something still has to be
+\ shown for it on a picker that lets a parent be chosen too.
 Examples: AccountDisplay
 | Path                  | Type     | ShownAs           |
 | Expenses:Auto:Fuel     | Expense  | Auto:Fuel (Expense) |
@@ -494,10 +494,10 @@ Attributes AccountDisplay
 
 Scenario Converting every account at once is cheap enough to repeat on every change
 Description A few hundred accounts and categories at most, so converting the
-# whole chart over again -- rather than patching the one that moved --
-# is simpler and still instant. This runs when the book is opened,
-# and again after any add, edit, move, rename, hide or delete of
-# either an account or a category.
+\ whole chart over again -- rather than patching the one that moved --
+\ is simpler and still instant. This runs when the book is opened,
+\ and again after any add, edit, move, rename, hide or delete of
+\ either an account or a category.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -514,10 +514,10 @@ Then accounts show as : AccountDisplay CompareOnly
 
 Scenario A category's display name is rebuilt the same way, and when the book opens
 Description Category is now a separate entity from Account, but the rebuild is
-# one pass over everything either entity holds, not two: a book with
-# a few hundred nodes between them converts all of them, every time
-# it is opened and every time one is added, edited, moved, renamed,
-# hidden or deleted, and it is still instant.
+\ one pass over everything either entity holds, not two: a book with
+\ a few hundred nodes between them converts all of them, every time
+\ it is opened and every time one is added, edited, moved, renamed,
+\ hidden or deleted, and it is still instant.
 Given the categories are : Categories
 | Path               | Placeholder |
 | Expenses:Auto      | true        |
@@ -532,34 +532,34 @@ Then categories show as : AccountDisplay CompareOnly
 # ---------------------------------------------------------------------------
 
 Description Each account has a dialog of its own, holding what is known about
-# the account itself: which bank it is at, what that bank calls itself
-# in a download, and the number on the statement.
+\ the account itself: which bank it is at, what that bank calls itself
+\ in a download, and the number on the statement.
 Details These are facts about the account and not about any transaction, so
-# they live on the account rather than in a setting shared by the book.
-# Two current accounts at the same bank have to be told apart, and the
-# number is how the statement tells them apart.
-#
-# More will go here. The dialog is the place for anything true of one
-# account and of nothing else -- which CSV profile its downloads are in,
-# what its statements call a payment to it -- which is why it is a
-# dialog per account rather than another column in the account list.
-#
-# An OFX download names an account in the bank's own terms, a routing
-# number and an account number. Those are these: the three of them sit
-# on the account together, and matching a download to an account is
-# reading them off the account it belongs to. There is no second place
-# where a bank's numbering is recorded, because a second place is a
-# second thing to keep in step, and the one thing a download has to
-# find is an account.
-#
-# Bank is for a person and BankId is for a file, which is why they are
-# two attributes rather than one. Nobody should have to type a routing
-# number to label an account, and nothing reads "First Bank" out of a
-# download. Neither is ever required: an account with none of this works
-# exactly as it always did, and a QIF history carries none of it, so
-# every account migrated from Quicken starts with all three empty. The
-# first download into such an account is where they get filled in; see
-# what a download teaches an account in ImportOfx.
+\ they live on the account rather than in a setting shared by the book.
+\ Two current accounts at the same bank have to be told apart, and the
+\ number is how the statement tells them apart.
+\
+\ More will go here. The dialog is the place for anything true of one
+\ account and of nothing else -- which CSV profile its downloads are in,
+\ what its statements call a payment to it -- which is why it is a
+\ dialog per account rather than another column in the account list.
+\
+\ An OFX download names an account in the bank's own terms, a routing
+\ number and an account number. Those are these: the three of them sit
+\ on the account together, and matching a download to an account is
+\ reading them off the account it belongs to. There is no second place
+\ where a bank's numbering is recorded, because a second place is a
+\ second thing to keep in step, and the one thing a download has to
+\ find is an account.
+\
+\ Bank is for a person and BankId is for a file, which is why they are
+\ two attributes rather than one. Nobody should have to type a routing
+\ number to label an account, and nothing reads "First Bank" out of a
+\ download. Neither is ever required: an account with none of this works
+\ exactly as it always did, and a QIF history carries none of it, so
+\ every account migrated from Quicken starts with all three empty. The
+\ first download into such an account is where they get filled in; see
+\ what a download teaches an account in ImportOfx.
 
 Attributes AccountSettings
 Description What the dialog of one account holds.
@@ -571,8 +571,8 @@ Description What the dialog of one account holds.
 
 Scenario An account starts with nothing known about it but its name
 Description Nothing is required. An account with no bank and no number works
-# exactly as it does now, and the dialog is somewhere to put the
-# answer when there is one.
+\ exactly as it does now, and the dialog is somewhere to put the
+\ answer when there is one.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
 | Assets:Checking | Checking | false       |
@@ -591,7 +591,7 @@ Then account settings are : AccountSettings Vertical
 $TBD
 Scenario The bank and the number are kept with the book
 Description Written when they are entered, because a book is a file and not a
-# session. See the saving rule in Books.
+\ session. See the saving rule in Books.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
 | Assets:Checking | Checking | false       |
@@ -613,9 +613,9 @@ Then account settings are : AccountSettings Vertical
 
 Scenario An account number is kept as it is written
 Description A number on a statement is a label and not an amount: it may carry
-# dashes or spaces, it may have a leading zero that matters, and it
-# is never added to anything. So it is kept exactly as typed, with
-# only the blanks at either end taken off.
+\ dashes or spaces, it may have a leading zero that matters, and it
+\ is never added to anything. So it is kept exactly as typed, with
+\ only the blanks at either end taken off.
 Given the chart of accounts is : ChartOfAccounts
 | Path             | Type       | Placeholder |
 | Assets:Checking  | Checking   | false       |
@@ -642,24 +642,24 @@ Then account settings are : AccountSettings
 
 BusinessRule Typing part of a category offers it and everything under it
 Description Categorising a transaction by hand starts with typing. Whatever is
-# typed is matched against every part of every path, and a category
-# that matches is offered along with all the categories beneath it --
-# because typing a parent is how a person says "somewhere in here".
+\ typed is matched against every part of every path, and a category
+\ that matches is offered along with all the categories beneath it --
+\ because typing a parent is how a person says "somewhere in here".
 Details Matching is on any segment, not only the first, so "fuel" finds
-# Expenses:Auto:Fuel without anyone having typed Expenses or Auto. It
-# ignores case, because nobody capitalises while typing fast.
-#
-# Offering the children of a match is the part that matters. There are
-# nearly four hundred categories here and the useful ones sit two levels
-# down; a picker that offered only exact matches would mean typing the
-# whole path, and one that offered only leaves would make a parent
-# untypeable.
-#
-# A hidden category is not offered. Nor is one that has not been used for
-# years: the book has categories last used in 2008, and a list that offers
-# them alongside the ones in weekly use is a list nobody reads to the
-# bottom. Both stay in the book and both keep their history -- this is
-# about what is offered while typing, not about what exists.
+\ Expenses:Auto:Fuel without anyone having typed Expenses or Auto. It
+\ ignores case, because nobody capitalises while typing fast.
+\
+\ Offering the children of a match is the part that matters. There are
+\ nearly four hundred categories here and the useful ones sit two levels
+\ down; a picker that offered only exact matches would mean typing the
+\ whole path, and one that offered only leaves would make a parent
+\ untypeable.
+\
+\ A hidden category is not offered. Nor is one that has not been used for
+\ years: the book has categories last used in 2008, and a list that offers
+\ them alongside the ones in weekly use is a list nobody reads to the
+\ bottom. Both stay in the book and both keep their history -- this is
+\ about what is offered while typing, not about what exists.
 Examples: CategoryMatch
 | Typed | Offered                                            | Notes                                  |
 | fuel  | Expenses:Auto:Fuel                                 | Any segment, not just the first        |
@@ -692,7 +692,7 @@ Then categories offered are : CategoryOffered
 
 Attributes CategorySearch
 Description What has been typed so far, and whether the search was asked to
-# include the categories it normally leaves out.
+\ include the categories it normally leaves out.
 | Attribute      | Type       | Default |
 | Typed          | SearchText |         |
 | IncludeUnused  | Boolean    | false   |
@@ -703,8 +703,8 @@ Attributes CategoryOffered
 
 Scenario An alias stands for one category however little is typed
 Description A category used weekly should not need its name typed. The alias is
-# the user's own, a couple of letters after an at sign, and it offers
-# exactly the one category rather than everything that matches.
+\ the user's own, a couple of letters after an at sign, and it offers
+\ exactly the one category rather than everything that matches.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type    | Placeholder | Alias |
 | Expenses:Auto           | Expense | true        | none  |
@@ -720,8 +720,8 @@ Then categories offered are : CategoryOffered
 
 Scenario A category not used for years is left out while typing
 Description It is still in the book, still has its history, and still appears in
-# a report that covers the years it was used. It is simply not put in
-# front of someone categorising a transaction today.
+\ a report that covers the years it was used. It is simply not put in
+\ front of someone categorising a transaction today.
 Given today is : Today Vertical
 | Date | 2026-10-05 |
 Given the chart of accounts is : ChartOfAccounts
@@ -770,17 +770,17 @@ Then categories offered are : CategoryOffered
 
 DomainTerm RawBalance : Money
 Description The sum of the amounts of every transaction to one account, with the
-# sign those transactions carry. Debits are positive throughout.
+\ sign those transactions carry. Debits are positive throughout.
 
 DomainTerm DisplayBalance : Money
 Description The raw balance multiplied by the display sign of the account type,
-# so that each account reads the way its own statement reads.
+\ so that each account reads the way its own statement reads.
 
 BusinessRule Display sign follows from account type
 Description Which account types read the other way round from their transactions.
 Details A charge to a credit card credits that account, leaving a negative raw
-# balance, but the cardholder thinks of it as an amount owed. Income is
-# credited by a paycheque, and a report should show it as earned.
+\ balance, but the cardholder thinks of it as an amount owed. Income is
+\ credited by a paycheque, and a report should show it as earned.
 Examples: DisplaySignOf
 | AccountType        | DisplaySign | Notes                                       |
 | Checking           | 1           | Positive raw balance means money held       |
@@ -818,8 +818,8 @@ Attributes DisplaySignOf
 
 Define SomeEntries
 Description The entries the next three scenarios all read, named so that each
-# can ask for them. A scenario cannot take a table from the scenario
-# before it: every generated test stands alone.
+\ can ask for them. A scenario cannot take a table from the scenario
+\ before it: every generated test stands alone.
 | Account            | Amount   |
 | Assets:Checking    | 1000.00  |
 | Assets:Checking    | -45.00   |
@@ -843,9 +843,9 @@ Then balances are : AccountBalance
 
 Attributes AccountEntry
 Description An amount a transaction put against this account, from whichever
-# side of it. Used where a scenario is about what an account holds --
-# its balance, its rollup, its place in net worth -- and the other
-# side of each transaction is beside the point.
+\ side of it. Used where a scenario is about what an account holds --
+\ its balance, its rollup, its place in net worth -- and the other
+\ side of each transaction is beside the point.
 | Attribute | Type        | Default |
 | Account   | AccountPath |         |
 | Amount    | Money       | 0.00    |
@@ -859,8 +859,8 @@ Attributes AccountBalance
 
 Scenario A placeholder balance is the total of its descendants
 Description A placeholder takes no transactions of its own, so its balance is
-# entirely the roll-up. A node that is both posted to and a parent
-# reports both numbers, which is why there are two columns.
+\ entirely the roll-up. A node that is both posted to and a parent
+\ reports both numbers, which is why there are two columns.
 Given the chart of accounts is as previous
 Given entries are : AccountEntry
 =SomeEntries
@@ -881,7 +881,7 @@ Attributes RolledUpBalance
 
 Scenario Net worth is the total of the real accounts
 Description The nominal accounts are left out: including them would always give
-# zero, because every transaction balances.
+\ zero, because every transaction balances.
 Given the chart of accounts is as previous
 Given entries are : AccountEntry
 =SomeEntries
@@ -898,7 +898,7 @@ Attributes NetWorth
 
 Scenario A balance as at a date ignores later entries
 Description Every balance in the program is a balance as at a date; the figure
-# shown without one is the balance as at today. See Reports.
+\ shown without one is the balance as at today. See Reports.
 Given the chart of accounts is as previous
 Given dated entries are : DatedAccountEntry
 | Date       | Account         | Amount  |
@@ -914,7 +914,7 @@ Then balance as at dates are : BalanceAsAt
 
 Attributes DatedAccountEntry
 Description An AccountEntry with the date the transaction behind it was posted
-# on, for scenarios about when an account was last used.
+\ on, for scenarios about when an account was last used.
 | Attribute | Type        | Default    |
 | Date      | Date        | 2024-01-01 |
 | Account   | AccountPath |            |
@@ -933,9 +933,9 @@ Attributes BalanceAsAt
 
 Scenario Opening a real account with a balance
 Description There is no opening balance field on an account. An opening balance
-# is a transaction against Equity:Opening Balances, so the book
-# balances from its first day. This is what lets an import of twenty
-# years of history start from a known position.
+\ is a transaction against Equity:Opening Balances, so the book
+\ balances from its first day. This is what lets an import of twenty
+\ years of history start from a known position.
 Given the chart of accounts is as previous
 When account added with an opening balance : AccountWithOpeningBalance Vertical
 | Path           | Assets:Brokerage Cash |
@@ -955,7 +955,7 @@ Attributes AccountWithOpeningBalance
 
 Scenario Opening a credit card with a balance owed
 Description The opening balance is entered the way the statement reads, as an
-# amount owed, and is stored with the sign the transaction needs.
+\ amount owed, and is stored with the sign the transaction needs.
 Given the chart of accounts is as previous
 When account added with an opening balance : AccountWithOpeningBalance Vertical
 | Path           | Liabilities:Amex |
@@ -1003,7 +1003,7 @@ Attributes AccountTypeChange
 
 Scenario Changing type across the real and nominal divide is refused
 Description Changing an Expense into a Bank would change the sign that every
-# existing transaction is read with, and so rewrite history in silence.
+\ existing transaction is read with, and so rewrite history in silence.
 Given the chart of accounts is as previous
 Given Expenses:Groceries has entries : EntryCount
 | Count |
@@ -1017,7 +1017,7 @@ Then rejected because : Rejection
 
 Scenario Changing type within the real accounts is allowed
 Description A Bank mistakenly set up as Cash is a common correction, and the
-# display sign is the same for both, so no transaction changes meaning.
+\ display sign is the same for both, so no transaction changes meaning.
 Given the chart of accounts is as previous
 Given Assets:Savings has entries : EntryCount
 | Count |

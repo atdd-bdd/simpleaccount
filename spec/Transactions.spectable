@@ -1,21 +1,21 @@
 Specification Transactions
 
 Description The transaction and the rule that every transaction balances.
-# Splits and transfers are not separate kinds of thing here: a split
-# is a transaction whose Destination is Split, with its lines in
-# TransactionSplit; a transfer is a pair of transactions each naming
-# the other as Destination.
+\ Splits and transfers are not separate kinds of thing here: a split
+\ is a transaction whose Destination is Split, with its lines in
+\ TransactionSplit; a transfer is a pair of transactions each naming
+\ the other as Destination.
 Details
-# Tables in this file group rows into one transaction with a Ref column.
-# Ref is how a table says that two rows belong together, and nothing more
-# than that: a device of these tables, short enough to read. It is not
-# shown anywhere in the program and it is not what a transaction is stored
-# under. That is its Id, given once when the transaction is created and
-# never changed afterwards. See the rule on naming a transaction.
+\ Tables in this file group rows into one transaction with a Ref column.
+\ Ref is how a table says that two rows belong together, and nothing more
+\ than that: a device of these tables, short enough to read. It is not
+\ shown anywhere in the program and it is not what a transaction is stored
+\ under. That is its Id, given once when the transaction is created and
+\ never changed afterwards. See the rule on naming a transaction.
 
 DataType TransactionRef
 Description How a table in this specification says which rows belong to one
-# transaction. Not the stored identity, which is the Id.
+\ transaction. Not the stored identity, which is the Id.
 Uses Text
 Examples: ValidValues
 | Value | IsValid | Notes                               |
@@ -29,8 +29,8 @@ Examples: ValidValues
 
 DataType ImportSource
 Description Where an identifier came from. Two files describing one transaction
-# do not agree on what to call it, so the name of the source travels
-# with the name of the transaction.
+\ do not agree on what to call it, so the name of the source travels
+\ with the name of the transaction.
 Examples: EnumerationValues
 | Value | Notes                                      |
 | Ofx   | A FITID, from an OFX or QFX download        |
@@ -40,23 +40,23 @@ Examples: EnumerationValues
 Entity ImportId
 Description An identifier a file gave to a transaction, and which file gave it.
 Details At most one per source: a transaction has exactly one home account --
-# the one it was downloaded into or typed against -- so there is no
-# second side with an identifier of its own.
+\ the one it was downloaded into or typed against -- so there is no
+\ second side with an identifier of its own.
 | Attribute | Type         | Default | Notes                                |
 | Source    | ImportSource | Ofx     | Which kind of file said so           |
 | Id        | Text         |         | As that file gave it, unchanged      |
 
 Collection ImportIds
 Description The identifiers one transaction has collected. More than one,
-# because a transaction imported from a CSV and later recognised in a
-# QFX has a name in each, and losing either would make that file
-# import twice.
+\ because a transaction imported from a CSV and later recognised in a
+\ QFX has a name in each, and losing either would make that file
+\ import twice.
 | DataType | Minimum | Maximum | Notes                        |
 | ImportId | 0       | 8       | One per source at most       |
 
 Entity Transaction
 Description What a transaction is: the account it lives in, the other side,
-# and the signed amount between them.
+\ and the signed amount between them.
 | Attribute     | Type           | Default    | Notes                        |
 | Id            | TransactionId  | none       | Identity; given once, never changes. These tables never name one: it is given by whatever creates the transaction, so a table that stated one would be stating something no scenario controls |
 | Ref           | TransactionRef |            | A device of these tables; not stored |
@@ -76,26 +76,26 @@ Description What a transaction is: the account it lives in, the other side,
 
 BusinessRule An unknown category and an unknown account are different unknowns
 Description A charge whose category nobody has chosen is Uncategorized. A payment
-# whose other account nobody has worked out is Unassigned. They are
-# separate because they are different questions with different answers
-# and different ways of being resolved.
+\ whose other account nobody has worked out is Unassigned. They are
+\ separate because they are different questions with different answers
+\ and different ways of being resolved.
 Details Uncategorized asks what the money was for. It is answered by choosing a
-# category, by a payee rule, or by leaving it: a spending report with a
-# line called Uncategorized is telling the truth about money that was
-# spent on something nobody classified, and Quicken's own reports have had
-# such a line for twenty years.
-#
-# Unassigned asks which account the money went to. It is answered by the
-# other side of the transfer turning up in a later import, or by a person
-# assigning it in the register. It is never answered by leaving it, because
-# money that left one account and arrived nowhere is not a fact about the
-# world -- it is a fact about what has been imported so far.
-#
-# That difference is why Unassigned is a real account and Uncategorized is
-# a category. Unassigned holds money in transit, its balance is the work
-# outstanding, and that balance is expected to reach zero. A book whose
-# Unassigned balance is not zero is not wrong: it is telling its owner how
-# many halves of transfers are still waiting for the other half.
+\ category, by a payee rule, or by leaving it: a spending report with a
+\ line called Uncategorized is telling the truth about money that was
+\ spent on something nobody classified, and Quicken's own reports have had
+\ such a line for twenty years.
+\
+\ Unassigned asks which account the money went to. It is answered by the
+\ other side of the transfer turning up in a later import, or by a person
+\ assigning it in the register. It is never answered by leaving it, because
+\ money that left one account and arrived nowhere is not a fact about the
+\ world -- it is a fact about what has been imported so far.
+\
+\ That difference is why Unassigned is a real account and Uncategorized is
+\ a category. Unassigned holds money in transit, its balance is the work
+\ outstanding, and that balance is expected to reach zero. A book whose
+\ Unassigned balance is not zero is not wrong: it is telling its owner how
+\ many halves of transfers are still waiting for the other half.
 Examples: TwoUnknowns
 | TheUnknown     | TheQuestion                      | WhereItLives | ClearedBy                        |
 | Uncategorized  | What was the money for           | A category   | A category, a payee rule, or left |
@@ -121,27 +121,27 @@ Description Assigning the other account of a transfer by hand, in the register.
 $TBD
 BusinessRule Whether the other side is an account or a category
 Description The other side of a downloaded row is an account when the money came
-# from or went to something this book keeps, and a category when it did
-# not. That single question decides which of the two unknowns is used,
-# and nothing else about the row decides it.
+\ from or went to something this book keeps, and a category when it did
+\ not. That single question decides which of the two unknowns is used,
+\ and nothing else about the row decides it.
 Details A payment from the bank to a credit card the book keeps is a transfer and
-# nothing else: both halves are accounts here, the money never left the
-# book, and the two halves add to nothing. The book balances because it
-# should -- that is the whole of double entry and there is no income or
-# expense anywhere in it.
-#
-# A paycheck is not a transfer. The money came from an employer this book
-# does not keep, so there is no second account for it to have come out of,
-# and the other side is a category: Income:Salary. The same goes for a
-# royalty, and for a distribution from an IRA or a trust that the book does
-# not itself hold -- money arriving from outside is income, however
-# institutional the sender.
-#
-# This is why a payee that matches no account's PaymentPayee is not a
-# failed transfer. It is an ordinary deposit, and recording it as a
-# category is correct rather than second best. Unassigned is only for a row
-# that is known to have another side in this book and does not yet know
-# which.
+\ nothing else: both halves are accounts here, the money never left the
+\ book, and the two halves add to nothing. The book balances because it
+\ should -- that is the whole of double entry and there is no income or
+\ expense anywhere in it.
+\
+\ A paycheck is not a transfer. The money came from an employer this book
+\ does not keep, so there is no second account for it to have come out of,
+\ and the other side is a category: Income:Salary. The same goes for a
+\ royalty, and for a distribution from an IRA or a trust that the book does
+\ not itself hold -- money arriving from outside is income, however
+\ institutional the sender.
+\
+\ This is why a payee that matches no account's PaymentPayee is not a
+\ failed transfer. It is an ordinary deposit, and recording it as a
+\ category is correct rather than second best. Unassigned is only for a row
+\ that is known to have another side in this book and does not yet know
+\ which.
 Examples: WhereTheOtherSideLives
 | TheRow                                | TheOtherSide          | Because                               |
 | A payment to a card the book keeps    | The card account      | Both halves are in the book           |
@@ -160,8 +160,8 @@ Attributes WhereTheOtherSideLives
 
 Scenario A deposit from outside the book is a category, not an unassigned transfer
 Description A paycheck. Nothing in the book is the other side of it, so there is
-# nothing for Unassigned to be waiting for and the row is categorised
-# like any other.
+\ nothing for Unassigned to be waiting for and the row is categorised
+\ like any other.
 Given the chart of accounts is : ChartOfAccounts
 | Path                 | Type   | Placeholder |
 | Assets:Checking      | Checking | false       |
@@ -183,24 +183,24 @@ Then balances are : AccountBalance CompareOnly
 $TBD
 BusinessRule Assigning an account asks whether the other entry already exists
 Description Assigning a real account to an Unassigned side says where the money
-# went. It does not say whether that account already has a row for it.
-# Both are possible and they are different outcomes, so the program
-# asks rather than choosing.
+\ went. It does not say whether that account already has a row for it.
+\ Both are possible and they are different outcomes, so the program
+\ asks rather than choosing.
 Details Making a new entry is right when the other account has no row for this
-# money -- usually because it has not been imported yet. The transfer
-# is one transaction naming the other account, shown in both registers,
-# and the second account will recognise its own row when its file is read.
-#
-# Matching an existing entry is right when the other account already has
-# the row, entered by hand or imported too long ago or too far out for the
-# windows to have paired them. Then there are two transactions describing
-# one movement of money, and leaving both would double it. They become one.
-#
-# So the register offers the other account's entries to scroll through,
-# nearest in date and amount first, and the user picks the one that is the
-# same movement of money. Picking nothing and making a new entry instead is
-# always available, because a user who cannot find it is better served by a
-# new row than by being made to choose wrongly.
+\ money -- usually because it has not been imported yet. The transfer
+\ is one transaction naming the other account, shown in both registers,
+\ and the second account will recognise its own row when its file is read.
+\
+\ Matching an existing entry is right when the other account already has
+\ the row, entered by hand or imported too long ago or too far out for the
+\ windows to have paired them. Then there are two transactions describing
+\ one movement of money, and leaving both would double it. They become one.
+\
+\ So the register offers the other account's entries to scroll through,
+\ nearest in date and amount first, and the user picks the one that is the
+\ same movement of money. Picking nothing and making a new entry instead is
+\ always available, because a user who cannot find it is better served by a
+\ new row than by being made to choose wrongly.
 Examples: AssignmentOutcome
 | TheOtherAccount                | WhatHappens                                        |
 | Has no row for this money      | One transaction names it, and shows in both registers    |
@@ -214,15 +214,15 @@ Attributes AssignmentOutcome
 
 Attributes EntryMatch
 Description Matching an Unassigned side against an entry the user picked from
-# another account's register.
+\ another account's register.
 | Attribute | Type           | Default |
 | Ref       | TransactionRef |         |
 | OtherRef  | TransactionRef |         |
 
 Scenario The entries offered to match are the other account's, nearest first
 Description Scrolling someone through four hundred rows is not offering a choice.
-# The entries offered are the ones in the account being assigned, with
-# the closest in amount and date at the top.
+\ The entries offered are the ones in the account being assigned, with
+\ the closest in amount and date at the top.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
 | Assets:Checking        | Checking   | false       |
@@ -259,31 +259,31 @@ Attributes OfferedEntry
 $TBD
 BusinessRule A transaction is named when it is created and keeps that name
 Description The name is the moment it was created: the date and the time to the
-# millisecond. The generator waits if the clock has not moved since the
-# last name it gave out, so no two can be the same, and a name sorts
-# into the order things were entered.
+\ millisecond. The generator waits if the clock has not moved since the
+\ last name it gave out, so no two can be the same, and a name sorts
+\ into the order things were entered.
 Details The name is given once, by whatever creates the transaction, and never
-# changes. That is the whole of the rule, and the reason for it is that
-# the alternatives cannot promise it. A name taken from where a
-# transaction came from -- a FITID, a CSV row -- is a fact about a file,
-# and a transaction can collect one of those from every kind of file it is
-# ever recognised in. A transaction imported from a CSV and later matched
-# in a QFX has a name in each, which is why ImportIds is a collection.
-# Identity cannot be one of several, and it cannot change when a later
-# import learns something, so it is kept apart from all of them.
-#
-# The import identifiers are still kept and still do the work they always
-# did: they are what makes the same file read twice import nothing the
-# second time. They are facts about the transaction rather than its name.
-#
-# The cost is a millisecond for each transaction created in a run. That is
-# nothing while a person types, and about forty-three seconds for the
-# forty-three thousand transactions of the business QIF -- paid once, on
-# the slowest thing the program already does.
-#
-# What it buys is worth more than the second. A transaction can be traced:
-# a name carrying the minute it was entered answers "when did this appear,
-# and what else appeared with it" without anything having had to record it.
+\ changes. That is the whole of the rule, and the reason for it is that
+\ the alternatives cannot promise it. A name taken from where a
+\ transaction came from -- a FITID, a CSV row -- is a fact about a file,
+\ and a transaction can collect one of those from every kind of file it is
+\ ever recognised in. A transaction imported from a CSV and later matched
+\ in a QFX has a name in each, which is why ImportIds is a collection.
+\ Identity cannot be one of several, and it cannot change when a later
+\ import learns something, so it is kept apart from all of them.
+\
+\ The import identifiers are still kept and still do the work they always
+\ did: they are what makes the same file read twice import nothing the
+\ second time. They are facts about the transaction rather than its name.
+\
+\ The cost is a millisecond for each transaction created in a run. That is
+\ nothing while a person types, and about forty-three seconds for the
+\ forty-three thousand transactions of the business QIF -- paid once, on
+\ the slowest thing the program already does.
+\
+\ What it buys is worth more than the second. A transaction can be traced:
+\ a name carrying the minute it was entered answers "when did this appear,
+\ and what else appeared with it" without anything having had to record it.
 Examples: TransactionNaming
 | CreatedBy       | TheNameComesFrom              | Notes                              |
 | Typing it in    | The clock, to the millisecond | Nothing else is consulted          |
@@ -299,8 +299,8 @@ Attributes TransactionNaming
 
 Scenario Two transactions created in the same millisecond cannot happen
 Description The generator waits for the clock rather than giving out a name it
-# has given before. So transactions created as fast as the program can
-# create them are still a millisecond apart, and in order.
+\ has given before. So transactions created as fast as the program can
+\ create them are still a millisecond apart, and in order.
 When transactions are created in a row : TransactionsCreated Vertical
 | HowMany | 3 |
 Then the names are all different
@@ -314,7 +314,7 @@ Attributes TransactionsCreated
 
 DataType TransactionId
 Description The name a transaction is stored under: the date and the time it was
-# created, to the millisecond. Sorts into creation order as text.
+\ created, to the millisecond. Sorts into creation order as text.
 Uses Text
 Examples: ValidValues
 | Value              | IsValid | Notes                                     |
@@ -329,22 +329,22 @@ Examples: ValidValues
 
 BusinessRule Every transaction balances
 Description A transaction names one signed amount against one source account, and
-# its destination carries the opposite effect by construction. There is
-# no second figure to disagree with the first, so an ordinary
-# transaction cannot be out of balance -- it is the shape that makes
-# double entry hold, not a check run over a list of transactions.
+\ its destination carries the opposite effect by construction. There is
+\ no second figure to disagree with the first, so an ordinary
+\ transaction cannot be out of balance -- it is the shape that makes
+\ double entry hold, not a check run over a list of transactions.
 Details What can still fail to add up is a split, because a split is the one
-# place with more than one figure that is supposed to agree with
-# another: its lines against its transaction's amount. That check, and
-# the refusal when it fails, are the split rule and the shortfall
-# scenario further down this file.
-#
-# The old shape made the same guarantee by summing the amounts of the
-# postings of one transaction to zero. Two postings that summed to five
-# dollars, or a lone transaction that summed to itself, were the two ways
-# that could fail; neither is expressible now. A transaction has one
-# amount, and the entry in the other account -- when there is one, as
-# for a transfer -- is a transaction in its own right with its own.
+\ place with more than one figure that is supposed to agree with
+\ another: its lines against its transaction's amount. That check, and
+\ the refusal when it fails, are the split rule and the shortfall
+\ scenario further down this file.
+\
+\ The old shape made the same guarantee by summing the amounts of the
+\ postings of one transaction to zero. Two postings that summed to five
+\ dollars, or a lone transaction that summed to itself, were the two ways
+\ that could fail; neither is expressible now. A transaction has one
+\ amount, and the entry in the other account -- when there is one, as
+\ for a transfer -- is a transaction in its own right with its own.
 Examples: BalanceByConstruction
 | Amount   | DestinationEffect | WhatCanDisagree | Notes                                          |
 | -45.00   | 45.00             | Nothing         | An ordinary payment                            |
@@ -366,9 +366,9 @@ Attributes BalanceByConstruction
 
 Attributes RegisterEntry
 Description What is typed on one line of a register. The register is always
-# opened on one account, which is the Account column here.
+\ opened on one account, which is the Account column here.
 Details Payment and Deposit are the two amount columns of the register, and
-# only one of them is filled in. See TransactionRegister.
+\ only one of them is filled in. See TransactionRegister.
 | Attribute | Type        | Default    |
 | Account   | AccountPath |            |
 | Date      | Date        | 2024-01-01 |
@@ -382,10 +382,10 @@ Details Payment and Deposit are the two amount columns of the register, and
 BusinessRule A register entry becomes one transaction
 Description How the Payment and Deposit columns turn into one signed amount.
 Details The amount on the register account is the deposit less the payment.
-# The register is always opened on one account, so that account is the
-# transaction's SourceAccount and the Category column is its
-# Destination. The destination carries the opposite effect by
-# construction; it is not a second figure for the register to fill in.
+\ The register is always opened on one account, so that account is the
+\ transaction's SourceAccount and the Category column is its
+\ Destination. The destination carries the opposite effect by
+\ construction; it is not a second figure for the register to fill in.
 Examples: RegisterEntryToTransaction
 | Payment | Deposit | Amount  | Notes            |
 | 45.00   | 0.00    | -45.00  | Money out        |
@@ -466,17 +466,17 @@ Then transaction is : Transaction Vertical
 
 DomainTerm Transfer : Transaction
 Description A transaction whose SourceAccount and Destination are both real
-# accounts. It is not a separate kind of record: it is recognised by
-# its shape, and that is why it needs no special handling anywhere
-# else.
+\ accounts. It is not a separate kind of record: it is recognised by
+\ its shape, and that is why it needs no special handling anywhere
+\ else.
 
 Scenario A transfer between two accounts
 Description The category column of the register holds the other account. Two
-# transactions are created, one for each account, each naming the
-# other. A transaction is one account's own entry, so a movement
-# between two accounts is an entry in each -- which is also what a
-# download of the same movement from both banks would leave, and why
-# each side can clear on its own statement.
+\ transactions are created, one for each account, each naming the
+\ other. A transaction is one account's own entry, so a movement
+\ between two accounts is an entry in each -- which is also what a
+\ download of the same movement from both banks would leave, and why
+\ each side can clear on its own statement.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
 | Assets:Checking | Checking | false       |
@@ -516,8 +516,8 @@ Then transaction is a transfer : TransferCheck Vertical
 
 Scenario A credit card payment is a transfer, not an expense
 Description Paying the card moves money between two real accounts. Recording it
-# as an expense would count the spending twice: once when each charge
-# was categorised, and again when the card was paid.
+\ as an expense would count the spending twice: once when each charge
+\ was categorised, and again when the card was paid.
 Given the chart of accounts is : ChartOfAccounts
 | Path             | Type       | Placeholder |
 | Assets:Checking  | Checking   | false       |
@@ -539,7 +539,7 @@ Then balances are : AccountBalance
 
 Scenario A transaction may not name the same account on both sides
 Description An account transferring to itself would change nothing and clear
-# nothing; it is always a mistake.
+\ nothing; it is always a mistake.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
 | Assets:Checking | Checking | false       |
@@ -555,8 +555,8 @@ Then rejected because : Rejection
 
 Scenario A transaction to a placeholder account is refused
 Description A placeholder exists to group its children in a report. Entering
-# against it makes its own balance differ from the total of its
-# children, which is the one thing a tree of accounts must not do.
+\ against it makes its own balance differ from the total of its
+\ children, which is the one thing a tree of accounts must not do.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -578,7 +578,7 @@ Then rejected because : Rejection
 Attributes SplitLine
 Description One category line of a split, as it is typed into the split window.
 Details The amount is entered the way the register entry is: positive for money
-# leaving the account being reconciled.
+\ leaving the account being reconciled.
 | Attribute | Type        | Default |
 | Category  | AccountPath |         |
 | Amount    | Money       | 0.00    |
@@ -586,8 +586,8 @@ Details The amount is entered the way the register entry is: positive for money
 
 Scenario A split across three categories
 Description One trip to the hardware store, charged three ways. The transaction
-# carries the total against the register's account; each category is a
-# line of its split.
+\ carries the total against the register's account; each category is a
+\ line of its split.
 Given the chart of accounts is : ChartOfAccounts
 | Path                       | Type    | Placeholder |
 | Assets:Checking            | Checking | false       |
@@ -618,7 +618,7 @@ Then split lines are : TransactionSplit
 
 Scenario Split lines that do not add up to the total are refused
 Description The split window shows the shortfall as it is typed; this is what
-# happens if the entry is committed anyway.
+\ happens if the entry is committed anyway.
 Given the chart of accounts is : ChartOfAccounts
 | Path                       | Type    | Placeholder |
 | Assets:Checking            | Checking | false       |
@@ -641,46 +641,46 @@ Then rejected because : Rejection
 $TBD
 BusinessRule A split is saved only when its lines match the total it was opened on
 Description A split is edited in a window of its own, on a transaction that
-# already has an amount, so the window knows what its lines are
-# supposed to come to. That total is checked when the window is
-# saved, and a split that does not match it is not quietly written.
+\ already has an amount, so the window knows what its lines are
+\ supposed to come to. That total is checked when the window is
+\ saved, and a split that does not match it is not quietly written.
 Details The shortfall is shown as the lines are typed -- the scenario above
-# is that -- so by the time somebody presses save they have usually
-# seen it already. The check at save is for the case where they have
-# not: a line typed and left half finished, a figure corrected in one
-# place and not the other.
-#
-# Saying "not matching" and stopping there would leave the user to do
-# the arithmetic themselves. So three answers are offered, and what
-# separates them is what becomes of the lines that were typed. Edit
-# the split goes back to the window with those lines still in it,
-# which is the answer for somebody who can now see which of the two
-# figures is wrong and wants to fix it. Add the remainder puts the
-# difference in a line of its own, which balances the split and
-# leaves the amount visible in a category instead of hidden in a
-# rounding nobody can find. Cancel the save abandons the edit: the
-# window closes, the typed lines go with it, and the split is the one
-# it was opened on.
-#
-# Cancel and edit are both "do not save this", and the difference
-# between them is the only thing about this dialog anyone has to
-# think about. Edit keeps the work and stays; cancel discards it and
-# leaves. Offering one without the other would make somebody choose
-# between losing a figure they have just typed and not being able to
-# leave the window at all.
-#
-# The remainder goes to Expenses:Uncategorized, not to Unassigned. The
-# two kinds of unknown are set out at the top of this file: Unassigned
-# is for money whose other account nobody has worked out, and it is a
-# real account whose balance is a work list. A split line is a
-# category line, so a remainder nobody has categorised is the other
-# unknown -- the one that appears on a spending report as
-# Uncategorized and asks to be given a heading.
-#
-# A split whose lines come to more than the transaction is the same
-# question with the sign turned round, and is offered the same three
-# answers. The remainder is then negative, and a line of -30.00 under
-# Uncategorized is honest about where the arithmetic went.
+\ is that -- so by the time somebody presses save they have usually
+\ seen it already. The check at save is for the case where they have
+\ not: a line typed and left half finished, a figure corrected in one
+\ place and not the other.
+\
+\ Saying "not matching" and stopping there would leave the user to do
+\ the arithmetic themselves. So three answers are offered, and what
+\ separates them is what becomes of the lines that were typed. Edit
+\ the split goes back to the window with those lines still in it,
+\ which is the answer for somebody who can now see which of the two
+\ figures is wrong and wants to fix it. Add the remainder puts the
+\ difference in a line of its own, which balances the split and
+\ leaves the amount visible in a category instead of hidden in a
+\ rounding nobody can find. Cancel the save abandons the edit: the
+\ window closes, the typed lines go with it, and the split is the one
+\ it was opened on.
+\
+\ Cancel and edit are both "do not save this", and the difference
+\ between them is the only thing about this dialog anyone has to
+\ think about. Edit keeps the work and stays; cancel discards it and
+\ leaves. Offering one without the other would make somebody choose
+\ between losing a figure they have just typed and not being able to
+\ leave the window at all.
+\
+\ The remainder goes to Expenses:Uncategorized, not to Unassigned. The
+\ two kinds of unknown are set out at the top of this file: Unassigned
+\ is for money whose other account nobody has worked out, and it is a
+\ real account whose balance is a work list. A split line is a
+\ category line, so a remainder nobody has categorised is the other
+\ unknown -- the one that appears on a spending report as
+\ Uncategorized and asks to be given a heading.
+\
+\ A split whose lines come to more than the transaction is the same
+\ question with the sign turned round, and is offered the same three
+\ answers. The remainder is then negative, and a line of -30.00 under
+\ Uncategorized is honest about where the arithmetic went.
 Examples: SplitSaveCheck
 | Total  | Allocated | Remainder | Saved                                           |
 | 184.50 | 184.50    | 0.00      | Saved; nothing is said                          |
@@ -706,9 +706,9 @@ Examples: EnumerationValues
 $TBD
 Scenario Saving a split whose lines do not match the total says so
 Description The window is opened on a split of 184.50 and one of its lines is
-# taken out, so the lines now come to 154.50. The save says what the
-# two figures are rather than only that they differ: the user is
-# about to choose between them.
+\ taken out, so the lines now come to 154.50. The save says what the
+\ two figures are rather than only that they differ: the user is
+\ about to choose between them.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type     | Placeholder |
 | Assets:Checking           | Checking | false       |
@@ -750,9 +750,9 @@ Attributes SplitMismatch
 $TBD
 Scenario Cancelling the save leaves the stored split as it was
 Description Nothing is written, so the split is still the three lines it was
-# opened on, and the window has gone with the typed lines in it. The
-# line for the wiper blades is back, because it was never taken out
-# of anything but the window.
+\ opened on, and the window has gone with the typed lines in it. The
+\ line for the wiper blades is back, because it was never taken out
+\ of anything but the window.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type     | Placeholder |
 | Assets:Checking           | Checking | false       |
@@ -792,11 +792,11 @@ Attributes SplitMismatchAnswer
 $TBD
 Scenario Choosing to edit the split goes back to the lines as they were typed
 Description The answer for somebody who has now seen the two figures and knows
-# which of them is wrong. Nothing is written and nothing is thrown
-# away either: the window is still there with the two lines in it,
-# and the 30.00 can be typed against whichever category it belongs
-# to. This is the difference between editing and cancelling -- cancel
-# would have closed the window and lost the two lines as typed.
+\ which of them is wrong. Nothing is written and nothing is thrown
+\ away either: the window is still there with the two lines in it,
+\ and the 30.00 can be typed against whichever category it belongs
+\ to. This is the difference between editing and cancelling -- cancel
+\ would have closed the window and lost the two lines as typed.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type     | Placeholder |
 | Assets:Checking           | Checking | false       |
@@ -835,8 +835,8 @@ Then split lines are : TransactionSplit
 $TBD
 Scenario Adding the remainder balances the split and saves it
 Description The 30.00 that was taken out comes back as a line of its own under
-# Uncategorized. The transaction's own amount does not move -- what
-# the bank took is not in question here, only where it went.
+\ Uncategorized. The transaction's own amount does not move -- what
+\ the bank took is not in question here, only where it went.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type     | Placeholder |
 | Assets:Checking           | Checking | false       |
@@ -875,9 +875,9 @@ Then transaction is : Transaction Vertical CompareOnly
 $TBD
 Scenario A split whose lines come to more than the total is the same question
 Description Over by thirty rather than short by thirty, and the remainder is
-# negative. Adding it is still the honest answer: a line of -30.00
-# under Uncategorized says the lines came to more than the bank took
-# and nobody has yet said which of them is wrong.
+\ negative. Adding it is still the honest answer: a line of -30.00
+\ under Uncategorized says the lines came to more than the bank took
+\ and nobody has yet said which of them is wrong.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type     | Placeholder |
 | Assets:Checking           | Checking | false       |
@@ -909,7 +909,7 @@ Then not matching is said : SplitMismatch Vertical
 $TBD
 Scenario A split whose lines match the total is saved without a word
 Description The ordinary case, stated so that the dialog above is known to be
-# the exception rather than a step in saving a split.
+\ the exception rather than a step in saving a split.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type     | Placeholder |
 | Assets:Checking           | Checking | false       |
@@ -941,7 +941,7 @@ Then split lines are : TransactionSplit
 
 Scenario A split with an income line and an expense line
 Description A paycheque is the usual case: gross pay in, tax and insurance out,
-# and the net is what reaches the account.
+\ and the net is what reaches the account.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -978,8 +978,8 @@ Then balances are : AccountBalance
 
 Scenario A split line may transfer to a real account
 Description Part of the paycheque going straight to savings is a split line
-# naming an account rather than a category. Nothing special is needed:
-# a split line does not care which kind of account it names.
+\ naming an account rather than a category. Nothing special is needed:
+\ a split line does not care which kind of account it names.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type   | Placeholder |
 | Assets:Checking | Checking | false       |
@@ -1010,23 +1010,23 @@ Then split lines are : TransactionSplit
 # ---------------------------------------------------------------------------
 
 Description SourceAccount, Destination and Amount are how a transaction is
-# stored: the account it lives in, the other side, and the signed
-# amount between them. A register line can therefore be read from the
-# transaction alone, with no second table to join for the ordinary
-# case.
+\ stored: the account it lives in, the other side, and the signed
+\ amount between them. A register line can therefore be read from the
+\ transaction alone, with no second table to join for the ordinary
+\ case.
 Details A split keeps a table of its own, TransactionSplit, for its lines. An
-# ordinary transaction -- the common case -- needs no second table at
-# all: SourceAccount and Destination are both already on it.
-#
-# Every reference below -- SourceAccount, Destination, and a split
-# line's own Destination -- is an id underneath, the same as every
-# account or category reference elsewhere; AccountPath is this
-# specification's reading of it, not what is stored. See the identity
-# rule in Accounts.
+\ ordinary transaction -- the common case -- needs no second table at
+\ all: SourceAccount and Destination are both already on it.
+\
+\ Every reference below -- SourceAccount, Destination, and a split
+\ line's own Destination -- is an id underneath, the same as every
+\ account or category reference elsewhere; AccountPath is this
+\ specification's reading of it, not what is stored. See the identity
+\ rule in Accounts.
 
 Scenario An ordinary transaction names both accounts directly
 Description The register's category column becomes Destination; nothing is
-# created that has to sum to anything, because there is only one row.
+\ created that has to sum to anything, because there is only one row.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -1047,8 +1047,8 @@ Then no split lines exist for it
 
 Scenario A split names Split as its destination, and its categories live apart
 Description The transaction itself says Split and carries the total; the parts
-# are rows of their own, found by the transaction's id, rather than
-# folded into the transaction the way Postings folds them today.
+\ are rows of their own, found by the transaction's id, rather than
+\ folded into the transaction the way Postings folds them today.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1071,11 +1071,11 @@ Then the split lines total the transaction's amount
 
 Scenario A split line that is itself a transfer is matched by hand, not automatically
 Description Part of a paycheque goes straight to savings. The savings account
-# gets its own, independently downloaded entry later; nothing here
-# reaches across to find it, because matching a whole account's
-# entry is already a careful, user-driven thing, and a split's line
-# is a smaller, less certain thing to be matching blind. See the
-# matching rule above.
+\ gets its own, independently downloaded entry later; nothing here
+\ reaches across to find it, because matching a whole account's
+\ entry is already a careful, user-driven thing, and a split's line
+\ is a smaller, less certain thing to be matching blind. See the
+\ matching rule above.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type    | Placeholder |
 | Assets:Checking | Checking | false       |
@@ -1112,9 +1112,9 @@ Attributes TransactionCount
 
 Scenario Assigning the other account updates Destination
 Description The last resort, and the one that always works, done the new way:
-# there is one row for this entry, and assigning the other account is
-# changing what its Destination says, not creating or editing a
-# second transaction to Unassigned.
+\ there is one row for this entry, and assigning the other account is
+\ changing what its Destination says, not creating or editing a
+\ second transaction to Unassigned.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
 | Assets:Checking        | Checking   | false       |
@@ -1138,10 +1138,10 @@ Then balances are : AccountBalance CompareOnly
 
 Scenario Matching an entry in another register updates both transactions' Destination
 Description The card was imported weeks ago and the payment never paired. Both
-# sides already exist as their own row, each with a real account as
-# SourceAccount and Unassigned as Destination. Matching them points
-# each one at the other's account; neither row is deleted and nothing
-# is merged into one.
+\ sides already exist as their own row, each with a real account as
+\ SourceAccount and Unassigned as Destination. Matching them points
+\ each one at the other's account; neither row is deleted and nothing
+\ is merged into one.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
 | Assets:Checking        | Checking   | false       |
@@ -1168,10 +1168,10 @@ Then balances are : AccountBalance CompareOnly
 
 Entity TransactionSplit
 Description One category line of a split, kept apart from the transaction that
-# carries the total and the account it was entered or downloaded
-# against. Only a split has rows here: an ordinary transaction's
-# destination is a plain account or category, named directly on the
-# transaction, and needs none of this.
+\ carries the total and the account it was entered or downloaded
+\ against. Only a split has rows here: an ordinary transaction's
+\ destination is a plain account or category, named directly on the
+\ transaction, and needs none of this.
 | Attribute     | Type          | Default | Notes                            |
 | TransactionId | TransactionId | none    | Which split this line belongs to; a unique id, not a name |
 | Destination   | AccountPath   |         | A category, or an account for a line entered by hand as a transfer |
@@ -1185,11 +1185,11 @@ Description The lines of every split in the book.
 
 BusinessRule A split's lines are what is totalled against its transaction's amount
 Description The transaction itself is never out of balance under this shape --
-# it names one amount against one source account, and nothing sums
-# against it. Only a split can be short or over, because only a
-# split has more than one figure that is supposed to agree with
-# another. See the existing shortfall scenario above, which already
-# checks exactly this.
+\ it names one amount against one source account, and nothing sums
+\ against it. Only a split can be short or over, because only a
+\ split has more than one figure that is supposed to agree with
+\ another. See the existing shortfall scenario above, which already
+\ checks exactly this.
 Examples: SplitTotalCheck
 | TransactionAmount | LineTotal | Short | Notes                    |
 | 184.50             | 184.50    | 0.00  | Agrees                   |
@@ -1209,10 +1209,10 @@ Attributes SplitTotalCheck
 
 Scenario A transaction with no category posts to Uncategorized
 Description An import knows one side of a transaction and often not the other.
-# Rather than refuse it, or leave the book out of balance, the other
-# side goes to an Uncategorized account chosen by the sign, so that
-# reports stay readable and the work left to do is visible in one
-# place. See ImportOfx.
+\ Rather than refuse it, or leave the book out of balance, the other
+\ side goes to an Uncategorized account chosen by the sign, so that
+\ reports stay readable and the work left to do is visible in one
+\ place. See ImportOfx.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
 | Assets:Checking | Checking | false       |
@@ -1246,7 +1246,7 @@ Then transaction is : Transaction Vertical CompareOnly
 
 BusinessRule Which Uncategorized account the other side takes
 Description Chosen by the sign of the transaction's own amount, so an expense
-# never shows as negative income.
+\ never shows as negative income.
 Examples: UncategorizedChoice
 | KnownAmount | OtherAccount           | Notes                    |
 | -23.75      | Expenses:Uncategorized | Money left the account   |
@@ -1265,8 +1265,8 @@ Attributes UncategorizedChoice
 
 Scenario Changing the amount of an ordinary transaction moves both sides
 Description An ordinary transaction carries one amount and its destination takes
-# the opposite by construction, so editing the amount in the register
-# moves both sides at once without asking anything.
+\ the opposite by construction, so editing the amount in the register
+\ moves both sides at once without asking anything.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -1293,8 +1293,8 @@ Attributes AmountChange
 
 Scenario Changing the amount of a split does not guess which line to adjust
 Description A split has more than one line, so there is no one other side to
-# move, and the shortfall is reported and the split window is opened
-# instead.
+\ move, and the shortfall is reported and the split window is opened
+\ instead.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
 | Assets:Checking           | Checking | false       |
@@ -1342,8 +1342,8 @@ Attributes CategoryChange
 
 Scenario Deleting a transaction removes it from both registers at once
 Description A transaction is one record naming both sides, so a delete is always
-# of the whole of it, from whichever register it is asked for. There
-# is no half of it that could be left behind.
+\ of the whole of it, from whichever register it is asked for. There
+\ is no half of it that could be left behind.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -1361,10 +1361,10 @@ Then transactions are : Transaction CompareOnly
 
 Scenario Deleting a split takes its lines with it
 Description The lines of a split belong to the transaction that carries the
-# total and have nothing to belong to once it is gone. Left behind
-# they would be the split of a transaction that does not exist: the
-# categories would still carry the money on every report, and
-# nothing in the register would say where it came from.
+\ total and have nothing to belong to once it is gone. Left behind
+\ they would be the split of a transaction that does not exist: the
+\ categories would still carry the money on every report, and
+\ nothing in the register would say where it came from.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type     | Placeholder |
 | Assets:Checking           | Checking | false       |
@@ -1392,8 +1392,8 @@ Then split lines are : TransactionSplit
 
 Scenario A reconciled transaction warns before it is changed
 Description A finished reconciliation agreed with a statement. Changing a
-# transaction inside it breaks that agreement, so it is allowed but
-# not quietly.
+\ transaction inside it breaks that agreement, so it is allowed but
+\ not quietly.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -1419,12 +1419,12 @@ Attributes Warning
 
 Scenario The two sides of a downloaded transfer clear separately
 Description Money leaves checking on one statement and arrives in savings on
-# another, often days apart. Each account downloaded its own entry,
-# so each side is a transaction in its own right carrying its own
-# Cleared, and one can be cleared while the other is not.
+\ another, often days apart. Each account downloaded its own entry,
+\ so each side is a transaction in its own right carrying its own
+\ Cleared, and one can be cleared while the other is not.
 Details This is why the status is on the transaction rather than anywhere
-# else: the transaction is one account's own entry, and clearing is
-# one account's bank reporting one row of its own statement.
+\ else: the transaction is one account's own entry, and clearing is
+\ one account's bank reporting one row of its own statement.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
 | Assets:Checking | Checking | false       |

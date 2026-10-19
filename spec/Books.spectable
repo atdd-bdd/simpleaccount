@@ -1,20 +1,20 @@
 Specification Books
 
 Description The book: one file, one chart of accounts, one set of transactions.
-# There are two of them here, a business one and a personal one, and
-# nothing joins them.
+\ There are two of them here, a business one and a personal one, and
+\ nothing joins them.
 Details
-# Every other specification in this folder is written about one book and
-# says so by saying nothing: "the chart of accounts" means the chart of
-# accounts of the book being worked in. This file is what makes that
-# precise, now that there are two.
-#
-# Two books rather than one set of accounts with a business branch is the
-# decision. A sole proprietor files a business return and a personal one,
-# and the figures on each must come from somewhere that cannot
-# accidentally include the other. Separate files give that by
-# construction: there is no query that can reach across them, so no
-# report can be wrong in that particular way.
+\ Every other specification in this folder is written about one book and
+\ says so by saying nothing: "the chart of accounts" means the chart of
+\ accounts of the book being worked in. This file is what makes that
+\ precise, now that there are two.
+\
+\ Two books rather than one set of accounts with a business branch is the
+\ decision. A sole proprietor files a business return and a personal one,
+\ and the figures on each must come from somewhere that cannot
+\ accidentally include the other. Separate files give that by
+\ construction: there is no query that can reach across them, so no
+\ report can be wrong in that particular way.
 
 Entity Book
 Description One book, which is one file on disk.
@@ -27,7 +27,7 @@ Description One book, which is one file on disk.
 
 Collection Books
 Description The books the program knows about. Not a container: each is its own
-# file, and this is the list of them that the user has opened.
+\ file, and this is the list of them that the user has opened.
 | DataType | Minimum | Maximum | Notes                        |
 | Book     | 0       | 1000    | FilePath is unique            |
 
@@ -43,29 +43,29 @@ Given books are : Books
 
 BusinessRule Everything a book needs is in the book
 Description A book is self-contained. Anything the program needs in order to
-# work on a book is stored in that book's own file, even where two
-# books would hold the same thing.
+\ work on a book is stored in that book's own file, even where two
+\ books would hold the same thing.
 Details An earlier reading of this had the bank profiles shared, on the
-# grounds that the same bank sends the same CSV layout to a business
-# account and a personal one, so matching its headings is a fact about
-# the bank rather than about either book. That is true and it is not the
-# point. Setting a profile up twice is a minute's work; a book that
-# cannot be opened, copied or carried to another machine on its own is
-# a permanent cost. Separation is worth more than the minute.
-#
-# So almost nothing is stored outside a book. The window's own state --
-# its size, which columns are where -- is the program's settings rather
-# than anybody's data, and one thing more is kept beside the books.
-#
-# That one thing is the QIF profile, and it is worth saying why it is not
-# per book when the CSV profile is. A CSV profile describes a bank, and
-# the same bank writes the same layout to a business account and a
-# personal one, so duplicating it costs a minute and keeps the books
-# apart. A QIF profile describes how Quicken itself writes a file -- the
-# date order, whether the decimal mark is a comma, what to do with trade
-# history -- and that is one answer for the machine, not one per book.
-# Importing the same export a second time should not ask again, and
-# importing from a second Quicken book should not ask at all.
+\ grounds that the same bank sends the same CSV layout to a business
+\ account and a personal one, so matching its headings is a fact about
+\ the bank rather than about either book. That is true and it is not the
+\ point. Setting a profile up twice is a minute's work; a book that
+\ cannot be opened, copied or carried to another machine on its own is
+\ a permanent cost. Separation is worth more than the minute.
+\
+\ So almost nothing is stored outside a book. The window's own state --
+\ its size, which columns are where -- is the program's settings rather
+\ than anybody's data, and one thing more is kept beside the books.
+\
+\ That one thing is the QIF profile, and it is worth saying why it is not
+\ per book when the CSV profile is. A CSV profile describes a bank, and
+\ the same bank writes the same layout to a business account and a
+\ personal one, so duplicating it costs a minute and keeps the books
+\ apart. A QIF profile describes how Quicken itself writes a file -- the
+\ date order, whether the decimal mark is a comma, what to do with trade
+\ history -- and that is one answer for the machine, not one per book.
+\ Importing the same export a second time should not ask again, and
+\ importing from a second Quicken book should not ask at all.
 Examples: BookScope
 | Thing                        | Scope    | Why                                       |
 | Accounts                     | PerBook  | A fact about money                        |
@@ -90,7 +90,7 @@ Attributes BookScope
 
 Scenario A category in one book is not in the other
 Description The business book has categories the personal one has no use for,
-# and the pickers in each offer only their own.
+\ and the pickers in each offer only their own.
 Given books are as previous
 Given the chart of accounts of Business is : ChartOfAccounts
 | Path                     | Type    | Placeholder |
@@ -110,8 +110,8 @@ Then category picker offers : ChartOfAccounts CompareOnly
 
 Scenario A payee rule made in one book does not act in the other
 Description The rules are learned from categorising, and a category learned in
-# the business book names a business category. Applying it in the
-# personal book would either fail or create that category there.
+\ the business book names a business category. Applying it in the
+\ personal book would either fail or create that category there.
 Given books are as previous
 Given payee rules of Business are : PayeeRules
 | Pattern | MatchType | Payee  | Category                 |
@@ -125,12 +125,12 @@ Then payee rules in force in Personal are : PayeeRules
 $TBD
 Scenario A CSV profile set up for one book is not in the other
 Description The headings of a CSV file from a bank are the same whichever
-# account they describe, so a shared profile would save the second
-# book its setting up. It is not shared. The same bank's layout
-# being set up twice is the repetition this decision accepts: a
-# book that cannot be opened, copied or carried to another machine
-# on its own would be the permanent cost, and it is the larger one.
-# The second book asks, and what it is told becomes its own profile.
+\ account they describe, so a shared profile would save the second
+\ book its setting up. It is not shared. The same bank's layout
+\ being set up twice is the repetition this decision accepts: a
+\ book that cannot be opened, copied or carried to another machine
+\ on its own would be the permanent cost, and it is the larger one.
+\ The second book asks, and what it is told becomes its own profile.
 Given books are as previous
 Given saved profiles of Business are : SavedProfile
 | Name         | Signature                                      |
@@ -161,10 +161,10 @@ Attributes CurrentBook
 $TBD
 Scenario A bank number known to one book is unknown to the other
 Description Two accounts at one bank, one business and one personal, have two
-# different numbers and belong in two different books. Each book's
-# account carries its own number, and a download is placed by the
-# book that is open. Finding the number in the other book would post
-# business money to a personal account.
+\ different numbers and belong in two different books. Each book's
+\ account carries its own number, and a download is placed by the
+\ book that is open. Finding the number in the other book would post
+\ business money to a personal account.
 Given books are as previous
 Given the chart of accounts of Business is : ChartOfAccounts
 | Path            | Type     | Placeholder | BankId    | AccountNumber |
@@ -193,8 +193,8 @@ Then asked to choose an account for : UnknownAccount Vertical
 
 Scenario Every book balances independently
 Description The check from Transactions is per book. A book is never balanced
-# by something in another one, which is what makes each set of
-# figures defensible on its own.
+\ by something in another one, which is what makes each set of
+\ figures defensible on its own.
 Given books are as previous
 Given transactions of Business are : Transaction
 | Ref | SourceAccount   | Date       | Destination              | Amount |
@@ -218,8 +218,8 @@ Attributes PerBookCheck
 $TBD
 Scenario A transfer may not name an account in another book
 Description A transaction names an account, and the accounts of another book are
-# not in scope. There is no syntax for it and no account picker that
-# offers it, so this is what happens if a path is typed in.
+\ not in scope. There is no syntax for it and no account picker that
+\ offers it, so this is what happens if a path is typed in.
 Given books are as previous
 Given the current book is : CurrentBook Vertical
 | Name | Personal |
@@ -234,13 +234,13 @@ Then rejected because : Rejection
 
 Scenario Money moving between the two books is two transactions
 Description A draw from the business is the case that makes people want one
-# book. It is recorded as two transactions, one in each book, each
-# balanced within its own. Equity is where it goes, because from the
-# point of view of the business it is capital leaving and from the
-# point of view of the household it is not income earned.
+\ book. It is recorded as two transactions, one in each book, each
+\ balanced within its own. Equity is where it goes, because from the
+\ point of view of the business it is capital leaving and from the
+\ point of view of the household it is not income earned.
 Details Nothing links the two records. Making the second is the work the two
-# books cost, and it is a handful of transactions a year against the
-# certainty that no business report includes household spending.
+\ books cost, and it is a handful of transactions a year against the
+\ certainty that no business report includes household spending.
 Given books are as previous
 Given the chart of accounts of Business is : ChartOfAccounts
 | Path                | Type   | Placeholder |
@@ -276,9 +276,9 @@ Attributes OwnerDraw
 
 Scenario A draw is not income in the personal book
 Description It would be counted twice: once as business income when it was
-# earned and again as household income when it was drawn. Equity is
-# nominal, so it moves net worth without entering an income report.
-# This is the same reasoning as market value changes in Investments.
+\ earned and again as household income when it was drawn. Equity is
+\ nominal, so it moves net worth without entering an income report.
+\ This is the same reasoning as market value changes in Investments.
 Given books are as previous
 Given transactions of Personal are : Transaction
 | Ref | SourceAccount   | Date       | Destination       | Amount  |
@@ -305,22 +305,22 @@ Then net worth is : NetWorth Vertical
 
 BusinessRule A book is one SQLite database in one known folder
 Description Every book is a single file with a .sadb name, and they all live in
-# one folder that the program knows without being told. There is no
-# "where would you like to save this": a book is named, and the name
-# decides the file.
+\ one folder that the program knows without being told. There is no
+\ "where would you like to save this": a book is named, and the name
+\ decides the file.
 Details The folder is ProgramData\SimpleAccount. It is machine-wide rather than
-# per-user, so the books on a machine are the books, whoever is signed
-# in. As many of them as the user makes can live there side by side.
-#
-# The program makes the folder itself, the first time a book is created.
-# That needs no installer and no elevation: a process running as an
-# ordinary user may create a subfolder of ProgramData and owns what it
-# puts there.
-#
-# Nothing is ever created implicitly. A database is initialised when the
-# user asks for a new book and at no other time, so opening a book that
-# is not there is refused rather than quietly made -- a mistyped name
-# must not look like a book that lost all its transactions.
+\ per-user, so the books on a machine are the books, whoever is signed
+\ in. As many of them as the user makes can live there side by side.
+\
+\ The program makes the folder itself, the first time a book is created.
+\ That needs no installer and no elevation: a process running as an
+\ ordinary user may create a subfolder of ProgramData and owns what it
+\ puts there.
+\
+\ Nothing is ever created implicitly. A database is initialised when the
+\ user asks for a new book and at no other time, so opening a book that
+\ is not there is refused rather than quietly made -- a mistyped name
+\ must not look like a book that lost all its transactions.
 Examples: BookFile
 | Action                        | Name     | Effect                                |
 | New book                      | Business | Created, initialised, and opened      |
@@ -337,28 +337,28 @@ Attributes BookFile
 
 BusinessRule One table per collection, one row per entity
 Description The schema is not designed separately from this specification: it is
-# read off it. Every Entity declared anywhere in these files becomes a
-# row, and the Collection it belongs to becomes the table. Its
-# attributes become the columns, with the same names and the same
-# defaults.
+\ read off it. Every Entity declared anywhere in these files becomes a
+\ row, and the Collection it belongs to becomes the table. Its
+\ attributes become the columns, with the same names and the same
+\ defaults.
 Details So there is nothing to keep in step by hand. Adding an attribute to an
-# Entity adds a column; declaring a new Entity that belongs in a book
-# adds a table. The check that the two have not drifted is mechanical:
-# every Entity in these files appears below, in one of the three
-# groups, and a reviewer can see at a glance that none was forgotten.
-#
-# Which group an Entity is in follows from the rule above. Nearly
-# everything is in the book's own file. One thing sits beside the books,
-# because it describes Quicken rather than any book of ours. And what is
-# only ever being looked at is stored nowhere: a statement being
-# imported, a Quicken report being compared against. Those belong to the
-# act of importing rather than to a book.
-#
-# Holdings are the exception and are marked "not yet" rather than left
-# out: investments are carried as balances only in this round, so there
-# is nothing to store per security. The row stays in the table above so
-# that the count of entities still matches and nobody has to wonder
-# whether it was forgotten.
+\ Entity adds a column; declaring a new Entity that belongs in a book
+\ adds a table. The check that the two have not drifted is mechanical:
+\ every Entity in these files appears below, in one of the three
+\ groups, and a reviewer can see at a glance that none was forgotten.
+\
+\ Which group an Entity is in follows from the rule above. Nearly
+\ everything is in the book's own file. One thing sits beside the books,
+\ because it describes Quicken rather than any book of ours. And what is
+\ only ever being looked at is stored nowhere: a statement being
+\ imported, a Quicken report being compared against. Those belong to the
+\ act of importing rather than to a book.
+\
+\ Holdings are the exception and are marked "not yet" rather than left
+\ out: investments are carried as balances only in this round, so there
+\ is nothing to store per security. The row stays in the table above so
+\ that the count of entities still matches and nobody has to wonder
+\ whether it was forgotten.
 Examples: EntityStorage
 | Entity            | Collection          | Table                 | Where       |
 | Account           | ChartOfAccounts     | accounts              | The book    |
@@ -386,34 +386,34 @@ Attributes EntityStorage
 
 BusinessRule What a book's file holds besides its entities
 Description Two things that are not entities and are needed anyway: which
-# version the schema is, and the book's own name and fiscal year.
+\ version the schema is, and the book's own name and fiscal year.
 Details The version is read before anything else. A file written by a later
-# version of the program is refused and left untouched, because the
-# alternative is a program guessing at columns it does not know and
-# writing the book back in a shape that loses them. Being told to
-# upgrade is a better morning than finding a silently emptied register.
-#
-# The Book entity is the odd one out: there is no table of books inside a
-# book, and no table of books anywhere. The folder is the collection --
-# one file per book -- and a book is chosen from the file names in it
-# with the extension taken off, so the list is made by looking rather
-# than maintained.
-#
-# What a book stores about itself is a single row in a table of its own.
-# A text file of the same name beside the database would do as well, and
-# the reason to prefer the row is that there is then one file per book:
-# copying it, backing it up or moving it to another machine cannot take
-# half of a book, and there is no second file to fall out of step.
-#
-# Amounts are stored as whole cents in an integer column. A binary
-# floating-point column cannot hold 0.10, and a book that cannot add up
-# is the one thing this program may not be.
-#
-# The settings a book carries go in that same row rather than in a table
-# of name and value pairs. There are few of them, each means something
-# different, and a row of named columns can be read without a join and
-# cannot hold a setting nobody recognises. See the check-number window in
-# ImportOfx for the first one that is not simply descriptive.
+\ version of the program is refused and left untouched, because the
+\ alternative is a program guessing at columns it does not know and
+\ writing the book back in a shape that loses them. Being told to
+\ upgrade is a better morning than finding a silently emptied register.
+\
+\ The Book entity is the odd one out: there is no table of books inside a
+\ book, and no table of books anywhere. The folder is the collection --
+\ one file per book -- and a book is chosen from the file names in it
+\ with the extension taken off, so the list is made by looking rather
+\ than maintained.
+\
+\ What a book stores about itself is a single row in a table of its own.
+\ A text file of the same name beside the database would do as well, and
+\ the reason to prefer the row is that there is then one file per book:
+\ copying it, backing it up or moving it to another machine cannot take
+\ half of a book, and there is no second file to fall out of step.
+\
+\ Amounts are stored as whole cents in an integer column. A binary
+\ floating-point column cannot hold 0.10, and a book that cannot add up
+\ is the one thing this program may not be.
+\
+\ The settings a book carries go in that same row rather than in a table
+\ of name and value pairs. There are few of them, each means something
+\ different, and a row of named columns can be read without a join and
+\ cannot hold a setting nobody recognises. See the check-number window in
+\ ImportOfx for the first one that is not simply descriptive.
 Examples: BookInfrastructure
 | Table  | Columns                        | Notes                              |
 | schema | version                        | One row; read before anything else |
@@ -448,16 +448,16 @@ Attributes ColumnType
 $TBD
 BusinessRule The QIF profiles live in one file beside the books, under a name
 Description Named, so there can be more than one: an export made years ago may
-# have a different date order from one made today, and being able to
-# keep both beats answering the question again from memory.
+\ have a different date order from one made today, and being able to
+\ keep both beats answering the question again from memory.
 Details The file is settings.sadata in the same folder, and the extension is
-# what keeps it out of the way: a book is a .sadb file, so the list of
-# books does not offer this one and a stray file is never mistaken for a
-# book. It carries its own schema version, read first, for the same
-# reason a book does.
-#
-# It is made on demand, like the folder. A machine that has never
-# imported a QIF file has no such file and needs none.
+\ what keeps it out of the way: a book is a .sadb file, so the list of
+\ books does not offer this one and a stray file is never mistaken for a
+\ book. It carries its own schema version, read first, for the same
+\ reason a book does.
+\
+\ It is made on demand, like the folder. A machine that has never
+\ imported a QIF file has no such file and needs none.
 Examples: BesideTheBooks
 | File            | Holds                     | InBookList |
 | Business.sadb   | A book                    | Yes        |
@@ -474,7 +474,7 @@ Attributes BesideTheBooks
 $TBD
 Scenario A QIF profile is remembered under a name and found again
 Description So that importing the same export twice does not ask twice, and
-# importing from another Quicken book does not ask at all.
+\ importing from another Quicken book does not ask at all.
 Given no settings file exists
 When a qif profile is saved named : QifProfileSaved Vertical
 | Name           | Quicken 2026 |
@@ -504,7 +504,7 @@ Attributes QifProfileRow
 
 Scenario A new book is initialised empty
 Description No accounts, no transactions, and a schema version. An empty book is
-# a working book: it opens, it reports nothing, and it balances.
+\ a working book: it opens, it reports nothing, and it balances.
 When a new book is made named : BookName Vertical
 | Name | Business |
 Then the book opened is : OpenedBook Vertical
@@ -526,9 +526,9 @@ Attributes OpenedBook
 
 Scenario A book written and opened again is the same book
 Description The round trip is the whole of what storage has to do, so it is
-# stated as one scenario over a book with something in it: a chart,
-# a transaction naming both its accounts, its memo, and its cleared
-# status.
+\ stated as one scenario over a book with something in it: a chart,
+\ a transaction naming both its accounts, its memo, and its cleared
+\ status.
 Given a new book named Business
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
@@ -559,31 +559,31 @@ Then transaction is : Transaction Vertical CompareOnly
 
 BusinessRule A save leaves the file holding exactly what the book holds
 Description A save is under no obligation to write everything, and it is under
-# an obligation to leave nothing behind. What is specified is the
-# state of the file afterwards: every change the book has taken is in
-# it, every row the book no longer has is gone from it, and a row
-# nobody touched reads back as it was.
+\ an obligation to leave nothing behind. What is specified is the
+\ state of the file afterwards: every change the book has taken is in
+\ it, every row the book no longer has is gone from it, and a row
+\ nobody touched reads back as it was.
 Details The first implementation wrote everything -- every table emptied and
-# every row inserted again, twenty years of history for one new
-# transaction. That is correct, and it is most of why entering a
-# transaction takes as long as it does.
-#
-# The rule is stated about the file afterwards rather than about the
-# rows written, because the second would be a specification of the
-# mechanism. Nobody reading a register can tell an UPDATE from a
-# DELETE followed by an INSERT. They can tell a stale row.
-#
-# A save is all or nothing. If it cannot be completed -- the disk is
-# full, another process holds the file -- what is on disk afterwards is
-# the book as it was before the save, not half of each. A half-written
-# save is the worst outcome available here: a register would read back
-# with one side of a transfer missing, and nothing would say so.
-#
-# Deletion is what an incremental save gets wrong, so it is below
-# twice: a transaction deleted, and a split with one line fewer than it
-# had. The row nobody asked about is the same rule read the other way,
-# and it is in the editing scenario -- the transaction beside the
-# edited one must read back untouched.
+\ every row inserted again, twenty years of history for one new
+\ transaction. That is correct, and it is most of why entering a
+\ transaction takes as long as it does.
+\
+\ The rule is stated about the file afterwards rather than about the
+\ rows written, because the second would be a specification of the
+\ mechanism. Nobody reading a register can tell an UPDATE from a
+\ DELETE followed by an INSERT. They can tell a stale row.
+\
+\ A save is all or nothing. If it cannot be completed -- the disk is
+\ full, another process holds the file -- what is on disk afterwards is
+\ the book as it was before the save, not half of each. A half-written
+\ save is the worst outcome available here: a register would read back
+\ with one side of a transfer missing, and nothing would say so.
+\
+\ Deletion is what an incremental save gets wrong, so it is below
+\ twice: a transaction deleted, and a split with one line fewer than it
+\ had. The row nobody asked about is the same rule read the other way,
+\ and it is in the editing scenario -- the transaction beside the
+\ edited one must read back untouched.
 Examples: SaveEffect
 | Change                | Afterwards                                      |
 | A transaction added   | Its row is there, and no other row has altered  |
@@ -602,8 +602,8 @@ Attributes SaveEffect
 
 Scenario A transaction edited after a save reads back edited
 Description And the transaction beside it, which nobody touched, reads back as
-# it was. Both halves matter: the edit has to reach the file, and
-# reaching it must not disturb anything else.
+\ it was. Both halves matter: the edit has to reach the file, and
+\ reaching it must not disturb anything else.
 Given a new book named Business
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
@@ -629,9 +629,9 @@ Then transactions are : Transaction
 
 Scenario A transaction deleted after a save is gone from the file
 Description Along with its split lines. A transaction is deleted from the
-# register and the lines beneath it are nobody's any more: left in
-# the file, they would be read back as a split of a transaction
-# that no longer exists.
+\ register and the lines beneath it are nobody's any more: left in
+\ the file, they would be read back as a split of a transaction
+\ that no longer exists.
 Given a new book named Business
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
@@ -660,8 +660,8 @@ Then split lines are : TransactionSplit
 
 Scenario A split line removed after a save is not read back
 Description The split had two lines and now has one. The line that went has to
-# go from the file as well, because a save that wrote the lines it
-# has and left the rest would read the split back as seventy-five.
+\ go from the file as well, because a save that wrote the lines it
+\ has and left the rest would read the split back as seventy-five.
 Given a new book named Business
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
@@ -686,8 +686,8 @@ Then split lines are : TransactionSplit
 
 Scenario A second save with nothing changed leaves the book as it was
 Description The common case while somebody is reading rather than typing. A save
-# with nothing to write is still a save: it may not empty anything,
-# and what was there is read back whole.
+\ with nothing to write is still a save: it may not empty anything,
+\ and what was there is read back whole.
 Given a new book named Business
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
@@ -708,9 +708,9 @@ Then transactions are : Transaction
 
 Scenario An account renamed after a save reads back renamed
 Description The account kept its identity and changed its name, so the file has
-# to hold the new path against the same row rather than a second row
-# under the new name. The account renamed here is one no transaction
-# names, so what is under test is the chart alone.
+\ to hold the new path against the same row rather than a second row
+\ under the new name. The account renamed here is one no transaction
+\ names, so what is under test is the chart alone.
 Given a new book named Business
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
@@ -732,7 +732,7 @@ Then the chart of accounts is : ChartOfAccounts
 
 Scenario A payee rule added after a save leaves the earlier rules alone
 Description Rules are learned one at a time, as categories are chosen, so this
-# is the shape of nearly every save the rules table ever sees.
+\ is the shape of nearly every save the rules table ever sees.
 Given a new book named Business
 Given payee rules of Business are : PayeeRules
 | Pattern | MatchType | Payee  |
@@ -750,7 +750,7 @@ Then payee rules in force in Business are : PayeeRules
 
 Scenario Opening a book that is not there is refused
 Description And says so, rather than making one. A mistyped name is the likely
-# cause, and an empty book would look like a catastrophe.
+\ cause, and an empty book would look like a catastrophe.
 When a book is opened named : BookName Vertical
 | Name | Typo |
 Then the book is refused saying
@@ -760,8 +760,8 @@ There is no book named Typo
 
 Scenario Making a book that already exists is refused
 Description The existing one is not touched. Overwriting a book of twenty years
-# of history because a name was reused is not a mistake worth making
-# available.
+\ of history because a name was reused is not a mistake worth making
+\ available.
 Given a new book named Business
 When a new book is made named : BookName Vertical
 | Name | Business |
@@ -772,7 +772,7 @@ A book named Business already exists
 
 Scenario A book from a later version of the program is refused
 Description Rather than opened and written back in a shape that drops whatever
-# the later version added.
+\ the later version added.
 Given a book whose schema version is 99
 When a book is opened named : BookName Vertical
 | Name | Business |
@@ -783,7 +783,7 @@ Business was written by a later version of SimpleAccount
 
 Scenario The books in the folder are listed by name
 Description What the open dialog offers. The name is the file name without its
-# extension, because the extension is not the user's business.
+\ extension, because the extension is not the user's business.
 Given the books folder holds : BookFileList
 | FileName       |
 | Business.sadb  |
@@ -811,8 +811,8 @@ Attributes BookNameRow
 $TBD
 Scenario Two books may be open at once, in two windows
 Description A window is open on one book and every register, report and import
-# in it belongs to that book. Having both open is useful on the day
-# a draw is recorded, and there is no window that shows both.
+\ in it belongs to that book. Having both open is useful on the day
+\ a draw is recorded, and there is no window that shows both.
 Given books are as previous
 When book opened : BookOpen Vertical
 | Name | Business |
@@ -835,7 +835,7 @@ Attributes BookWindow
 $TBD
 Scenario Opening the same book twice brings its window forward
 Description Two windows on one book would let the same transaction be edited
-# in two places, and the second edit would silently win.
+\ in two places, and the second edit would silently win.
 Given books are as previous
 When book opened : BookOpen Vertical
 | Name | Business |
@@ -847,8 +847,8 @@ Then windows are : BookWindow
 
 Scenario A report names the book it is of
 Description Two reports of the same period from two books look alike, and the
-# figures are not comparable. The name is on the report so that a
-# printed one can be told from the other.
+\ figures are not comparable. The name is on the report so that a
+\ printed one can be told from the other.
 Given books are as previous
 Given the current book is : CurrentBook Vertical
 | Name | Business |
@@ -873,9 +873,9 @@ Attributes ReportHeading
 $TBD
 Scenario Each QIF file migrates into its own book
 Description The two exports in testdata become the two books, and the
-# migration is run twice. Neither run can see the other, so a
-# transfer whose other half is in the other file is unpaired rather
-# than matched across the two. See ImportQif.
+\ migration is run twice. Neither run can see the other, so a
+\ transfer whose other half is in the other file is unpaired rather
+\ than matched across the two. See ImportQif.
 Given no books exist
 When qif file migrated into a new book : QifMigration
 | SourceFile      | BookName |
@@ -894,10 +894,10 @@ Attributes QifMigration
 $TBD
 Scenario A bracketed account naming the other file is created in this book
 Description The business export may name an account that lives in the personal
-# one. The migration cannot reach across, so it creates the account
-# in the book it is building and reports it, as it does for any
-# bracketed name it has not seen. Whether the two should be joined
-# afterwards is a judgement, and it is left to the user.
+\ one. The migration cannot reach across, so it creates the account
+\ in the book it is building and reports it, as it does for any
+\ bracketed name it has not seen. Whether the two should be joined
+\ afterwards is a judgement, and it is left to the user.
 Given no books exist
 Given the current book is : CurrentBook Vertical
 | Name | Business |
@@ -930,19 +930,19 @@ Then migration notes are : MigrationNote
 
 BusinessRule The id counter is recorded in the book, not worked out from it
 Description Accounts and categories are identified by a number drawn from one
-# shared counter -- see Accounts. The number the counter last handed
-# out is a column of the book row, written every time one is given
-# out, so the next id a book hands out after being opened again is
-# one past the last it ever gave, not one past the largest it still
-# holds.
+\ shared counter -- see Accounts. The number the counter last handed
+\ out is a column of the book row, written every time one is given
+\ out, so the next id a book hands out after being opened again is
+\ one past the last it ever gave, not one past the largest it still
+\ holds.
 Details The difference shows when something is deleted. A counter worked out
-# from the chart would drop back when its highest account went, and the
-# next account created would be handed a number something else still
-# names -- a transaction in a file not yet imported, a backup opened
-# later. A recorded counter cannot drop back.
-#
-# Nothing reads the number off a screen, so no scenario here states one.
-# What is stated is where it lives and what it is not.
+\ from the chart would drop back when its highest account went, and the
+\ next account created would be handed a number something else still
+\ names -- a transaction in a file not yet imported, a backup opened
+\ later. A recorded counter cannot drop back.
+\
+\ Nothing reads the number off a screen, so no scenario here states one.
+\ What is stated is where it lives and what it is not.
 Examples: CounterStorage
 | WhatIsAsked                               | Answer                                        |
 | Where the last id handed out is kept      | The last_id_used column of the book row       |
@@ -958,15 +958,15 @@ Attributes CounterStorage
 
 Scenario Every node in the chart has an id, and the book records the last one
 Description The only scenario in this specification that states an id. It can,
-# because a new book is empty and the counter starts from nothing, so
-# the numbers here are not something a reader has to look up -- they
-# are the order the nodes were made in.
-#
-# A group is a node like any other, so it takes an id too. Nothing
-# needs one yet, but they are there and they cost nothing, and a chart
-# where some nodes have an identity and some do not is worse than one
-# where they all do. Assets and Expenses are the two groups here, and
-# each is numbered before the account under it.
+\ because a new book is empty and the counter starts from nothing, so
+\ the numbers here are not something a reader has to look up -- they
+\ are the order the nodes were made in.
+\
+\ A group is a node like any other, so it takes an id too. Nothing
+\ needs one yet, but they are there and they cost nothing, and a chart
+\ where some nodes have an identity and some do not is worse than one
+\ where they all do. Assets and Expenses are the two groups here, and
+\ each is numbered before the account under it.
 Given a new book named Business
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |

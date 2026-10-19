@@ -1,22 +1,22 @@
 Specification ImportCsv
 
 Description Reading a CSV file into an account, and the saved mapping that says
-# what its columns mean.
+\ what its columns mean.
 Details
-# A CSV file has no standard. Every bank picks its own column headings,
-# its own date order and its own way of signing an amount. The headings
-# are therefore matched to one fixed set of fields, and the result is a
-# named profile: set up once per bank, recognised by its headings
-# thereafter.
-#
-# A CSV file usually has no identifier per transaction, so test one of
-# ImportOfx -- the one that makes a second read of a QFX do nothing --
-# has nothing to work on. Everything below it does: the tests are the
-# same tests, over the same date and amount, counted the same way. Where
-# a file does carry a reference of its own it is kept and used, under
-# the name of the source that gave it, exactly as a FITID is. See how a
-# downloaded transaction is identified in ImportOfx; what is here is the
-# same rule read for a file without identifiers.
+\ A CSV file has no standard. Every bank picks its own column headings,
+\ its own date order and its own way of signing an amount. The headings
+\ are therefore matched to one fixed set of fields, and the result is a
+\ named profile: set up once per bank, recognised by its headings
+\ thereafter.
+\
+\ A CSV file usually has no identifier per transaction, so test one of
+\ ImportOfx -- the one that makes a second read of a QFX do nothing --
+\ has nothing to work on. Everything below it does: the tests are the
+\ same tests, over the same date and amount, counted the same way. Where
+\ a file does carry a reference of its own it is kept and used, under
+\ the name of the source that gave it, exactly as a FITID is. See how a
+\ downloaded transaction is identified in ImportOfx; what is here is the
+\ same rule read for a file without identifiers.
 
 # ---------------------------------------------------------------------------
 # The mapping
@@ -25,7 +25,7 @@ Details
 Entity CsvProfile
 Description What the columns of one institution CSV file mean.
 Details A column is named by its heading when the file has a header row, and by
-# its position, counting from one, when it does not.
+\ its position, counting from one, when it does not.
 | Attribute     | Type          | Default  | Notes                             |
 | Name          | Text          |          | Shown in the import dialog        |
 | HasHeader     | Boolean       | true     |                                   |
@@ -55,8 +55,8 @@ Examples: EnumerationValues
 DataType DateOrder
 Description Which of the first two numbers in a date is the month.
 Details Stated in the profile rather than detected. A file whose dates are all
-# before the thirteenth of the month is genuinely ambiguous, and guessing
-# wrong silently moves twenty years of history by up to eleven months.
+\ before the thirteenth of the month is genuinely ambiguous, and guessing
+\ wrong silently moves twenty years of history by up to eleven months.
 Examples: EnumerationValues
 | Value | Notes                      |
 | MDY   | 03/04/2024 is 4 March      |
@@ -74,7 +74,7 @@ Examples: EnumerationValues
 DataType OutwardSign
 Description What money leaving the account looks like in the file.
 Details A statement written from the point of view of the bank has the signs the
-# other way round from one written for the customer, and both exist.
+\ other way round from one written for the customer, and both exist.
 Examples: EnumerationValues
 | Value    | Notes                                              |
 | Negative | A payment is -45.00; the usual case                |
@@ -85,12 +85,12 @@ Examples: EnumerationValues
 # ---------------------------------------------------------------------------
 
 Description Every bank names its columns differently, so the headers of the file
-# are matched to one fixed set of fields. That set is below, and it is
-# the only vocabulary the rest of the import speaks.
+\ are matched to one fixed set of fields. That set is below, and it is
+\ the only vocabulary the rest of the import speaks.
 
 DataType CanonicalField
 Description The fields an imported row can supply. Nothing outside this set is
-# read, and a header matched to none of them is carried no further.
+\ read, and a header matched to none of them is carried no further.
 Examples: EnumerationValues
 | Value   | Notes                                                           |
 | Date    | Required                                                        |
@@ -106,7 +106,7 @@ Examples: EnumerationValues
 
 BusinessRule Which fields a file must supply
 Description A file missing a required field cannot be imported, because nothing
-# downstream can invent a date or an amount.
+\ downstream can invent a date or an amount.
 Examples: FieldRequirement
 | Field    | Requirement                              |
 | Date     | Always                                   |
@@ -139,7 +139,7 @@ Collection HeaderMatches
 DataType MatchedBy
 Description How a column came to be matched to its field.
 Details The difference matters to the user: a match from a saved profile has
-# been confirmed before, and one from the alias table has not.
+\ been confirmed before, and one from the alias table has not.
 Examples: EnumerationValues
 | Value   | Notes                                                    |
 | Profile | A saved profile for this bank said so                    |
@@ -149,8 +149,8 @@ Examples: EnumerationValues
 
 BusinessRule How a header is normalised before it is matched
 Description Case, spaces and punctuation differ between exports of the same
-# bank, so they are removed before comparing. What is left is
-# letters and digits.
+\ bank, so they are removed before comparing. What is left is
+\ letters and digits.
 Examples: HeaderNormalisation
 | SourceHeader         | Normalised        | Notes                     |
 | Date                 | date              |                           |
@@ -172,11 +172,11 @@ Attributes HeaderNormalisation
 
 BusinessRule Known spellings of each field
 Description The alias table. It is what lets a file from a bank not seen before
-# import with nothing to set up, and it is the starting point the
-# import dialog offers when something is unmatched.
+\ import with nothing to set up, and it is the starting point the
+\ import dialog offers when something is unmatched.
 Details Headers are listed in their normalised form. The table is data, not
-# code: a spelling added here is the whole of adding support for
-# another bank that happens to use it.
+\ code: a spelling added here is the whole of adding support for
+\ another bank that happens to use it.
 Examples: HeaderAlias
 | Normalised           | Field    |
 | date                 | Date     |
@@ -307,8 +307,8 @@ Attributes AmountStyleFromFields
 
 Scenario An unknown header is left unmatched and asked about
 Description The file still imports: the unmatched column is simply not read.
-# The user is told which column was not understood, and may map it
-# or leave it, and the choice is saved with the profile.
+\ The user is told which column was not understood, and may map it
+\ or leave it, and the choice is saved with the profile.
 Given the file contains
 """
 Date,Narrative,Amount,Reference
@@ -341,7 +341,7 @@ Attributes UnmatchedHeader
 
 Scenario A required field that nothing matches stops the import
 Description Refusing is the only option: a row with no date cannot be placed in
-# a register.
+\ a register.
 Given the file contains
 """
 Description,Amount
@@ -354,7 +354,7 @@ Then rejected because : Rejection
 
 Scenario Two headers matching one field is reported rather than resolved
 Description Taking the first would be a guess, and a file with both Amount and
-# Transaction Amount is a file worth looking at before importing.
+\ Transaction Amount is a file worth looking at before importing.
 Given the file contains
 """
 Date,Description,Amount,Transaction Amount
@@ -378,7 +378,7 @@ Attributes AmbiguousField
 
 Scenario Two columns with the same header are both reported
 Description It happens in exports that concatenate two statements. Neither is
-# chosen.
+\ chosen.
 Given the file contains
 """
 Date,Description,Amount,Amount
@@ -391,8 +391,8 @@ Then ambiguous fields are : AmbiguousField
 
 Scenario A saved profile is recognised by the headers of the file
 Description Once a bank has been set up, its files are recognised by the set of
-# headers they carry, so the right profile is chosen without the user
-# naming it. The signature is the matched headers in file order.
+\ headers they carry, so the right profile is chosen without the user
+\ naming it. The signature is the matched headers in file order.
 Given saved profiles are : SavedProfile
 | Name            | Signature                                 |
 | Example Bank    | Posted Date,Description,Amount,Running Balance |
@@ -421,8 +421,8 @@ Attributes ProfileRecognition
 
 Scenario A profile takes precedence over the alias table
 Description The user corrected a mapping once; that correction is not quietly
-# undone by an alias that happens to match. Here Description was
-# mapped to Memo rather than Payee, and it stays mapped to Memo.
+\ undone by an alias that happens to match. Here Description was
+\ mapped to Memo rather than Payee, and it stays mapped to Memo.
 Given saved profiles are : SavedProfile
 | Name         | Signature                      |
 | Odd Bank     | Date,Description,Narrative,Amount |
@@ -450,8 +450,8 @@ Then rows read are : CsvRowRead
 
 Scenario A file whose headers are in a different order is still recognised
 Description The signature is compared as a set, so a bank that reorders its
-# columns between exports does not need setting up again. The
-# positions are taken from this file, not from the saved ones.
+\ columns between exports does not need setting up again. The
+\ positions are taken from this file, not from the saved ones.
 Given saved profiles are : SavedProfile
 | Name         | Signature                                      |
 | Example Bank | Posted Date,Description,Amount,Running Balance |
@@ -473,7 +473,7 @@ Then header matches are : HeaderMatches
 
 Scenario A confirmed mapping is saved against the name the user gives the bank
 Description The mapping is set up once. What is saved is the signature, the
-# matches, and the file-level settings of the profile.
+\ matches, and the file-level settings of the profile.
 Given the file contains
 """
 Date,Narrative,Amount
@@ -507,8 +507,8 @@ Examples: ValidValues
 
 Scenario Columns the file has that the program does not need are ignored quietly
 Description A bank that exports a currency column and a transaction type column
-# is not asking a question. These are matched to Ignore by the alias
-# table, so the user is not asked about them.
+\ is not asking a question. These are matched to Ignore by the alias
+\ table, so the user is not asked about them.
 Given the file contains
 """
 Date,Description,Amount,Currency,Transaction Type,Status
@@ -531,8 +531,8 @@ Then header matching is complete : HeaderMatchResult Vertical
 
 Scenario A matched balance column is used to check the import, not stored
 Description The balance after each row is the strongest check a CSV file offers,
-# and it is the nearest thing in CSV to the ledger balance of an OFX
-# file. A disagreement is reported with the row that broke it.
+\ and it is the nearest thing in CSV to the ledger balance of an OFX
+\ file. A disagreement is reported with the row that broke it.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -603,8 +603,8 @@ Then rows read are : CsvRowRead
 
 Scenario A file with separate debit and credit columns
 Description Each row fills in one column or the other. A debit is money out,
-# whatever sign the file writes it with, so the sign is taken from the
-# column rather than from the number.
+\ whatever sign the file writes it with, so the sign is taken from the
+\ column rather than from the number.
 Given the csv profile is : CsvProfile Vertical
 | Name         | Two Column Bank |
 | HasHeader    | true            |
@@ -630,8 +630,8 @@ Then rows read are : CsvRowRead
 
 Scenario A file whose signs are written from the point of view of the bank
 Description Some exports show a customer payment as a positive number, because
-# to the bank it is a credit. The profile says so and the signs are
-# turned round on the way in.
+\ to the bank it is a credit. The profile says so and the signs are
+\ turned round on the way in.
 Given the csv profile is : CsvProfile Vertical
 | Name         | Inverted Bank |
 | HasHeader    | true          |
@@ -679,7 +679,7 @@ Attributes CsvAmount
 
 Scenario A row with both debit and credit filled in is refused
 Description In the DebitCredit style this cannot be meant, and adding them would
-# invent a figure. The row is reported with its line number.
+\ invent a figure. The row is reported with its line number.
 Given the csv profile is : CsvProfile Vertical
 | Name         | Two Column Bank |
 | DateColumn   | Posted          |
@@ -707,7 +707,7 @@ Attributes CsvRowError
 
 BusinessRule How a date cell is read
 Description The profile says which order the parts are in; the separator and the
-# width of the year are taken as they come.
+\ width of the year are taken as they come.
 Examples: CsvDateParse
 | DateOrder | Text       | Date       | Valid | Notes                        |
 | MDY       | 01/15/2024 | 2024-01-15 | true  |                              |
@@ -736,7 +736,7 @@ Attributes CsvDateParse
 BusinessRule How a two-digit year is read
 Description A window is needed, and twenty years of history sets where it goes.
 Details Years 70 to 99 are nineteen hundreds; 00 to 69 are two thousands. A
-# file old enough to write dates this way will not contain 2070.
+\ file old enough to write dates this way will not contain 2070.
 Examples: TwoDigitYear
 | Text | Year | Notes                    |
 | 24   | 2024 |                          |
@@ -753,8 +753,8 @@ Attributes TwoDigitYear
 
 Scenario A file whose dates could be read either way is reported before import
 Description Every date in this file has a first part of twelve or less, so both
-# readings work and they disagree. The import says which it will use
-# and what the file would look like the other way, and waits.
+\ readings work and they disagree. The import says which it will use
+\ and what the file would look like the other way, and waits.
 Given the csv profile is : CsvProfile Vertical
 | Name         | Ambiguous Bank |
 | DateColumn   | Date           |
@@ -783,7 +783,7 @@ Attributes DateOrderWarning
 
 Scenario A file with an unambiguous date is not queried
 Description One date with a first part above twelve settles the order for the
-# whole file, and it agrees with the profile, so nothing is asked.
+\ whole file, and it agrees with the profile, so nothing is asked.
 Given the csv profile is : CsvProfile Vertical
 | Name         | Ambiguous Bank |
 | DateColumn   | Date           |
@@ -802,8 +802,8 @@ Then date order is ambiguous : DateOrderWarning Vertical
 
 Scenario A file whose dates contradict the profile is refused
 Description The profile says month first, and the file has a thirteenth month.
-# Reading it the other way would work, but quietly disagreeing with
-# the profile is how a migration goes wrong without anyone noticing.
+\ Reading it the other way would work, but quietly disagreeing with
+\ the profile is how a migration goes wrong without anyone noticing.
 Given the csv profile is : CsvProfile Vertical
 | Name         | Ambiguous Bank |
 | DateColumn   | Date           |
@@ -845,7 +845,7 @@ Then rows read are : CsvRowRead
 
 Scenario A quoted field may contain a line break
 Description A memo typed with a newline in it arrives as one field spanning two
-# lines of the file. Counting lines by newline would split the row.
+\ lines of the file. Counting lines by newline would split the row.
 Given the csv profile is : CsvProfile Vertical
 | Name         | Example Bank |
 | DateColumn   | Date         |
@@ -866,7 +866,7 @@ Then rows read are : CsvRowRead
 
 Scenario A preamble before the header row is skipped
 Description Several banks put the account number and the period above the
-# header. SkipRows says how many lines to pass over.
+\ header. SkipRows says how many lines to pass over.
 Given the csv profile is : CsvProfile Vertical
 | Name         | Preamble Bank |
 | HasHeader    | true          |
@@ -907,8 +907,8 @@ Then rows read are : CsvRowRead
 
 Scenario Blank rows and a trailing total row are skipped
 Description A blank line is passed over without comment. A row whose date cell
-# will not parse is reported, because it might have been a real
-# transaction rather than a footer.
+\ will not parse is reported, because it might have been a real
+\ transaction rather than a footer.
 Given the csv profile is : CsvProfile Vertical
 | Name         | Example Bank |
 | DateColumn   | Date         |
@@ -931,9 +931,9 @@ Then rows rejected are : CsvRowError
 
 Scenario A byte order mark does not become part of the first heading
 Description A file saved from a spreadsheet on Windows begins with a BOM. Left
-# in place it makes the first column heading unmatchable, and the
-# error that follows says the Date column is missing, which sends the
-# reader looking in the wrong place.
+\ in place it makes the first column heading unmatchable, and the
+\ error that follows says the Date column is missing, which sends the
+\ reader looking in the wrong place.
 Given the file begins with a byte order mark and contains
 """
 Date,Description,Amount
@@ -960,9 +960,9 @@ Examples: ValidValues
 
 Scenario A file that carries categories imports them
 Description This is the migration path. An export of twenty years of history
-# names the category of each transaction, and taking it saves
-# recategorising everything by hand. A category named in the file but
-# not in the book is created, as in Accounts.
+\ names the category of each transaction, and taking it saves
+\ recategorising everything by hand. A category named in the file but
+\ not in the book is created, as in Accounts.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -997,8 +997,8 @@ Then accounts created are : ChartOfAccounts
 
 Scenario A category column naming a real account makes a transfer
 Description A Quicken export writes a transfer with the other account in square
-# brackets. Stripping them gives the account path, and the result is
-# an ordinary transfer.
+\ brackets. Stripping them gives the account path, and the result is
+\ an ordinary transfer.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
 | Assets:Checking | Checking | false       |
@@ -1028,27 +1028,27 @@ Then transactions are : Transaction
 
 DomainTerm Fingerprint : Text
 Description The date and the amount of a row, with the payee compared as the
-# payee rule describes -- the rules first, then loosely. It is the name
-# for what two records of one transaction have in common when neither
-# carries an identifier.
+\ payee rule describes -- the rules first, then loosely. It is the name
+\ for what two records of one transaction have in common when neither
+\ carries an identifier.
 Details The date and the amount are the key. The payee is not part of it,
-# because the first reconciliation against a history brought over from
-# Quicken would match nothing if it were: Harris Teeter against HARRIS
-# TEETER #231. What the payee decides is the note. See two payees are
-# compared after the rules and then loosely, in ImportOfx.
+\ because the first reconciliation against a history brought over from
+\ Quicken would match nothing if it were: Harris Teeter against HARRIS
+\ TEETER #231. What the payee decides is the note. See two payees are
+\ compared after the rules and then loosely, in ImportOfx.
 
 $TBD
 BusinessRule How a CSV row is tested against what is already there
 Description The tests of ImportOfx, less the one about identifiers, which a CSV
-# file usually has nothing for. Where a file does carry a reference of
-# its own, test one applies to it and is scoped to that source.
+\ file usually has nothing for. Where a file does carry a reference of
+\ its own, test one applies to it and is scoped to that source.
 Details There was a weaker rule here once, and it was weaker in both
-# directions. It offered a row that matched rather than settling it, so
-# re-reading a file asked about every row of it; and it reached five
-# days on an amount alone, which is a guess about whether somebody
-# shopped twice dressed up as a match. The rule now is the one rule,
-# stated once in ImportOfx and read here for a file without
-# identifiers.
+\ directions. It offered a row that matched rather than settling it, so
+\ re-reading a file asked about every row of it; and it reached five
+\ days on an amount alone, which is a guess about whether somebody
+\ shopped twice dressed up as a match. The rule now is the one rule,
+\ stated once in ImportOfx and read here for a file without
+\ identifiers.
 Examples: CsvDispositionRule
 | Test | Condition                                                             | Disposition |
 | 1    | A transaction in this account carries this row's reference, from a Csv import | Duplicate |
@@ -1065,43 +1065,43 @@ Attributes CsvDispositionRule
 
 BusinessRule How many rows match how many transactions
 Description The tests above ask whether something matching is there. That is not
-# enough, because it answers the same way however many there are. Two
-# rows in one file with the same date and amount are two transactions,
-# not one row read twice, so the file and the book are counted against
-# each other.
+\ enough, because it answers the same way however many there are. Two
+\ rows in one file with the same date and amount are two transactions,
+\ not one row read twice, so the file and the book are counted against
+\ each other.
 Details Where the counts agree, every one of them is a duplicate. Two rows
-# and two transactions is one file read twice; nothing is created and
-# both transactions are cleared. Where the counts do not agree, every
-# one of them is a question: nothing says which row goes with which
-# transaction, and there is no reason to prefer one pairing over
-# another.
-#
-# Pairing them off one for one and calling the remainder new was the
-# earlier rule, and it decided the one thing nobody can decide from a
-# file. Two rows against one transaction is either a second visit to
-# the shop or a file that has been read before and a transaction that
-# was missed; the counts say which only when they agree. So the
-# disagreeing case asks, and asks about all of it, because the row that
-# would have been paired off is no better evidenced than the row that
-# would have been left over.
-#
-# The test that asks only "is there one like this?" silently loses the
-# second coffee of the day, the second fuel stop, the second identical
-# transfer. Nothing reports it, the register is simply short, and the
-# account reconciles against nothing. Of the two ways to be wrong this
-# is the worse one: an extra row is seen and deleted, a missing row is
-# discovered a year later or never.
-#
-# The counting is per account, as every other duplicate test here is,
-# and over what tests one and two have not already settled: a row whose
-# reference or check number has named its transaction is out of the
-# count, and so is that transaction.
-#
-# The book is never changed to fit the file. Where the book holds more
-# than the file does -- the same amount twice over where the download
-# has it once -- the spare is left alone and nothing is reported about
-# it. The file is a statement of what the bank knows, not an
-# instruction to make the book match.
+\ and two transactions is one file read twice; nothing is created and
+\ both transactions are cleared. Where the counts do not agree, every
+\ one of them is a question: nothing says which row goes with which
+\ transaction, and there is no reason to prefer one pairing over
+\ another.
+\
+\ Pairing them off one for one and calling the remainder new was the
+\ earlier rule, and it decided the one thing nobody can decide from a
+\ file. Two rows against one transaction is either a second visit to
+\ the shop or a file that has been read before and a transaction that
+\ was missed; the counts say which only when they agree. So the
+\ disagreeing case asks, and asks about all of it, because the row that
+\ would have been paired off is no better evidenced than the row that
+\ would have been left over.
+\
+\ The test that asks only "is there one like this?" silently loses the
+\ second coffee of the day, the second fuel stop, the second identical
+\ transfer. Nothing reports it, the register is simply short, and the
+\ account reconciles against nothing. Of the two ways to be wrong this
+\ is the worse one: an extra row is seen and deleted, a missing row is
+\ discovered a year later or never.
+\
+\ The counting is per account, as every other duplicate test here is,
+\ and over what tests one and two have not already settled: a row whose
+\ reference or check number has named its transaction is out of the
+\ count, and so is that transaction.
+\
+\ The book is never changed to fit the file. Where the book holds more
+\ than the file does -- the same amount twice over where the download
+\ has it once -- the spare is left alone and nothing is reported about
+\ it. The file is a statement of what the bank knows, not an
+\ instruction to make the book match.
 Examples: ClaimPairing
 | InFile | AlreadyThere | Duplicate | Possible | New | Notes                                   |
 | 1      | 0            | 0         | 0        | 1   | Nothing to match                        |
@@ -1123,10 +1123,10 @@ Attributes ClaimPairing
 
 Scenario Two identical rows against one transaction already there
 Description The case the rule exists for. Two coffees at the same shop on the
-# same day for the same amount, and the book has one of them: either
-# the second was never entered, or this file has been read before and
-# one of the two was missed. Nothing in the file says which, so both
-# rows are asked about.
+\ same day for the same amount, and the book has one of them: either
+\ the second was never entered, or this file has been read before and
+\ one of the two was missed. Nothing in the file says which, so both
+\ rows are asked about.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1158,7 +1158,7 @@ Then import summary is : ImportSummary Vertical
 
 Scenario Two identical rows with nothing already there are both new
 Description The same file into an empty account. Neither row is a duplicate of
-# the other: the file is what the bank says happened.
+\ the other: the file is what the bank says happened.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1183,8 +1183,8 @@ Then import summary is : ImportSummary Vertical
 
 Scenario The book holding more than the file leaves the spare alone
 Description Two coffees were entered by hand and the download has one. The
-# second is not reported and not touched: the file is a statement of
-# what the bank knows, not an instruction to make the book match.
+\ second is not reported and not touched: the file is a statement of
+\ what the bank knows, not an instruction to make the book match.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1213,10 +1213,10 @@ Then import summary is : ImportSummary Vertical
 
 Scenario Re-importing the same CSV file does nothing the second time
 Description One row in the file and the one it created in the book: the counts
-# agree, so it is a duplicate and nothing is created. This is the whole
-# point of reading a file twice being safe, and the earlier rule --
-# which offered every row again -- made a monthly download a monthly
-# questionnaire.
+\ agree, so it is a duplicate and nothing is created. This is the whole
+\ point of reading a file twice being safe, and the earlier rule --
+\ which offered every row again -- made a monthly download a monthly
+\ questionnaire.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1250,13 +1250,13 @@ Then import summary is : ImportSummary Vertical
 
 BusinessRule What a fingerprint ignores
 Description Two rows that differ only in how the payee is spaced, cased or
-# numbered are the same row. Two that differ in amount or date are not.
+\ numbered are the same row. Two that differ in amount or date are not.
 Details The last row is the one that moved. A trailing number on a payee is a
-# store number or a terminal number, not a different shop, and treating
-# it as a difference put a payee note on every row of a reconciliation
-# against a Quicken history. See two payees are compared after the
-# rules and then loosely, in ImportOfx: this is that comparison, named
-# from the CSV side.
+\ store number or a terminal number, not a different shop, and treating
+\ it as a difference put a payee note on every row of a reconciliation
+\ against a Quicken history. See two payees are compared after the
+\ rules and then loosely, in ImportOfx: this is that comparison, named
+\ from the CSV side.
 Examples: FingerprintMatch
 | DateA      | PayeeA          | AmountA | DateB      | PayeeB          | AmountB | Same  |
 | 2024-01-15 | Harris Teeter   | -45.00  | 2024-01-15 | HARRIS TEETER   | -45.00  | true  |

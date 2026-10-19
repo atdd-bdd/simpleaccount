@@ -452,12 +452,27 @@ To reproduce: take any `BusinessRule` with a multi-line `Description` and an
 `analyze_cli` on the folder. 4 diagnostics, all warnings, and one of them is the
 rule going dark.
 
-**Since taken up here.** The whole folder now writes continuations as `#`:
-2,350 lines across the fourteen files, with only the first line of each
-paragraph keeping its keyword. 0 diagnostics, the same 467 tests. It reads the
-way it should and it is the discarding form, so every one of those lines is a
-`\` waiting for the leading marker to arrive — which is the request above, and
-the reason it is worth having.
+**Resolved in 0.9.2, and the leading marker is the one that shipped.** Syntax
+v3.3a §4.1.1 defines a line whose first character is `\` as a continuation of
+the named comment above it, which is request 1 as asked for. The interim `#`
+form had grown to 2,851 lines across the fourteen files; they were converted
+to `\` in one pass, and the result is 0 diagnostics with the generated tests
+byte-identical -- as expected, since nothing is generated from a named comment
+today. The text is now inside the model instead of being discarded, which was
+the point.
+
+Two notes from the conversion:
+
+- **A paragraph break has no marker, and a bare `\` is what we used.** The
+  continuation joins with a single space, so a paragraph of two cannot be
+  written as one `Description`. A line holding `\` and nothing else analyzes
+  clean and does not break the chain, so that is the stand-in here; it is
+  worth either documenting or giving a marker of its own, because today it
+  joins as a single space like any other continuation and a reader of the
+  rendered comment will not see the break.
+- **Request 2 is still open.** An unrecognised keyword inside a block still
+  ends it silently -- the leading marker removes the reason a wrapped sentence
+  arrives there, but not the consequence if one does.
 
 ---
 

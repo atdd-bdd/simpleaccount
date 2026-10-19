@@ -1,16 +1,16 @@
 Specification Reports
 
 Description Reporting by category and by payee, over a date range or over many
-# years side by side.
+\ years side by side.
 Details
-# Every figure in a report is a total of transactions. A report never reads a
-# stored total, so it cannot disagree with the register, and a correction
-# made in 2007 shows in a report run today without anything being
-# rebuilt.
-#
-# Amounts are shown with the display sign of the account, so income and
-# expenses are both positive and a reader does not have to hold the sign
-# convention in their head. See the display sign rule in Accounts.
+\ Every figure in a report is a total of transactions. A report never reads a
+\ stored total, so it cannot disagree with the register, and a correction
+\ made in 2007 shows in a report run today without anything being
+\ rebuilt.
+\
+\ Amounts are shown with the display sign of the account, so income and
+\ expenses are both positive and a reader does not have to hold the sign
+\ convention in their head. See the display sign rule in Accounts.
 
 # ---------------------------------------------------------------------------
 # Asking for a report
@@ -50,17 +50,17 @@ Examples: EnumerationValues
 
 DataType ReportDetail
 Description How much of the category tree a report shows, which is the choice
-# offered on the report itself.
+\ offered on the report itself.
 Details HighestOnly is the summary: one line for each category at the top of a
-# section, with everything below it rolled up into its figure. It is the
-# same report as Depth 1, under the name the window offers.
-#
-# AllCategories is the whole tree, each category indented one step further
-# than its parent so that a child reads as belonging to the line above it.
-#
-# Transactions is the whole tree with the transactions behind each figure
-# shown under it, which is the drill-down of every line at once rather
-# than one line at a time. See the drill-down section below.
+\ section, with everything below it rolled up into its figure. It is the
+\ same report as Depth 1, under the name the window offers.
+\
+\ AllCategories is the whole tree, each category indented one step further
+\ than its parent so that a child reads as belonging to the line above it.
+\
+\ Transactions is the whole tree with the transactions behind each figure
+\ shown under it, which is the drill-down of every line at once rather
+\ than one line at a time. See the drill-down section below.
 Examples: EnumerationValues
 | Value         | Notes                                                 |
 | HighestOnly   | One line per category at the top of a section         |
@@ -106,7 +106,7 @@ Given transactions are : Transaction
 
 Scenario A category report for one year
 Description The tree is kept, with a subtotal on every placeholder, and income
-# and expenses both read as positive figures.
+\ and expenses both read as positive figures.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run : ReportSpec Vertical
@@ -138,24 +138,24 @@ Attributes ReportTotal
 
 Scenario Quicken signs show expenses negative
 Description The same report as above with QuickenSigns asked for, which is how
-# Quicken writes it: income positive, expenses negative. For reading
-# a figure against a Quicken report side by side, where having to
-# negate one column in your head is where mistakes come from.
+\ Quicken writes it: income positive, expenses negative. For reading
+\ a figure against a Quicken report side by side, where having to
+\ negate one column in your head is where mistakes come from.
 Details The rule is uniform and has no special cases: a Quicken expense figure
-# is the negation of ours, every row, and that holds for a category whose
-# figure is a credit as well. Measured on the 2021 business report, where
-# Clear Out Balances reads 127.56 in Quicken and -127.56 here, and
-# Groceries reads -12,129.60 there and 12,129.60 here.
-#
-# The net does not move. Only the sign of the expenses figure does, so
-# the net is income plus expenses in this mode and income minus expenses
-# in the other, and both come to the same number.
-#
-# Income is untouched because the two conventions already agree on it.
-# Payee reports keep the other convention whatever this is set to: a
-# payee report sums a payee's income and expense transactions into one
-# figure, so a payee with both has no sensible sign here, and flipping it
-# would make the number meaningless rather than differently signed.
+\ is the negation of ours, every row, and that holds for a category whose
+\ figure is a credit as well. Measured on the 2021 business report, where
+\ Clear Out Balances reads 127.56 in Quicken and -127.56 here, and
+\ Groceries reads -12,129.60 there and 12,129.60 here.
+\
+\ The net does not move. Only the sign of the expenses figure does, so
+\ the net is income plus expenses in this mode and income minus expenses
+\ in the other, and both come to the same number.
+\
+\ Income is untouched because the two conventions already agree on it.
+\ Payee reports keep the other convention whatever this is set to: a
+\ payee report sums a payee's income and expense transactions into one
+\ figure, so a payee with both has no sensible sign here, and flipping it
+\ would make the number meaningless rather than differently signed.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run : ReportSpec Vertical
@@ -184,8 +184,8 @@ Then report total is : ReportTotal Vertical
 
 Scenario Rows are in alphabetical order within each parent
 Description Not by amount. A report compared with the same report from last
-# month should have its rows in the same places, so that the eye can
-# find a line without reading every one of them.
+\ month should have its rows in the same places, so that the eye can
+\ find a line without reading every one of them.
 Given the chart of accounts is : ChartOfAccounts
 | Path           | Type    | Placeholder |
 | Assets:Checking | Checking | false       |
@@ -213,8 +213,8 @@ Then report rows are : ReportRow
 
 Scenario A transaction reports under the category its destination names
 Description A category report reads the book's balances and does not care which
-# shape put them there. See the section on naming both accounts
-# directly in Transactions.spectable.
+\ shape put them there. See the section on naming both accounts
+\ directly in Transactions.spectable.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -253,7 +253,7 @@ Then report rows are : ReportRow
 
 Scenario Asking for zero rows keeps every category in the report
 Description Useful when the report is a form to be filled in, or compared with
-# the same report from another year.
+\ the same report from another year.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run : ReportSpec Vertical
@@ -276,7 +276,7 @@ Then report rows are : ReportRow
 
 Scenario A depth limit rolls the detail up into its parent
 Description Twenty years of history grows a deep tree. A report to depth one is
-# the summary; the figures still add to the same total.
+\ the summary; the figures still add to the same total.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run : ReportSpec Vertical
@@ -303,8 +303,8 @@ Then report rows are : ReportRow
 
 Scenario Asking for the highest categories only shows one line for each
 Description The summary: Auto reads 450.00 with nothing under it, and the figure
-# still adds to the same total as the full tree. The section lines stay,
-# because the totals have to be somewhere.
+\ still adds to the same total as the full tree. The section lines stay,
+\ because the totals have to be somewhere.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run : ReportSpec Vertical
@@ -332,9 +332,9 @@ Then report total is : ReportTotal Vertical
 
 Scenario Asking for all the categories shows the whole tree indented
 Description Every category, each one starting a step further over than its
-# parent, so that Fuel reads as part of Auto without the path having to
-# be written out on the line. The indent is Level: one step per level,
-# and a transaction line later takes its indent the same way.
+\ parent, so that Fuel reads as part of Auto without the path having to
+\ be written out on the line. The indent is Level: one step per level,
+\ and a transaction line later takes its indent the same way.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run : ReportSpec Vertical
@@ -360,20 +360,20 @@ Then report rows are : ReportRow
 Attributes ReportDetailLine
 Description One line of a report shown with its transactions.
 Details Two amount columns, because they are two different kinds of figure and
-# putting them in one column would invite adding a transaction to the
-# total that already contains it. Each holds the individual amount and is
-# filled only on a transaction line; Amount holds the figure for the
-# category and is filled only on a category line. Each is the left of the
-# two, so the individual amounts run down the inside of the page and the
-# column of totals stays where it is in every other report.
-#
-# A column with nothing in it on this line is empty rather than zero: a
-# category line has no individual amount to show, which is not the same as
-# showing it as 0.00.
-#
-# Account on a transaction line is the category the transaction was posted
-# to, so that a line can be read on its own, and Level is one more than
-# that category's, which is what steps it over.
+\ putting them in one column would invite adding a transaction to the
+\ total that already contains it. Each holds the individual amount and is
+\ filled only on a transaction line; Amount holds the figure for the
+\ category and is filled only on a category line. Each is the left of the
+\ two, so the individual amounts run down the inside of the page and the
+\ column of totals stays where it is in every other report.
+\
+\ A column with nothing in it on this line is empty rather than zero: a
+\ category line has no individual amount to show, which is not the same as
+\ showing it as 0.00.
+\
+\ Account on a transaction line is the category the transaction was posted
+\ to, so that a line can be read on its own, and Level is one more than
+\ that category's, which is what steps it over.
 | Attribute | Type           | Default |
 | Kind      | ReportLineKind |         |
 | Account   | AccountPath    |         |
@@ -393,8 +393,8 @@ Examples: EnumerationValues
 
 Scenario Asking for transactions shows each one under its category
 Description The figures are the ones the full tree already shows; what is added is
-# a line for each transaction behind them, in date order, one step
-# further over than the category it belongs to.
+\ a line for each transaction behind them, in date order, one step
+\ further over than the category it belongs to.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run : ReportSpec Vertical
@@ -434,9 +434,9 @@ Then report total is : ReportTotal Vertical
 
 Scenario A category with transactions of its own shows them under its Other line
 Description The Other line is where a category's own transactions are totalled,
-# so it is where they are listed. Without that, the forty and the ten
-# would both hang under Auto and the page would not say which of them
-# the Other line stood for.
+\ so it is where they are listed. Without that, the forty and the ten
+\ would both hang under Auto and the page would not say which of them
+\ the Other line stood for.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -469,9 +469,9 @@ Then report lines are : ReportDetailLine
 
 Scenario Transfers do not appear in a category report
 Description A transfer between two real accounts touches no category, so it is
-# absent without having to be excluded. This is the reason the credit
-# card payment in Transactions is modelled as a transfer: were it an
-# expense, this report would count the same spending twice.
+\ absent without having to be excluded. This is the reason the credit
+\ card payment in Transactions is modelled as a transfer: were it an
+\ expense, this report would count the same spending twice.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type       | Placeholder |
 | Assets:Checking    | Checking   | false       |
@@ -500,7 +500,7 @@ Then report total is : ReportTotal Vertical
 
 Scenario A hidden category with activity in the range still reports
 Description Hiding a category keeps it out of the picker for new transactions.
-# Leaving it out of a report would make the total wrong.
+\ Leaving it out of a report would make the total wrong.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder | Hidden |
 | Assets:Checking    | Checking | false       | false  |
@@ -525,31 +525,31 @@ Then report rows are : ReportRow
 
 BusinessRule A category with its own transactions shows them on an Other row
 Description A category that contains other categories can still be chosen for a
-# transaction. Expenses:Auto has Fuel and Insurance under it and also
-# has petrol bought before anyone made a Fuel category, and cash spent
-# on the car that belongs nowhere more precise.
-#
-# The transaction is associated with the containing category, exactly as
-# chosen. The report is where it shows differently: the containing
-# category carries the total of everything beneath it, and its own
-# transactions appear as a row under it called Other, so that the rows
-# underneath add up to the row above.
+\ transaction. Expenses:Auto has Fuel and Insurance under it and also
+\ has petrol bought before anyone made a Fuel category, and cash spent
+\ on the car that belongs nowhere more precise.
+\
+\ The transaction is associated with the containing category, exactly as
+\ chosen. The report is where it shows differently: the containing
+\ category carries the total of everything beneath it, and its own
+\ transactions appear as a row under it called Other, so that the rows
+\ underneath add up to the row above.
 Details Without that row the arithmetic of the report is wrong in a way that is
-# hard to see: Auto reads 100,948.56, its children add to 99,862.97, and
-# the missing 1,085.59 is money posted to Auto itself with nothing on the
-# page to say so. A reader checking the column would find the error and
-# have no way to explain it.
-#
-# The row is not a category. Nobody chooses it, nothing is posted to it,
-# and it is not in the chart of accounts. It exists for the length of the
-# report, which is why choosing the containing category is the whole of
-# what a person does.
-#
-# The name follows Quicken, because the reports are checked against
-# Quicken's: the word Other, then the containing category's path with the
-# section name taken off. So Expenses:Auto gives "Other Auto", and
-# Expenses:Cash Expenditures:Foreign Travel gives "Other Cash
-# Expenditures:Foreign Travel".
+\ hard to see: Auto reads 100,948.56, its children add to 99,862.97, and
+\ the missing 1,085.59 is money posted to Auto itself with nothing on the
+\ page to say so. A reader checking the column would find the error and
+\ have no way to explain it.
+\
+\ The row is not a category. Nobody chooses it, nothing is posted to it,
+\ and it is not in the chart of accounts. It exists for the length of the
+\ report, which is why choosing the containing category is the whole of
+\ what a person does.
+\
+\ The name follows Quicken, because the reports are checked against
+\ Quicken's: the word Other, then the containing category's path with the
+\ section name taken off. So Expenses:Auto gives "Other Auto", and
+\ Expenses:Cash Expenditures:Foreign Travel gives "Other Cash
+\ Expenditures:Foreign Travel".
 Examples: OtherRowNaming
 | ContainingCategory                         | TheRowIsCalled                         |
 | Expenses:Auto                              | Other Auto                             |
@@ -565,8 +565,8 @@ Attributes OtherRowNaming
 
 Scenario A category with its own transactions and children shows an Other row
 Description Forty on petrol under Fuel, ten on something to do with the car
-# posted to Auto itself. Auto totals fifty, and the two rows beneath it
-# add to fifty.
+\ posted to Auto itself. Auto totals fifty, and the two rows beneath it
+\ add to fifty.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -595,7 +595,7 @@ Then report rows are : ReportRow
 
 Scenario A category with its own transactions and no children shows no Other row
 Description There is nothing for the row to distinguish: the category's figure
-# is already its own transactions and nothing else.
+\ is already its own transactions and nothing else.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -648,23 +648,23 @@ Then report rows are : ReportRow
 
 BusinessRule Income and expense arising inside an investment account is left out
 Description A spending report answers what was earned and spent. A dividend
-# reinvested inside a retirement account was neither: no money
-# reached the household, and the figure is reported on a 1099
-# rather than budgeted against.
+\ reinvested inside a retirement account was neither: no money
+\ reached the household, and the figure is reported on a 1099
+\ rather than budgeted against.
 Details
-# So the test is not which category was used but where the money was.
-# A category transaction counts when the transaction it belongs to touches
-# no investment account, and is left out when it touches one. The same
-# category can do both -- Invest Inc is real income when the dividend
-# lands in a bank account and is not when it stays in the brokerage --
-# which is why the category alone cannot decide it.
-#
-# Money actually moved out of an investment account into a bank account
-# is a transfer between two real accounts, so it never reached this
-# report in the first place; see the transfer scenario above.
-#
-# IncludeInvestmentActivity puts it all back, for the reader who wants
-# the whole picture rather than the household one.
+\ So the test is not which category was used but where the money was.
+\ A category transaction counts when the transaction it belongs to touches
+\ no investment account, and is left out when it touches one. The same
+\ category can do both -- Invest Inc is real income when the dividend
+\ lands in a bank account and is not when it stays in the brokerage --
+\ which is why the category alone cannot decide it.
+\
+\ Money actually moved out of an investment account into a bank account
+\ is a transfer between two real accounts, so it never reached this
+\ report in the first place; see the transfer scenario above.
+\
+\ IncludeInvestmentActivity puts it all back, for the reader who wants
+\ the whole picture rather than the household one.
 Examples: InvestmentActivityCase
 | TransactionTouches                     | Category          | Counts | Notes                               |
 | A brokerage account only               | Income:Invest Inc | false  | A dividend reinvested; on the 1099  |
@@ -683,7 +683,7 @@ Attributes InvestmentActivityCase
 
 Scenario A dividend reinvested inside a retirement account is not income
 Description T2 credits Income:Invest Inc for 1200.00 and the money stayed in
-# the IRA, so the report shows only the 40.00 that reached the bank.
+\ the IRA, so the report shows only the 40.00 that reached the bank.
 Given the chart of accounts is : ChartOfAccounts
 | Path              | Type       | Placeholder |
 | Assets:Checking   | Checking   | false       |
@@ -719,7 +719,7 @@ Then report total is : ReportTotal Vertical
 
 Scenario Asking for investment activity puts it back
 Description The same range with the whole picture rather than the household
-# one. Every figure above grows by what was left out.
+\ one. Every figure above grows by what was left out.
 Given the chart of accounts is : ChartOfAccounts
 | Path              | Type       | Placeholder |
 | Assets:Checking   | Checking   | false       |
@@ -756,10 +756,10 @@ Then report total is : ReportTotal Vertical
 
 Scenario A transaction touching both a brokerage and a bank is left out
 Description A sale inside the brokerage that sweeps the proceeds to checking
-# and books a gain in one transaction. The gain belongs to the
-# brokerage, so the whole of it is left out rather than apportioned:
-# guessing which transaction the investment account is responsible for
-# would be a worse answer than the one on the 1099.
+\ and books a gain in one transaction. The gain belongs to the
+\ brokerage, so the whole of it is left out rather than apportioned:
+\ guessing which transaction the investment account is responsible for
+\ would be a worse answer than the one on the 1099.
 Given the chart of accounts is : ChartOfAccounts
 | Path              | Type       | Placeholder |
 | Assets:Checking   | Checking   | false       |
@@ -787,7 +787,7 @@ Then report total is : ReportTotal Vertical
 
 Scenario A payee report leaves out investment activity too
 Description Otherwise the largest payee in the book would be the brokerage,
-# for money that was never spent anywhere.
+\ for money that was never spent anywhere.
 Given the chart of accounts is : ChartOfAccounts
 | Path              | Type       | Placeholder |
 | Assets:Checking   | Checking   | false       |
@@ -811,27 +811,27 @@ Then payee report rows are : PayeeReportRow
 
 Scenario A draw from another book does not reach the spending report
 Description Money drawn from Ken Pugh, Inc. or WarpandByteDesigns is not income
-# here. That income was earned and already reported in the other
-# book, and counting it again would state the same earnings twice.
-# Entered as a transfer to an account for what that entity has paid
-# across, both sides are real, so nothing has to exclude it: only the
-# salary was earned in this book.
+\ here. That income was earned and already reported in the other
+\ book, and counting it again would state the same earnings twice.
+\ Entered as a transfer to an account for what that entity has paid
+\ across, both sides are real, so nothing has to exclude it: only the
+\ salary was earned in this book.
 Details
-# The convention, rather than a mechanism. A draw is entered as this
-# transfer when it happens; nothing rewrites a category on import, and
-# the import stays a faithful mirror of its source. Twenty years of
-# history hold two such transactions -- 27,500.00 drawn in December 2021
-# and 10,815.00 returned in August 2022 -- so a mapping in the importer
-# would be machinery for two lines, and a rule that applied only after
-# some cutover date would put a step in the middle of the multi-year
-# report that is the point of keeping the history at all.
-#
-# The reimbursement trees that carry the same two names are a different
-# thing and need nothing: a business expense paid personally debits a
-# subcategory and the reimbursement credits the parent, so the subtree
-# cancels itself. Over 2010 to 2026 the Warp And Byte tree nets 230.94
-# across 3,540 transactions. What is left in such a net is a real personal
-# expense that was never reimbursed, so excluding it would be wrong.
+\ The convention, rather than a mechanism. A draw is entered as this
+\ transfer when it happens; nothing rewrites a category on import, and
+\ the import stays a faithful mirror of its source. Twenty years of
+\ history hold two such transactions -- 27,500.00 drawn in December 2021
+\ and 10,815.00 returned in August 2022 -- so a mapping in the importer
+\ would be machinery for two lines, and a rule that applied only after
+\ some cutover date would put a step in the middle of the multi-year
+\ report that is the point of keeping the history at all.
+\
+\ The reimbursement trees that carry the same two names are a different
+\ thing and need nothing: a business expense paid personally debits a
+\ subcategory and the reimbursement credits the parent, so the subtree
+\ cancels itself. Over 2010 to 2026 the Warp And Byte tree nets 230.94
+\ across 3,540 transactions. What is left in such a net is a real personal
+\ expense that was never reimbursed, so excluding it would be wrong.
 Given the chart of accounts is : ChartOfAccounts
 | Path                         | Type   | Placeholder |
 | Assets:Ken~Checking          | Checking | false       |
@@ -864,7 +864,7 @@ Then report total is : ReportTotal Vertical
 
 Scenario A payee report over one year
 Description Flat, because payees have no tree, and ordered by amount because
-# the question being asked is usually which is the largest.
+\ the question being asked is usually which is the largest.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run : ReportSpec Vertical
@@ -889,8 +889,8 @@ Attributes PayeeReportRow
 
 Scenario A payee report counts each transaction once
 Description A split with three lines is one visit to the hardware store. The
-# amount is the total of those lines, which is the transaction's own
-# amount and not twice it.
+\ amount is the total of those lines, which is the transaction's own
+\ amount and not twice it.
 Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
 | Assets:Checking           | Checking | false       |
@@ -917,7 +917,7 @@ Then payee report rows are : PayeeReportRow
 $TBD
 Scenario A payee report for one category only
 Description What was spent at the hardware store on the garden, rather than
-# what was spent there altogether.
+\ what was spent there altogether.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run for category : CategoryFilter Vertical
@@ -940,7 +940,7 @@ Attributes CategoryFilter
 
 Attributes YearColumnRow
 Description A report row with one column per year. Three years are shown here;
-# the real report has as many columns as the range covers.
+\ the real report has as many columns as the range covers.
 | Attribute | Type        | Default |
 | Account   | AccountPath |         |
 | Level     | Integer     | 0       |
@@ -951,8 +951,8 @@ Description A report row with one column per year. Three years are shown here;
 
 Scenario A category report by year
 Description This is the multi-year history, and it is the reason the transactions
-# are never summarised into a stored total: a column for 2007 is the
-# same calculation as a column for this year.
+\ are never summarised into a stored total: a column for 2007 is the
+\ same calculation as a column for this year.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run : ReportSpec Vertical
@@ -974,8 +974,8 @@ Then year column rows are : YearColumnRow
 
 Scenario A year with no transactions still has a column
 Description An empty column is information: it says nothing happened that year,
-# which is a different statement from the year being absent from the
-# report altogether. Nothing was posted in 2025, and 2025 is a column.
+\ which is a different statement from the year being absent from the
+\ report altogether. Nothing was posted in 2025, and 2025 is a column.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run : ReportSpec Vertical
@@ -998,7 +998,7 @@ Attributes ReportColumn
 
 Scenario A range that stops inside a year gives a short last column
 Description The column is labelled with the part of the year it covers, so that
-# a figure covering five months is not read as a whole year.
+\ a figure covering five months is not read as a whole year.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run : ReportSpec Vertical
@@ -1013,8 +1013,8 @@ Then report columns are : ReportColumn
 
 Scenario An average column over the years asked for
 Description The average is over the columns in the report, not over the years in
-# which something happened, so a category used twice in three years
-# averages over three.
+\ which something happened, so a category used twice in three years
+\ averages over three.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run with average : ReportSpec Vertical
@@ -1041,8 +1041,8 @@ Attributes AverageRow
 BusinessRule What the named date ranges mean
 Description Taken relative to today, which is 2024-05-15 in these examples.
 Details The ranges that end today end today rather than at the end of the
-# period, because a month-to-date total compared with a whole previous
-# month is a comparison nobody wants by accident.
+\ period, because a month-to-date total compared with a whole previous
+\ month is a comparison nobody wants by accident.
 Examples: NamedRange
 | Name            | From       | To         | Notes                        |
 | ThisMonth       | 2024-05-01 | 2024-05-31 | The whole month              |
@@ -1064,10 +1064,10 @@ Attributes NamedRange
 
 BusinessRule How a fiscal year is named and bounded
 Description The fiscal year is named for the calendar year it ends in. With a
-# start month of July, the year running July 2023 to June 2024 is
-# FY2024.
+\ start month of July, the year running July 2023 to June 2024 is
+\ FY2024.
 Details A start month of January makes the fiscal year the calendar year, which
-# is the default and what most users want.
+\ is the default and what most users want.
 Examples: FiscalYear
 | StartMonth | FiscalYear | From       | To         | Notes               |
 | 1          | FY2024     | 2024-01-01 | 2024-12-31 | The calendar year   |
@@ -1090,8 +1090,8 @@ Attributes FiscalYear
 
 Scenario A figure in a report opens the transactions it is made of
 Description Any figure, including a subtotal. A report that cannot be taken
-# apart is a report that cannot be checked, and over twenty years
-# every odd-looking number is worth checking.
+\ apart is a report that cannot be checked, and over twenty years
+\ every odd-looking number is worth checking.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report figure opened : ReportCell Vertical
@@ -1124,39 +1124,39 @@ Attributes DrillDownRow
 # ---------------------------------------------------------------------------
 
 Description What is owned and what is owed, as at one date, with net worth as
-# the bottom line.
+\ the bottom line.
 Details Every other report in this file totals a period. A balance sheet is a
-# position: a balance is as at a moment, so From is not read and To is
-# the date the sheet is drawn up as at. Interval Whole and GroupBy
-# Account say that this is the one-column form; the same report with
-# Interval Year is the net worth table further down, which is this
-# bottom line as at several dates at once.
-#
-# The two sides are the real accounts, divided by the side each type is
-# on: see the balance-side rule in CoreTypes, which is the only place the
-# words Asset and Liability decide anything. The groups and their order
-# are the ones the account list uses, so the page and the list down the
-# side of the window agree with each other, and a group with nothing in
-# it is left out rather than shown empty.
-#
-# The Transfer group is left out altogether. Those accounts hold money on
-# its way between two accounts that are both already here, so showing
-# them would count the same money twice.
-#
-# Each figure is the display balance, so a card and a mortgage read as
-# what is owed rather than as the negative balances they are posted as,
-# and net worth is what is owned less what is owed.
-#
-# The categories are not here. Income, Expenses and Equity are nominal,
-# and a balance sheet is the real accounts -- but the equity that started
-# the book and everything earned and spent since are exactly what net
-# worth is made of, which is the last scenario in this section.
+\ position: a balance is as at a moment, so From is not read and To is
+\ the date the sheet is drawn up as at. Interval Whole and GroupBy
+\ Account say that this is the one-column form; the same report with
+\ Interval Year is the net worth table further down, which is this
+\ bottom line as at several dates at once.
+\
+\ The two sides are the real accounts, divided by the side each type is
+\ on: see the balance-side rule in CoreTypes, which is the only place the
+\ words Asset and Liability decide anything. The groups and their order
+\ are the ones the account list uses, so the page and the list down the
+\ side of the window agree with each other, and a group with nothing in
+\ it is left out rather than shown empty.
+\
+\ The Transfer group is left out altogether. Those accounts hold money on
+\ its way between two accounts that are both already here, so showing
+\ them would count the same money twice.
+\
+\ Each figure is the display balance, so a card and a mortgage read as
+\ what is owed rather than as the negative balances they are posted as,
+\ and net worth is what is owned less what is owed.
+\
+\ The categories are not here. Income, Expenses and Equity are nominal,
+\ and a balance sheet is the real accounts -- but the equity that started
+\ the book and everything earned and spent since are exactly what net
+\ worth is made of, which is the last scenario in this section.
 
 Attributes BalanceSheetRow
 Description One line of a balance sheet. A group heading carries the total of
-# the accounts under it and names no account; an account names no
-# group. Level is the indent, as in the account list: a heading is 0,
-# an account under it 1, and a child of that account 2.
+\ the accounts under it and names no account; an account names no
+\ group. Level is the indent, as in the account list: a heading is 0,
+\ an account under it 1, and a child of that account 2.
 | Attribute  | Type                | Default |
 | Section    | BalanceSheetSection | Assets  |
 | Group      | Text                | none    |
@@ -1175,8 +1175,8 @@ Examples: EnumerationValues
 
 Scenario A balance sheet as at a date
 Description A house and a mortgage, a card and two bank accounts. The salary
-# that arrives in March is not on a sheet drawn up in February: a
-# balance as at a date ignores what happens after it.
+\ that arrives in March is not on a sheet drawn up in February: a
+\ balance as at a date ignores what happens after it.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type       | Placeholder |
 | Assets:Checking         | Checking   | false       |
@@ -1226,9 +1226,9 @@ Then balance sheet total is : NetWorth Vertical
 
 Scenario An account at zero is left out
 Description A wallet that has never been used and a card that has been paid off
-# are both at zero, and neither earns a line. Twenty years of history
-# leaves a trail of closed accounts, and a page of zeroes is a page
-# nobody reads.
+\ are both at zero, and neither earns a line. Twenty years of history
+\ leaves a trail of closed accounts, and a page of zeroes is a page
+\ nobody reads.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type       | Placeholder |
 | Assets:Checking         | Checking   | false       |
@@ -1260,8 +1260,8 @@ Then balance sheet total is : NetWorth Vertical
 
 Scenario Asking for zero rows puts the empty accounts back
 Description The same book and date, with ZeroRows asked for, which is the same
-# flag the category report uses. A card at zero is worth seeing when
-# the question is whether it was paid off.
+\ flag the category report uses. A card at zero is worth seeing when
+\ the question is whether it was paid off.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type       | Placeholder |
 | Assets:Checking         | Checking   | false       |
@@ -1293,10 +1293,10 @@ Then balance sheet total is : NetWorth Vertical
 
 Scenario A placeholder carries its subtree, so a brokerage shows its holdings
 Description The ordinary roll-up from Accounts, and it is the whole of what a
-# balance sheet needs for an investment account: the value of a
-# holding is the money balance of its account, so the market value
-# arrives through the same addition as everything else. See the
-# holding-value rule in Investments.
+\ balance sheet needs for an investment account: the value of a
+\ holding is the money balance of its account, so the market value
+\ arrives through the same addition as everything else. See the
+\ holding-value rule in Investments.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type       | Placeholder |
 | Assets:Brokerage        | Brokerage  | true        |
@@ -1330,10 +1330,10 @@ Then balance sheet total is : NetWorth Vertical
 
 Scenario A transfer account is not on the balance sheet
 Description A transfer account holds money on its way between two accounts
-# that are both already on the sheet, so counting it would count the
-# same money twice. It is a real account and it is reconciled like
-# one; it is this report that leaves it out. See the balance-side
-# rule in CoreTypes.
+\ that are both already on the sheet, so counting it would count the
+\ same money twice. It is a real account and it is reconciled like
+\ one; it is this report that leaves it out. See the balance-side
+\ rule in CoreTypes.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type        | Placeholder |
 | Assets:Checking         | Checking    | false       |
@@ -1364,9 +1364,9 @@ Then balance sheet total is : NetWorth Vertical
 
 Scenario A hidden account with a balance is still on the balance sheet
 Description A hidden account is kept out of the pickers so it stops being
-# offered, and its money has not gone anywhere. Leaving it out would
-# make the sheet disagree with net worth, which is the one thing a
-# balance sheet must not do.
+\ offered, and its money has not gone anywhere. Leaving it out would
+\ make the sheet disagree with net worth, which is the one thing a
+\ balance sheet must not do.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type   | Placeholder | Hidden |
 | Assets:Checking         | Checking | false       | false  |
@@ -1404,12 +1404,12 @@ Description Net worth taken the other way round, from the nominal accounts.
 
 Scenario Net worth is the opening equity plus what has been earned less spent
 Description The same book and date as the first scenario in this section, read
-# from the other side. Every transaction balances, so what is owned
-# less what is owed must equal what was put into the book plus what
-# it has earned and less what it has spent. The two figures agreeing
-# is what says the sheet is right, and it is worth showing on the
-# page: a difference means a transaction has gone somewhere nobody
-# intended, and that is otherwise very hard to see.
+\ from the other side. Every transaction balances, so what is owned
+\ less what is owed must equal what was put into the book plus what
+\ it has earned and less what it has spent. The two figures agreeing
+\ is what says the sheet is right, and it is worth showing on the
+\ page: a difference means a transaction has gone somewhere nobody
+\ intended, and that is otherwise very hard to see.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type       | Placeholder |
 | Assets:Checking         | Checking   | false       |
@@ -1454,8 +1454,8 @@ Then net worth comes from : NetWorthTie Vertical
 
 Scenario Net worth at the end of each year
 Description The real accounts only, as in Accounts. Each column is a balance as
-# at a date rather than a total of a period, which is why this report
-# is a different shape from the category one.
+\ at a date rather than a total of a period, which is why this report
+\ is a different shape from the category one.
 Given the chart of accounts is : ChartOfAccounts
 | Path             | Type       | Placeholder |
 | Assets:Checking  | Checking   | false       |
@@ -1490,8 +1490,8 @@ Attributes NetWorthColumn
 
 Scenario A report is written out as CSV with its figures unrounded
 Description The file is for a spreadsheet, so the grouping separators and the
-# parentheses of the displayed report are left out and the sign is
-# written as a minus.
+\ parentheses of the displayed report are left out and the sign is
+\ written as a minus.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report exported as csv : ReportSpec Vertical

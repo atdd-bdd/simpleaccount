@@ -1,12 +1,12 @@
 Specification ImportOfx
 
 Description Reading a QFX or OFX download, and deciding for each transaction in
-# it whether it is new, already present, or the arrival of something
-# entered by hand.
+\ it whether it is new, already present, or the arrival of something
+\ entered by hand.
 Details
-# Importing the same file twice must change nothing. That is the single
-# requirement everything in this file serves, because over twenty years
-# of downloads it is certain to happen by accident.
+\ Importing the same file twice must change nothing. That is the single
+\ requirement everything in this file serves, because over twenty years
+\ of downloads it is certain to happen by accident.
 
 # ---------------------------------------------------------------------------
 # What the file says
@@ -48,7 +48,7 @@ Description One STMTTRN block.
 
 DataType OfxTrnType
 Description The transaction type OFX reports. It is recorded but not relied on:
-# the sign of the amount is what decides direction.
+\ the sign of the amount is what decides direction.
 Examples: EnumerationValues
 | Value     | Notes                       |
 | CREDIT    | Money in                    |
@@ -79,8 +79,8 @@ Collection OfxTransactions
 
 Scenario Reading an OFX 1 file, which is SGML and not XML
 Description Most bank downloads are OFX 1.0.2 with unclosed tags, and a strict
-# XML parser rejects them. The reader closes a tag when the next one
-# opens at the same level, which is what the format intends.
+\ XML parser rejects them. The reader closes a tag when the next one
+\ opens at the same level, which is what the format intends.
 Given the file contains
 """
 OFXHEADER:100
@@ -119,7 +119,7 @@ Then transactions read are : OfxTransactions
 
 Scenario Reading an OFX 2 file, which is XML
 Description Newer downloads are well-formed XML with every tag closed. The same
-# reader handles both, so nothing downstream knows which it was.
+\ reader handles both, so nothing downstream knows which it was.
 Given the file contains
 """
 <?xml version="1.0" encoding="UTF-8"?>
@@ -155,8 +155,8 @@ Then transactions read are : OfxTransactions
 
 BusinessRule An OFX date is read to the day
 Description DTPOSTED may carry a time and a timezone. The time is discarded:
-# a register is kept by date, and keeping the time would make the
-# same transaction sort differently depending on the reader timezone.
+\ a register is kept by date, and keeping the time would make the
+\ same transaction sort differently depending on the reader timezone.
 Examples: OfxDateParse
 | Text                      | Date       | Notes                           |
 | 20240115                  | 2024-01-15 | Date only                       |
@@ -174,9 +174,9 @@ Attributes OfxDateParse
 
 BusinessRule The amount in an OFX file is used as the transaction amount
 Description TRNAMT is signed from the point of view of the account the statement
-# is for, which is the same convention the transactions use. No account
-# type needs a sign flip, including a credit card: a charge is
-# negative in the file and a credit to the card in the book.
+\ is for, which is the same convention the transactions use. No account
+\ type needs a sign flip, including a credit card: a charge is
+\ negative in the file and a credit to the card in the book.
 Examples: OfxAmountToPosting
 | OfxAcctType | TrnAmt  | PostingAmount | Notes                        |
 | CHECKING    | -45.00  | -45.00        | Money out of checking        |
@@ -207,35 +207,35 @@ Then rejected because : Rejection
 # ---------------------------------------------------------------------------
 
 Description A download names its account in the bank's own terms -- a routing
-# number, and the number the bank keeps the account under -- and the
-# account itself is where those terms are kept. The account a
-# statement belongs to is the account whose number the statement
-# names.
+\ number, and the number the bank keeps the account under -- and the
+\ account itself is where those terms are kept. The account a
+\ statement belongs to is the account whose number the statement
+\ names.
 Details There is no table of mappings. An account carries the name of its
-# bank, that bank's id and its own number, the three of them together;
-# see what is kept about an account in Accounts. Finding the account
-# for a download is reading those off the chart. A second place to
-# record a bank's numbering would be a second thing to keep in step
-# with the first, and the only question a download asks -- which
-# account is this -- is answered by an account or not at all.
-#
-# A number is kept as a person writes it and a file gives bare digits,
-# so it is the digits of each that are compared; the rule below says
-# how. The routing numbers have to agree whenever both say anything,
-# because two banks number their accounts independently and over
-# twenty years one of them reaches a number the other has used.
-#
-# An account that knows none of this is matched by nothing, and that is
-# the ordinary state of every account brought over from Quicken: a QIF
-# carries no routing number and no account number. The first download
-# into such an account is where they arrive; see what a download
-# teaches an account, below.
+\ bank, that bank's id and its own number, the three of them together;
+\ see what is kept about an account in Accounts. Finding the account
+\ for a download is reading those off the chart. A second place to
+\ record a bank's numbering would be a second thing to keep in step
+\ with the first, and the only question a download asks -- which
+\ account is this -- is answered by an account or not at all.
+\
+\ A number is kept as a person writes it and a file gives bare digits,
+\ so it is the digits of each that are compared; the rule below says
+\ how. The routing numbers have to agree whenever both say anything,
+\ because two banks number their accounts independently and over
+\ twenty years one of them reaches a number the other has used.
+\
+\ An account that knows none of this is matched by nothing, and that is
+\ the ordinary state of every account brought over from Quicken: a QIF
+\ carries no routing number and no account number. The first download
+\ into such an account is where they arrive; see what a download
+\ teaches an account, below.
 
 $TBD
 Scenario A statement whose number is on no account asks which account it is
 Description The first download from an institution names a number that means
-# nothing yet. The import stops and asks, rather than inventing an
-# account.
+\ nothing yet. The import stops and asks, rather than inventing an
+\ account.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder | BankId | AccountNumber |
 | Assets:Checking | Checking | false       | none   | none          |
@@ -260,7 +260,7 @@ Description What the dialog is told about a statement no account claims.
 $TBD
 Scenario A download whose number is on an account imports without asking
 Description Which is every month after the first. The account was told the
-# bank's numbers once and nobody is asked again.
+\ bank's numbers once and nobody is asked again.
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder | BankId    | AccountNumber |
 | Assets:Checking | Checking | false       | 053000196 | 1234567890    |
@@ -280,24 +280,24 @@ Attributes ImportTarget
 $TBD
 BusinessRule When the number in a download is the number on an account
 Description Asked of every real account in the chart. One account saying yes is
-# the account it goes to; none, and the import asks. Two is also
-# asked, because a number that names two accounts has named neither.
+\ the account it goes to; none, and the import asks. Two is also
+\ asked, because a number that names two accounts has named neither.
 Details Only the digits of each are compared, because the account's number
-# is kept as somebody wrote it -- 0012-3456, or a card number in
-# groups of four -- and the file gives nothing but digits.
-#
-# Equal digits are the ordinary case. Beyond that, the digits of one
-# ending the digits of the other count, which is what lets an account
-# labelled with the last four of a card meet the full number the
-# download carries. Four digits is the floor, the same floor the
-# file-name rule uses in UserInterface: three digits is a month or a
-# sequence number, and matching an account on three digits would put
-# a statement in the wrong account for a living.
-#
-# The routing numbers have to agree whenever both are stated. A card
-# statement states none, and an account that has not been told its
-# bank's id states none; neither of those is a disagreement, because
-# nothing was claimed.
+\ is kept as somebody wrote it -- 0012-3456, or a card number in
+\ groups of four -- and the file gives nothing but digits.
+\
+\ Equal digits are the ordinary case. Beyond that, the digits of one
+\ ending the digits of the other count, which is what lets an account
+\ labelled with the last four of a card meet the full number the
+\ download carries. Four digits is the floor, the same floor the
+\ file-name rule uses in UserInterface: three digits is a month or a
+\ sequence number, and matching an account on three digits would put
+\ a statement in the wrong account for a living.
+\
+\ The routing numbers have to agree whenever both are stated. A card
+\ statement states none, and an account that has not been told its
+\ bank's id states none; neither of those is a disagreement, because
+\ nothing was claimed.
 Examples: DownloadAccountMatch
 | StatementBankId | StatementAccountId | AccountBankId | AccountNumber        | Matches |
 | 053000196       | 1234567890         | 053000196     | 1234567890           | true    |
@@ -326,19 +326,19 @@ Attributes DownloadAccountMatch
 # ---------------------------------------------------------------------------
 
 Description An account that was never told the bank's numbers is told them by
-# the first download confirmed for it. Nothing already there is
-# changed.
+\ the first download confirmed for it. Nothing already there is
+\ changed.
 Details This is the whole of how the numbers get onto an account without
-# anybody typing them. A history imported from Quicken carries none,
-# so asking once per account is the least that can be asked, and
-# writing down the answer is what makes it once rather than monthly.
-#
-# Only what is blank is filled in. A number a person typed is what the
-# account dialog shows them, and a download that disagreed with it
-# would be rewriting a label they chose, in a place they were not
-# looking, on the strength of their having confirmed something else.
-# So a disagreement leaves the account alone and writes a note, and
-# the account dialog is where it is settled.
+\ anybody typing them. A history imported from Quicken carries none,
+\ so asking once per account is the least that can be asked, and
+\ writing down the answer is what makes it once rather than monthly.
+\
+\ Only what is blank is filled in. A number a person typed is what the
+\ account dialog shows them, and a download that disagreed with it
+\ would be rewriting a label they chose, in a place they were not
+\ looking, on the strength of their having confirmed something else.
+\ So a disagreement leaves the account alone and writes a note, and
+\ the account dialog is where it is settled.
 
 $TBD
 Scenario The first download confirmed for an account tells it the bank's numbers
@@ -368,8 +368,8 @@ Description The two things on an account that a download is matched against.
 $TBD
 Scenario A number already on the account is left as it is and noted
 Description The account says one number, the file says another, and the person
-# confirmed that account anyway. Which of the two is right is not
-# something an import can know, so it changes neither and says so.
+\ confirmed that account anyway. Which of the two is right is not
+\ something an import can know, so it changes neither and says so.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder | BankId    | AccountNumber |
 | Assets:Checking        | Checking | false       | 053000196 | 0012-3456     |
@@ -389,9 +389,9 @@ Then import finishes with : ImportCompletion Vertical CompareOnly
 $TBD
 Scenario A bank id arrives for an account that only knew its number
 Description The number was typed in the account dialog and the routing number
-# was not, because nobody reads a routing number off a statement to
-# label an account. The download has one, the account has none, and
-# none is not a disagreement.
+\ was not, because nobody reads a routing number off a statement to
+\ label an account. The download has one, the account has none, and
+\ none is not a disagreement.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder | BankId | AccountNumber |
 | Assets:Checking        | Checking | false       | none   | 1234567890    |
@@ -417,13 +417,13 @@ Then account numbering is : AccountNumbering
 DataType ImportDisposition
 Description What the import decided about one downloaded transaction.
 Details There were five of these once, and one of them was the mistake. A
-# Duplicate did nothing at all and a Matched stamped and cleared the
-# transaction it had found, which made them two answers to one
-# question -- is this transaction already here -- distinguished by how
-# the program had come to know it. Nobody reading an import wants that
-# distinction. What they want to know is that the row is already in
-# the book, and then, separately, whether anything about it did not
-# fit. So there are four dispositions and a note.
+\ Duplicate did nothing at all and a Matched stamped and cleared the
+\ transaction it had found, which made them two answers to one
+\ question -- is this transaction already here -- distinguished by how
+\ the program had come to know it. Nobody reading an import wants that
+\ distinction. What they want to know is that the row is already in
+\ the book, and then, separately, whether anything about it did not
+\ fit. So there are four dispositions and a note.
 Examples: EnumerationValues
 | Value     | Notes                                                           |
 | New       | Not seen before; a transaction is created                       |
@@ -433,9 +433,9 @@ Examples: EnumerationValues
 
 DataType DuplicateNote
 Description What did not fit about a duplicate. Written on the transaction in
-# the book, so it is still there next week when somebody wonders why
-# that row is cleared, and shown against the row while the import is
-# being looked at.
+\ the book, so it is still there next week when somebody wonders why
+\ that row is cleared, and shown against the row while the import is
+\ being looked at.
 Examples: EnumerationValues
 | Value           | Notes                                                           |
 | None            | The identifier matched and nothing differed                     |
@@ -447,19 +447,19 @@ Examples: EnumerationValues
 
 BusinessRule An identifier is only an identifier to the file that gave it
 Description A CSV and a QFX describing the same transaction do not agree on what
-# to call it. So an identifier is stored with the name of the source
-# that gave it, and the identifier test applies only where the source
-# matches the import being done. Against any other source the transaction
-# counts as having no identifier at all, and the weaker tests decide.
+\ to call it. So an identifier is stored with the name of the source
+\ that gave it, and the identifier test applies only where the source
+\ matches the import being done. Against any other source the transaction
+\ counts as having no identifier at all, and the weaker tests decide.
 Details Without this, importing a QFX after a CSV finds no FITID anywhere and
-# calls the whole statement new, duplicating a month of transactions.
-# With a single identifier field instead of one per source it is no
-# better the other way round: stamping the FITID over the CSV reference
-# would make the next CSV import offer every row again.
-#
-# So a transaction collects identifiers rather than having one. A transaction
-# imported from a CSV and later recognised in a QFX carries both, and
-# re-importing either file does nothing.
+\ calls the whole statement new, duplicating a month of transactions.
+\ With a single identifier field instead of one per source it is no
+\ better the other way round: stamping the FITID over the CSV reference
+\ would make the next CSV import offer every row again.
+\
+\ So a transaction collects identifiers rather than having one. A transaction
+\ imported from a CSV and later recognised in a QFX carries both, and
+\ re-importing either file does nothing.
 Examples: IdentifierScope
 | PostingCarries        | ImportIs | TestOneApplies | Then                                 |
 | Nothing               | Ofx      | No               | The weaker tests decide            |
@@ -479,51 +479,51 @@ Attributes IdentifierScope
 BusinessRule How a downloaded transaction is identified
 Description In order. The first test that applies decides.
 Details Test one is what makes a second read of the same file do nothing. It
-# is scoped to the account, because two banks may issue the same
-# identifier, and to the source, because a CSV and a QFX do not agree
-# on what to call one transaction. See an identifier is only an
-# identifier to the file that gave it, above.
-#
-# Test two is the check number, and it is the only test here allowed
-# any tolerance about the date. A check number is written on the check
-# itself, so the book and the download are naming the same piece of
-# paper -- but only within the book's check-number window, because
-# numbers come round again. It asks for the amount and the payee to
-# agree as well, and it is asked only of a checking account: a card
-# reference is not a check number and nothing else in a book is paid
-# by check.
-#
-# Tests three and four are one test counted two ways. The key is the
-# date and the amount, in this account, over the rows and the
-# transactions that tests one and two have not already settled. Where
-# the file has as many of them as the book does, every one is a
-# duplicate. Where it does not, every one is a question: nothing says
-# which row goes with which transaction, and deciding either way
-# doubles a transaction or loses one. See how many rows match how many
-# transactions, in ImportCsv.
-#
-# The payee is not part of the key. If it were, the first reconciliation
-# against a history brought over from Quicken would match nothing --
-# Harris Teeter against HARRIS TEETER #231 -- and a month would import
-# twice. So the payee is compared afterwards, and what it decides is
-# the note rather than the disposition. See two payees are compared
-# after the rules and then loosely, below.
-#
-# Every other date comparison is to the day. Reaching further is left
-# to a pass of its own, after the import has been accepted, where the
-# question is a different one: pairing a transaction in this register
-# against one in another register, the two halves of a transfer days
-# apart. That pass has a window because the two dates come from two
-# different places. Nothing in it happens while a row is being judged.
-# See proposing transfers.
-#
-# Cleared status decides nothing here. It used to: an uncleared
-# transaction was taken to be one somebody typed and was asked about
-# rather than matched, and a cleared one was taken to be a second
-# reading of a download and matched silently. Both are the same
-# transaction arriving again, so both are duplicates now, and the fact
-# that one of them was typed is recorded as a note instead of changing
-# the answer.
+\ is scoped to the account, because two banks may issue the same
+\ identifier, and to the source, because a CSV and a QFX do not agree
+\ on what to call one transaction. See an identifier is only an
+\ identifier to the file that gave it, above.
+\
+\ Test two is the check number, and it is the only test here allowed
+\ any tolerance about the date. A check number is written on the check
+\ itself, so the book and the download are naming the same piece of
+\ paper -- but only within the book's check-number window, because
+\ numbers come round again. It asks for the amount and the payee to
+\ agree as well, and it is asked only of a checking account: a card
+\ reference is not a check number and nothing else in a book is paid
+\ by check.
+\
+\ Tests three and four are one test counted two ways. The key is the
+\ date and the amount, in this account, over the rows and the
+\ transactions that tests one and two have not already settled. Where
+\ the file has as many of them as the book does, every one is a
+\ duplicate. Where it does not, every one is a question: nothing says
+\ which row goes with which transaction, and deciding either way
+\ doubles a transaction or loses one. See how many rows match how many
+\ transactions, in ImportCsv.
+\
+\ The payee is not part of the key. If it were, the first reconciliation
+\ against a history brought over from Quicken would match nothing --
+\ Harris Teeter against HARRIS TEETER #231 -- and a month would import
+\ twice. So the payee is compared afterwards, and what it decides is
+\ the note rather than the disposition. See two payees are compared
+\ after the rules and then loosely, below.
+\
+\ Every other date comparison is to the day. Reaching further is left
+\ to a pass of its own, after the import has been accepted, where the
+\ question is a different one: pairing a transaction in this register
+\ against one in another register, the two halves of a transfer days
+\ apart. That pass has a window because the two dates come from two
+\ different places. Nothing in it happens while a row is being judged.
+\ See proposing transfers.
+\
+\ Cleared status decides nothing here. It used to: an uncleared
+\ transaction was taken to be one somebody typed and was asked about
+\ rather than matched, and a cleared one was taken to be a second
+\ reading of a download and matched silently. Both are the same
+\ transaction arriving again, so both are duplicates now, and the fact
+\ that one of them was typed is recorded as a note instead of changing
+\ the answer.
 Examples: DispositionRule
 | Test | Condition                                                             | Disposition |
 | 1    | A transaction in this account carries this FITID, from an Ofx import   | Duplicate   |
@@ -541,27 +541,27 @@ Attributes DispositionRule
 
 BusinessRule What a duplicate does to the transaction already there
 Description Nothing is created. The transaction already in the book is the
-# transaction, and the import brings it up to date rather than
-# replacing it: cleared, given the identifier the row carried if it
-# had none for this source, and otherwise left exactly as it is.
+\ transaction, and the import brings it up to date rather than
+\ replacing it: cleared, given the identifier the row carried if it
+\ had none for this source, and otherwise left exactly as it is.
 Details Keeping the book's own date, payee, category, memo and check number
-# is the point of the whole exercise. A history brought over from
-# Quicken has twenty years of categorising in it and a download knows
-# none of it: the bank's name for a payee is HARRIS TEETER #231 and
-# its category is nothing at all. An import that overwrote what it
-# recognised would undo that work a month at a time.
-#
-# Cleared is the exception, because cleared is not something a person
-# chose. It is the bank saying the transaction happened, and the row
-# being read is the bank saying it. So a duplicate clears what it
-# recognised, and a transaction that was typed and never cleared is
-# cleared now -- with a note, because that is the one case where the
-# import has changed something a person could be surprised by.
-#
-# The identifier is written for the source that gave it and alongside
-# any the transaction already has, which is what lets the same
-# transaction be recognised by a QFX after a CSV. See an identifier is
-# only an identifier to the file that gave it.
+\ is the point of the whole exercise. A history brought over from
+\ Quicken has twenty years of categorising in it and a download knows
+\ none of it: the bank's name for a payee is HARRIS TEETER #231 and
+\ its category is nothing at all. An import that overwrote what it
+\ recognised would undo that work a month at a time.
+\
+\ Cleared is the exception, because cleared is not something a person
+\ chose. It is the bank saying the transaction happened, and the row
+\ being read is the bank saying it. So a duplicate clears what it
+\ recognised, and a transaction that was typed and never cleared is
+\ cleared now -- with a note, because that is the one case where the
+\ import has changed something a person could be surprised by.
+\
+\ The identifier is written for the source that gave it and alongside
+\ any the transaction already has, which is what lets the same
+\ transaction be recognised by a QFX after a CSV. See an identifier is
+\ only an identifier to the file that gave it.
 Examples: WhatADuplicateDoes
 | Property         | WhatHappens                                              |
 | The date         | The book's is kept                                       |
@@ -581,18 +581,18 @@ Attributes WhatADuplicateDoes
 
 BusinessRule What the note on a duplicate says
 Description A duplicate is not always a plain one, and the note is where
-# whatever did not fit is said. It is written on the transaction in
-# the book rather than against the import, because the question it
-# answers -- why is this cleared, why is it spelt like that -- is
-# asked long after the import has been put away.
+\ whatever did not fit is said. It is written on the transaction in
+\ the book rather than against the import, because the question it
+\ answers -- why is this cleared, why is it spelt like that -- is
+\ asked long after the import has been put away.
 Details Several can be true of one duplicate: a transaction that was typed,
-# whose payee the download spells differently, and which had no
-# identifier until now. All of them are kept, and each is kept once.
-# A later import that reaches the same transaction and sees the same
-# thing adds nothing, so re-reading a file does not grow a list.
-#
-# None of them changes the disposition. Every row below is a duplicate;
-# the note is what a person reads to decide whether to look at it.
+\ whose payee the download spells differently, and which had no
+\ identifier until now. All of them are kept, and each is kept once.
+\ A later import that reaches the same transaction and sees the same
+\ thing adds nothing, so re-reading a file does not grow a list.
+\
+\ None of them changes the disposition. Every row below is a duplicate;
+\ the note is what a person reads to decide whether to look at it.
 Examples: DuplicateNoteRule
 | WhatWasSeen                                                           | Note            |
 | The identifier matched and the date, amount and payee agree            | None            |
@@ -609,35 +609,35 @@ Attributes DuplicateNoteRule
 
 Attributes TransactionNote
 Description A note an import left on a transaction. It is a row rather than a
-# field because several can be true of one transaction, and it is on
-# the transaction rather than against the import because the question
-# it answers is asked long after the import was put away.
+\ field because several can be true of one transaction, and it is on
+\ the transaction rather than against the import because the question
+\ it answers is asked long after the import was put away.
 | Attribute | Type           | Default |
 | Ref       | TransactionRef |         |
 | Note      | DuplicateNote  | None    |
 
 BusinessRule Two payees are compared after the rules and then loosely
 Description The book says Harris Teeter and the download says HARRIS TEETER
-# #231. They are the same shop, and a comparison that says otherwise
-# puts a note on every row of the first reconciliation against a
-# Quicken history, which is a note on nothing.
+\ #231. They are the same shop, and a comparison that says otherwise
+\ puts a note on every row of the first reconciliation against a
+\ Quicken history, which is a note on nothing.
 Details So the download's payee goes through the payee rules first -- the
-# same rules that rename it when a transaction is created, and the
-# only thing that can know AMZN Mktp US*2X4 is Amazon. If a rule
-# renames it, the renamed name is what is compared. See Payees.
-#
-# If no rule applies, the two names are compared loosely: folded to
-# upper case, runs of blanks collapsed, punctuation dropped, and a
-# trailing run of digits or a store number taken off. What is left is
-# compared for equality. It is deliberately not a resemblance score:
-# a number saying two names are eighty per cent alike is not something
-# a person can check or a specification can state.
-#
-# A payee that still does not agree does not stop the duplicate. The
-# same date and the same amount in one account is enough to say this is
-# the same transaction; what the payee decides is whether the book's
-# name for it is worth a second look. So the duplicate stands and the
-# note says the payee was not matched.
+\ same rules that rename it when a transaction is created, and the
+\ only thing that can know AMZN Mktp US*2X4 is Amazon. If a rule
+\ renames it, the renamed name is what is compared. See Payees.
+\
+\ If no rule applies, the two names are compared loosely: folded to
+\ upper case, runs of blanks collapsed, punctuation dropped, and a
+\ trailing run of digits or a store number taken off. What is left is
+\ compared for equality. It is deliberately not a resemblance score:
+\ a number saying two names are eighty per cent alike is not something
+\ a person can check or a specification can state.
+\
+\ A payee that still does not agree does not stop the duplicate. The
+\ same date and the same amount in one account is enough to say this is
+\ the same transaction; what the payee decides is whether the book's
+\ name for it is worth a second look. So the duplicate stands and the
+\ note says the payee was not matched.
 Examples: PayeeComparison
 | InTheBook     | InTheFile          | Agree | Why                                             |
 | Harris Teeter | HARRIS TEETER      | Yes   | Case alone                                      |
@@ -657,7 +657,7 @@ Attributes PayeeComparison
 
 Scenario Importing the same file twice imports nothing the second time
 Description The FITID is stored on the transaction in the statement account, which
-# is what makes this test possible at all.
+\ is what makes this test possible at all.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder | BankId    | AccountNumber |
 | Assets:Checking        | Checking | false       | 053000196 | 1234567890    |
@@ -693,7 +693,7 @@ Attributes ImportSummary
 
 Scenario The same FITID in a different account is not a duplicate
 Description Two institutions may number their transactions alike. The test is
-# scoped to the account the statement is for.
+\ scoped to the account the statement is for.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
 | Assets:Checking        | Checking   | false       |
@@ -714,9 +714,9 @@ Then import summary is : ImportSummary Vertical
 
 Attributes ImportedTransaction
 Description A transaction that also carries the identifier it was imported with.
-# Everything but FitId reads as it does on Transaction itself; the
-# identifier is a fact about the file the row came from, which is why
-# it is here and not on the transaction.
+\ Everything but FitId reads as it does on Transaction itself; the
+\ identifier is a fact about the file the row came from, which is why
+\ it is here and not on the transaction.
 | Attribute     | Type           | Default    |
 | Ref           | TransactionRef |            |
 | Date          | Date           | 2024-01-01 |
@@ -730,11 +730,11 @@ Description A transaction that also carries the identifier it was imported with.
 
 Scenario A check entered by hand is cleared when the bank reports it
 Description The check was written on the second and reached the bank on the
-# third. One day, so the check number is trusted and the two are the
-# same check.
-# The import does not create a second transaction: it marks the one
-# already there as cleared, and records the FITID on it so that a
-# later import recognises it immediately.
+\ third. One day, so the check number is trusted and the two are the
+\ same check.
+\ The import does not create a second transaction: it marks the one
+\ already there as cleared, and records the FITID on it so that a
+\ later import recognises it immediately.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -771,14 +771,14 @@ Then transaction notes are : TransactionNote
 
 Scenario A typed transaction and a download two days apart are two transactions
 Description T1 was typed, which is what Uncleared says about it. The download
-# is two days later for the same amount, and the import does not
-# join them: an amount and a date is all there is to go on, and
-# reaching across days on that much is guessing.
+\ is two days later for the same amount, and the import does not
+\ join them: an amount and a date is all there is to go on, and
+\ reaching across days on that much is guessing.
 Details What a person would have to know to answer this is whether they
-# shopped twice, and the program cannot know it. So it does not
-# decide: the download comes in as a new transaction, and T1 is left
-# alone for the pass that pairs registers later, where the question
-# is asked with two dates from two different places behind it.
+\ shopped twice, and the program cannot know it. So it does not
+\ decide: the download comes in as a new transaction, and T1 is left
+\ alone for the pass that pairs registers later, where the question
+\ is asked with two dates from two different places behind it.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -799,9 +799,9 @@ Then import summary is : ImportSummary Vertical
 
 Scenario The same amount six days apart is not a duplicate
 Description Six days or two, it makes no difference now: there is no window
-# here to be inside of. The two are taken to be two separate visits
-# to the same shop for the same amount, which is commoner than a
-# bank taking a week to post.
+\ here to be inside of. The two are taken to be two separate visits
+\ to the same shop for the same amount, which is commoner than a
+\ bank taking a week to post.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -822,17 +822,17 @@ Then import summary is : ImportSummary Vertical
 
 Scenario A transaction already imported, with no identifier, is a duplicate on its day
 Description The case a history brought over from Quicken makes ordinary. T1 came
-# in with that history: it is cleared, because the bank had already
-# posted it when Quicken was told about it, and it carries no FITID,
-# because a QIF has none to carry. Downloading the same month from the
-# bank reaches it again.
+\ in with that history: it is cleared, because the bank had already
+\ posted it when Quicken was told about it, and it carries no FITID,
+\ because a QIF has none to carry. Downloading the same month from the
+\ bank reaches it again.
 Details The dates agree exactly, and they agree because both are the bank's
-# own posting date -- one recorded through Quicken, one read out of
-# the file today. So this is the transaction, not something that looks
-# like it, and the import says Duplicate.
-#
-# It is the FITID being absent that brings this test into play at all.
-# Where there is one, test one has already settled the question.
+\ own posting date -- one recorded through Quicken, one read out of
+\ the file today. So this is the transaction, not something that looks
+\ like it, and the import says Duplicate.
+\
+\ It is the FITID being absent that brings this test into play at all.
+\ Where there is one, test one has already settled the question.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -859,9 +859,9 @@ Then transactions are : ImportedTransaction
 
 Scenario The same amount a day either side of an imported transaction is a second transaction
 Description The dates disagree, and between two of the bank's own records that
-# means two postings. Five days would have swallowed this one; the
-# window is not offered here, because there is no lag between a bank
-# and itself to allow for.
+\ means two postings. Five days would have swallowed this one; the
+\ window is not offered here, because there is no lag between a bank
+\ and itself to allow for.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -882,8 +882,8 @@ Then import summary is : ImportSummary Vertical
 
 Scenario Two identical downloaded transactions both import
 Description A shop visited twice in one day for the same amount gives two
-# transactions with two FITIDs. Each is matched on its own identifier,
-# so neither is mistaken for the other.
+\ transactions with two FITIDs. Each is matched on its own identifier,
+\ so neither is mistaken for the other.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -901,8 +901,8 @@ Then import summary is : ImportSummary Vertical
 
 Scenario A new transaction is created uncategorised and cleared
 Description What the bank sends is known to have happened, so it arrives cleared.
-# The category is not known, so the other side is Uncategorized until
-# a payee rule or the user says otherwise. See Payees.
+\ The category is not known, so the other side is Uncategorized until
+\ a payee rule or the user says otherwise. See Payees.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -921,31 +921,31 @@ Then transactions are : ImportedTransaction
 $TBD
 BusinessRule A download arrives cleared and only a typed transaction is not
 Description Cleared means the bank has said this happened. A download is the
-# bank saying so, so everything read out of one is cleared. A
-# transaction is uncleared only while the only record of it is that
-# somebody typed it.
+\ bank saying so, so everything read out of one is cleared. A
+\ transaction is uncleared only while the only record of it is that
+\ somebody typed it.
 Details Which makes cleared status the one thing in a book that says where a
-# transaction came from. The matching tests above used to turn on it --
-# an uncleared transaction was asked about and a cleared one was
-# matched silently -- and they do not any more: both are the same
-# transaction arriving again, and which it was is recorded as a note
-# instead of changing the answer. What cleared status is for is the
-# reconciliation and the balance the bank states, which is the job it
-# was always doing.
-#
-# A download states a cleared status of its own in some formats, and it
-# is not read. Nothing a bank has sent is uncleared by the time it is
-# in the file, so a flag saying otherwise is either about something
-# else or wrong.
-#
-# A QIF history is the exception, and it is not a download: it is one
-# migration of twenty years of a Quicken file, and the C field in it is
-# the only thing that says which of those invoices were ever paid.
-# Three income figures agree with Quicken to the cent because of it.
-# So a history keeps the marker it carries, which leaves the
-# transactions it brought in cleared where Quicken had cleared them and
-# uncleared where it had not. See the cleared marker rule in ImportQif,
-# and was_paid in qif_import.h for what that marker replaced.
+\ transaction came from. The matching tests above used to turn on it --
+\ an uncleared transaction was asked about and a cleared one was
+\ matched silently -- and they do not any more: both are the same
+\ transaction arriving again, and which it was is recorded as a note
+\ instead of changing the answer. What cleared status is for is the
+\ reconciliation and the balance the bank states, which is the job it
+\ was always doing.
+\
+\ A download states a cleared status of its own in some formats, and it
+\ is not read. Nothing a bank has sent is uncleared by the time it is
+\ in the file, so a flag saying otherwise is either about something
+\ else or wrong.
+\
+\ A QIF history is the exception, and it is not a download: it is one
+\ migration of twenty years of a Quicken file, and the C field in it is
+\ the only thing that says which of those invoices were ever paid.
+\ Three income figures agree with Quicken to the cent because of it.
+\ So a history keeps the marker it carries, which leaves the
+\ transactions it brought in cleared where Quicken had cleared them and
+\ uncleared where it had not. See the cleared marker rule in ImportQif,
+\ and was_paid in qif_import.h for what that marker replaced.
 Examples: ClearedOnArrival
 | HowItArrived              | Cleared          |
 | Read from an OFX download | Cleared          |
@@ -965,49 +965,49 @@ Attributes ClearedOnArrival
 
 BusinessRule A check number is trusted for a day and no longer
 Description A check number is the strongest thing in a bank file: it is written
-# on the check itself, so the book and the download are naming the
-# same piece of paper. But only for as long as the number means what
-# it says. Check numbers are reused -- a new book of checks starts
-# where an old one left off, and over twenty years the same number
-# comes round again.
+\ on the check itself, so the book and the download are naming the
+\ same piece of paper. But only for as long as the number means what
+\ it says. Check numbers are reused -- a new book of checks starts
+\ where an old one left off, and over twenty years the same number
+\ comes round again.
 Details So a number settles a match only when the two are dated within the
-# book's check-number window of each other. Beyond that the number is
-# treated as coincidence and the weaker tests decide, which usually means
-# the transaction is created.
-#
-# It asks for the amount and the payee to agree as well -- a number on
-# its own is a number, and the three together are a check -- and it is
-# asked only of a checking account. A card's reference number is not a
-# check number and nothing else in a book is paid by check.
-#
-# The window is a setting on the book, a whole number of days, and it is
-# one day unless it is changed. One day is right for a book whose checks
-# are never entered before the bank reports them: nothing is outstanding,
-# so there is nothing for a number to reach back to, and a number that
-# matches anything older is more likely a number reused than a check
-# still in the post.
-#
-# This is the only window inside an import. Every test below the number
-# asks about one day, so the number is the one thing that reaches further
-# than the day the bank posted, and at one day it reaches exactly one day
-# further. A book that records checks when they are written has checks
-# outstanding for a week or three, and widening the window is what makes
-# the number worth having. Recording a check when it is written is not a
-# thing this program does yet.
-#
-# What happens then is the point of the rule. A number that matched while
-# the dates did not is exactly the case worth seeing: either a check
-# really did take a fortnight to clear, in which case the book now holds
-# two of it and one should be deleted, or the number came round again
-# and the import was right to create one. The program cannot tell those
-# apart, so it does not try: it writes a note against the import and
-# shows the notes when the import finishes.
-#
-# Nothing is silently reconciled on a number alone, and nothing is
-# silently left out. A note that nobody reads costs a line on a screen;
-# a check quietly matched to the wrong year costs an afternoon with a
-# statement.
-# Every row here is at the default window of one day.
+\ book's check-number window of each other. Beyond that the number is
+\ treated as coincidence and the weaker tests decide, which usually means
+\ the transaction is created.
+\
+\ It asks for the amount and the payee to agree as well -- a number on
+\ its own is a number, and the three together are a check -- and it is
+\ asked only of a checking account. A card's reference number is not a
+\ check number and nothing else in a book is paid by check.
+\
+\ The window is a setting on the book, a whole number of days, and it is
+\ one day unless it is changed. One day is right for a book whose checks
+\ are never entered before the bank reports them: nothing is outstanding,
+\ so there is nothing for a number to reach back to, and a number that
+\ matches anything older is more likely a number reused than a check
+\ still in the post.
+\
+\ This is the only window inside an import. Every test below the number
+\ asks about one day, so the number is the one thing that reaches further
+\ than the day the bank posted, and at one day it reaches exactly one day
+\ further. A book that records checks when they are written has checks
+\ outstanding for a week or three, and widening the window is what makes
+\ the number worth having. Recording a check when it is written is not a
+\ thing this program does yet.
+\
+\ What happens then is the point of the rule. A number that matched while
+\ the dates did not is exactly the case worth seeing: either a check
+\ really did take a fortnight to clear, in which case the book now holds
+\ two of it and one should be deleted, or the number came round again
+\ and the import was right to create one. The program cannot tell those
+\ apart, so it does not try: it writes a note against the import and
+\ shows the notes when the import finishes.
+\
+\ Nothing is silently reconciled on a number alone, and nothing is
+\ silently left out. A note that nobody reads costs a line on a screen;
+\ a check quietly matched to the wrong year costs an afternoon with a
+\ statement.
+\ Every row here is at the default window of one day.
 Examples: CheckNumberWindow
 | DaysApart | NumberMatches | Duplicate | NoteWritten | Notes                                              |
 | 0         | Yes           | Yes     | No          | The number settles it                              |
@@ -1018,14 +1018,14 @@ Examples: CheckNumberWindow
 
 Attributes CheckNumberWindow
 Description Whether a check number settles a match, by how far apart the two are
-# dated, and whether the import wrote a note about it.
+\ dated, and whether the import wrote a note about it.
 Details Duplicate is the disposition, not the reason for it. The row two days
-# apart is created rather than matched, because at the default window
-# nothing reaches two days: the number is past its day and the amount
-# never reached beyond the day at all. The note is written all the same,
-# because the number said one check and the dates said another and that
-# is what a person needs to see -- a created transaction is the right
-# answer and still worth being told about.
+\ apart is created rather than matched, because at the default window
+\ nothing reaches two days: the number is past its day and the amount
+\ never reached beyond the day at all. The note is written all the same,
+\ because the number said one check and the dates said another and that
+\ is what a person needs to see -- a created transaction is the right
+\ answer and still worth being told about.
 | Attribute     | Type    | Default |
 | DaysApart     | Integer | 0       |
 | NumberMatches | Text    | Yes     |
@@ -1035,9 +1035,9 @@ Details Duplicate is the disposition, not the reason for it. The row two days
 
 Scenario A check number that matches too long afterwards does not settle it
 Description The same number sixteen days later. The number alone is not enough
-# to reconcile a check across that gap, so the transaction is created
-# and a note says what was seen -- leaving a person to decide whether
-# it is the same check or the number come round again.
+\ to reconcile a check across that gap, so the transaction is created
+\ and a note says what was seen -- leaving a person to decide whether
+\ it is the same check or the number come round again.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1063,8 +1063,8 @@ Then import notes are : ImportNote
 
 Attributes ImportNote
 Description Something the import saw and could not decide, kept against the
-# import and shown when it finishes. Modelled on MigrationNote, which
-# does the same job for a QIF.
+\ import and shown when it finishes. Modelled on MigrationNote, which
+\ does the same job for a QIF.
 | Attribute | Type | Default |
 | Kind      | Text |         |
 | Detail    | Text |         |
@@ -1072,9 +1072,9 @@ Description Something the import saw and could not decide, kept against the
 $TBD
 Scenario A wider check-number window reaches a check that took a fortnight
 Description The same check sixteen days later, in a book whose window is thirty
-# days. The number settles it, so the one entered by hand is cleared
-# rather than a second one created -- which is what a book that
-# records checks when they are written needs.
+\ days. The number settles it, so the one entered by hand is cleared
+\ rather than a second one created -- which is what a book that
+\ records checks when they are written needs.
 Given the book setting is : BookSetting Vertical
 | CheckWindowDays | 30 |
 Given the chart of accounts is : ChartOfAccounts
@@ -1101,14 +1101,14 @@ Then import notes are : ImportNote
 
 Attributes BookSetting
 Description A setting the book carries, in its own single row. Defaulted here as
-# it is defaulted on a new book.
+\ it is defaulted on a new book.
 | Attribute       | Type    | Default |
 | CheckWindowDays | Integer | 1       |
 
 Scenario The notes are shown when the import finishes
 Description An import that wrote notes says so at the end, with the notes. A
-# note nobody is shown is a note nobody acts on, and the whole reason
-# for writing one is that the program could not decide.
+\ note nobody is shown is a note nobody acts on, and the whole reason
+\ for writing one is that the program could not decide.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1137,28 +1137,28 @@ Description What the import says when it is done.
 
 BusinessRule A possible duplicate is the only disposition that waits
 Description The other three settle themselves. A new transaction is created, a
-# duplicate clears the one already in the book and creates nothing, a
-# completed payment fills in the half that was waiting. A possible
-# duplicate is the case the program cannot settle, so it is the one
-# that asks, and nothing happens to it until it is answered.
+\ duplicate clears the one already in the book and creates nothing, a
+\ completed payment fills in the half that was waiting. A possible
+\ duplicate is the case the program cannot settle, so it is the one
+\ that asks, and nothing happens to it until it is answered.
 Details One thing produces it: the file and the book disagreeing about how
-# many. Where the same date and amount is in the file twice and in the
-# book once, or in the file once and in the book twice, nothing says
-# which row goes with which transaction. The counts are the whole of
-# the evidence and they do not add up.
-#
-# What a person needs to know to answer it is whether they shopped
-# twice, and the program cannot know that. So it does not decide. Every
-# row of the disagreeing set is offered, and each is answered on its
-# own: this one is the transaction already there, or this one is
-# another the book does not have.
-#
-# An import left unanswered changes nothing, which is what makes it
-# safe to put it down and come back to it. A possible duplicate quietly
-# created would double a transaction and one quietly discarded would
-# lose it. Over twenty years both happen, and the second is worse: an
-# extra row is seen and deleted, a missing one is found a year later or
-# never.
+\ many. Where the same date and amount is in the file twice and in the
+\ book once, or in the file once and in the book twice, nothing says
+\ which row goes with which transaction. The counts are the whole of
+\ the evidence and they do not add up.
+\
+\ What a person needs to know to answer it is whether they shopped
+\ twice, and the program cannot know that. So it does not decide. Every
+\ row of the disagreeing set is offered, and each is answered on its
+\ own: this one is the transaction already there, or this one is
+\ another the book does not have.
+\
+\ An import left unanswered changes nothing, which is what makes it
+\ safe to put it down and come back to it. A possible duplicate quietly
+\ created would double a transaction and one quietly discarded would
+\ lose it. Over twenty years both happen, and the second is worse: an
+\ extra row is seen and deleted, a missing one is found a year later or
+\ never.
 Examples: PossibleAnswer
 | Answer     | TheOneAlreadyThere                       | TheDownloadedRow            |
 | TheSame    | Cleared, and stamped with the identifier | Nothing is created          |
@@ -1174,10 +1174,10 @@ Attributes PossibleAnswer
 $TBD
 Scenario Answering that one of two offered rows is the transaction already there
 Description Two coffees, or one coffee entered by hand and read back. The file
-# has the same amount twice on the same day and the book has it once,
-# so the counts disagree and both rows are offered. Answering says
-# which is which: F003 is the one already there, F004 is the second
-# visit.
+\ has the same amount twice on the same day and the book has it once,
+\ so the counts disagree and both rows are offered. Answering says
+\ which is which: F003 is the one already there, F004 is the second
+\ visit.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1218,8 +1218,8 @@ Description Which offered row is being answered, and what the answer is.
 $TBD
 Scenario Answering that both offered rows are different transactions
 Description Three genuine visits to one shop on one day for one amount: one
-# typed, two downloaded, and the bank is describing two the book does
-# not have.
+\ typed, two downloaded, and the bank is describing two the book does
+\ not have.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1253,8 +1253,8 @@ Then transactions are : ImportedTransaction
 $TBD
 Scenario An unanswered possible duplicate changes nothing and is asked again
 Description Which is what makes it safe to put an import down and come back to
-# it. Nothing is created, nothing is stamped and nothing is cleared,
-# so reading the file again reaches the same question.
+\ it. Nothing is created, nothing is stamped and nothing is cleared,
+\ so reading the file again reaches the same question.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1282,16 +1282,16 @@ Then transactions are : ImportedTransaction
 # ---------------------------------------------------------------------------
 
 Description Importing a file for each account brings in both halves of a
-# transfer as two separate transactions. Recognising them as one is a
-# different problem from the matching above, because neither half is
-# already in the book: both are new in the same import.
+\ transfer as two separate transactions. Recognising them as one is a
+\ different problem from the matching above, because neither half is
+\ already in the book: both are new in the same import.
 Details
-# It is never done without asking. Two accounts at one bank moving the
-# same round number on the same day is exactly what a genuine pair of
-# separate payments looks like, and merging those would lose one of them.
-# So a pair is proposed and the user approves it, and an approval can be
-# remembered so that the next month's import proposes the same thing with
-# the reasoning already made.
+\ It is never done without asking. Two accounts at one bank moving the
+\ same round number on the same day is exactly what a genuine pair of
+\ separate payments looks like, and merging those would lose one of them.
+\ So a pair is proposed and the user approves it, and an approval can be
+\ remembered so that the next month's import proposes the same thing with
+\ the reasoning already made.
 
 DataType TransferCandidateState
 Description How far a proposed pairing has got.
@@ -1321,18 +1321,18 @@ $TBD
 BusinessRule When two new transactions are proposed as one transfer
 Description All of these, and then it is proposed rather than done.
 Details The window is two days, wider than the same day a download is
-# allowed to reach when it is matched against a transaction already in
-# the book. The two rules are answering different questions. There the
-# evidence is an amount and a date, and a date somebody typed is the day
-# they paid rather than the day the bank posted; here both halves are
-# electronic and both dates are the bank's own, so two days is the lag
-# between two postings rather than a guess about one. Even so every
-# extra day of window is another chance to pair two payments that were
-# never one transfer.
-# Borne out by the three files in testdata: of the seven pairs in them,
-# five are on the same day and the widest is the credit card autopay of
-# 3 August, which posted to the card on the 1st. Nothing is further
-# apart than two days.
+\ allowed to reach when it is matched against a transaction already in
+\ the book. The two rules are answering different questions. There the
+\ evidence is an amount and a date, and a date somebody typed is the day
+\ they paid rather than the day the bank posted; here both halves are
+\ electronic and both dates are the bank's own, so two days is the lag
+\ between two postings rather than a guess about one. Even so every
+\ extra day of window is another chance to pair two payments that were
+\ never one transfer.
+\ Borne out by the three files in testdata: of the seven pairs in them,
+\ five are on the same day and the widest is the credit card autopay of
+\ 3 August, which posted to the card on the 1st. Nothing is further
+\ apart than two days.
 Examples: TransferCandidateRule
 | Test | Condition                                                            |
 | 1    | Neither has been claimed by this import already                       |
@@ -1343,29 +1343,29 @@ Examples: TransferCandidateRule
 
 BusinessRule A payment is completed by whichever import arrives second
 Description A payment from a bank account to a credit card is downloaded twice,
-# once from each side, and the two downloads usually happen on
-# different days in either order. Whichever arrives first records the
-# payment with its other side Unassigned. Whichever arrives second
-# finds that transaction and completes it, rather than recording the
-# same payment again.
+\ once from each side, and the two downloads usually happen on
+\ different days in either order. Whichever arrives first records the
+\ payment with its other side Unassigned. Whichever arrives second
+\ finds that transaction and completes it, rather than recording the
+\ same payment again.
 Details So the two halves of a transfer do not have to arrive together, which
-# the first version of this rule required and which no real month looks
-# like. The side that arrives second brings two things: the account, which
-# fills in the first side's Unassigned Destination, and a row of its
-# own -- a transaction is one account's own download, so the second half
-# is a transaction in its own right, not a rewrite of the first, and it
-# carries its own identifier rather than a second one squeezed onto the
-# first's.
-#
-# Each side's payee is whatever its own file called it. A bank calls it
-# a payment to the card; a card calls it a payment received. The first
-# side's own payee is never touched by the second arriving -- there is
-# nothing to overwrite, since each is its own transaction.
-#
-# Matching needs the amount equal and opposite and the dates within the
-# transfer window. What it must not do is search every account in the
-# book: two cards paid in the same week for similar amounts would pair
-# with each other's payments. The payment payee is what narrows it.
+\ the first version of this rule required and which no real month looks
+\ like. The side that arrives second brings two things: the account, which
+\ fills in the first side's Unassigned Destination, and a row of its
+\ own -- a transaction is one account's own download, so the second half
+\ is a transaction in its own right, not a rewrite of the first, and it
+\ carries its own identifier rather than a second one squeezed onto the
+\ first's.
+\
+\ Each side's payee is whatever its own file called it. A bank calls it
+\ a payment to the card; a card calls it a payment received. The first
+\ side's own payee is never touched by the second arriving -- there is
+\ nothing to overwrite, since each is its own transaction.
+\
+\ Matching needs the amount equal and opposite and the dates within the
+\ transfer window. What it must not do is search every account in the
+\ book: two cards paid in the same week for similar amounts would pair
+\ with each other's payments. The payment payee is what narrows it.
 Examples: PaymentCompletion
 | WhichArrivesFirst | WhatItRecords                         | WhatTheSecondDoes              |
 | The bank          | The payment, other side Unassigned    | Fills in the card, stamps its id |
@@ -1380,20 +1380,20 @@ Attributes PaymentCompletion
 
 BusinessRule The payment payee says which accounts a payment could belong to
 Description A credit card is paid by a transfer that appears on the bank
-# statement as a payee -- CHASEBANK, say. Recording that payee against
-# the card account is what lets a payment on the bank side find the
-# card side without searching the whole book.
+\ statement as a payee -- CHASEBANK, say. Recording that payee against
+\ the card account is what lets a payment on the bank side find the
+\ card side without searching the whole book.
 Details One payee can belong to several accounts, because several cards are paid
-# from one bank and all of them say CHASEBANK. So the payee narrows the
-# search to the accounts that carry it, and among those the amount and the
-# date decide. Two cards from one bank paid different amounts in the same
-# week are told apart by the amount; paid the same amount in the same week
-# they are not, and that is asked rather than guessed.
-#
-# Where the payee matches nothing, there is no narrowing and no match: the
-# payment is recorded with its other side Unassigned and waits for a
-# person. That is the honest outcome -- a payment whose destination nobody
-# can work out is not improved by being attached to the wrong card.
+\ from one bank and all of them say CHASEBANK. So the payee narrows the
+\ search to the accounts that carry it, and among those the amount and the
+\ date decide. Two cards from one bank paid different amounts in the same
+\ week are told apart by the amount; paid the same amount in the same week
+\ they are not, and that is asked rather than guessed.
+\
+\ Where the payee matches nothing, there is no narrowing and no match: the
+\ payment is recorded with its other side Unassigned and waits for a
+\ person. That is the honest outcome -- a payment whose destination nobody
+\ can work out is not improved by being attached to the wrong card.
 Examples: PaymentPayeeNarrowing
 | TheyPayeeMatches        | ThenTheSearchIs                                  |
 | One account             | That account, on amount and date                  |
@@ -1408,8 +1408,8 @@ Attributes PaymentPayeeNarrowing
 
 Scenario A card payment downloaded from the bank waits with its other side unassigned
 Description The bank is read first. It knows the money left and it knows the payee,
-# and it does not know which card was paid, because the card has not
-# been read yet.
+\ and it does not know which card was paid, because the card has not
+\ been read yet.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder | PaymentPayee |
 | Assets:Checking        | Checking   | false       | none         |
@@ -1429,8 +1429,8 @@ Then transactions are : ImportedTransaction
 $TBD
 Scenario The card import completes the payment the bank import recorded
 Description The card is read a week later. It finds the payment already there with
-# its other side unassigned, and completes it rather than recording the
-# same payment again.
+\ its other side unassigned, and completes it rather than recording the
+\ same payment again.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder | PaymentPayee |
 | Assets:Checking        | Checking   | false       | none         |
@@ -1461,7 +1461,7 @@ Then transactions are : ImportedTransaction
 $TBD
 Scenario Two cards from one bank are told apart by the amount
 Description Both cards say CHASEBANK, so the payee narrows the search to both and
-# the amount decides between them.
+\ the amount decides between them.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type       | Placeholder | PaymentPayee |
 | Assets:Checking         | Checking   | false       | none         |
@@ -1491,12 +1491,12 @@ Then transactions are : ImportedTransaction
 
 Scenario A row whose payee matches no account is money leaving the book
 Description There is no account for it to be a transfer to, so it is not a
-# transfer and nothing is waiting: the other side is a category, like
-# any other payment to anyone the book does not keep.
-#
-# This is the common case and not a failure. Most of what leaves a
-# current account goes to somebody outside the book, and a payee that
-# matches no PaymentPayee is how that is recognised.
+\ transfer and nothing is waiting: the other side is a category, like
+\ any other payment to anyone the book does not keep.
+\
+\ This is the common case and not a failure. Most of what leaves a
+\ current account goes to somebody outside the book, and a payee that
+\ matches no PaymentPayee is how that is recognised.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder | PaymentPayee |
 | Assets:Checking        | Checking   | false       | none         |
@@ -1521,28 +1521,28 @@ Then balances are : AccountBalance CompareOnly
 
 BusinessRule The date windows and why they differ
 Description Written down together because having four windows in one program
-# invites someone to unify them, and unifying them breaks one case or
-# another. Each row is a different question about two dates, and the
-# window follows from whose dates they are.
+\ invites someone to unify them, and unifying them breaks one case or
+\ another. Each row is a different question about two dates, and the
+\ window follows from whose dates they are.
 Details Nearly all of this is same-day, and deliberately so. While a row is
-# being identified the only window is the check-number one, where a
-# number says the two records are of one payment and the days between
-# them are the bank's lag and nothing else.
-#
-# Everywhere else inside the import the dates agree or they do not, and
-# it makes no difference how the transaction already there was come by.
-# Two records of one posting from one bank agree about the day, so a
-# day's difference is a difference and not a lag. A transaction somebody
-# typed carries their date rather than the bank's, and an amount and a
-# date is too little evidence to reach across days on -- so nothing
-# reaches, and what the import has instead of a window is the count: as
-# many as the book has is a duplicate, any other number is a question.
-#
-# The last row is the window that used to be inside the import and is
-# not any more. Pairing a transaction in one register against one in
-# another is asked of transactions after the import has been accepted,
-# never of rows while each one is being judged, and it has a window
-# because its two dates come from two different places.
+\ being identified the only window is the check-number one, where a
+\ number says the two records are of one payment and the days between
+\ them are the bank's lag and nothing else.
+\
+\ Everywhere else inside the import the dates agree or they do not, and
+\ it makes no difference how the transaction already there was come by.
+\ Two records of one posting from one bank agree about the day, so a
+\ day's difference is a difference and not a lag. A transaction somebody
+\ typed carries their date rather than the bank's, and an amount and a
+\ date is too little evidence to reach across days on -- so nothing
+\ reaches, and what the import has instead of a window is the count: as
+\ many as the book has is a duplicate, any other number is a question.
+\
+\ The last row is the window that used to be inside the import and is
+\ not any more. Pairing a transaction in one register against one in
+\ another is asked of transactions after the import has been accepted,
+\ never of rows while each one is being judged, and it has a window
+\ because its two dates come from two different places.
 Examples: DateWindow
 | Rule                                              | Window   | Why                                        |
 | A download against a check already in the book    | 1 day    | The number carries it; see the check rule  |
@@ -1563,7 +1563,7 @@ Attributes TransferCandidateRule
 
 Scenario A transfer between two checking accounts is proposed and approved
 Description The pair observed in the two checking files in testdata: the same
-# amount out of one account and into the other on the same day.
+\ amount out of one account and into the other on the same day.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder | BankId    | AccountNumber |
 | Assets:Checking Prime  | Checking | false       | 053000219 | 1023711843105 |
@@ -1608,9 +1608,9 @@ Description Transactions from several files at once, each naming its account.
 
 Scenario A credit card autopay is proposed across a two-day gap
 Description The payment left the checking account on 3 August and reached the
-# card on 1 August. It is the same transfer, and this is the pair
-# that sets the window: anything narrower than three days would
-# leave it as two transactions and double the spending.
+\ card on 1 August. It is the same transfer, and this is the pair
+\ that sets the window: anything narrower than three days would
+\ leave it as two transactions and double the spending.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder | BankId    | AccountNumber    |
 | Assets:Checking Prime  | Checking   | false       | 053000219 | 1023711843105    |
@@ -1648,9 +1648,9 @@ Then report rows are : ReportRow
 
 Scenario Three days apart is not proposed
 Description The boundary. Two days is the window, so a third day makes these
-# two ordinary transactions. The amounts and accounts still look like
-# a transfer, which is the point: the window is what stops a pair of
-# unrelated payments being merged on the strength of that alone.
+\ two ordinary transactions. The amounts and accounts still look like
+\ a transfer, which is the point: the window is what stops a pair of
+\ unrelated payments being merged on the strength of that alone.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder | BankId    | AccountNumber    |
 | Assets:Checking Prime  | Checking   | false       | 053000219 | 1023711843105    |
@@ -1687,11 +1687,11 @@ Then transfer candidates are : TransferCandidate
 
 Scenario Every proposal is confirmed in a dialog before anything is written
 Description Nothing is paired without being shown and agreed to. The dialog
-# lists each proposal with both halves, the gap in days, and the
-# accounts, and offers approve, reject, and approve-and-remember.
+\ lists each proposal with both halves, the gap in days, and the
+\ accounts, and offers approve, reject, and approve-and-remember.
 Details A remembered rule can approve a later pair without asking again, and
-# that is the only path that pairs anything silently. It exists because
-# the user said so once, about those two payees in those two accounts.
+\ that is the only path that pairs anything silently. It exists because
+\ the user said so once, about those two payees in those two accounts.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder | BankId    | AccountNumber    |
 | Assets:Checking Prime  | Checking   | false       | 053000219 | 1023711843105    |
@@ -1725,7 +1725,7 @@ Attributes ConfirmationRow
 
 Scenario Rejecting a candidate leaves two transactions
 Description The user knows these were two separate payments. Nothing is merged,
-# and each gets the Uncategorized side it would have had anyway.
+\ and each gets the Uncategorized side it would have had anyway.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder | BankId    | AccountNumber    |
 | Assets:Checking Prime  | Checking   | false       | 053000219 | 1023711843105    |
@@ -1751,8 +1751,8 @@ Then import summary is : ImportSummary Vertical
 
 Scenario Four transfers of the same shape are proposed as four pairs
 Description Three of 3,000.00 on three month ends and one of 30,000.00, which
-# is what the two checking files hold. Each half pairs with exactly
-# one other half, and a half once proposed is not offered again.
+\ is what the two checking files hold. Each half pairs with exactly
+\ one other half, and a half once proposed is not offered again.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder | BankId    | AccountNumber |
 | Assets:Checking Prime  | Checking | false       | 053000219 | 1023711843105 |
@@ -1781,7 +1781,7 @@ Then transfer candidates are : TransferCandidate
 $TBD
 BusinessRule Which half pairs with which when several match
 Description Closest date first, and then the order the files were read. A half
-# that has been paired is out of the running for the rest.
+\ that has been paired is out of the running for the rest.
 Examples: CandidatePriority
 | Test | Condition                                             |
 | 1    | The pair whose dates are closest together is formed first |
@@ -1796,9 +1796,9 @@ Attributes CandidatePriority
 
 Scenario A candidate is never proposed within one account
 Description Two transactions in one account with opposite amounts is a payment
-# and a refund, or a mistake, and either way it is not a transfer.
-# The rule in Transactions refuses a transaction transaction twice to one
-# account, and this is where that is kept from arising.
+\ and a refund, or a mistake, and either way it is not a transfer.
+\ The rule in Transactions refuses a transaction transaction twice to one
+\ account, and this is where that is kept from arising.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder | BankId    | AccountNumber |
 | Assets:Checking Prime  | Checking | false       | 053000219 | 1023711843105 |
@@ -1824,8 +1824,8 @@ Then transfer candidates are : TransferCandidate
 $TBD
 Scenario A candidate is not proposed when one half matches a transaction already there
 Description The matching rules of this file run first. A downloaded transaction
-# that clears something already in the book is accounted for, and is
-# not then also offered as half of a transfer.
+\ that clears something already in the book is accounted for, and is
+\ not then also offered as half of a transfer.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder | BankId    | AccountNumber |
 | Assets:Checking Prime  | Checking | false       | 053000219 | 1023711843105 |
@@ -1854,11 +1854,11 @@ Then transfer candidates are : TransferCandidate
 
 Entity TransferMatchRule
 Description A remembered approval, so that next month's import does not ask the
-# same question again.
+\ same question again.
 Details Learned from an approval, in the same way a payee rule is learned from
-# categorising. It names the two accounts and the two payee texts, and
-# it does not name an amount: the autopay is a different figure every
-# month and that is the whole point of remembering it.
+\ categorising. It names the two accounts and the two payee texts, and
+\ it does not name an amount: the autopay is a different figure every
+\ month and that is the whole point of remembering it.
 | Attribute   | Type        | Default | Notes                            |
 | FromAccount | AccountPath |         |                                  |
 | FromPattern | Text        |         | Matched against the name, Contains |
@@ -1872,8 +1872,8 @@ Collection TransferMatchRules
 
 Scenario Approving a candidate offers to remember it
 Description The offer is made, not taken. Whether a recurring autopay should
-# always be paired is a judgement about the accounts, and the user is
-# the one who knows.
+\ always be paired is a judgement about the accounts, and the user is
+\ the one who knows.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
 | Assets:Checking Prime  | Checking   | false       |
@@ -1895,8 +1895,8 @@ Then rule offered is : TransferMatchRule Vertical
 
 Scenario A remembered rule pairs the next month without asking
 Description The same two names, a different amount and a different month. The
-# candidate is approved automatically and still appears in the import
-# summary, so that it is visible rather than silent.
+\ candidate is approved automatically and still appears in the import
+\ summary, so that it is visible rather than silent.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder | BankId    | AccountNumber    |
 | Assets:Checking Prime  | Checking   | false       | 053000219 | 1023711843105    |
@@ -1920,8 +1920,8 @@ Then transactions are : ImportedTransaction
 
 Scenario A remembered rule still requires the amounts to be equal and opposite
 Description The rule says these two payees in these two accounts are worth
-# pairing. It does not say any two transactions between them are one
-# transfer, so the arithmetic is still checked.
+\ pairing. It does not say any two transactions between them are one
+\ transfer, so the arithmetic is still checked.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder | BankId    | AccountNumber    |
 | Assets:Checking Prime  | Checking   | false       | 053000219 | 1023711843105    |
@@ -1941,8 +1941,8 @@ Then transfer candidates are : TransferCandidate
 
 Scenario Candidates are shown before anything is written
 Description The import is one decision. The candidates, the duplicates and the
-# matches are all presented together, and the file is committed once
-# the user has been through them.
+\ matches are all presented together, and the file is committed once
+\ the user has been through them.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder | BankId    | AccountNumber    |
 | Assets:Checking Prime  | Checking   | false       | 053000219 | 1023711843105    |
@@ -1975,7 +1975,7 @@ Attributes ImportPreview
 
 Scenario The imported balance is checked against the one the bank states
 Description LEDGERBAL is the strongest check there is that the import is right.
-# A disagreement is reported rather than silently accepted.
+\ A disagreement is reported rather than silently accepted.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -2013,8 +2013,8 @@ Attributes LedgerBalanceResult
 
 Scenario A disagreement with the stated balance is reported
 Description The usual cause is a transaction entered by hand that the bank has
-# not seen, wrongly marked cleared. The number is what makes it
-# findable, so it is shown rather than hidden.
+\ not seen, wrongly marked cleared. The number is what makes it
+\ findable, so it is shown rather than hidden.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -2035,7 +2035,7 @@ Then balance check is : LedgerBalanceResult Vertical
 
 Scenario Only cleared transactions count towards the stated balance
 Description A check written but not yet presented is in the register and not at
-# the bank. Counting it would make every import look wrong.
+\ the bank. Counting it would make every import look wrong.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |

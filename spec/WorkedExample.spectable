@@ -1,40 +1,40 @@
 Specification WorkedExample
 
 Description One month of downloads, read into four accounts, and then worked
-# the way a person works it.
+\ the way a person works it.
 Details Every other file here specifies one thing at a time. This one is an
-# ordinary month end to end: four statements arrive as CSV, they are
-# imported, the categories that matter are assigned, and the report is
-# read. It is the book the window is tried against, written down, so
-# that what was being checked by hand is checked by the suite.
-#
-# What makes it worth having is that nothing in it is isolated. The
-# import, the chart of accounts, the categorisation and the report all
-# have to agree, and a change to one of them that breaks another shows
-# up here rather than in a month's time.
-#
-# Every scenario below is written against the Background alone, which is
-# inlined into each generated test, so none of them depends on the one
-# before it. That is why the same figures appear more than once: each
-# scenario starts from the four statements and nothing else.
-#
-# Opening balances are not in it. These are four downloads covering one
-# month, which is what keeps the book small enough to read on a page; a
-# book that starts from a known position is the opening-balance
-# transaction in Accounts. It is also why the loan here is a month of
-# interest rather than a debt being paid down.
-#
-# The statements do not carry each other's transfers. A card statement
-# closes on the twentieth and the payment goes out on the twenty-fifth,
-# so the payment is in the checking file and not in the card file, and
-# nothing is imported twice. Two downloads that do both show the same
-# transfer is a real situation and a different problem -- the matching
-# in ImportOfx -- and it is deliberately not what this file is about.
+\ ordinary month end to end: four statements arrive as CSV, they are
+\ imported, the categories that matter are assigned, and the report is
+\ read. It is the book the window is tried against, written down, so
+\ that what was being checked by hand is checked by the suite.
+\
+\ What makes it worth having is that nothing in it is isolated. The
+\ import, the chart of accounts, the categorisation and the report all
+\ have to agree, and a change to one of them that breaks another shows
+\ up here rather than in a month's time.
+\
+\ Every scenario below is written against the Background alone, which is
+\ inlined into each generated test, so none of them depends on the one
+\ before it. That is why the same figures appear more than once: each
+\ scenario starts from the four statements and nothing else.
+\
+\ Opening balances are not in it. These are four downloads covering one
+\ month, which is what keeps the book small enough to read on a page; a
+\ book that starts from a known position is the opening-balance
+\ transaction in Accounts. It is also why the loan here is a month of
+\ interest rather than a debt being paid down.
+\
+\ The statements do not carry each other's transfers. A card statement
+\ closes on the twentieth and the payment goes out on the twenty-fifth,
+\ so the payment is in the checking file and not in the card file, and
+\ nothing is imported twice. Two downloads that do both show the same
+\ transfer is a real situation and a different problem -- the matching
+\ in ImportOfx -- and it is deliberately not what this file is about.
 
 Background A month of statements, one for each account
 Description Four accounts, two profiles, four files. The categories the
-# scenarios use are in the chart from the start, so that a scenario
-# is about assigning one and not about creating it.
+\ scenarios use are in the chart from the start, so that a scenario
+\ is about assigning one and not about creating it.
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type       | Placeholder |
 | Assets:Checking         | Checking   | false       |
@@ -116,8 +116,8 @@ Given rows imported
 
 Scenario The four registers balance after the imports
 Description The first thing to check, and the thing a person checks: each
-# register agrees with the statement it was read from. A card and a
-# loan read as what is owed.
+\ register agrees with the statement it was read from. A card and a
+\ loan read as what is owed.
 Then balances are : AccountBalance
 | Account              | RawBalance | DisplayBalance | Notes                      |
 | Assets:Checking      | 1800.50    | 1800.50        | 2500.00 in, 699.50 out     |
@@ -130,9 +130,9 @@ Then balances are : AccountBalance
 
 Scenario Everything starts in Uncategorized
 Description Not one of these files carried a category, so the whole month is
-# sitting in the two Uncategorized accounts waiting to be told what
-# it was. This is the state a month starts in, and the reason the
-# report is worth running at all.
+\ sitting in the two Uncategorized accounts waiting to be told what
+\ it was. This is the state a month starts in, and the reason the
+\ report is worth running at all.
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2026-03-01 |
@@ -160,9 +160,9 @@ Then report total is : ReportTotal Vertical
 
 Attributes CategoryAssignment
 Description One transaction given its category. It is named by its date and
-# its payee, which is how a person finds it on the screen, rather
-# than by a ref: a ref is a device of these tables and is not
-# something the program shows.
+\ its payee, which is how a person finds it on the screen, rather
+\ than by a ref: a ref is a device of these tables and is not
+\ something the program shows.
 | Attribute | Type        | Default |
 | Date      | Date        |         |
 | Payee     | PayeeName   |         |
@@ -170,9 +170,9 @@ Description One transaction given its category. It is named by its date and
 
 Scenario Categorising the card charges and the two checks
 Description The three charges on the card and the two checks written during
-# the month. The rest is left alone on purpose: the groceries bought
-# on the checking account and the payment to the card are still
-# Uncategorized afterwards, and the report shows them that way.
+\ the month. The rest is left alone on purpose: the groceries bought
+\ on the checking account and the payment to the card are still
+\ Uncategorized afterwards, and the report shows them that way.
 When categories assigned : CategoryAssignment
 | Date       | Payee              | Category                |
 | 2026-03-05 | SHELL OIL 3344     | Expenses:Auto:Fuel      |
@@ -217,10 +217,10 @@ Then report total is : ReportTotal Vertical
 
 Scenario A payment to a card is a transfer, not an expense
 Description Giving the payment the card account as its category makes the
-# transaction a transfer between two real accounts, and a transfer
-# is in no report of what was earned or spent. This is the one kind
-# of recategorisation that is allowed to move the total, because
-# both transactions have left the categories altogether.
+\ transaction a transfer between two real accounts, and a transfer
+\ is in no report of what was earned or spent. This is the one kind
+\ of recategorisation that is allowed to move the total, because
+\ both transactions have left the categories altogether.
 When categories assigned : CategoryAssignment
 | Date       | Payee        | Category         |
 | 2026-03-25 | Visa Payment | Liabilities:Visa |
