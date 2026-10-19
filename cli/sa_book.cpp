@@ -152,8 +152,8 @@ int import_csv(const std::string& text, const std::string& account, bool accept,
                     one.row.payee.substr(0, 28).c_str(),
                     one.row.amount.in_register().c_str(),
                     ofx::to_string(one.disposition).c_str());
-    std::printf("\nNew %d  Matched %d  Possible %d\n", decided.summary.New,
-                decided.summary.Matched, decided.summary.Possible);
+    std::printf("\nNew %d  Duplicate %d  Possible %d\n", decided.summary.New,
+                decided.summary.Duplicate, decided.summary.Possible);
 
     if (!accept) {
         std::printf("nothing written; pass --accept to keep it\n");
@@ -581,12 +581,12 @@ int main(int argc, char** argv) {
                             one.claimed_ref.c_str());
             total.New += decided.summary.New;
             total.Duplicate += decided.summary.Duplicate;
-            total.Matched += decided.summary.Matched;
+            total.Completed += decided.summary.Completed;
             total.Possible += decided.summary.Possible;
 
-            // A match clears the transaction already there rather than making a
-            // second copy of it.
-            matched_clear += ofx::apply_matches(open.accounts, decided, account, &open.transactions);
+            // A duplicate brings the transaction already there up to date
+            // rather than making a second copy of it.
+            matched_clear += ofx::apply_duplicates(open.accounts, decided, account, &open.transactions);
             // And the payments this file is the other half of.
             const ofx::Completed done_completing = ofx::apply_completions(
                 open.accounts, decided, account,
@@ -632,8 +632,8 @@ int main(int argc, char** argv) {
                 adding.push_back(t);
             }
         }
-        std::printf("\nNew %d  Duplicate %d  Matched %d  Possible %d\n",
-                    total.New, total.Duplicate, total.Matched, total.Possible);
+        std::printf("\nNew %d  Duplicate %d  Completed %d  Possible %d\n",
+                    total.New, total.Duplicate, total.Completed, total.Possible);
         if (completed > 0)
             std::printf("completed %d payment(s) already in the book\n", completed);
         if (total.Possible > 0)

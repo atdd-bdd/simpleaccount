@@ -323,6 +323,33 @@ struct ReviewRow {
     // Whether the bank has settled this row, which the import says and the
     // review carries: an OFX file's rows are a statement, a CSV's are not.
     types::ClearedStatus cleared = types::ClearedStatus::Cleared;
+    // The transactions already in the book that the import decided this row
+    // already was, by identity rather than by label. One for a duplicate or a
+    // completion, several for a possible, none for a new row. Carried so that
+    // the claim can be looked at before the tick is believed: see the
+    // show-the-duplicate section of UserInterface.spectable.
+    std::vector<std::string> claimed_ids;
+};
+
+// One transaction a review row claimed, read off the book rather than off the
+// file: this is what is already there, as the register would show it.
+struct DuplicateRow {
+    std::string ref;
+    types::Date date;
+    std::string payee;
+    std::string account;
+    std::string category;
+    Money amount;
+    std::string check_no;
+    types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
+};
+
+// What came of asking to see the claim. Heading is shown above the
+// transactions because one of them and three of them mean different things.
+struct DuplicateLook {
+    bool shown = false;
+    std::string heading;
+    std::vector<DuplicateRow> rows;
 };
 
 struct Pane {
@@ -620,6 +647,8 @@ public:
     // An import goes into the account confirmed for it.
     void review_import(const std::vector<ReviewRow>& rows, const std::string& into) {
         review_ = rows;
+        review_line_ = 0;
+        look_ = DuplicateLook();
         for (ReviewRow& r : review_)
             if (r.disposition != "New") r.accepted = false;
         committed_ = false;
@@ -794,6 +823,66 @@ public:
     void select_lines(const std::vector<int>& lines) { selected_ = lines; }
 
     const std::vector<int>& selected_lines() const { return selected_; }
+
+    // The line of the import review that is selected, counting from one in the
+    // order the review is showing. Nought is none.
+    void select_review_line(int line) { review_line_ = line; }
+
+    // The item reads as the disposition does: a duplicate names one
+    // transaction, a possible names several, and a completion names the
+    // payment whose other half was waiting. On a row that claims nothing the
+    // item is still there and disabled, because a menu that changes shape from
+    // line to line is harder to learn than one item that is sometimes grey.
+    // See the menu rule in UserInterface.spectable.
+    std::vector<MenuEntry> review_menu_items() const {
+        const ReviewRow* row = review_line(review_line_);
+        const std::string what = row == nullptr ? "New" : row->disposition;
+        if (what == "Possible")
+            return {MenuEntry{"Show possible duplicates...", true}};
+        if (what == "Completed")
+            return {MenuEntry{"Show the payment this completes...", true}};
+        const bool anything = row != nullptr && !row->claimed_ids.empty();
+        return {MenuEntry{"Show duplicate transaction...", anything}};
+    }
+
+    // Asking on a row that claims nothing is not an error: there is simply
+    // nothing to show, which is what keeps a double click or a shortcut from
+    // opening an empty dialog.
+    const DuplicateLook& show_duplicate() {
+        look_ = DuplicateLook();
+        const ReviewRow* row = review_line(review_line_);
+        if (row == nullptr || row->claimed_ids.empty()) return look_;
+        for (const std::string& id : row->claimed_ids) {
+            const ledger::Transaction* found = transaction_with(id);
+            if (found == nullptr) continue;
+            DuplicateRow out;
+            out.ref = found->ref.value();
+            out.date = found->date;
+            out.payee = found->payee.value();
+            out.account = accounts_.path_for_ref(found->source_account);
+            out.category = accounts_.path_for_ref(found->destination);
+            out.amount = found->amount;
+            out.check_no = found->check_no.value();
+            out.cleared = found->cleared;
+            look_.rows.push_back(out);
+        }
+        // Nothing found means every transaction it claimed has since gone, and
+        // an empty dialog says less than no dialog at all.
+        if (look_.rows.empty()) return look_;
+        look_.shown = true;
+        look_.heading = row->disposition == "Possible"
+                            ? "Could be any of these"
+                            : (row->disposition == "Completed"
+                                   ? "The payment this completes"
+                                   : "Already in the book");
+        return look_;
+    }
+
+    const DuplicateLook& duplicate_look() const { return look_; }
+
+    // Closing it changes nothing else: the dialog is a look, not a decision.
+    // The tick is where the decision is made.
+    void close_duplicate_look() { look_ = DuplicateLook(); }
 
     std::vector<MenuEntry> menu_items() const {
         const bool anything = !selected_.empty() && !tabs_.empty() &&
@@ -1185,8 +1274,22 @@ private:
     std::vector<FindResultRow> results_;
     std::vector<ledger::Transaction> accepted_;
     std::vector<int> selected_;
+    int review_line_ = 0;
+    DuplicateLook look_;
     bool committed_ = false;
     long long changes_ = 0;
+
+    const ReviewRow* review_line(int line) const {
+        for (const ReviewRow& r : review_)
+            if (r.line == line) return &r;
+        return nullptr;
+    }
+
+    const ledger::Transaction* transaction_with(const std::string& id) const {
+        for (const ledger::Transaction& t : transactions_)
+            if (t.id.value() == id) return &t;
+        return nullptr;
+    }
 
     void set_accepted(int line, bool accepted) {
         for (ReviewRow& r : review_)

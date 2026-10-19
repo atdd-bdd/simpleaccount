@@ -1724,6 +1724,206 @@ Then panes are : PaneState
 # The same as accepting, as far as the panel goes: the import is over either way.
 
 # ---------------------------------------------------------------------------
+# Showing the transaction an import row was decided against
+# ---------------------------------------------------------------------------
+
+Description A duplicate is a claim about a transaction that is already in the
+# book, and the claim is worth looking at before it is believed. The
+# review shows the row the file sent; this shows what the import
+# decided the row already was, so that the two can be read side by
+# side and the tick changed if the decision was wrong.
+
+Attributes ImportReviewSelect
+Description The line of the import review that is selected, counting from one
+# in the order the review is showing.
+| Attribute | Type    | Default |
+| Line      | Integer | 1       |
+
+Attributes ImportReviewClaim
+Description What the import decided a review line already was. A line can
+# claim more than one transaction -- a Possible claims every
+# transaction it could be -- so this is a row per claim rather than a
+# field on the row. Line is the review line; Ref is the transaction
+# already in the book.
+| Attribute | Type           | Default |
+| Line      | Integer        | 0       |
+| Ref       | TransactionRef |         |
+
+Attributes DuplicateTransactionDialog
+Description What came up. Heading is shown above the transactions because one
+# transaction and three of them mean different things, and the
+# difference is the whole reason the dialog is worth opening.
+| Attribute | Type    | Default |
+| Shown     | Boolean | false   |
+| Count     | Integer | 0       |
+| Heading   | Text    | none    |
+
+Attributes DuplicateTransactionRow
+Description One transaction the import claimed, read off the book rather than
+# off the file: this is what is already there.
+| Attribute | Type           | Default    |
+| Ref       | TransactionRef |            |
+| Date      | Date           | 2026-01-01 |
+| Payee     | PayeeName      | none       |
+| Account   | AccountPath    | none       |
+| Category  | AccountPath    | none       |
+| Amount    | Money          | 0.00       |
+| CheckNo   | CheckNumber    | none       |
+| Cleared   | ClearedStatus  | Uncleared  |
+
+Attributes DuplicateMenuRule
+| Attribute   | Type              | Default |
+| Disposition | ImportDisposition | New     |
+| Item        | Text              | none    |
+| Enabled     | Boolean           | true    |
+
+BusinessRule What the menu on an import row offers
+Description The item reads as the disposition does. A duplicate names one
+# transaction, a possible names several, and a completion names the
+# payment whose other half was waiting -- calling that last one a
+# duplicate would be wrong, because nothing is being refused.
+Details A New row claims nothing, so there is nothing to show. The item is
+# still on the menu, disabled, rather than absent: a menu that
+# changes shape from line to line is harder to learn than one item
+# that is sometimes grey.
+Examples: DuplicateMenuRule
+| Disposition | Item                               | Enabled |
+| New         | Show~duplicate~transaction...      | false   |
+| Duplicate   | Show~duplicate~transaction...      | true    |
+| Possible    | Show~possible~duplicates...        | true    |
+| Completed   | Show~the~payment~this~completes... | true    |
+
+Scenario Showing the duplicate brings up the transaction already in the book
+Description The row the bank sent and the transaction the import says it
+# already is. Everything the register would show of it is here,
+# including the cleared status, because an uncleared transaction of
+# the same date and amount is the usual reason to disagree.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
+| T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
+Given import claims are : ImportReviewClaim
+| Line | Ref |
+| 1    | T1  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import reviewed : ImportReviewRow
+| Line | Date       | Payee         | Account         | Category           | Amount | Disposition | Accepted |
+| 1    | 2026-01-15 | HARRIS TEETER | Assets:Checking | Expenses:Groceries | -45.00 | Duplicate   | false    |
+When import review line selected : ImportReviewSelect
+| Line |
+| 1    |
+When duplicate transaction asked
+Then duplicate transaction dialog is : DuplicateTransactionDialog Vertical
+| Shown   | true                |
+| Count   | 1                   |
+| Heading | Already~in~the~book |
+Then duplicate transactions shown are : DuplicateTransactionRow
+| Ref | Date       | Payee         | Account         | Category           | Amount | Cleared   |
+| T1  | 2026-01-15 | Harris Teeter | Assets:Checking | Expenses:Groceries | -45.00 | Uncleared |
+
+Scenario A possible duplicate shows every transaction it could be
+Description Two transactions of the same date and amount against the one row
+# that was sent. The import cannot say which, and neither can the
+# dialog -- what it can do is show both, which is what makes the
+# question answerable by somebody who remembers writing them.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
+| T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 |
+| T2  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 |
+Given import claims are : ImportReviewClaim
+| Line | Ref |
+| 1    | T1  |
+| 1    | T2  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import reviewed : ImportReviewRow
+| Line | Date       | Payee         | Account         | Category           | Amount | Disposition | Accepted |
+| 1    | 2026-02-05 | HARRIS TEETER | Assets:Checking | Expenses:Groceries | -88.20 | Possible    | false    |
+When import review line selected : ImportReviewSelect
+| Line |
+| 1    |
+When duplicate transaction asked
+Then duplicate transaction dialog is : DuplicateTransactionDialog Vertical
+| Shown   | true                  |
+| Count   | 2                     |
+| Heading | Could~be~any~of~these |
+Then duplicate transactions shown are : DuplicateTransactionRow
+| Ref | Date       | Payee         | Account         | Category           | Amount | Cleared   |
+| T1  | 2026-02-05 | Harris Teeter | Assets:Checking | Expenses:Groceries | -88.20 | Uncleared |
+| T2  | 2026-02-05 | Harris Teeter | Assets:Checking | Expenses:Groceries | -88.20 | Uncleared |
+
+Scenario Asking on a new row brings up nothing
+Description The item is disabled, and asking anyway is not an error: there is
+# simply nothing to show. Stated so that a keyboard shortcut or a
+# double click cannot open an empty dialog.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination        | Amount |
+| T1  | Assets:Checking | 2026-01-05 | Acme Payroll | Expenses:Groceries | -10.00 |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import reviewed : ImportReviewRow
+| Line | Date       | Payee         | Account         | Category           | Amount | Disposition | Accepted |
+| 1    | 2026-02-02 | Harris Teeter | Assets:Checking | Expenses:Groceries | -52.10 | New         | true     |
+When import review line selected : ImportReviewSelect
+| Line |
+| 1    |
+When duplicate transaction asked
+Then duplicate transaction dialog is : DuplicateTransactionDialog Vertical
+| Shown   | false |
+| Count   | 0     |
+| Heading | none  |
+
+Scenario Looking at the duplicate changes neither the review nor the book
+Description The dialog is a look, not a decision. The tick is where the
+# decision is made, and it is still where it was afterwards.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
+| T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
+Given import claims are : ImportReviewClaim
+| Line | Ref |
+| 1    | T1  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When import reviewed : ImportReviewRow
+| Line | Date       | Payee         | Account         | Category           | Amount | Disposition | Accepted |
+| 1    | 2026-01-15 | HARRIS TEETER | Assets:Checking | Expenses:Groceries | -45.00 | Duplicate   | false    |
+When import review line selected : ImportReviewSelect
+| Line |
+| 1    |
+When duplicate transaction asked
+When duplicate transaction dialog closed
+Then import review rows are : ImportReviewRow CompareOnly
+| Line | Payee         | Disposition | Accepted |
+| 1    | HARRIS TEETER | Duplicate   | false    |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Payee         | Balance |
+| T1  | 2026-01-15 | Harris Teeter | -45.00  |
+Then bottom panel is : BottomPanel Vertical
+| Open      | true |
+| TabCount  | 1    |
+| ActiveTab | 1    |
+
+# ---------------------------------------------------------------------------
 # More than one tab in the bottom panel
 # ---------------------------------------------------------------------------
 

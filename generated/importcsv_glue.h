@@ -517,11 +517,14 @@ public:
             const auto two_date = types::Date::from_iso(value.dateb);
             ASSERT_TRUE(one_date.has_value()) << value.datea;
             ASSERT_TRUE(two_date.has_value()) << value.dateb;
-            const std::string one = ofx::detail::fingerprint(
-                *one_date, Money(value.amounta), blank(value.payeea));
-            const std::string two = ofx::detail::fingerprint(
-                *two_date, Money(value.amountb), blank(value.payeeb));
-            EXPECT_EQ(parse_bool_cell(value.same), one == two)
+            // Two parts, because the fingerprint is two parts: the date and
+            // the amount, which are the key, and the payee, which is
+            // compared afterwards and loosely.
+            const std::string one = ofx::detail::fingerprint(*one_date, Money(value.amounta));
+            const std::string two = ofx::detail::fingerprint(*two_date, Money(value.amountb));
+            const bool same = one == two &&
+                ofx::detail::payees_agree(blank(value.payeea), blank(value.payeeb), {});
+            EXPECT_EQ(parse_bool_cell(value.same), same)
                 << "\"" << value.payeea << "\" against \"" << value.payeeb << "\"";
         }
     }

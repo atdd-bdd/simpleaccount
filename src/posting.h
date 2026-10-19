@@ -58,6 +58,15 @@ struct Transaction {
     Money amount;
     types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
 
+    // What an import saw about this transaction and could not say in a field
+    // of its own: that it cleared something which had been typed and never
+    // cleared, that the file spells the payee differently, that it wrote an
+    // identifier where there was none. Each is kept once, so re-reading a file
+    // does not grow the list. The names are the DuplicateNote values of
+    // ImportOfx.spectable, kept as text so that a transaction does not have to
+    // know what an import is.
+    std::vector<std::string> import_notes;
+
     // The identifiers this transaction has collected, at most one per source.
     // More than one because a transaction imported from a CSV and later
     // recognised in a QFX has a name in each, and losing either would make

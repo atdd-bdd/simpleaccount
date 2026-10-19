@@ -714,14 +714,14 @@ private:
     }
 
     // One import, in the order the program does it: decide, create what is new,
-    // then clear what was matched. Nothing is written for a duplicate or for a
-    // possible duplicate, which is what the summary then shows.
+    // then bring up to date what was already here. Nothing is created for a
+    // duplicate or for a possible duplicate, which is what the summary shows.
     void import(const ofx::Statement& statement) {
         decided_ = ofx::decide(statement, target_, transactions_, chart_, check_window_days_);
         summary_ = decided_.summary;
         const std::vector<ledger::Transaction> made =
             ofx::transactions_for(decided_, target_, ledger::transaction_count(transactions_), &chart_);
-        ofx::apply_matches(chart_, decided_, target_, &transactions_);
+        ofx::apply_duplicates(chart_, decided_, target_, &transactions_);
         const ofx::Completed completed = ofx::apply_completions(
             chart_, decided_, target_, ledger::transaction_count(transactions_) + made.size(), &transactions_);
         transactions_.insert(transactions_.end(), made.begin(), made.end());
@@ -754,8 +754,8 @@ private:
 
     static ofx::Disposition disposition_named(const std::string& name) {
         if (name == "Duplicate") return ofx::Disposition::Duplicate;
-        if (name == "Matched")   return ofx::Disposition::Matched;
         if (name == "Possible")  return ofx::Disposition::Possible;
+        if (name == "Completed") return ofx::Disposition::Completed;
         return ofx::Disposition::New;
     }
 
@@ -838,12 +838,14 @@ private:
         ledger::Transaction t;
         t.id = ledger::new_id();
         t.ref = types::TransactionRef("T1");
-        t.date = types::Date(2024, 1, 15);
+        // Two days before the row, so that no other test can reach it: the
+        // counting test asks for the same day and the check-number test for a
+        // check number, and neither is here. What is left is the identifier,
+        // which is what the rule is about.
+        t.date = types::Date(2024, 1, 13);
         t.payee = types::PayeeName("HARRIS TEETER");
         t.source_account = chart_.ref_for_path("Assets:Checking");
         t.amount = Money("-45.00");
-        // Cleared, so neither match test can claim it and the only question
-        // left is the one about identifiers.
         t.cleared = types::ClearedStatus::Cleared;
         if (carries == "An Ofx id, the same") {
             ledger::stamp(&t, types::ImportSource::Ofx, "F100");
@@ -877,9 +879,11 @@ private:
         return statement;
     }
 
-    // A book holding one transaction of the same date and amount that somebody
-    // typed -- uncleared, no identifier -- which is the one case the program
-    // cannot settle on its own.
+    // A book holding two transactions of the same date and amount as the one
+    // downloaded row. Two against one is not a pairing: nothing says which of
+    // them the row is, and answering either way would double a transaction or
+    // lose one. So the import can only ask, which is the disposition rule's
+    // fourth test and the one case the program cannot settle on its own.
     void offer_a_possible() {
         start_fresh("Assets:Checking", types::AccountType::Checking);
         chart_.put(account_of("Expenses:Groceries", types::AccountType::Expense));
@@ -890,11 +894,12 @@ private:
         t.payee = types::PayeeName("Harris Teeter");
         t.source_account = chart_.ref_for_path("Assets:Checking");
         t.amount = Money("-88.20");
-        // Typed, not imported, which is what leaves the import able only to
-        // ask about it: the disposition rule's third test.
         t.cleared = types::ClearedStatus::Uncleared;
         t.destination = chart_.ref_for_path("Expenses:Groceries");
-        transactions_ = {t};
+        ledger::Transaction second = t;
+        second.id = ledger::new_id();
+        second.ref = types::TransactionRef("T2");
+        transactions_ = {t, second};
         import(offered_statement());
     }
 
@@ -904,6 +909,8 @@ private:
     // there, so each row of the rule table is checked by the behaviour it
     // describes.
     ofx::Disposition disposition_reaching_test(const std::string& test) {
+        if (test == "5") return disposition_of_a_payment_half();
+
         start_fresh("Assets:Checking", types::AccountType::Checking);
         ofx::Transaction row;
         row.date_posted = types::Date(2024, 1, 20);
@@ -918,47 +925,63 @@ private:
         t.source_account = chart_.ref_for_path("Assets:Checking");
         t.amount = Money("-45.00");
         t.destination = chart_.ref_for_path("Expenses:Uncategorized");
+        // A week before the row unless the test says otherwise, because the
+        // counting tests are the only ones that ask for the same day and the
+        // rows above them must not be reachable by counting.
+        t.date = types::Date(2024, 1, 13);
 
-        bool anything_already_there = true;
+        std::vector<ledger::Transaction> book;
         if (test == "1") {
             // Already carries this FITID from an Ofx import.
-            t.date = types::Date(2024, 1, 20);
-            t.cleared = types::ClearedStatus::Cleared;
             ledger::stamp(&t, types::ImportSource::Ofx, "F001");
+            book = {t};
         } else if (test == "2") {
-            // Uncleared, same amount and check number, inside the window.
-            //
-            // The number is what tells this apart from test three, which is
-            // the same posting without one and can only be asked about. It is
-            // also the only thing here that reaches across days at all, which
-            // is what the book's check-number window is for and why the
-            // scenario widening it to thirty days matters. Here the claim is
-            // only the one the rule table makes: this condition yields
-            // Matched.
-            t.date = types::Date(2024, 1, 20);
+            // The same check number, amount and payee, a day away. The number
+            // is the only thing here that reaches across days at all, which is
+            // what the book's check-number window is for and why the scenario
+            // widening it to thirty days matters.
+            t.date = types::Date(2024, 1, 19);
             t.check_no = types::CheckNumber("2041");
             row.check_num = "2041";
+            book = {t};
         } else if (test == "3") {
-            // Uncleared, same amount, the same day, no check number: typed by
-            // hand, so the import can only ask.
+            // One row and one transaction of its date and amount: equal in
+            // number, so the row is the transaction already here.
             t.date = types::Date(2024, 1, 20);
+            book = {t};
         } else if (test == "4") {
-            // Cleared, same amount and date, no identifier: nothing above can
-            // apply, and it is too like the downloaded row to create blindly.
+            // Two of them against the one row. Nothing says which, so the
+            // import can only ask -- about both of them.
             t.date = types::Date(2024, 1, 20);
-            t.cleared = types::ClearedStatus::Cleared;
+            ledger::Transaction second = t;
+            second.id = ledger::new_id();
+            second.ref = types::TransactionRef("T2");
+            book = {t, second};
         } else {
-            // Test 5: an empty book, so nothing above applies.
-            anything_already_there = false;
+            // Test 6: an empty book, so nothing above applies.
+            EXPECT_EQ("6", test) << "unlisted test";
         }
 
-        if (anything_already_there) {
-            transactions_ = {t};
-        }
+        transactions_ = book;
         ofx::Statement statement;
         statement.transactions.push_back(row);
         import(statement);
         EXPECT_EQ(1u, decided_.decided.size()) << "test " << test;
+        return decided_.decided.empty() ? ofx::Disposition::New
+                                        : decided_.decided.front().disposition;
+    }
+
+    // Test five, which needs a book of two accounts rather than one: the
+    // bank's side of a card payment arrives first and waits with its other
+    // half unassigned, and the card's own statement is the row that completes
+    // it. Nothing above applies, because the card has nothing in it yet.
+    ofx::Disposition disposition_of_a_payment_half() {
+        a_book_with_two_accounts();
+        target_ = kBank;
+        import(payment_side(kBank));
+        target_ = kCard;
+        import(payment_side(kCard));
+        EXPECT_EQ(1u, decided_.decided.size()) << "test 5";
         return decided_.decided.empty() ? ofx::Disposition::New
                                         : decided_.decided.front().disposition;
     }
@@ -1012,9 +1035,9 @@ public:
             import(statement);
 
             ASSERT_EQ(1u, decided_.decided.size());
-            const bool matched =
-                decided_.decided.front().disposition == ofx::Disposition::Matched;
-            EXPECT_EQ(value.duplicate == "Yes", matched)
+            const bool settled =
+                decided_.decided.front().disposition == ofx::Disposition::Duplicate;
+            EXPECT_EQ(value.duplicate == "Yes", settled)
                 << days << " days apart, number matches " << value.numbermatches
                 << " -- " << value.notes << "; the import decided "
                 << ofx::to_string(decided_.decided.front().disposition);
@@ -1191,36 +1214,236 @@ public:
         ADD_FAILURE() << "Not implemented: examples_businessrule_a_download_arrives_cleared_and_only_a_typed_transaction_is_not";
     }
 
-    void examples_businessrule_the_date_windows_and_why_they_differ(const std::vector<DateWindowString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_the_date_windows_and_why_they_differ";
+    void examples_businessrule_the_date_windows_and_why_they_differ(
+            const std::vector<DateWindowString>& values) {
+        for (const auto& value : values) {
+            if (value.window == "1 day") {
+                EXPECT_EQ(1, ofx::kCheckWindow) << value.rule << " -- " << value.why;
+            } else if (value.window == "2 days") {
+                EXPECT_EQ(2, ofx::kTransferWindow) << value.rule << " -- " << value.why;
+            } else if (value.window == "5 days") {
+                EXPECT_EQ(5, ofx::kMatchWindow) << value.rule << " -- " << value.why;
+            } else if (value.window == "Same day") {
+                // There is no constant for this one, and that is the point:
+                // the test is dates being equal. So the claim is checked by
+                // the behaviour -- a day away reaches nothing and is created.
+                EXPECT_EQ(ofx::Disposition::New, a_day_away_from_what_is_here())
+                    << value.rule << " -- " << value.why;
+            } else {
+                FAIL() << "there is no window called " << value.window;
+            }
+        }
+    }
+
+    // One cleared transaction in the book, and a download of the same amount
+    // the day after. Nothing carries a check number, so nothing may reach
+    // across the day.
+    ofx::Disposition a_day_away_from_what_is_here() {
+        start_fresh("Assets:Checking", types::AccountType::Checking);
+        ledger::Transaction t;
+        t.id = ledger::new_id();
+        t.ref = types::TransactionRef("T1");
+        t.date = types::Date(2024, 1, 20);
+        t.payee = types::PayeeName("Harris Teeter");
+        t.source_account = chart_.ref_for_path("Assets:Checking");
+        t.destination = chart_.ref_for_path("Expenses:Uncategorized");
+        t.amount = Money("-45.00");
+        t.cleared = types::ClearedStatus::Cleared;
+        transactions_ = {t};
+
+        ofx::Statement statement;
+        ofx::Transaction row;
+        row.date_posted = types::Date(2024, 1, 21);
+        row.amount = Money("-45.00");
+        row.fit_id = "F001";
+        row.name = "HARRIS TEETER";
+        statement.transactions.push_back(row);
+        import(statement);
+        EXPECT_EQ(1u, decided_.decided.size());
+        return decided_.decided.empty() ? ofx::Disposition::Duplicate
+                                        : decided_.decided.front().disposition;
     }
 
 public:
 
+    // The table is read by transaction, in the order it gives them, because
+    // the order is part of what is being said: what settled the duplicate
+    // first, then what the import changed about it.
     void then_transaction_notes_are(const std::vector<TransactionNoteString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_transaction_notes_are";
+        std::vector<std::string> refs;
+        for (const auto& value : values)
+            if (std::find(refs.begin(), refs.end(), value.ref) == refs.end())
+                refs.push_back(value.ref);
+        for (const std::string& ref : refs) {
+            std::vector<std::string> wanted;
+            for (const auto& value : values)
+                if (value.ref == ref) wanted.push_back(value.note);
+            const ledger::Transaction* here = nullptr;
+            for (const ledger::Transaction& one : transactions_)
+                if (one.ref.value() == ref) here = &one;
+            ASSERT_NE(nullptr, here) << "there is no transaction called " << ref;
+            EXPECT_EQ(wanted, here->import_notes) << "the notes on " << ref;
+        }
     }
 
+    // Every value the table names, in the order it names them, against every
+    // value the code has: a note the one has and the other has not is what
+    // this is for.
     void examples_datatype_duplicatenote(const std::vector<EnumerationValuesString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_datatype_duplicatenote";
+        const std::vector<ofx::DuplicateNote> all = {
+            ofx::DuplicateNote::None,            ofx::DuplicateNote::DetailsDiffer,
+            ofx::DuplicateNote::CheckNumberSame, ofx::DuplicateNote::FitIdAdded,
+            ofx::DuplicateNote::PayeeUnmatched,  ofx::DuplicateNote::Uncleared};
+        ASSERT_EQ(all.size(), values.size()) << "the table and the code disagree about how many";
+        for (std::size_t i = 0; i < values.size(); ++i)
+            EXPECT_EQ(values[i].value, ofx::to_string(all[i])) << values[i].notes;
     }
 
-    void examples_businessrule_what_a_duplicate_does_to_the_transaction_already_there(const std::vector<WhatADuplicateDoesString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_what_a_duplicate_does_to_the_transaction_already_there";
+    // One duplicate, settled by its check number, where the download
+    // disagrees about everything it is allowed to disagree about: a different
+    // day, no memo of its own worth keeping, no category at all, and an
+    // identifier the transaction has not got. Every row of the table is then
+    // asked of the one transaction afterwards.
+    void examples_businessrule_what_a_duplicate_does_to_the_transaction_already_there(
+            const std::vector<WhatADuplicateDoesString>& values) {
+        start_fresh("Assets:Checking", types::AccountType::Checking);
+        chart_.put(account_of("Expenses:Home:Rates", types::AccountType::Expense));
+        ledger::Transaction t;
+        t.id = ledger::new_id();
+        t.ref = types::TransactionRef("T1");
+        t.date = types::Date(2024, 1, 2);
+        t.payee = types::PayeeName("County Tax Office");
+        t.memo = "Second half";
+        t.check_no = types::CheckNumber("2041");
+        t.source_account = chart_.ref_for_path("Assets:Checking");
+        t.destination = chart_.ref_for_path("Expenses:Home:Rates");
+        t.amount = Money("-1250.00");
+        t.cleared = types::ClearedStatus::Uncleared;
+        transactions_ = {t};
+
+        ofx::Statement statement;
+        ofx::Transaction row;
+        row.trn_type = "CHECK";
+        row.date_posted = types::Date(2024, 1, 3);
+        row.amount = Money("-1250.00");
+        row.fit_id = "20240103002";
+        row.name = "COUNTY TAX OFFICE";
+        row.memo = "ACH DEBIT";
+        row.check_num = "2041";
+        statement.transactions.push_back(row);
+        import(statement);
+
+        ASSERT_EQ(1, summary_.Duplicate) << "the check number should have settled it";
+        ASSERT_EQ(1u, transactions_.size()) << "a duplicate creates nothing";
+        const ledger::Transaction& after = transactions_.front();
+        for (const auto& value : values) {
+            const std::string& what = value.whathappens;
+            if (value.property == "The date") {
+                EXPECT_EQ("2024-01-02", after.date.iso()) << what;
+            } else if (value.property == "The payee") {
+                EXPECT_EQ("County Tax Office", after.payee.value()) << what;
+            } else if (value.property == "The category") {
+                EXPECT_TRUE(after.destination == chart_.ref_for_path("Expenses:Home:Rates"))
+                    << what;
+            } else if (value.property == "The memo") {
+                EXPECT_EQ("Second half", after.memo) << what;
+            } else if (value.property == "The check number") {
+                EXPECT_EQ("2041", after.check_no.value()) << what;
+            } else if (value.property == "The amount") {
+                EXPECT_EQ(Money("-1250.00").cents(), after.amount.cents()) << what;
+            } else if (value.property == "Cleared") {
+                EXPECT_EQ(types::ClearedStatus::Cleared, after.cleared) << what;
+            } else if (value.property == "The identifier") {
+                const std::string* id = ledger::id_from(after, types::ImportSource::Ofx);
+                ASSERT_NE(nullptr, id) << what;
+                EXPECT_EQ("20240103002", *id) << what;
+            } else if (value.property == "The note") {
+                EXPECT_FALSE(after.import_notes.empty()) << what;
+            } else {
+                FAIL() << "there is no property called " << value.property;
+            }
+        }
     }
 
-    void examples_businessrule_what_the_note_on_a_duplicate_says(const std::vector<DuplicateNoteRuleString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_what_the_note_on_a_duplicate_says";
+    // Each row is a book of one transaction and a file of one row, arranged so
+    // that what the row describes is what is seen. Several notes can be true
+    // of one duplicate, so what is checked is that the named one is among
+    // them -- except for None, which is the claim that there are none at all.
+    void examples_businessrule_what_the_note_on_a_duplicate_says(
+            const std::vector<DuplicateNoteRuleString>& values) {
+        for (const auto& value : values) {
+            start_fresh("Assets:Checking", types::AccountType::Checking);
+            ledger::Transaction t;
+            t.id = ledger::new_id();
+            t.ref = types::TransactionRef("T1");
+            t.date = types::Date(2024, 1, 16);
+            t.payee = types::PayeeName("Harris Teeter");
+            t.source_account = chart_.ref_for_path("Assets:Checking");
+            t.destination = chart_.ref_for_path("Expenses:Uncategorized");
+            t.amount = Money("-45.00");
+            t.cleared = types::ClearedStatus::Cleared;
+
+            ofx::Transaction row;
+            row.date_posted = types::Date(2024, 1, 16);
+            row.amount = Money("-45.00");
+            row.fit_id = "F100";
+            row.name = "HARRIS TEETER #231";
+
+            if (value.note == "None") {
+                // The identifier settles it and nothing else is out of place.
+                ledger::stamp(&t, types::ImportSource::Ofx, "F100");
+            } else if (value.note == "DetailsDiffer") {
+                // The identifier settles it and the day does not agree.
+                t.date = types::Date(2024, 1, 13);
+                ledger::stamp(&t, types::ImportSource::Ofx, "F100");
+            } else if (value.note == "CheckNumberSame") {
+                t.date = types::Date(2024, 1, 15);
+                t.check_no = types::CheckNumber("2041");
+                row.check_num = "2041";
+            } else if (value.note == "FitIdAdded") {
+                // The same day and amount, and no identifier until now.
+            } else if (value.note == "PayeeUnmatched") {
+                t.payee = types::PayeeName("Costco");
+            } else if (value.note == "Uncleared") {
+                t.cleared = types::ClearedStatus::Uncleared;
+            } else {
+                FAIL() << "there is no note called " << value.note;
+                continue;
+            }
+
+            transactions_ = {t};
+            ofx::Statement statement;
+            statement.transactions.push_back(row);
+            import(statement);
+
+            ASSERT_EQ(1u, decided_.decided.size()) << value.whatwasseen;
+            const ofx::Decided& one = decided_.decided.front();
+            EXPECT_EQ(ofx::Disposition::Duplicate, one.disposition)
+                << value.whatwasseen << " -- every row here is a duplicate";
+            std::string written;
+            for (ofx::DuplicateNote note : one.notes) written += ofx::to_string(note) + " ";
+            if (value.note == "None") {
+                EXPECT_TRUE(one.notes.empty())
+                    << value.whatwasseen << " -- notes written: " << written;
+                continue;
+            }
+            bool found = false;
+            for (ofx::DuplicateNote note : one.notes)
+                if (ofx::to_string(note) == value.note) found = true;
+            EXPECT_TRUE(found) << value.whatwasseen << " -- notes written: " << written;
+        }
     }
 
-    void examples_businessrule_two_payees_are_compared_after_the_rules_and_then_loosely(const std::vector<PayeeComparisonString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_two_payees_are_compared_after_the_rules_and_then_loosely";
+    // No rules, because every row here is about what is left when no rule
+    // applies. That a rule is consulted first is the business of the payee
+    // specification, and of the scenarios that import with rules in force.
+    void examples_businessrule_two_payees_are_compared_after_the_rules_and_then_loosely(
+            const std::vector<PayeeComparisonString>& values) {
+        for (const auto& value : values)
+            EXPECT_EQ(value.agree == "Yes",
+                      ofx::detail::payees_agree(value.inthebook, value.inthefile, {}))
+                << "\"" << value.inthebook << "\" against \"" << value.inthefile
+                << "\" -- " << value.why;
     }
 
 };

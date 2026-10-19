@@ -308,6 +308,9 @@ MainWindow::MainWindow() {
         {"", "Date", "Payee", "Account", "Category", "Amount", "Import says"});
     reviewTable_->verticalHeader()->setVisible(false);
     reviewTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    reviewTable_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(reviewTable_, &QTableWidget::customContextMenuRequested, this,
+            &MainWindow::reviewMenu);
     reviewTable_->setMinimumHeight(1);
     reviewTable_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
     reviewTable_->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
@@ -1821,6 +1824,68 @@ void MainWindow::registerMenu(int tabPosition, const QPoint& at) {
                     [this]() { addPayeeRuleFrom(1); });
     }
     menu.exec(p.reg->viewport()->mapToGlobal(at));
+}
+
+// The menu on a line of the import review. One item, which reads as the
+// disposition does and is grey on a line that claims nothing. See the
+// show-the-duplicate section of UserInterface.spectable.
+void MainWindow::reviewMenu(const QPoint& at) {
+    if (!workspace_ || !workspace_->review_showing()) return;
+    const QModelIndex index = reviewTable_->indexAt(at);
+    if (!index.isValid()) return;
+    workspace_->select_review_line(index.row() + 1);
+
+    QMenu menu(this);
+    for (const ui::MenuEntry& entry : workspace_->review_menu_items()) {
+        QAction* action = menu.addAction(QString::fromStdString(entry.item));
+        action->setEnabled(entry.enabled);
+        connect(action, &QAction::triggered, this, [this]() { showDuplicate(); });
+    }
+    menu.exec(reviewTable_->viewport()->mapToGlobal(at));
+}
+
+// What the import decided the line already was, read off the book. A look, not
+// a decision: the tick in the review is where the decision is made, so this
+// changes nothing and only has to be closed.
+void MainWindow::showDuplicate() {
+    if (!workspace_) return;
+    const ui::DuplicateLook look = workspace_->show_duplicate();
+    if (!look.shown) return;
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Transaction already in the book"));
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->addWidget(new QLabel(QString::fromStdString(look.heading)));
+
+    auto* table = new QTableWidget(static_cast<int>(look.rows.size()), 7);
+    table->setHorizontalHeaderLabels({tr("Date"), tr("Payee"), tr("Account"),
+                                      tr("Category"), tr("Amount"), tr("Check"),
+                                      tr("Cleared")});
+    table->verticalHeader()->setVisible(false);
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setFont(appFont_);
+    for (int r = 0; r < static_cast<int>(look.rows.size()); ++r) {
+        const ui::DuplicateRow& row = look.rows[static_cast<std::size_t>(r)];
+        table->setItem(r, 0, new QTableWidgetItem(QString::fromStdString(row.date.iso())));
+        table->setItem(r, 1, new QTableWidgetItem(QString::fromStdString(row.payee)));
+        table->setItem(r, 2, new QTableWidgetItem(QString::fromStdString(row.account)));
+        table->setItem(r, 3, new QTableWidgetItem(QString::fromStdString(row.category)));
+        setAmount(table, r, 4, row.amount);
+        table->setItem(r, 5, new QTableWidgetItem(QString::fromStdString(row.check_no)));
+        table->setItem(r, 6, new QTableWidgetItem(
+                                 QString::fromStdString(types::to_string(row.cleared))));
+    }
+    table->resizeColumnsToContents();
+    table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    layout->addWidget(table);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    dialog.resize(640, 240);
+    dialog.exec();
+    workspace_->close_duplicate_look();
 }
 
 void MainWindow::recategorise(int paneOneBased) {

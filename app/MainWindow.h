@@ -150,6 +150,11 @@ private:
     // The menu on a selection of register lines, and what its items do. The
     // selection itself lives in the workspace, which has no Qt in it.
     void registerMenu(int tabPosition, const QPoint& at);
+    // The menu on a line of the import review, which offers to show what the
+    // import decided the line already was. See the show-the-duplicate section
+    // of UserInterface.spectable.
+    void reviewMenu(const QPoint& at);
+    void showDuplicate();
     // The menu on a line of the tree on the left. A group heading offers only
     // a new account, a heading being nothing in the book.
     void treeMenu(const QPoint& at);

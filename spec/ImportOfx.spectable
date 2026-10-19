@@ -414,17 +414,16 @@ Then account numbering is : AccountNumbering
 # Deciding what to do with each transaction
 # ---------------------------------------------------------------------------
 
-$TBD
 DataType ImportDisposition
 Description What the import decided about one downloaded transaction.
-Details There were four of these once, and one of them was the mistake. A
+Details There were five of these once, and one of them was the mistake. A
 # Duplicate did nothing at all and a Matched stamped and cleared the
 # transaction it had found, which made them two answers to one
 # question -- is this transaction already here -- distinguished by how
 # the program had come to know it. Nobody reading an import wants that
 # distinction. What they want to know is that the row is already in
 # the book, and then, separately, whether anything about it did not
-# fit. So there are three dispositions and a note.
+# fit. So there are four dispositions and a note.
 Examples: EnumerationValues
 | Value     | Notes                                                           |
 | New       | Not seen before; a transaction is created                       |
@@ -432,7 +431,6 @@ Examples: EnumerationValues
 | Possible  | The same date and amount is there, but the counts disagree; asks |
 | Completed | Created, and it filled in the other half of a payment already here |
 
-$TBD
 DataType DuplicateNote
 Description What did not fit about a duplicate. Written on the transaction in
 # the book, so it is still there next week when somebody wonders why
@@ -478,7 +476,6 @@ Attributes IdentifierScope
 | TestOneApplies | String |         |
 | Then           | String |         |
 
-$TBD
 BusinessRule How a downloaded transaction is identified
 Description In order. The first test that applies decides.
 Details Test one is what makes a second read of the same file do nothing. It
@@ -542,7 +539,6 @@ Attributes DispositionRule
 | Condition   | String            |         |
 | Disposition | ImportDisposition | New     |
 
-$TBD
 BusinessRule What a duplicate does to the transaction already there
 Description Nothing is created. The transaction already in the book is the
 # transaction, and the import brings it up to date rather than
@@ -583,7 +579,6 @@ Attributes WhatADuplicateDoes
 | Property     | String |         |
 | WhatHappens  | String |         |
 
-$TBD
 BusinessRule What the note on a duplicate says
 Description A duplicate is not always a plain one, and the note is where
 # whatever did not fit is said. It is written on the transaction in
@@ -621,7 +616,6 @@ Description A note an import left on a transaction. It is a row rather than a
 | Ref       | TransactionRef |         |
 | Note      | DuplicateNote  | None    |
 
-$TBD
 BusinessRule Two payees are compared after the rules and then loosely
 Description The book says Harris Teeter and the download says HARRIS TEETER
 # #231. They are the same shop, and a comparison that says otherwise
@@ -734,7 +728,6 @@ Description A transaction that also carries the identifier it was imported with.
 | CheckNo       | CheckNumber    | none       |
 | FitId         | FitId          | none       |
 
-$TBD
 Scenario A check entered by hand is cleared when the bank reports it
 Description The check was written on the second and reached the bank on the
 # third. One day, so the check number is trusted and the two are the
@@ -827,7 +820,6 @@ Then import summary is : ImportSummary Vertical
 | Duplicate | 0 |
 | Possible  | 0 |
 
-$TBD
 Scenario A transaction already imported, with no identifier, is a duplicate on its day
 Description The case a history brought over from Quicken makes ordinary. T1 came
 # in with that history: it is cleared, because the bank had already
@@ -971,7 +963,6 @@ Attributes ClearedOnArrival
 # What a check number is worth, and for how long
 # ---------------------------------------------------------------------------
 
-$TBD
 BusinessRule A check number is trusted for a day and no longer
 Description A check number is the strongest thing in a bank file: it is written
 # on the check itself, so the book and the download are naming the
@@ -1528,7 +1519,6 @@ Then balances are : AccountBalance CompareOnly
 # this book keeps, and that is decided by the payee, not by the type.
 
 
-$TBD
 BusinessRule The date windows and why they differ
 Description Written down together because having four windows in one program
 # invites someone to unify them, and unifying them breaks one case or

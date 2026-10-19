@@ -158,6 +158,7 @@ public:
         const ui::Workspace::ActiveRegister active = workspace().active_register();
         ASSERT_FALSE(active.refused) << active.reason;
         rows_from(values, &last_review_);
+        claim_onto(&last_review_);
         last_into_ = active.account;
         workspace().review_import(last_review_, last_into_);
     }
@@ -1265,6 +1266,126 @@ public:
                 << "where " << blank(value.proposed) << " came from";
         }
     }
+
+    // --------------------------------------- showing what an import claimed
+
+    // The claim is stated as a transaction reference, because a reference is
+    // what a scenario can write. The review carries ids, and the ids are made
+    // when the Given builds the book, so the references are kept here and
+    // turned into ids when the review opens.
+    void given_import_claims_are(const std::vector<ImportReviewClaimString>& values) {
+        claims_.clear();
+        for (const auto& value : values)
+            claims_.push_back(std::make_pair(std::stoi(value.line), value.ref));
+    }
+
+    void claim_onto(std::vector<ui::ReviewRow>* rows) {
+        for (const auto& claim : claims_) {
+            const ledger::Transaction* found = nullptr;
+            for (const ledger::Transaction& t : transactions_)
+                if (t.ref.value() == claim.second) found = &t;
+            ASSERT_NE(nullptr, found) << "no transaction " << claim.second;
+            for (ui::ReviewRow& r : *rows)
+                if (r.line == claim.first) r.claimed_ids.push_back(found->id.value());
+        }
+    }
+
+    void when_import_review_line_selected(const std::vector<ImportReviewSelectString>& values) {
+        for (const auto& value : values)
+            workspace().select_review_line(std::stoi(value.line));
+    }
+
+    void when_duplicate_transaction_asked() { look_ = workspace().show_duplicate(); }
+
+    void when_duplicate_transaction_dialog_closed() {
+        workspace().close_duplicate_look();
+        look_ = workspace().duplicate_look();
+    }
+
+    void then_duplicate_transaction_dialog_is(
+            const std::vector<DuplicateTransactionDialogString>& values) {
+        ASSERT_EQ(1u, values.size());
+        const auto& value = values.front();
+        EXPECT_EQ(parse_bool_cell(value.shown), look_.shown) << "dialog shown";
+        EXPECT_EQ(std::stoi(value.count), static_cast<int>(look_.rows.size()))
+            << "transactions shown";
+        EXPECT_EQ(blank(value.heading), look_.heading) << "heading";
+    }
+
+    void then_duplicate_transactions_shown_are(
+            const std::vector<DuplicateTransactionRowString>& values) {
+        ASSERT_EQ(values.size(), look_.rows.size()) << "number of transactions shown";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const auto& value = values[i];
+            const ui::DuplicateRow& got = look_.rows[i];
+            EXPECT_EQ(value.ref, got.ref) << "transaction " << i + 1;
+            EXPECT_EQ(value.date, got.date.iso()) << got.ref << " date";
+            EXPECT_EQ(blank(value.payee), got.payee) << got.ref << " payee";
+            EXPECT_EQ(blank(value.account), got.account) << got.ref << " account";
+            EXPECT_EQ(blank(value.category), got.category) << got.ref << " category";
+            EXPECT_EQ(Money(value.amount).cents(), got.amount.cents()) << got.ref << " amount";
+            EXPECT_EQ(blank(value.checkno), got.check_no) << got.ref << " check number";
+            EXPECT_EQ(value.cleared, types::to_string(got.cleared)) << got.ref << " cleared";
+        }
+    }
+
+    void examples_businessrule_what_the_menu_on_an_import_row_offers(
+            const std::vector<DuplicateMenuRuleString>& values) {
+        for (const auto& value : values) {
+            a_review_of_one_row(value.disposition);
+            const std::vector<ui::MenuEntry> got = workspace().review_menu_items();
+            ASSERT_EQ(1u, got.size()) << value.disposition << " menu";
+            EXPECT_EQ(blank(value.item), got.front().item) << value.disposition;
+            EXPECT_EQ(parse_bool_cell(value.enabled), got.front().enabled)
+                << got.front().item << " enabled";
+        }
+    }
+
+    // A review of one row of the given disposition, over a book holding one
+    // transaction it can claim. A New row claims nothing, which is what its own
+    // row of the rule is about.
+    void a_review_of_one_row(const std::string& disposition) {
+        chart_ = chart::Chart();
+        const auto put = [&](const std::string& path, types::AccountType type) {
+            chart::Account a;
+            a.path = types::AccountPath(path);
+            a.type = type;
+            chart_.put(a);
+        };
+        put("Assets:Checking", types::AccountType::Checking);
+        put("Expenses:Groceries", types::AccountType::Expense);
+
+        transactions_.clear();
+        splits_.clear();
+        ledger::Transaction t;
+        t.id = ledger::new_id();
+        t.ref = types::TransactionRef("T1");
+        t.date = types::Date(2026, 1, 15);
+        t.payee = types::PayeeName("Harris Teeter");
+        t.source_account = chart_.ref_for_path("Assets:Checking");
+        t.destination = chart_.ref_for_path("Expenses:Groceries");
+        t.amount = Money("-45.00");
+        transactions_.push_back(t);
+        rebuild_book();
+        workspace_.reset();
+        workspace().select("Assets:Checking");
+
+        ui::ReviewRow row;
+        row.line = 1;
+        row.date = t.date;
+        row.payee = "HARRIS TEETER";
+        row.account = "Assets:Checking";
+        row.category = "Expenses:Groceries";
+        row.amount = t.amount;
+        row.disposition = disposition;
+        row.accepted = disposition == "New";
+        if (disposition != "New") row.claimed_ids.push_back(t.id.value());
+        workspace().review_import({row}, "Assets:Checking");
+        workspace().select_review_line(1);
+    }
+
+    std::vector<std::pair<int, std::string>> claims_;
+    ui::DuplicateLook look_;
 
     void examples_businessrule_when_the_name_of_a_file_fits_an_account(
             const std::vector<FileNameMatchString>& values) {

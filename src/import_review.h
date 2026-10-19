@@ -33,10 +33,11 @@ struct Prepared {
     std::vector<ui::ReviewRow> rows;
     // The account the import is for, which the file names rather than the reader.
     std::string into;
-    // How many rows the import decided it had already seen, and how many it
-    // matched against something entered by hand. Neither is added again.
+    // How many rows the import decided it had already seen, and how many
+    // filled in the other half of a payment already here. A duplicate adds
+    // nothing; a completion adds the side the file described.
     int duplicates = 0;
-    int matched = 0;
+    int completed = 0;
 };
 
 namespace detail {
@@ -81,8 +82,11 @@ inline Prepared from_ofx(const std::string& text, const std::string& account,
 
     int line = 0;
     for (const ofx::Statement& statement : parsed.statements) {
+        // Asked with the rules in force, because comparing two payees is the
+        // first thing the rules are for: only a rule can know that AMZN Mktp
+        // US*2X4 and Amazon are one shop.
         const ofx::Imported decided =
-            ofx::decide(statement, account, existing, *accounts);
+            ofx::decide(statement, account, existing, *accounts, ofx::kCheckWindow, rules);
         // Asked with the rules in force, so the review shows the payee and the
         // category the user will actually get.
         const std::vector<ledger::Transaction> prepared = ofx::transactions_for(
@@ -102,10 +106,11 @@ inline Prepared from_ofx(const std::string& text, const std::string& account,
             row.identifier = one.downloaded.fit_id;
             row.source = types::ImportSource::Ofx;
             row.disposition = ofx::to_string(one.disposition);
+            row.claimed_ids = one.claim_ids;
             if (one.disposition == ofx::Disposition::New && next < prepared.size())
                 detail::add_row(*accounts, &row, prepared[next++]);
             if (one.disposition == ofx::Disposition::Duplicate) ++out.duplicates;
-            if (one.disposition == ofx::Disposition::Matched) ++out.matched;
+            if (one.disposition == ofx::Disposition::Completed) ++out.completed;
             out.rows.push_back(row);
         }
         for (const ofx::Note& note : decided.notes)
@@ -161,7 +166,10 @@ inline Prepared from_csv(const std::string& text, const std::string& account,
         out.notes.push_back("line " + std::to_string(bad.line) +
                             " was not imported: " + bad.reason);
 
-    const csv::Imported decided = csv::decide(*accounts, rows.rows, account, existing);
+    // Asked with the rules in force, for the same reason the OFX import is:
+    // only a rule can know that two spellings are one payee.
+    const csv::Imported decided =
+        csv::decide(*accounts, rows.rows, account, existing, rules);
     const std::vector<ledger::Transaction> prepared = csv::transactions_for(
         decided, account, existing.size(), accounts, rules);
 
@@ -183,10 +191,11 @@ inline Prepared from_csv(const std::string& text, const std::string& account,
         row.source = types::ImportSource::Csv;
         row.cleared = types::ClearedStatus::Uncleared;
         row.disposition = ofx::to_string(one.disposition);
+        row.claimed_ids = one.claim_ids;
         if (one.disposition == ofx::Disposition::New && next < prepared.size())
             detail::add_row(*accounts, &row, prepared[next++]);
         if (one.disposition == ofx::Disposition::Duplicate) ++out.duplicates;
-        if (one.disposition == ofx::Disposition::Matched) ++out.matched;
+        if (one.disposition == ofx::Disposition::Completed) ++out.completed;
         out.rows.push_back(row);
     }
     return out;

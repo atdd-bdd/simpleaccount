@@ -18,21 +18,52 @@
 // ImportCsv.spectable.
 namespace ofx {
 
-// Completes is the fifth: this row is the other half of a payment already in the
-// book, waiting with its account unassigned. Nothing is created and nothing is
-// cleared on this row's behalf -- the transaction already there gains an account
-// and this file's identifier. See the payment rule in ImportOfx.spectable.
-enum class Disposition { New, Duplicate, Matched, Possible, Completes };
+// Four, where there were five. Matched and Duplicate were two answers to one
+// question -- this transaction is already here -- and the only thing that told
+// them apart was whether the one already here was cleared, which says where it
+// came from and nothing about whether it is the same transaction. So both are
+// Duplicate now, and what was typed is said in a note.
+//
+// Completed is the one that creates something: this row is a payment whose
+// other half is already in the book, waiting with its own side unassigned. The
+// transaction already there gains an account, and this row is written as the
+// side the file described. See the payment rule in ImportOfx.spectable.
+enum class Disposition { New, Duplicate, Possible, Completed };
 
 inline std::string to_string(Disposition d) {
     switch (d) {
         case Disposition::New:       return "New";
         case Disposition::Duplicate: return "Duplicate";
-        case Disposition::Matched:   return "Matched";
         case Disposition::Possible:  return "Possible";
-        case Disposition::Completes: return "Completes";
+        case Disposition::Completed: return "Completed";
     }
     return "New";
+}
+
+// What was seen about a duplicate that did not fit in its answer. Kept on the
+// transaction rather than against the import, because the question it answers
+// -- why is this cleared, why is it spelt like that -- is asked long after the
+// import has been put away. Several can be true of one duplicate, and each is
+// kept once. See what the note on a duplicate says in ImportOfx.spectable.
+enum class DuplicateNote {
+    None,
+    DetailsDiffer,
+    CheckNumberSame,
+    FitIdAdded,
+    PayeeUnmatched,
+    Uncleared,
+};
+
+inline std::string to_string(DuplicateNote n) {
+    switch (n) {
+        case DuplicateNote::None:            return "None";
+        case DuplicateNote::DetailsDiffer:   return "DetailsDiffer";
+        case DuplicateNote::CheckNumberSame: return "CheckNumberSame";
+        case DuplicateNote::FitIdAdded:      return "FitIdAdded";
+        case DuplicateNote::PayeeUnmatched:  return "PayeeUnmatched";
+        case DuplicateNote::Uncleared:       return "Uncleared";
+    }
+    return "None";
 }
 
 struct Decided {
@@ -44,16 +75,25 @@ struct Decided {
     // The same transaction's label, for saying which one in a message. Never
     // used to find it again.
     std::string claimed_ref;
+    // Every transaction already in the book that this row was decided against:
+    // one for a duplicate or a completion, and for a possible all of the ones
+    // it could be, because nothing says which. The review carries these so
+    // that the claim can be looked at before it is believed. See the
+    // show-the-duplicate section of UserInterface.spectable.
+    std::vector<std::string> claim_ids;
     // Whether this row's other side should wait in Unassigned rather than go to
     // a category: true only where something in the book could be the other half.
     bool other_side_waits = false;
+    // What was seen about this duplicate, in the order a reader wants it: what
+    // settled it first, then what the import changed, then what it added.
+    std::vector<DuplicateNote> notes;
 };
 
 struct Summary {
     int New = 0;
     int Duplicate = 0;
-    int Matched = 0;
     int Possible = 0;
+    int Completed = 0;
 };
 
 // Something the import saw and could not decide. Kept against the import and
@@ -93,12 +133,74 @@ inline std::string fold(const std::string& s) {
     return out;
 }
 
-// The date, amount and payee taken together, folded. It stands in for the FITID
-// that a file without identifiers does not have; see the Fingerprint term in
-// ImportCsv.spectable.
-inline std::string fingerprint(const types::Date& on, const Money& amount,
-                               const std::string& payee) {
-    return on.iso() + "|" + std::to_string(amount.cents()) + "|" + fold(payee);
+// The date and the amount, which is the key everything here is matched on. The
+// payee is deliberately not in it: a history brought over from Quicken says
+// Harris Teeter where the download says HARRIS TEETER #231, and a key holding
+// both would match neither. What the payee decides is the note. See the
+// Fingerprint term in ImportCsv.spectable.
+inline std::string fingerprint(const types::Date& on, const Money& amount) {
+    return on.iso() + "|" + std::to_string(amount.cents());
+}
+
+// A payee reduced to what two files might agree on: upper case, punctuation
+// gone, runs of blanks collapsed, and a trailing run of all-digit words taken
+// off. The last of those is the store number -- HARRIS TEETER #231 is the
+// Harris Teeter on Franklin Street, not a different shop, and JOE COFFEE 02 is
+// the second till.
+//
+// It stops there on purpose. SHELL OIL does not reduce to SHELL and AMZN Mktp
+// US*2X4 does not reduce to Amazon, and no amount of trimming would get there
+// -- only a payee rule knows those. A resemblance score would reach them and
+// reach a dozen wrong things with them, and a number saying two names are
+// eighty per cent alike is not something a person can check or a specification
+// can state. See two payees are compared after the rules and then loosely.
+inline std::string loose_payee(const std::string& s) {
+    std::string plain;
+    for (char c : s) {
+        const unsigned char u = static_cast<unsigned char>(c);
+        if (std::isalnum(u) != 0) {
+            plain.push_back(static_cast<char>(std::toupper(u)));
+        } else {
+            plain.push_back(' ');
+        }
+    }
+    std::vector<std::string> words;
+    std::string word;
+    for (char c : plain) {
+        if (c == ' ') {
+            if (!word.empty()) words.push_back(word);
+            word.clear();
+            continue;
+        }
+        word.push_back(c);
+    }
+    if (!word.empty()) words.push_back(word);
+
+    const auto all_digits = [](const std::string& w) {
+        for (char c : w)
+            if (std::isdigit(static_cast<unsigned char>(c)) == 0) return false;
+        return !w.empty();
+    };
+    // Only a trailing run, and never the whole name: a payee called 7 ELEVEN
+    // has a number at the front and a shop called 02 is still a shop.
+    while (words.size() > 1 && all_digits(words.back())) words.pop_back();
+
+    std::string out;
+    for (const std::string& one : words) {
+        if (!out.empty()) out.push_back(' ');
+        out += one;
+    }
+    return out;
+}
+
+// Whether the book and the file are naming the same payee. The rules come
+// first, because they are the only thing that can know AMZN Mktp US*2X4 is
+// Amazon, and a renamed name is what gets compared. Where no rule applies the
+// two are compared loosely.
+inline bool payees_agree(const std::string& in_book, const std::string& in_file,
+                         const std::vector<payees::Rule>& rules) {
+    const payees::Applied named = payees::apply(rules, in_file);
+    return loose_payee(in_book) == loose_payee(named.payee);
 }
 
 // One posting already in the book, in the account being imported into, with
@@ -114,26 +216,31 @@ struct Existing {
     Money amount;
     std::string payee;
     std::string check_no;
-    // What this posting is called by an OFX file, if anything. An identifier
-    // from any other kind of file is not consulted here: it would not match a
-    // FITID, and treating it as one would make every download look new.
-    std::string ofx_id;
+    // What this posting is called by the kind of file being read, if
+    // anything. An identifier from any other kind of file is not consulted: a
+    // CSV reference would not match a FITID, and treating it as one would make
+    // every download look new. See an identifier is only an identifier to the
+    // file that gave it, in ImportOfx.spectable.
+    std::string source_id;
     types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
-    // Set once something has claimed it. A transaction already in the book may
-    // be claimed once: the first matching row takes it and the next finds
-    // nothing left. Without this the test answers the same way however many
-    // there are, and the second coffee of the day is silently lost.
+    // Set once a row has settled against it. A transaction already in the book
+    // settles once: two identical rows against two identical transactions are
+    // two duplicates, not one transaction recognised twice. Without this the
+    // test answers the same way however many there are, and the second coffee
+    // of the day is silently lost.
     bool claimed = false;
 };
 
 }  // namespace detail
 
-// What the account already holds, in the form the decision needs. The FITID is
-// carried on the posting in the statement's own account.
+// What the account already holds, in the form the decision needs. The
+// identifier read is the one for the kind of file being imported: see the
+// source_id field.
 inline std::vector<detail::Existing> existing_in(
         const chart::Chart& accounts,
         const std::vector<ledger::Transaction>& transactions,
-        const std::string& account) {
+        const std::string& account,
+        types::ImportSource source = types::ImportSource::Ofx) {
     std::vector<detail::Existing> out;
     const chart::Ref account_ref = accounts.ref_for_path(account);
     for (const ledger::Transaction& t : transactions) {
@@ -145,8 +252,8 @@ inline std::vector<detail::Existing> existing_in(
         one.amount = t.amount;
         one.payee = t.payee.value();
         one.check_no = t.check_no.value();
-        if (const std::string* id = ledger::id_from(t, types::ImportSource::Ofx))
-            one.ofx_id = *id;
+        if (const std::string* id = ledger::id_from(t, source))
+            one.source_id = *id;
         one.cleared = t.cleared;
         out.push_back(one);
     }
@@ -258,134 +365,257 @@ inline Waiting waiting_for(const chart::Chart& accounts,
     return out;
 }
 
+// One row of any kind of file, reduced to what the matching rules ask about.
+// Written down once so the OFX and CSV importers decide the same way: the only
+// difference between them is that a CSV usually has nothing for source_id, and
+// a test that has nothing to work on simply does not apply.
+struct Candidate {
+    types::Date date{2024, 1, 1};
+    Money amount;
+    std::string payee;
+    std::string check_no;
+    std::string source_id;
+};
+
+// What one row came to, before anything is done about it.
+struct Judgement {
+    Disposition disposition = Disposition::New;
+    std::string claimed_id;
+    std::string claimed_ref;
+    // Every transaction the row was decided against, which is more than one
+    // only for a possible duplicate.
+    std::vector<std::string> claim_ids;
+    std::vector<DuplicateNote> notes;
+};
+
+// Tests one to four of the disposition rule, over a whole file at once --
+// which it has to be, because tests three and four are a count and a count is
+// not a property of one row. A row the tests do not settle comes back New, and
+// what the caller does with it then is its own business: the OFX importer asks
+// whether it completes a payment already here, and the CSV importer does not.
+//
+// `already` is modified: a transaction that has been settled against is marked
+// so the next row cannot settle against it too.
+//
+// See how a downloaded transaction is identified, and how many rows match how
+// many transactions in ImportCsv.spectable, which is the same rule read from
+// the side of a file without identifiers.
+inline std::vector<Judgement> judge(std::vector<detail::Existing>* already,
+                                    const std::vector<Candidate>& rows,
+                                    bool is_checking,
+                                    const std::vector<payees::Rule>& rules,
+                                    long long check_window,
+                                    std::vector<Note>* notes) {
+    std::vector<Judgement> out(rows.size());
+    std::vector<bool> settled(rows.size(), false);
+
+    const auto note_once = [](Judgement* j, DuplicateNote n) {
+        for (DuplicateNote one : j->notes)
+            if (one == n) return;
+        j->notes.push_back(n);
+    };
+    // What any duplicate may have to say, after whatever settled it: that the
+    // import has cleared something a person typed, and that it has written an
+    // identifier where there was none. Both are things the import changed, so
+    // both are worth a note; neither changes the answer.
+    const auto and_what_changed = [&](Judgement* j, const detail::Existing& e,
+                                      const Candidate& row) {
+        if (e.cleared == types::ClearedStatus::Uncleared)
+            note_once(j, DuplicateNote::Uncleared);
+        if (!row.source_id.empty() && e.source_id.empty())
+            note_once(j, DuplicateNote::FitIdAdded);
+    };
+
+    for (std::size_t i = 0; i < rows.size(); ++i) {
+        const Candidate& row = rows[i];
+
+        // 1. A transaction in this account already carries this row's
+        // identifier, from a file of this kind. Unique within the account, so
+        // it needs no counting: a second read of one file does nothing.
+        if (!row.source_id.empty()) {
+            const auto same = std::find_if(already->begin(), already->end(),
+                [&](const detail::Existing& e) {
+                    return !e.source_id.empty() && e.source_id == row.source_id;
+                });
+            if (same != already->end()) {
+                same->claimed = true;
+                out[i].disposition = Disposition::Duplicate;
+                out[i].claimed_id = same->id;
+                out[i].claimed_ref = same->ref;
+                out[i].claim_ids.push_back(same->id);
+                // The identifier is the bank's own word for this transaction,
+                // so it settles the question whatever else disagrees -- and if
+                // something does disagree, that is worth saying.
+                if (same->date != row.date ||
+                    same->amount.cents() != row.amount.cents() ||
+                    !detail::payees_agree(same->payee, row.payee, rules))
+                    note_once(&out[i], DuplicateNote::DetailsDiffer);
+                and_what_changed(&out[i], *same, row);
+                settled[i] = true;
+                continue;
+            }
+        }
+
+        // 2. The same check number, amount and payee, within the book's
+        // check-number window. A check number is written on the check itself,
+        // so the book and the file are naming one piece of paper -- but only
+        // of a checking account, because a card reference is not a check
+        // number, and only for as long as the number means what it says.
+        if (!is_checking || row.check_no.empty()) continue;
+        const auto same_check = [&](const detail::Existing& e) {
+            return !e.claimed && !e.check_no.empty() && e.check_no == row.check_no &&
+                   e.amount.cents() == row.amount.cents() &&
+                   detail::payees_agree(e.payee, row.payee, rules);
+        };
+        const auto found = std::find_if(already->begin(), already->end(),
+            [&](const detail::Existing& e) {
+                return same_check(e) &&
+                       std::abs(types::Date::days_between(e.date, row.date)) <= check_window;
+            });
+        if (found != already->end()) {
+            found->claimed = true;
+            out[i].disposition = Disposition::Duplicate;
+            out[i].claimed_id = found->id;
+            out[i].claimed_ref = found->ref;
+            out[i].claim_ids.push_back(found->id);
+            note_once(&out[i], DuplicateNote::CheckNumberSame);
+            and_what_changed(&out[i], *found, row);
+            settled[i] = true;
+            continue;
+        }
+
+        // The number matched and the day did not. Either the check really took
+        // that long to clear, in which case the book is about to hold two of
+        // it, or the number came round again and creating one is right.
+        // Nothing here can tell those apart, so it does not try.
+        const auto stale = std::find_if(already->begin(), already->end(), same_check);
+        if (stale != already->end() && notes != nullptr)
+            notes->push_back(Note{
+                "CheckNumberStale",
+                "Check " + row.check_no + " is dated " + stale->date.iso() +
+                    " here and " + row.date.iso() + " in the file"});
+    }
+
+    // 3 and 4. One test counted two ways, over the date and the amount, in
+    // this account, across what tests one and two have not already settled.
+    // Where the file has as many as the book does, every one is a duplicate.
+    // Where it does not, every one is a question: nothing says which row goes
+    // with which transaction, and deciding either way doubles a transaction or
+    // loses one.
+    std::vector<std::string> keys;
+    for (std::size_t i = 0; i < rows.size(); ++i) {
+        if (settled[i]) continue;
+        const std::string key = detail::fingerprint(rows[i].date, rows[i].amount);
+        if (std::find(keys.begin(), keys.end(), key) == keys.end()) keys.push_back(key);
+    }
+    for (const std::string& key : keys) {
+        std::vector<std::size_t> group;
+        for (std::size_t i = 0; i < rows.size(); ++i)
+            if (!settled[i] && detail::fingerprint(rows[i].date, rows[i].amount) == key)
+                group.push_back(i);
+        std::vector<detail::Existing*> here;
+        for (detail::Existing& e : *already)
+            if (!e.claimed && detail::fingerprint(e.date, e.amount) == key) here.push_back(&e);
+
+        // Nothing like it is here, so this is not the test that decides.
+        if (here.empty()) continue;
+
+        if (here.size() == group.size()) {
+            for (std::size_t k = 0; k < group.size(); ++k) {
+                detail::Existing& e = *here[k];
+                Judgement& j = out[group[k]];
+                const Candidate& row = rows[group[k]];
+                e.claimed = true;
+                j.disposition = Disposition::Duplicate;
+                j.claimed_id = e.id;
+                j.claimed_ref = e.ref;
+                j.claim_ids.push_back(e.id);
+                // The payee is not part of the key, so it cannot refuse the
+                // duplicate -- the same date and the same amount in one
+                // account is enough to say this is the same transaction. What
+                // it decides is whether the book's name for it is worth a
+                // second look.
+                if (!detail::payees_agree(e.payee, row.payee, rules))
+                    note_once(&j, DuplicateNote::PayeeUnmatched);
+                and_what_changed(&j, e, row);
+                settled[group[k]] = true;
+            }
+            continue;
+        }
+
+        // The counts disagree. Every row of the group is offered, including
+        // the one a pairing would have settled: it is no better evidenced than
+        // the one the pairing would have left over. Nothing is claimed, since
+        // nothing has been settled -- what each row points at is the first
+        // transaction like it, so a person can be shown what the question is
+        // about.
+        for (std::size_t i : group) {
+            out[i].disposition = Disposition::Possible;
+            out[i].claimed_id = here.front()->id;
+            out[i].claimed_ref = here.front()->ref;
+            // All of them, not just the first: the question the row asks is
+            // which of these it is, and it cannot be answered by somebody
+            // shown only one.
+            for (const detail::Existing* e : here) out[i].claim_ids.push_back(e->id);
+            settled[i] = true;
+        }
+    }
+    return out;
+}
+
 // The chart is needed to tell a payment from a payment to nobody: whether a
 // payee names an account this book keeps is the question that decides whether
 // the other side is an account or a category.
 inline Imported decide(const Statement& statement, const std::string& account,
                        const std::vector<ledger::Transaction>& transactions,
                        const chart::Chart& accounts,
-                       long long check_window = kCheckWindow) {
+                       long long check_window = kCheckWindow,
+                       const std::vector<payees::Rule>& rules = {}) {
     Imported out;
-    std::vector<detail::Existing> already = existing_in(accounts, transactions, account);
+    std::vector<detail::Existing> already =
+        existing_in(accounts, transactions, account, types::ImportSource::Ofx);
     // What a payment to the account being imported into is called elsewhere, so
     // a card's own statement can recognise a payment received as a payment.
     std::string statement_payee;
-    if (const chart::Account* mine = accounts.find(account))
+    // Check numbers are asked about only here. Nothing else in a book is paid
+    // by check, and a card reference in the CheckNum field is not a number
+    // written on anything.
+    bool is_checking = false;
+    if (const chart::Account* mine = accounts.find(account)) {
         statement_payee = mine->payment_payee;
+        is_checking = mine->type == types::AccountType::Checking;
+    }
 
+    std::vector<Candidate> rows;
     for (const Transaction& downloaded : statement.transactions) {
+        Candidate row;
+        row.date = downloaded.date_posted;
+        row.amount = downloaded.amount;
+        row.payee = downloaded.name;
+        row.check_no = downloaded.check_num;
+        row.source_id = downloaded.fit_id;
+        rows.push_back(row);
+    }
+    const std::vector<Judgement> judged =
+        judge(&already, rows, is_checking, rules, check_window, &out.notes);
+
+    for (std::size_t i = 0; i < statement.transactions.size(); ++i) {
+        const Transaction& downloaded = statement.transactions[i];
         Decided decided;
         decided.downloaded = downloaded;
+        decided.disposition = judged[i].disposition;
+        decided.claimed_id = judged[i].claimed_id;
+        decided.claimed_ref = judged[i].claimed_ref;
+        decided.claim_ids = judged[i].claim_ids;
+        decided.notes = judged[i].notes;
 
-        // 1. The same FITID in this account. Unique within the account, so it
-        // needs no claiming: a second import of one file does nothing.
-        if (!downloaded.fit_id.empty()) {
-            const auto same = std::find_if(already.begin(), already.end(),
-                [&](const detail::Existing& e) { return e.ofx_id == downloaded.fit_id; });
-            if (same != already.end()) {
-                decided.disposition = Disposition::Duplicate;
-                decided.claimed_id = same->id;
-                decided.claimed_ref = same->ref;
-                ++out.summary.Duplicate;
-                out.decided.push_back(decided);
-                continue;
-            }
-        }
-
-        const auto unclaimed = [&](const detail::Existing& e) { return !e.claimed; };
-
-        // 2. An uncleared posting with the same amount and check number, dated
-        // within a day: the check written by hand, now reached the bank.
-        auto found = already.end();
-        if (!downloaded.check_num.empty()) {
-            const auto same_number = [&](const detail::Existing& e) {
-                return unclaimed(e) && e.cleared == types::ClearedStatus::Uncleared &&
-                       e.amount.cents() == downloaded.amount.cents() &&
-                       !e.check_no.empty() && e.check_no == downloaded.check_num;
-            };
-            const auto within_a_day = [&](const detail::Existing& e) {
-                return std::abs(types::Date::days_between(e.date, downloaded.date_posted))
-                       <= check_window;
-            };
-            found = std::find_if(already.begin(), already.end(),
-                [&](const detail::Existing& e) { return same_number(e) && within_a_day(e); });
-
-            // The number matched and the day did not. Either the check really
-            // took that long to clear, in which case the book is about to hold
-            // two of it, or the number came round again and creating one is
-            // right. Nothing here can tell those apart, so it does not try.
-            if (found == already.end()) {
-                const auto stale = std::find_if(already.begin(), already.end(), same_number);
-                if (stale != already.end())
-                    out.notes.push_back(Note{
-                        "CheckNumberStale",
-                        "Check " + downloaded.check_num + " is dated " + stale->date.iso() +
-                            " here and " + downloaded.date_posted.iso() + " in the file"});
-            }
-        }
-        if (found != already.end()) {
-            found->claimed = true;
-            decided.disposition = Disposition::Matched;
-            decided.claimed_id = found->id;
-            decided.claimed_ref = found->ref;
-            ++out.summary.Matched;
+        if (decided.disposition == Disposition::Duplicate) {
+            ++out.summary.Duplicate;
             out.decided.push_back(decided);
             continue;
         }
-
-        // Tests three and four are both the same amount on the same day, and
-        // they differ only in what is already here. Cleared status is what
-        // tells them apart: everything an import writes is cleared, so an
-        // uncleared posting is one somebody typed.
-        const auto same_day_and_amount = [&](const detail::Existing& e) {
-            return unclaimed(e) && e.amount.cents() == downloaded.amount.cents() &&
-                   e.date == downloaded.date_posted;
-        };
-
-        // 3. An uncleared posting: typed by hand, with no number to settle it.
-        // Its date is the day the person paid and this one is the day the bank
-        // posted, and the two agreeing is not proof that they are one payment
-        // -- two genuine visits to one shop on one day for one amount are not
-        // rare. An amount and a date are not enough to decide on, so this is
-        // the one case that asks.
-        found = std::find_if(already.begin(), already.end(),
-            [&](const detail::Existing& e) {
-                return same_day_and_amount(e) &&
-                       e.cleared == types::ClearedStatus::Uncleared;
-            });
-        if (found != already.end()) {
-            found->claimed = true;
-            decided.disposition = Disposition::Possible;
-            decided.claimed_id = found->id;
-            decided.claimed_ref = found->ref;
+        if (decided.disposition == Disposition::Possible) {
             ++out.summary.Possible;
-            out.decided.push_back(decided);
-            continue;
-        }
-
-        // 4. A cleared posting carrying no identifier: this transaction
-        // arriving a second time. Both dates are the bank's own posting date
-        // -- one recorded when the transaction was first brought in, through a
-        // Qif history or an earlier download, and one read out of the file
-        // today -- so they agree because they came from the same place, and
-        // that is the whole of the evidence needed. Matched outright: asking
-        // would be asking a person to confirm what is already known.
-        //
-        // The payee is deliberately not compared. A history and a download
-        // spell one payment's name differently -- "Harris Teeter" against
-        // "HARRIS TEETER #231" -- and comparing them would turn every such
-        // transaction into a second copy of itself.
-        found = std::find_if(already.begin(), already.end(),
-            [&](const detail::Existing& e) {
-                return same_day_and_amount(e) && e.ofx_id.empty() &&
-                       e.cleared == types::ClearedStatus::Cleared;
-            });
-        if (found != already.end()) {
-            found->claimed = true;
-            decided.disposition = Disposition::Matched;
-            decided.claimed_id = found->id;
-            decided.claimed_ref = found->ref;
-            ++out.summary.Matched;
             out.decided.push_back(decided);
             continue;
         }
@@ -405,13 +635,10 @@ inline Imported decide(const Statement& statement, const std::string& account,
         if (could_be_a_payment) {
             const Waiting waiting = waiting_for(accounts, transactions, downloaded, account);
             if (waiting.found) {
-                decided.disposition = Disposition::Completes;
+                decided.disposition = Disposition::Completed;
                 decided.claimed_id = waiting.transaction_id;
-                // Counted as a match: it joined this row to a transaction
-                // already here, which is what Matched means to a reader. The
-                // disposition stays its own thing because the action differs --
-                // a match clears a posting, a completion fills in an account.
-                ++out.summary.Matched;
+                decided.claim_ids.push_back(waiting.transaction_id);
+                ++out.summary.Completed;
                 out.decided.push_back(decided);
                 continue;
             }
@@ -510,7 +737,7 @@ inline Completed apply_completions(const chart::Chart& accounts, const Imported&
     Completed out;
     const chart::Ref account_ref = accounts.ref_for_path(account);
     for (const Decided& one : decided.decided) {
-        if (one.disposition != Disposition::Completes) continue;
+        if (one.disposition != Disposition::Completed) continue;
         for (ledger::Transaction& t : *transactions) {
             if (t.id.value() != one.claimed_id) continue;
             t.destination = account_ref;
@@ -538,25 +765,42 @@ inline Completed apply_completions(const chart::Chart& accounts, const Imported&
     return out;
 }
 
-// A match is not a new transaction: the one entered by hand is the transaction,
-// and what the download adds is the knowledge that the bank has seen it. So the
-// posting in that account is marked cleared and stamped with the identifier.
+// A duplicate creates nothing. The transaction already in the book is the
+// transaction, and the import brings it up to date rather than replacing it:
+// the book's date, payee, category, memo and check number are kept, because a
+// history brought over from Quicken has twenty years of categorising in it and
+// a download knows none of it.
 //
-// The stamp is what makes the difference on a second import. Without it the
-// same row matches the same hand-entered transaction again every time the file
-// is read, and a transaction that has already been reconciled goes on offering
-// itself for ever.
-inline int apply_matches(const chart::Chart& accounts, const Imported& decided,
-                         const std::string& account,
-                         std::vector<ledger::Transaction>* transactions) {
+// Cleared is the exception, because cleared is not something a person chose --
+// it is the bank saying the transaction happened, and the row being read is the
+// bank saying it. The identifier is written for the source that gave it and
+// alongside any the transaction already has, which is what lets one
+// transaction be recognised by a QFX after a CSV.
+//
+// The stamp is also what makes the difference on a second import. Without it
+// the same row reaches the same transaction by counting every time the file is
+// read, which works but asks the question again the moment anything about the
+// book changes.
+//
+// See what a duplicate does to the transaction already there, and what the
+// note on a duplicate says, in ImportOfx.spectable.
+inline int apply_duplicates(const chart::Chart& accounts, const Imported& decided,
+                            const std::string& account,
+                            std::vector<ledger::Transaction>* transactions) {
     int cleared = 0;
     const chart::Ref account_ref = accounts.ref_for_path(account);
     for (const Decided& one : decided.decided) {
-        if (one.disposition != Disposition::Matched) continue;
+        if (one.disposition != Disposition::Duplicate) continue;
         for (ledger::Transaction& t : *transactions) {
             if (t.id.value() != one.claimed_id || t.source_account != account_ref) continue;
             t.cleared = types::ClearedStatus::Cleared;
             ledger::stamp(&t, types::ImportSource::Ofx, one.downloaded.fit_id);
+            for (DuplicateNote note : one.notes) {
+                const std::string name = to_string(note);
+                if (std::find(t.import_notes.begin(), t.import_notes.end(), name) ==
+                    t.import_notes.end())
+                    t.import_notes.push_back(name);
+            }
             ++cleared;
         }
     }
@@ -575,7 +819,7 @@ inline std::string completion_of(const Imported& result) {
     };
     count(result.summary.New, "new");
     count(result.summary.Duplicate, "already here");
-    count(result.summary.Matched, "matched");
+    count(result.summary.Completed, "completed");
     count(result.summary.Possible, "to answer");
     if (!result.notes.empty())
         parts.push_back(std::to_string(result.notes.size()) +
@@ -619,6 +863,7 @@ inline ledger::Transaction answer_different(const Decided& offered,
     as_new.disposition = Disposition::New;
     as_new.claimed_id.clear();
     as_new.claimed_ref.clear();
+    as_new.claim_ids.clear();
     one.decided.push_back(as_new);
     const std::vector<ledger::Transaction> made =
         transactions_for(one, account, already_in_book, accounts);
@@ -754,10 +999,10 @@ inline MultiImported decide_multi(const std::vector<AccountRows>& by_account,
         statement.transactions = ar.rows;
         const Imported one = decide(statement, ar.account, *transactions, *accounts);
         out.summary.Duplicate += one.summary.Duplicate;
-        out.summary.Matched += one.summary.Matched;
         out.summary.Possible += one.summary.Possible;
+        out.summary.Completed += one.summary.Completed;
         for (const Note& n : one.notes) out.notes.push_back(n);
-        apply_matches(*accounts, one, ar.account, transactions);
+        apply_duplicates(*accounts, one, ar.account, transactions);
         const Completed done_completing =
             apply_completions(*accounts, one, ar.account, transactions->size(), transactions);
         for (const ledger::Transaction& t : done_completing.created)
@@ -965,7 +1210,9 @@ inline ImportPreview preview_of(const MultiImported& m) {
     ImportPreview p;
     p.new_transactions = m.summary.New;
     p.duplicates = m.summary.Duplicate;
-    p.matched_to_existing = m.summary.Matched;
+    // What joined itself to something already in the book: the payment halves,
+    // now that a duplicate is counted as a duplicate.
+    p.matched_to_existing = m.summary.Completed;
     int pending = 0;
     for (const TransferProposal& c : m.candidates)
         if (c.candidate.state == TransferCandidateState::Proposed) ++pending;

@@ -524,21 +524,19 @@ inline Rows rows_of(const Read& file, const Matching& matching,
 
 // --- what the book already holds --------------------------------------------
 
-// The tests, in order, and the first that applies decides. Weaker than the OFX
-// tests and deliberately so: a CSV row carries no identifier its bank promises
-// to repeat, so nothing here can say "this is certainly the row I saw before".
-// A row that looks like something already present is offered, not skipped.
-//
-// That is why re-reading the same file offers every row again rather than
-// reporting duplicates. It reads like a failing but it is the honest answer:
-// two visits to one shop on one day for one amount are not rare, and a program
-// that silently discarded the second would be wrong in a way nobody would
-// notice until the balance did not match.
+// What is already here, and what to do about each row. The tests themselves
+// are the OFX importer's: one rule, read from the side of a file that has no
+// identifiers. See how a CSV row is tested against what is already there, and
+// how many rows match how many transactions, in ImportCsv.spectable.
 struct Decided {
     RowRead row;
     ofx::Disposition disposition = ofx::Disposition::New;
     std::string claimed_id;
     std::string claimed_ref;
+    // Every transaction already in the book this row was decided against. See
+    // ofx::Decided, whose field this is a copy of.
+    std::vector<std::string> claim_ids;
+    std::vector<ofx::DuplicateNote> notes;
 };
 
 struct Imported {
@@ -546,74 +544,53 @@ struct Imported {
     ofx::Summary summary;
 };
 
+// A CSV row is judged by the same rules as a downloaded one, with one test
+// missing: there is no identifier. A line number is not a reference the bank
+// promises to repeat -- the same file exported twice numbers its lines
+// differently the moment one row is added above -- so nothing is offered for
+// source_id and test one has nothing to work on. What is left is the check
+// number and the count of rows against transactions, which is enough: a month
+// re-read against a month already here has as many of each, so every row is a
+// duplicate, and a file holding one of two identical transactions is a
+// question rather than a guess.
 inline Imported decide(const chart::Chart& accounts, const std::vector<RowRead>& rows,
                        const std::string& account,
-                       const std::vector<ledger::Transaction>& transactions) {
+                       const std::vector<ledger::Transaction>& transactions,
+                       const std::vector<payees::Rule>& rules = {}) {
     Imported out;
-    // Claim pairing, shared with the OFX import rather than written twice: a
-    // transaction already in the book may be claimed once, so two identical rows
-    // pair off against two identical transactions and not against one of them
-    // twice. See the claim rule in ImportCsv.spectable.
-    std::vector<ofx::detail::Existing> already = ofx::existing_in(accounts, transactions, account);
-    const auto unclaimed = [](const ofx::detail::Existing& e) { return !e.claimed; };
+    std::vector<ofx::detail::Existing> already =
+        ofx::existing_in(accounts, transactions, account, types::ImportSource::Csv);
+    // Check numbers are asked about only of a checking account: nothing else in
+    // a book is paid by check.
+    bool is_checking = false;
+    if (const chart::Account* mine = accounts.find(account))
+        is_checking = mine->type == types::AccountType::Checking;
 
+    std::vector<ofx::Candidate> candidates;
     for (const RowRead& row : rows) {
+        ofx::Candidate one;
+        one.date = row.date;
+        one.amount = row.amount;
+        one.payee = row.payee;
+        one.check_no = row.check_no;
+        candidates.push_back(one);
+    }
+    const std::vector<ofx::Judgement> judged =
+        ofx::judge(&already, candidates, is_checking, rules, ofx::kCheckWindow, nullptr);
+
+    for (std::size_t i = 0; i < rows.size(); ++i) {
         Decided decided;
-        decided.row = row;
-
-        // 1. Something with the same fingerprint. First, because it is the
-        // strongest thing a file without identifiers offers -- and still only
-        // enough to ask.
-        const std::string print = ofx::detail::fingerprint(row.date, row.amount, row.payee);
-        auto found = std::find_if(already.begin(), already.end(),
-            [&](const ofx::detail::Existing& e) {
-                return unclaimed(e) &&
-                       ofx::detail::fingerprint(e.date, e.amount, e.payee) == print;
-            });
-        if (found != already.end()) {
-            found->claimed = true;
-            decided.disposition = ofx::Disposition::Possible;
-            decided.claimed_id = found->id;
-            decided.claimed_ref = found->ref;
-            ++out.summary.Possible;
-            out.decided.push_back(decided);
-            continue;
+        decided.row = rows[i];
+        decided.disposition = judged[i].disposition;
+        decided.claimed_id = judged[i].claimed_id;
+        decided.claimed_ref = judged[i].claimed_ref;
+        decided.claim_ids = judged[i].claim_ids;
+        decided.notes = judged[i].notes;
+        switch (decided.disposition) {
+            case ofx::Disposition::Duplicate: ++out.summary.Duplicate; break;
+            case ofx::Disposition::Possible:  ++out.summary.Possible;  break;
+            default:                          ++out.summary.New;       break;
         }
-
-        // 2. An uncleared posting with the same amount and check number: the
-        // cheque written by hand, now reported by the bank.
-        found = already.end();
-        if (!row.check_no.empty()) {
-            found = std::find_if(already.begin(), already.end(),
-                [&](const ofx::detail::Existing& e) {
-                    return unclaimed(e) && e.cleared == types::ClearedStatus::Uncleared &&
-                           e.amount == row.amount && !e.check_no.empty() &&
-                           e.check_no == row.check_no;
-                });
-        }
-        // 3. An uncleared posting with the same amount within five days.
-        if (found == already.end()) {
-            found = std::find_if(already.begin(), already.end(),
-                [&](const ofx::detail::Existing& e) {
-                    return unclaimed(e) && e.cleared == types::ClearedStatus::Uncleared &&
-                           e.amount == row.amount &&
-                           std::abs(types::Date::days_between(e.date, row.date))
-                               <= ofx::kMatchWindow;
-                });
-        }
-        if (found != already.end()) {
-            found->claimed = true;
-            decided.disposition = ofx::Disposition::Matched;
-            decided.claimed_id = found->id;
-            decided.claimed_ref = found->ref;
-            ++out.summary.Matched;
-            out.decided.push_back(decided);
-            continue;
-        }
-
-        // 4. Nothing above applies.
-        decided.disposition = ofx::Disposition::New;
-        ++out.summary.New;
         out.decided.push_back(decided);
     }
     return out;

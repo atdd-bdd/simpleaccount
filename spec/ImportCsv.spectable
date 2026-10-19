@@ -1063,7 +1063,6 @@ Attributes CsvDispositionRule
 | Condition   | String            |         |
 | Disposition | ImportDisposition | New     |
 
-$TBD
 BusinessRule How many rows match how many transactions
 Description The tests above ask whether something matching is there. That is not
 # enough, because it answers the same way however many there are. Two
@@ -1122,7 +1121,6 @@ Attributes ClaimPairing
 | New          | Integer | 0       |
 | Notes        | String  | none    |
 
-$TBD
 Scenario Two identical rows against one transaction already there
 Description The case the rule exists for. Two coffees at the same shop on the
 # same day for the same amount, and the book has one of them: either
@@ -1213,7 +1211,6 @@ Then import summary is : ImportSummary Vertical
 | Possible | 1 |
 # One claim, one spare, and nothing said about the spare.
 
-$TBD
 Scenario Re-importing the same CSV file does nothing the second time
 Description One row in the file and the one it created in the book: the counts
 # agree, so it is a duplicate and nothing is created. This is the whole
@@ -1251,7 +1248,6 @@ Then import summary is : ImportSummary Vertical
 | Duplicate | 1 |
 | Possible  | 0 |
 
-$TBD
 BusinessRule What a fingerprint ignores
 Description Two rows that differ only in how the payee is spaced, cased or
 # numbered are the same row. Two that differ in amount or date are not.
