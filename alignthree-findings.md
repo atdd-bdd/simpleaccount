@@ -1,8 +1,8 @@
 # AlignThree findings from a real project
 
 Written while specifying and starting to implement SimpleAccount (a Quicken
-replacement) with AlignThree 0.9.1. Fourteen `.spectable` files, ~16,400
-lines, 449 generated C++ tests, GoogleTest, MSVC 2022.
+replacement) with AlignThree 0.9.1 and then 0.9.2. Fourteen `.spectable`
+files, ~16,400 lines, 496 generated C++ tests, GoogleTest, MSVC 2022.
 
 Ready to drop in the AlignThree repository. Everything below was observed, not
 guessed; each item says how to reproduce it.
@@ -473,6 +473,100 @@ Two notes from the conversion:
 - **Request 2 is still open.** An unrecognised keyword inside a block still
   ends it silently -- the leading marker removes the reason a wrapped sentence
   arrives there, but not the consequence if one does.
+
+## 11. 0.9.2 makes a cell a struct, and the glue that compared one stops compiling
+
+**Defect, or a release note that is missing.**
+
+Upgrading the converter from 0.9.1 to 0.9.2 -- the same spec, the same command
+line -- turned a clean build into **214 compiler errors across twelve glue
+files.** Nothing in the specification changed. What changed is the generated
+cell type. In 0.9.1 a `DataType`'s cell arrived as a `std::string`. In 0.9.2 it
+arrives as a wrapper:
+
+```cpp
+struct ClearedStatusString {
+    std::string value;
+    ClearedStatusString(const char* text) : value(text ? text : "") {}
+    ClearedStatusString(std::string text) : value(std::move(text)) {}
+    operator const std::string&() const { return value; }
+    static ClearedStatusString from_text(const std::string& text) { ... }
+    std::string to_string() const { return value; }
+};
+```
+
+The header says, in its own comment, that this is source-compatible:
+
+> It converts to and from a string implicitly, so glue written against the text
+> keeps working and a cell can be compared, streamed or handed to the
+> production class directly.
+
+**Handed to, yes. Compared, no.** The implicit conversion works for a
+parameter, which is why most glue still compiles, but `std::string`'s
+`operator==` and `operator!=` are templates on `charT`, `traits` and `Alloc`,
+and template argument deduction does not consider user-defined conversions.
+So the one thing the comment promises is the one thing that fails:
+
+```cpp
+if (value.cleared != DNCString && !value.cleared.empty())   // both errors
+```
+
+`DNCString` is the converter's own constant, declared `const std::string` eight
+lines above the struct in the same generated header.
+
+The 214 errors are five shapes:
+
+| count | written as | error |
+|------:|------------|-------|
+| ~100 | `cell != expected`, `cell == expected` | C2678, no operator found |
+| 26 | `cell.empty()` | C2039, not a member |
+| 15 | `EXPECT_EQ(cell, x)` | C2660 / C2737, downstream of the above |
+| 10 | `std::stod(cell)` | C2665, no overload converts |
+| 11 | `Money(cell)`, `account_type_from_string(cell)` on a `...Typed` | C2440 / C2664 |
+
+The last row is a second type with a second accessor: a `...Typed` holds its
+text in `.text` where a `...String` holds it in `.value`, so glue that touches
+both is edited two ways.
+
+**The comment's reasoning is worth a second look**, because the cost above
+bought nothing:
+
+> No operator== of its own, deliberately: one would make `cell == "x"`
+> ambiguous against the string comparison the conversion already allows.
+
+There is no such ambiguity to avoid. `cell == "x"` cannot reach
+`std::string`'s templated `operator==` at all -- deduction fails before
+conversions are considered -- so there is no competing candidate for a member
+`operator==` to be ambiguous with. Omitting it does not prevent an ambiguity;
+it removes the only comparison that would have worked.
+
+Suggested, in order of how much they would have helped here:
+
+1. **Give the wrapper `operator==` and `operator!=` against `std::string`,
+   `const char*` and its own type, and an `empty()`.** Five lines each, and the
+   214 errors become none. `dnc_equal(cell, other)` already works today,
+   because a parameter takes the conversion -- so the wrapper is one step from
+   behaving as its comment says it does.
+2. **If the break is intended, say so in the release.** `0.9.1 -> 0.9.2` reads
+   as a patch release. A line in the notes naming the two accessors, `.value`
+   and `.text`, would have turned an afternoon of compiler errors into a
+   scripted edit.
+3. **A `--cells-as-strings` flag** for a project mid-migration. There is no
+   option to ask for the old shape: the full `--help` has nothing between
+   `--no-flatten-single-row` and `--prod-dir` that touches it.
+
+To reproduce: take a project whose glue compares a cell to an expected value --
+any `Then` that checks a table -- generate it with 0.9.1, confirm it builds,
+then generate the same spec with 0.9.2 and build again.
+
+**Why it was upgraded here.** Not for this; for finding 10. The continuation
+marker arrived in 0.9.2 and the spec's 2,851 continuation lines were converted
+to it, which makes 0.9.2 the only converter that reads this spec correctly --
+0.9.1 reports each `\` as an unrecognized keyword and generates 24 tests for
+`Payees.spectable` where it has 29. So the two findings arrive together: the
+fix in 10 cannot be taken without the break in 11.
+
+---
 
 ---
 
