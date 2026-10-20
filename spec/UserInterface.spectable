@@ -2522,7 +2522,6 @@ Details Show split is left off a transaction that is not a split rather than
 \ recategorising from a find has to decide what a selection of results
 \ from several registers means, and that is a separate piece of work.
 
-$TBD
 Scenario The menu on a split result offers to show the split
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
@@ -2548,7 +2547,6 @@ Then menu items are : MenuItem
 | Go to the transaction... | true    |
 | Show split...            | true    |
 
-$TBD
 Scenario The menu on a result that is not a split does not offer to show one
 Given the chart of accounts is as previous
 Given transactions are as previous
@@ -2563,7 +2561,6 @@ Then menu items are : MenuItem
 | Item                     | Enabled |
 | Go to the transaction... | true    |
 
-$TBD
 Scenario Showing the split lists its lines
 Description The answer to "which line was that": the split as it was typed,
 \ which is where the 60.00 the find was given actually is. The
@@ -3672,7 +3669,6 @@ Attributes ScrollBarClick
 | WhereClicked  | Text |         |
 | WhatHappens   | Text |         |
 
-$TBD
 BusinessRule Clicking the scroll bar beside the indicator pages the view
 Description A register of thirty thousand lines is reached by its scroll bar
 \ more than by anything else, and the click a person makes most is
@@ -3740,7 +3736,6 @@ Description What was answered. A blank HistoryFile is the answer "this is an
 | Attribute   | Type | Default |
 | HistoryFile | Text | none    |
 
-$TBD
 Scenario Naming a new book asks whether there is a history to bring in
 Description The question arrives on its own, after the name and before
 \ anything is in the book.
@@ -3751,7 +3746,6 @@ Then the new book question is : NewBookSetup Vertical
 | BookName    | Household |
 | HistoryFile | none      |
 
-$TBD
 Scenario A book that starts from nothing starts with the standard chart
 Description Three accounts somebody can type into on the first day, and a
 \ category list taken from Quicken's own, because a stranger opening
@@ -3829,7 +3823,6 @@ Then the chart of accounts is : ChartOfAccounts
 | Income:Other~Income            | Income     | false       |
 | Income:Salary                  | Income     | false       |
 
-$TBD
 Scenario A book that starts from a history starts with the history own chart
 Description The standard list is not added to a history. Twenty years of
 \ Quicken has its own categories, they are the ones the imported
@@ -3861,9 +3854,15 @@ When the new book question is answered : NewBookAnswer Vertical
 | HistoryFile | household.qif |
 Then the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
+| Assets             | Checking | true        |
 | Assets:Checking    | Checking | false       |
+| Expenses           | Expense  | true        |
 | Expenses:Groceries | Expense  | false       |
+| Income             | Income   | true        |
 | Income:Salary      | Income   | false       |
+# The three roots are placeholders the import makes to hold what the file
+# names, each typed as what is under it; see ImportQif. The whole chart is
+# listed because the point of the scenario is which categories a new book has.
 # Expenses:Uncategorized is not here: nothing in this file is uncategorized,
 # and the category this program adds for itself is added when something needs
 # it. The checking account is the one the !Type:Bank section is read into; see
@@ -3898,7 +3897,6 @@ Description One item of the File menu, in the order shown. Separators are not
 | Item      | Text    |         |
 | Enabled   | Boolean | true    |
 
-$TBD
 Scenario The File menu has one import on it
 Description Open recent is a submenu and is named here as the item that opens
 \ it. The two imports that used to sit between Open and this one are
@@ -3920,7 +3918,6 @@ Description One file the import dialog lists, and when it was last written. The
 | Name      | Text |            |
 | Modified  | Date | 2024-01-01 |
 
-$TBD
 Scenario The import dialog lists the three formats, newest first
 Description Newest first because the file wanted is almost always the one just
 \ downloaded. Alphabetical order puts it wherever its bank name
@@ -3938,7 +3935,6 @@ Then the files offered are : ImportFileOffered
 | crown-2026-01.csv | 2026-02-02 |
 | statement.qif     | 2026-01-20 |
 
-$TBD
 Scenario The import dialog leaves out a file of any other kind
 Description A book, a spreadsheet and a PDF statement live in the same folder
 \ as the downloads, and none of them is something this program reads.
@@ -3953,7 +3949,6 @@ Then the files offered are : ImportFileOffered
 | Name              | Modified   |
 | crown-2026-01.csv | 2026-02-02 |
 
-$TBD
 BusinessRule The import dialog is the program own, not the one Windows provides
 Description Newest first is the whole reason. The order a native file dialog
 \ sorts in belongs to the shell, not to the program that opened it,
@@ -3985,7 +3980,6 @@ Attributes DispositionReading
 | Note        | DuplicateNote     | None    |
 | Reads       | Text              |         |
 
-$TBD
 BusinessRule The disposition column reads the disposition and then the note
 Description One column, because the note is never anything but a qualification
 \ of the disposition, and two columns would leave one of them empty on

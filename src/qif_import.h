@@ -184,6 +184,17 @@ struct Imported {
     }
 };
 
+// What kind of file this is, by what it holds rather than by what it is called.
+// A QIF opens with a bang directive -- !Type:Bank, !Account, !Option -- before
+// anything else, which neither a CSV nor an OFX can start with. Asked because
+// the one import item takes all three kinds and each has its own reader.
+inline bool looks_like_a_qif(const std::string& text) {
+    for (const char c : text) {
+        if (c == ' ' || c == '\r' || c == '\n' || c == '\t') continue;
+        return c == '!';
+    }
+    return false;
+}
 
 // One line of a split that is itself a transfer: the split names another account
 // in brackets instead of a category. Such a line posts both sides on its own --
@@ -205,6 +216,12 @@ public:
     // An existing chart to import into, where there is one.
     void start_from(const chart::Chart& existing) { result_.accounts = existing; }
     void import_into(const std::string& account) { target_ = account; }
+    // This file is a statement, not the history. A statement is a download that
+    // happens to be in Quicken's format, so its rows arrive cleared like any
+    // other download's and the C field in them is not read. Only the history
+    // keeps its markers, which is why that is the default. See the arrives
+    // cleared rule in ImportOfx.
+    void as_a_statement() { a_statement_ = true; }
 
     Imported run(const std::string& text) {
         const File file = read(decode(text), target_);
@@ -260,6 +277,7 @@ public:
 private:
     types::DateOrder order_;
     std::string target_;
+    bool a_statement_ = false;
     Imported result_;
     std::map<std::string, char> category_kind_;   // name -> 'I' or 'E'
     std::map<std::string, std::string> account_paths_;  // QIF name -> path
@@ -520,7 +538,10 @@ private:
             own_posting.account = result_.accounts.ref_for_path(real_posting_account(rec.account));
             own_posting.amount = rec.amount;
             own_posting.memo = rec.memo;
-            own_posting.cleared = cleared_of(rec.cleared_text);
+            // This side is the record's own account by construction, so a
+            // statement's row is cleared here whatever its C field says.
+            own_posting.cleared = a_statement_ ? types::ClearedStatus::Cleared
+                                               : cleared_of(rec.cleared_text);
             std::vector<Part> postings{own_posting};
             if (has_split_lines(raw)) {
                 const std::vector<std::string>& cats = raw.all('S');
@@ -858,9 +879,21 @@ private:
         p.amount = amount;
         p.memo = rec.memo;
         // The cleared marker belongs to the account whose section the record is
-        // in; the other side of the transaction is left uncleared.
-        p.cleared = account == rec.account ? cleared_of(rec.cleared_text)
-                                           : types::ClearedStatus::Uncleared;
+        // in; the other side of the transaction is left uncleared. A statement
+        // states nothing about it either way -- the bank sent it, so it
+        // happened -- and the marker in the file is not read.
+        //
+        // A statement is where the record's own account can be unnamed: a
+        // download of one account has no !Account block, so the side the file
+        // is about is the account the import was pointed at. The history always
+        // names its accounts, and is left reading exactly what it read before.
+        const bool own_side = account == rec.account ||
+                              (rec.account.empty() && account == target_);
+        p.cleared = a_statement_
+                        ? (own_side ? types::ClearedStatus::Cleared
+                                    : types::ClearedStatus::Uncleared)
+                        : (account == rec.account ? cleared_of(rec.cleared_text)
+                                                  : types::ClearedStatus::Uncleared);
         return p;
     }
 

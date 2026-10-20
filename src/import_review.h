@@ -107,6 +107,8 @@ inline Prepared from_ofx(const std::string& text, const std::string& account,
             row.source = types::ImportSource::Ofx;
             row.disposition = ofx::to_string(one.disposition);
             row.claimed_ids = one.claim_ids;
+            for (const ofx::DuplicateNote& note : one.notes)
+                row.notes.push_back(ofx::to_string(note));
             if (one.disposition == ofx::Disposition::New && next < prepared.size())
                 detail::add_row(*accounts, &row, prepared[next++]);
             if (one.disposition == ofx::Disposition::Duplicate) ++out.duplicates;
@@ -189,9 +191,14 @@ inline Prepared from_csv(const std::string& text, const std::string& account,
         // the importer stamps. Not an OFX identifier and never compared with one.
         row.identifier = std::to_string(one.row.line);
         row.source = types::ImportSource::Csv;
-        row.cleared = types::ClearedStatus::Uncleared;
+        // A download, so cleared; a New row has this read off the prepared
+        // transaction below in any case. See the arrives cleared rule in
+        // ImportOfx.
+        row.cleared = types::ClearedStatus::Cleared;
         row.disposition = ofx::to_string(one.disposition);
         row.claimed_ids = one.claim_ids;
+        for (const ofx::DuplicateNote& note : one.notes)
+            row.notes.push_back(ofx::to_string(note));
         if (one.disposition == ofx::Disposition::New && next < prepared.size())
             detail::add_row(*accounts, &row, prepared[next++]);
         if (one.disposition == ofx::Disposition::Duplicate) ++out.duplicates;

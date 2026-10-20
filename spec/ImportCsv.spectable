@@ -986,10 +986,10 @@ Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When rows imported
 Then transactions are : Transaction
-| Ref | SourceAccount   | Date       | Payee         | Destination            | Amount |
-| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries     | -45.00 |
-| T2  | Assets:Checking | 2024-01-16 | Shell         | Expenses:Auto:Fuel     | -52.00 |
-| T3  | Assets:Checking | 2024-01-17 | Unknown       | Expenses:Uncategorized | -10.00 |
+| Ref | SourceAccount   | Date       | Payee         | Destination            | Amount | Cleared |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries     | -45.00 | Cleared |
+| T2  | Assets:Checking | 2024-01-16 | Shell         | Expenses:Auto:Fuel     | -52.00 | Cleared |
+| T3  | Assets:Checking | 2024-01-17 | Unknown       | Expenses:Uncategorized | -10.00 | Cleared |
 Then accounts created are : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Expenses:Auto      | Expense | true        |
@@ -1019,8 +1019,8 @@ Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When rows imported
 Then transactions are : Transaction
-| Ref | SourceAccount   | Date       | Payee    | Destination    | Amount  |
-| T1  | Assets:Checking | 2024-03-01 | Transfer | Assets:Savings | -500.00 |
+| Ref | SourceAccount   | Date       | Payee    | Destination    | Amount  | Cleared |
+| T1  | Assets:Checking | 2024-03-01 | Transfer | Assets:Savings | -500.00 | Cleared |
 
 # ---------------------------------------------------------------------------
 # Duplicates, without an identifier to go on

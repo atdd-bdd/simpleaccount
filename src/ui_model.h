@@ -9,13 +9,17 @@
 #include "chart.h"
 #include "date.h"
 #include "find.h"
+#include "import_files.h"
 #include "import_target.h"
 #include "ledger.h"
 #include "money.h"
 #include "posting.h"
 #include "transaction_id.h"
 #include "payee_rules.h"
+#include "qif_import.h"
 #include "register_lines.h"
+#include "scrolling.h"
+#include "standard_chart.h"
 #include "text_types.h"
 #include "transaction_edit.h"
 
@@ -329,7 +333,42 @@ struct ReviewRow {
     // the claim can be looked at before the tick is believed: see the
     // show-the-duplicate section of UserInterface.spectable.
     std::vector<std::string> claimed_ids;
+    // The qualifications the import wrote on this row, by name. The
+    // disposition column reads them after the disposition itself; names
+    // rather than an enum, because this file knows nothing of the OFX
+    // reader. See the disposition column rule in UserInterface.spectable.
+    std::vector<std::string> notes;
 };
+
+// What the disposition column reads: the disposition, and after one dash the
+// notes that qualify it, in the order the note list declares them. One column,
+// because a note is never anything but a qualification of the disposition.
+// Named rather than enumerated, because a row carries the names the import
+// wrote on the transaction and this file knows nothing of the OFX reader. See
+// the disposition column rule in UserInterface.spectable.
+inline std::string note_in_words(const std::string& note) {
+    if (note == "DetailsDiffer") return "details differ";
+    if (note == "CheckNumberSame") return "check number the same";
+    if (note == "FitIdAdded") return "identifier added";
+    if (note == "PayeeUnmatched") return "payee unmatched";
+    if (note == "Uncleared") return "uncleared";
+    return {};     // None, and anything a later reader invents
+}
+
+inline std::string disposition_reading(const std::string& disposition,
+                                       const std::vector<std::string>& notes) {
+    // The declared order, so that two notes on one row read the same way round
+    // whichever order the import happened to find them in.
+    static const std::vector<std::string> declared = {
+        "DetailsDiffer", "CheckNumberSame", "FitIdAdded", "PayeeUnmatched", "Uncleared"};
+    std::string said;
+    for (const std::string& wanted : declared) {
+        if (std::find(notes.begin(), notes.end(), wanted) == notes.end()) continue;
+        if (!said.empty()) said += ", ";
+        said += note_in_words(wanted);
+    }
+    return said.empty() ? disposition : disposition + " - " + said;
+}
 
 // One transaction a review row claimed, read off the book rather than off the
 // file: this is what is already there, as the register would show it.
@@ -386,6 +425,34 @@ struct MenuEntry {
     std::string item;
     bool enabled = true;
 };
+
+// The question a new book is asked, as it stands. Shown is false before a book
+// is made and after the question is answered either way. See the new-book
+// section of UserInterface.spectable.
+struct NewBookSetup {
+    bool shown = false;
+    std::string book_name;
+    std::string history_file;
+};
+
+// What came of answering it. A refusal is the history being unreadable, which
+// leaves the question where it was rather than a book with nothing in it.
+struct NewBookStarted {
+    bool refused = false;
+    std::string refusal;
+    int transactions = 0;
+};
+
+// The File menu, in the order shown. Separators are not named: they group what
+// is here and change nothing. There is one import on it, because what the file
+// happens to be is a detail of the file, settled by reading it, and not a
+// question to put to somebody who only wants last month in the register. See
+// the file-menu section of UserInterface.spectable.
+inline std::vector<MenuEntry> file_menu_items() {
+    return {MenuEntry{"New book...", true}, MenuEntry{"Open book...", true},
+            MenuEntry{"Open recent", true},
+            MenuEntry{"Import transactions...", true}, MenuEntry{"Exit", true}};
+}
 
 // What came of recategorising a selection, counted, because a selection of
 // twenty is too many to check by eye. See the register-menu section of
@@ -1128,6 +1195,80 @@ public:
         return go_to_transaction_in(chosen.ref, chosen.account);
     }
 
+    // The lines under the split a result names, which is the answer to "which
+    // line was that" -- the question a split result raises and the row cannot
+    // answer, because the row reads --Split-- and nothing more. Empty where
+    // the transaction is not a split, which is also what makes it the test of
+    // whether to offer the item at all.
+    std::vector<reg::SplitLine> find_result_split(int line_one_based) const {
+        if (line_one_based < 1 || line_one_based > static_cast<int>(results_.size()))
+            return {};
+        const FindResultRow& chosen = results_[static_cast<std::size_t>(line_one_based - 1)];
+        return reg::split_lines_of(accounts_, transactions_, splits_, chosen.ref);
+    }
+
+    // The menu on a find result. Going to the transaction is on it because a
+    // menu that cannot do the obvious thing is a surprise, and Show split is
+    // on it where there is a split to show. A transaction with one category
+    // raises no question about its split, so the item is left off rather than
+    // offered and refused -- unlike the tree's Delete, where the reason a
+    // thing cannot be done is worth saying.
+    std::vector<MenuEntry> find_result_menu(int line_one_based) const {
+        std::vector<MenuEntry> items{MenuEntry{"Go to the transaction...", true}};
+        if (!find_result_split(line_one_based).empty())
+            items.push_back(MenuEntry{"Show split...", true});
+        return items;
+    }
+
+    // ----------------------------------------------------- a new book
+
+    // A book has been made and named. The question arrives on its own, after
+    // the name and before anything is in the book.
+    void make_new_book(const std::string& name) {
+        new_book_ = NewBookSetup();
+        new_book_.shown = true;
+        new_book_.book_name = name;
+    }
+
+    const NewBookSetup& new_book_question() const { return new_book_; }
+
+    // A blank history file is the answer "this is an entirely new book", not a
+    // cancellation, and it gives the standard chart. A history gives the chart
+    // the history has: the categories twenty years of Quicken used are the ones
+    // its transactions name, and the standard list beside them would be forty
+    // empty categories in every picker for the rest of the book's life. Either
+    // way the book ends with a chart in it, because a book with no accounts
+    // cannot be typed into.
+    //
+    // The contents are handed in rather than read here: the window reads the
+    // file, the same as it does for every other import.
+    NewBookStarted answer_new_book_question(const std::string& history_file,
+                                            const std::string& contents = {},
+                                            const std::string& into_account = {}) {
+        NewBookStarted out;
+        new_book_.history_file = history_file;
+        if (history_file.empty()) {
+            new_book_.shown = false;
+            book_is_now(chart::standard_chart(), ledger::Ledger(), {}, {});
+            return out;
+        }
+        qif::Importer importer;
+        if (!into_account.empty()) importer.import_into(into_account);
+        const qif::Imported imported = importer.run(contents);
+        if (imported.refused) {
+            // Nothing is put in the book and the question stays: a file that
+            // could not be read has not been answered with.
+            out.refused = true;
+            out.refusal = imported.refusal;
+            return out;
+        }
+        new_book_.shown = false;
+        book_is_now(imported.accounts, imported.book, imported.transactions,
+                    imported.splits);
+        out.transactions = static_cast<int>(imported.transactions.size());
+        return out;
+    }
+
     // Whether an import is waiting in the panel, and which account it is for.
     // The window needs both to label the review; see refreshReviewPanel.
     bool review_showing() const { return review_open_; }
@@ -1278,6 +1419,7 @@ private:
     DuplicateLook look_;
     bool committed_ = false;
     long long changes_ = 0;
+    NewBookSetup new_book_;
 
     const ReviewRow* review_line(int line) const {
         for (const ReviewRow& r : review_)

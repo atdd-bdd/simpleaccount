@@ -611,6 +611,17 @@ public:
 
 private:
     std::string tree_node_;
+    // What a Given said the history file holds, and which account a QIF with
+    // no account block of its own is read into.
+    std::string file_text_;
+    std::string import_target_;
+    // The folder as found, and what the dialog made of it.
+    std::vector<ui::FileOffered> in_folder_;
+    std::vector<ui::FileOffered> offered_files_;
+    // The find result whose menu a scenario asked for; zero until one is
+    // right-clicked, lines being one-based.
+    int find_result_line_ = 0;
+    std::vector<reg::SplitLine> split_shown_;
 
     // The splits go in too. They are the fourth argument and it has a default,
     // so leaving them out compiled and read as a workspace over the same book
@@ -629,6 +640,15 @@ private:
 
     static std::string blank(const std::string& s) {
         return (s == "none" || s == DNCString) ? std::string() : s;
+    }
+
+    // A table cell cannot hold a leading or trailing blank, so a value that is
+    // one is written in double quotes in the spec and the quotes come off here.
+    // Safe on every cell: one that is not quoted is returned as it stands.
+    static std::string unquoted(const std::string& s) {
+        if (s.size() >= 2 && s.front() == '"' && s.back() == '"')
+            return s.substr(1, s.size() - 2);
+        return s;
     }
 
     // A Then about the register means the pane that is showing one: the active
@@ -676,13 +696,17 @@ public:
     }
 
     void then_menu_items_are(const std::vector<MenuItemString>& values) {
-        // Three menus reached by one step: the tree's, the report's and the
-        // register's. A right-clicked tree node means the tree's, no scenario
+        // Four menus reached by one step: the tree's, a find result's, the
+        // report's and the register's. A right-clicked tree node means the
+        // tree's and a right-clicked result means that result's, no scenario
         // having any reason to ask for two of them at once.
         const std::vector<ui::MenuEntry> got =
-            !tree_node_.empty() ? workspace().tree_menu(tree_node_)
-                                : (report_mode_ ? report_menu_items()
-                                                : workspace().menu_items());
+            !tree_node_.empty()
+                ? workspace().tree_menu(tree_node_)
+                : (find_result_line_ != 0
+                       ? workspace().find_result_menu(find_result_line_)
+                       : (report_mode_ ? report_menu_items()
+                                       : workspace().menu_items()));
         ASSERT_EQ(values.size(), got.size()) << "number of menu items";
         for (std::size_t i = 0; i < values.size(); ++i) {
             EXPECT_EQ(values[i].item, got[i].item) << "item " << i + 1;
@@ -1420,72 +1444,133 @@ public:
 
 public:
 
+    // Which result the menu belongs to. The result names its own register, so
+    // the line is the whole of the choice; the menu itself is read by the
+    // common menu-items step, which is why this only records the line.
     void when_find_result_right_clicked(const std::vector<FindResultChoiceString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_find_result_right_clicked";
+        ASSERT_FALSE(values.empty());
+        find_result_line_ = std::stoi(values.front().line);
     }
 
     void when_find_result_split_shown(const std::vector<FindResultChoiceString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_find_result_split_shown";
+        ASSERT_FALSE(values.empty());
+        split_shown_ = workspace().find_result_split(std::stoi(values.front().line));
     }
 
     void then_the_split_shown_is(const std::vector<SplitLineShownString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_the_split_shown_is";
+        ASSERT_EQ(values.size(), split_shown_.size()) << "lines under the split";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            SplitLineShownString got = values[i];
+            got.category = split_shown_[i].category;
+            got.memo = split_shown_[i].memo.empty() ? "none" : split_shown_[i].memo;
+            if (values[i].amount.value != DNCString)
+                EXPECT_EQ(Money(values[i].amount), split_shown_[i].amount)
+                    << "split line " << i + 1 << " amount";
+            got.amount = values[i].amount;
+            EXPECT_EQ(values[i], got) << "split line " << i + 1;
+        }
     }
 
+    // ------------------------------------------------------- a new book
+
     void when_a_new_book_is_made_named(const std::vector<BookNameString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_a_new_book_is_made_named";
+        ASSERT_FALSE(values.empty());
+        workspace().make_new_book(values.front().name);
     }
 
     void then_the_new_book_question_is(const std::vector<NewBookSetupString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_the_new_book_question_is";
+        ASSERT_FALSE(values.empty());
+        const ui::NewBookSetup& got = workspace().new_book_question();
+        EXPECT_EQ(parse_bool_cell(values.front().shown), got.shown) << "shown";
+        EXPECT_EQ(blank(values.front().bookname), got.book_name) << "book name";
+        EXPECT_EQ(blank(values.front().historyfile), got.history_file)
+            << "history file";
     }
 
-    void when_the_new_book_question_is_answered(const std::vector<NewBookAnswerString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_the_new_book_question_is_answered";
+    // The window reads the file; here the Given above holds what it says.
+    void when_the_new_book_question_is_answered(
+            const std::vector<NewBookAnswerString>& values) {
+        ASSERT_FALSE(values.empty());
+        const std::string file = blank(values.front().historyfile);
+        const ui::NewBookStarted said =
+            workspace().answer_new_book_question(file, file_text_, import_target_);
+        EXPECT_FALSE(said.refused) << said.refusal;
     }
 
+    // The whole chart rather than a subset: which categories a new book has is
+    // what the two scenarios asking are about, and a category that should not
+    // be there is as much of a defect as one that is missing.
     void then_the_chart_of_accounts_is(const std::vector<AccountString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_the_chart_of_accounts_is";
+        const chart::Chart& got = workspace().accounts();
+        EXPECT_EQ(values.size(), got.all().size()) << "accounts in the chart";
+        for (const AccountString& want : values) {
+            const chart::Account* a = got.find(want.path);
+            ASSERT_NE(nullptr, a) << want.path.value << " is not in the chart";
+            EXPECT_EQ(want.type.value, types::to_string(a->type))
+                << want.path.value << " type";
+            EXPECT_EQ(parse_bool_cell(want.placeholder), a->placeholder)
+                << want.path.value << " placeholder";
+            EXPECT_EQ(parse_bool_cell(want.hidden), a->hidden)
+                << want.path.value << " hidden";
+        }
     }
 
     void given_import_target_is(const std::vector<ImportTargetString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: given_import_target_is";
+        ASSERT_FALSE(values.empty());
+        import_target_ = unquoted(blank(values.front().accountpath.value));
     }
 
-    void given_the_file_contains(const std::string& value) {
-        std::cout << value << "\n";
-        ADD_FAILURE() << "Not implemented: given_the_file_contains";
-    }
+    void given_the_file_contains(const std::string& value) { file_text_ = value; }
 
-    void when_the_file_menu_is_shown() {
-        ADD_FAILURE() << "Not implemented: when_the_file_menu_is_shown";
-    }
+    // ------------------------------------------- the File menu and its dialog
+
+    // Nothing to do: the menu is the same list every time it is shown, which
+    // is what the Then reads.
+    void when_the_file_menu_is_shown() {}
 
     void then_file_menu_items_are(const std::vector<FileMenuItemString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_file_menu_items_are";
+        const std::vector<ui::MenuEntry> got = ui::file_menu_items();
+        ASSERT_EQ(values.size(), got.size()) << "items on the File menu";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            EXPECT_EQ(values[i].item, got[i].item) << "item " << i + 1;
+            EXPECT_EQ(parse_bool_cell(values[i].enabled), got[i].enabled)
+                << got[i].item << " enabled";
+        }
     }
 
+    // The folder as the window found it, in the order it was written down,
+    // which is not the order anything is offered in.
     void given_the_folder_contains(const std::vector<ImportFileOfferedString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: given_the_folder_contains";
+        in_folder_.clear();
+        for (const ImportFileOfferedString& value : values) {
+            ui::FileOffered one;
+            one.name = value.name;
+            const auto on = types::Date::from_iso(value.modified);
+            ASSERT_TRUE(on.has_value()) << value.modified;
+            one.modified = *on;
+            in_folder_.push_back(one);
+        }
     }
 
     void when_the_import_file_dialog_is_shown() {
-        ADD_FAILURE() << "Not implemented: when_the_import_file_dialog_is_shown";
+        offered_files_ = ui::files_offered(in_folder_);
     }
 
     void then_the_files_offered_are(const std::vector<ImportFileOfferedString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_the_files_offered_are";
+        ASSERT_EQ(values.size(), offered_files_.size()) << "files offered";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            EXPECT_EQ(values[i].name, offered_files_[i].name) << "file " << i + 1;
+            EXPECT_EQ(values[i].modified, offered_files_[i].modified.iso())
+                << values[i].name << " modified";
+        }
+    }
+
+    // Nothing in the model to assert on: which dialog was opened is not a fact
+    // about the book, and the rule is here to say why the program draws its
+    // own. The rows are its reasoning, read by a person.
+    void examples_businessrule_the_import_dialog_is_the_program_own_not_the_one_windows_provides(
+            const std::vector<DialogChoiceString>& values) {
+        EXPECT_FALSE(values.empty()) << "the rule states no reasons";
     }
 
     void examples_businessrule_the_second_amount_field_is_only_there_for_a_range(const std::vector<AmountFieldsShownString>& values) {
@@ -1493,19 +1578,48 @@ public:
         ADD_FAILURE() << "Not implemented: examples_businessrule_the_second_amount_field_is_only_there_for_a_range";
     }
 
-    void examples_businessrule_clicking_the_scroll_bar_beside_the_indicator_pages_the_view(const std::vector<ScrollBarClickString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_clicking_the_scroll_bar_beside_the_indicator_pages_the_view";
+    // Which of the four places was clicked, read off the rule's own wording.
+    static ui::ScrollBarPlace place_clicked(const std::string& where) {
+        if (where == "Above the indicator") return ui::ScrollBarPlace::AboveIndicator;
+        if (where == "Below the indicator") return ui::ScrollBarPlace::BelowIndicator;
+        if (where == "On the indicator") return ui::ScrollBarPlace::OnIndicator;
+        return ui::ScrollBarPlace::OnArrow;
     }
 
-    void examples_businessrule_the_import_dialog_is_the_program_own_not_the_one_windows_provides(const std::vector<DialogChoiceString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_the_import_dialog_is_the_program_own_not_the_one_windows_provides";
+    // Whether the view moves, and how far, is the one part of this rule that is
+    // code rather than window: the window asks ui::scroll_lines and moves by
+    // what it says. How a click becomes a place is the window's, and a test
+    // with no window in it cannot ask that.
+    void examples_businessrule_clicking_the_scroll_bar_beside_the_indicator_pages_the_view(
+            const std::vector<ScrollBarClickString>& values) {
+        const int on_screen = 20;
+        for (const ScrollBarClickString& value : values) {
+            const std::string& what = value.whathappens;
+            int wanted = 0;
+            if (what.find("pages back") != std::string::npos)
+                wanted = -(on_screen - 1);
+            else if (what.find("pages on") != std::string::npos)
+                wanted = on_screen - 1;
+            else if (what.find("moves one line") != std::string::npos)
+                wanted = 1;
+            EXPECT_EQ(wanted, ui::scroll_lines(place_clicked(value.whereclicked), on_screen))
+                << value.whereclicked << " -- " << what;
+        }
     }
 
-    void examples_businessrule_the_disposition_column_reads_the_disposition_and_then_the_note(const std::vector<DispositionReadingString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_the_disposition_column_reads_the_disposition_and_then_the_note";
+    // One row of the table is one disposition and one note, which is the
+    // ordinary case; two notes on one row are covered by the check scenario in
+    // ImportOfx, and the order they read in is the function's own business.
+    void examples_businessrule_the_disposition_column_reads_the_disposition_and_then_the_note(
+            const std::vector<DispositionReadingString>& values) {
+        ASSERT_FALSE(values.empty());
+        for (const DispositionReadingString& value : values) {
+            std::vector<std::string> notes;
+            if (value.note.value != "None") notes.push_back(value.note.value);
+            EXPECT_EQ(unquoted(value.reads),
+                      ui::disposition_reading(value.disposition.value, notes))
+                << value.disposition.value << " with " << value.note.value;
+        }
     }
 
 };

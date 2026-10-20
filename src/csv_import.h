@@ -645,9 +645,12 @@ inline std::vector<ledger::Transaction> transactions_for(
         t.source_account = accounts->ref_for_path(account);
         t.destination = accounts->ref_for_path(other);
         t.amount = amount;
-        // Left uncleared. A CSV file carries no statement and says nothing about
-        // what the bank has settled, so nothing here can honestly say it has --
-        // unlike an OFX file, whose rows are a statement and are cleared.
+        // Cleared, like everything else read out of a download. A CSV says
+        // nothing about what the bank has settled, and that is not a reason to
+        // call it unsettled: the file came from the bank, so the rows in it
+        // happened. Uncleared is what a transaction nobody but the typist has
+        // seen looks like. See the arrives cleared rule in ImportOfx.
+        t.cleared = types::ClearedStatus::Cleared;
         // Named for the kind of file that gave it and by the line it came from,
         // which is the only name a CSV row has. It is not an OFX identifier and
         // is never compared with one: see the identifier-scope rule in ImportOfx.

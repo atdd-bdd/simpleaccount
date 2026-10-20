@@ -27,15 +27,21 @@
 #include <QModelIndex>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QSignalBlocker>
 #include <QSplitter>
 #include <QStatusBar>
 #include <QTableWidget>
 #include <QTabWidget>
+#include <QTreeView>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QKeyEvent>
 #include <QKeySequence>
+#include <QMouseEvent>
+#include <QScrollBar>
+#include <QStyle>
+#include <QStyleOptionSlider>
 #include <functional>
 #include <memory>
 #include <fstream>
@@ -49,6 +55,7 @@
 #include "qif_import.h"
 #include "register_lines.h"
 #include "register_view.h"
+#include "scrolling.h"
 
 namespace {
 
@@ -85,6 +92,63 @@ protected:
 private:
     std::function<void()> record_;
 };
+
+// Clicking the empty part of a scroll bar pages the view. The style decides
+// what a click on the bar means -- which of the four places it landed in --
+// and ui::scroll_lines decides how far the view then moves; a page is a
+// screenful less a line. Qt's own paging moves a whole screenful, leaving
+// nothing in common between the two views, which is what this replaces. See
+// the scroll bar rule in UserInterface.spectable.
+class PagesTheView : public QObject {
+public:
+    explicit PagesTheView(QScrollBar* bar) : QObject(bar), bar_(bar) {}
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (event->type() != QEvent::MouseButtonPress)
+            return QObject::eventFilter(watched, event);
+        auto* click = static_cast<QMouseEvent*>(event);
+        if (click->button() != Qt::LeftButton)
+            return QObject::eventFilter(watched, event);
+
+        QStyleOptionSlider option;
+        option.initFrom(bar_);
+        option.orientation = bar_->orientation();
+        option.minimum = bar_->minimum();
+        option.maximum = bar_->maximum();
+        option.sliderPosition = bar_->sliderPosition();
+        option.sliderValue = bar_->value();
+        option.singleStep = bar_->singleStep();
+        option.pageStep = bar_->pageStep();
+        option.subControls = QStyle::SC_All;
+        if (bar_->orientation() == Qt::Horizontal)
+            option.state |= QStyle::State_Horizontal;
+        const QStyle::SubControl where = bar_->style()->hitTestComplexControl(
+            QStyle::CC_ScrollBar, &option, click->position().toPoint(), bar_);
+
+        // The indicator and the arrows are left to Qt: dragging is its own
+        // thing, and an arrow already moves one line.
+        if (where != QStyle::SC_ScrollBarAddPage && where != QStyle::SC_ScrollBarSubPage)
+            return QObject::eventFilter(watched, event);
+
+        const ui::ScrollBarPlace place = where == QStyle::SC_ScrollBarAddPage
+                                             ? ui::ScrollBarPlace::BelowIndicator
+                                             : ui::ScrollBarPlace::AboveIndicator;
+        bar_->setValue(bar_->value() + ui::scroll_lines(place, bar_->pageStep()));
+        return true;
+    }
+
+private:
+    QScrollBar* bar_;
+};
+
+// A table whose scroll bar pages rather than jumps. Per-item scrolling is what
+// makes a page a number of lines rather than a number of pixels.
+void pagesTheView(QAbstractItemView* view) {
+    view->setVerticalScrollMode(QAbstractItemView::ScrollPerItem);
+    QScrollBar* bar = view->verticalScrollBar();
+    bar->installEventFilter(new PagesTheView(bar));
+}
 
 // A figure typed by a person, which may be anything at all. Nothing is reported
 // for text that is not a number: the cell simply holds no amount, which is the
@@ -363,6 +427,9 @@ MainWindow::MainWindow() {
         if (!workspace_->go_to_find_result(row + 1)) return;
         refresh();
     });
+    findTable_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(findTable_, &QTableWidget::customContextMenuRequested, this,
+            &MainWindow::findResultMenu);
 
     // The panel below the register. The import review is a tab of it, so that
     // the register it is about to change stays in view above, and so that more
@@ -719,14 +786,10 @@ void MainWindow::buildMenus() {
     recent_ = file->addMenu("Open &recent");
     rebuildRecent();
     file->addSeparator();
-    // A QIF is a one-time migration out of Quicken, not a way to open a book.
-    file->addAction("Import &history from Quicken...", this,
-                    &MainWindow::importHistory);
-    file->addAction("Import QIF for &review...", this,
-                    &MainWindow::importQifForReview);
-    file->addSeparator();
-    // The ordinary way transactions arrive: a download for one account, looked
-    // over in the pane beside its register before it changes anything.
+    // One import, not three. A QIF is no longer a menu item of its own: the
+    // history file is asked for when a book is made, and a QIF offered here is
+    // read the same way a QFX or a CSV is -- into one account, through the
+    // review panel. See the File menu scenario in UserInterface.spectable.
     file->addAction("&Import transactions...", this,
                     &MainWindow::importTransactions);
     file->addSeparator();
@@ -820,8 +883,106 @@ void MainWindow::newBook() {
     // does not have, so the workspace starts over rather than being handed
     // the new book.
     workspace_.reset();
+    splits_.clear();
     rememberRecent(name);
     bookChanged(name);
+    askTheNewBookQuestion(name);
+}
+
+// The question a new book opens with. A book with no accounts cannot be typed
+// into at all, so the first thing asked is where its chart comes from: twenty
+// years of Quicken, or the standard list. There is no Cancel, because a blank
+// answer is itself an answer -- this is an entirely new book -- and a book left
+// with no accounts would be of no use to anybody. See the new book scenarios in
+// UserInterface.spectable.
+void MainWindow::askTheNewBookQuestion(const QString& name) {
+    workspace_->make_new_book(name.toStdString());
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("New book");
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* asked = new QLabel(
+        QString("%1 has nothing in it yet. Where do its accounts come from?").arg(name),
+        &dialog);
+    asked->setWordWrap(true);
+    layout->addWidget(asked);
+
+    auto* fromNothing = new QRadioButton("Start fresh, with the standard categories", &dialog);
+    auto* fromHistory = new QRadioButton("Bring in a Quicken history file (QIF)", &dialog);
+    fromNothing->setChecked(true);
+    layout->addWidget(fromNothing);
+    layout->addWidget(fromHistory);
+
+    auto* row = new QHBoxLayout();
+    auto* chosen = new QLineEdit(&dialog);
+    chosen->setReadOnly(true);
+    auto* browse = new QPushButton("Choose...", &dialog);
+    chosen->setEnabled(false);
+    browse->setEnabled(false);
+    row->addWidget(chosen);
+    row->addWidget(browse);
+    layout->addLayout(row);
+
+    connect(fromHistory, &QRadioButton::toggled, chosen, &QWidget::setEnabled);
+    connect(fromHistory, &QRadioButton::toggled, browse, &QWidget::setEnabled);
+    connect(browse, &QPushButton::clicked, &dialog, [this, chosen] {
+        const QString file = chooseImportFile("History file", "Quicken export (*.qif *.QIF)");
+        if (!file.isEmpty()) chosen->setText(file);
+    });
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok, &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    layout->addWidget(buttons);
+
+    // The loop is for the two ways the answer can be no answer: the history
+    // chosen without naming a file, and a file the importer would not read.
+    for (;;) {
+        // Closing the window is not a third answer: a book has to start from
+        // something, so it starts from the standard list.
+        const QString file = dialog.exec() == QDialog::Accepted && fromHistory->isChecked()
+                                 ? chosen->text().trimmed()
+                                 : QString();
+        if (fromHistory->isChecked() && file.isEmpty() && dialog.result() == QDialog::Accepted) {
+            QMessageBox::information(this, "SimpleAccount",
+                                     "Name the QIF file, or start from the standard categories.");
+            continue;
+        }
+
+        std::string text;
+        if (!file.isEmpty()) {
+            std::ifstream in(file.toStdString(), std::ios::binary);
+            if (!in) {
+                QMessageBox::warning(this, "SimpleAccount",
+                                     QString("%1 could not be read").arg(file));
+                continue;
+            }
+            std::ostringstream buffer;
+            buffer << in.rdbuf();
+            text = buffer.str();
+        }
+
+        const ui::NewBookStarted said =
+            workspace_->answer_new_book_question(file.toStdString(), text, {});
+        if (said.refused) {
+            // All or nothing: a book half imported is neither the old data nor
+            // the new, with no way to tell which arrived.
+            QMessageBox::warning(this, "SimpleAccount", QString::fromStdString(said.refusal));
+            continue;
+        }
+
+        // The workspace did the work, so the window takes the book back off it.
+        chart_ = workspace_->accounts();
+        book_ = workspace_->book();
+        transactions_ = workspace_->transactions();
+        splits_ = workspace_->splits();
+        if (!save()) return;
+        refresh();
+        status_->setText(QString("%1  --  %2 transactions, %3 accounts")
+                             .arg(name)
+                             .arg(transactions_.size())
+                             .arg(chart_.all().size()));
+        return;
+    }
 }
 
 void MainWindow::openBook() {
@@ -1100,20 +1261,6 @@ void MainWindow::newAccount() {
     bookChanged(QString::fromStdString(wanted) + " added");
 }
 
-void MainWindow::importHistory() {
-    if (!store_.is_open()) {
-        QMessageBox::information(
-            this, "SimpleAccount",
-            "Open a book first, or make one with File > New book.\n\n"
-            "A QIF export is history brought in once; it is not a book.");
-        return;
-    }
-    const QString path = QFileDialog::getOpenFileName(
-        this, "Import history from Quicken", {}, "Quicken export (*.qif *.QIF)");
-    if (path.isEmpty()) return;
-    importHistoryFrom(path);
-}
-
 void MainWindow::importHistoryFrom(const QString& path) {
     std::ifstream in(path.toStdString(), std::ios::binary);
     if (!in) {
@@ -1149,10 +1296,7 @@ void MainWindow::importHistoryFrom(const QString& path) {
 // An import is shown in the split pane, beside the register it is about to
 // change, rather than in a dialog of its own. Nothing reaches the book until it
 // is accepted.
-void MainWindow::importQifForReview() {
-    const QString path = QFileDialog::getOpenFileName(this, "Import a QIF file for review", {},
-                                                      "Quicken export (*.qif *.QIF)");
-    if (path.isEmpty()) return;
+void MainWindow::importQifForReviewFrom(const QString& path) {
     std::ifstream in(path.toStdString(), std::ios::binary);
     if (!in) return;
     std::ostringstream buffer;
@@ -1161,6 +1305,10 @@ void MainWindow::importQifForReview() {
     qif::Importer importer;
     importer.start_from(chart_);
     importer.import_into(selectedAccount());
+    // Reached from Import transactions, so this file is a statement and its
+    // rows arrive cleared. The history is asked for once, when the book is
+    // made, and keeps the markers it carries.
+    importer.as_a_statement();
     const qif::Imported imported = importer.run(buffer.str());
     if (imported.refused) {
         QMessageBox::warning(this, "SimpleAccount",
@@ -1208,11 +1356,31 @@ void MainWindow::importTransactions() {
     // better witness of the two: a QFX knows which account it was downloaded
     // for and a register in front of you only knows what you last looked at.
     // See the section on where an import is going in UserInterface.spectable.
-    const QString path = QFileDialog::getOpenFileName(
-        this, "Import a statement", {},
-        "Downloaded transactions (*.qfx *.QFX *.ofx *.OFX *.csv *.CSV);;All files (*)");
+    const QString path = chooseImportFile(
+        "Import transactions",
+        "Downloaded transactions (*.csv *.CSV *.qfx *.QFX *.ofx *.OFX *.qif *.QIF)"
+        ";;All files (*)");
     if (path.isEmpty()) return;
     importTransactionsFrom(path);
+}
+
+// The program's own dialog, not the one Windows provides, because the order the
+// files come in is the point: an import is nearly always the file just
+// downloaded, and the native dialog sorts by name with no way to be told
+// otherwise. See the import dialog rule in UserInterface.spectable.
+QString MainWindow::chooseImportFile(const QString& title, const QString& filter) {
+    QFileDialog dialog(this, title);
+    dialog.setOption(QFileDialog::DontUseNativeDialog);
+    dialog.setFileMode(QFileDialog::ExistingFile);
+    dialog.setViewMode(QFileDialog::Detail);
+    dialog.setNameFilter(filter);
+    // Date Modified is the fourth column of the detail view, and descending
+    // puts the newest at the top.
+    if (auto* view = dialog.findChild<QTreeView*>("treeView"))
+        view->sortByColumn(3, Qt::DescendingOrder);
+    if (dialog.exec() != QDialog::Accepted) return {};
+    const QStringList chosen = dialog.selectedFiles();
+    return chosen.isEmpty() ? QString() : chosen.front();
 }
 
 // The dialog in front of an import. It proposes the account the file, its name
@@ -1276,6 +1444,14 @@ void MainWindow::importTransactionsFrom(const QString& path) {
     std::ostringstream buffer;
     buffer << in.rdbuf();
     const std::string text = buffer.str();
+
+    // QIF has no menu item of its own any more, so it arrives here and is sent
+    // on to the reader that understands it. The two differ in more than
+    // parsing: a QIF names its own accounts, so there is no account to confirm.
+    if (qif::looks_like_a_qif(text)) {
+        importQifForReviewFrom(path);
+        return;
+    }
 
     // What the file knows about itself, before a row of it is read. The mapping
     // table is not read here yet, so a QFX is placed by the account number
@@ -1543,6 +1719,8 @@ MainWindow::TabWidgets MainWindow::makeReportTab(int tabPosition, const std::str
     // category together. A category line is neither, and offers nothing.
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    // A report is paged by its scroll bar the same as a register is.
+    pagesTheView(table);
     table->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(table, &QTableWidget::customContextMenuRequested, container,
             [this, table, shown, run](const QPoint& at) {
@@ -1844,6 +2022,70 @@ void MainWindow::reviewMenu(const QPoint& at) {
     menu.exec(reviewTable_->viewport()->mapToGlobal(at));
 }
 
+// The menu on a find result. Going to the transaction is what clicking the row
+// already does; Show split is the item that earns the menu, a result row
+// reading --Split-- and nothing more. It is left off a result that is not a
+// split rather than offered and refused -- see the find-results menu section
+// of UserInterface.spectable.
+void MainWindow::findResultMenu(const QPoint& at) {
+    if (!workspace_) return;
+    const QModelIndex index = findTable_->indexAt(at);
+    if (!index.isValid()) return;
+    const int line = index.row() + 1;
+
+    QMenu menu(this);
+    for (const ui::MenuEntry& entry : workspace_->find_result_menu(line)) {
+        QAction* action = menu.addAction(QString::fromStdString(entry.item));
+        action->setEnabled(entry.enabled);
+        if (entry.item.rfind("Show split", 0) == 0)
+            connect(action, &QAction::triggered, this,
+                    [this, line]() { showFindResultSplit(line); });
+        else
+            connect(action, &QAction::triggered, this, [this, line]() {
+                if (!workspace_->go_to_find_result(line)) return;
+                refresh();
+            });
+    }
+    menu.exec(findTable_->viewport()->mapToGlobal(at));
+}
+
+// The split as it was typed, which is where the amount a find was given
+// actually is. A look only: the register is where a split is changed.
+void MainWindow::showFindResultSplit(int line) {
+    if (!workspace_) return;
+    const std::vector<reg::SplitLine> lines = workspace_->find_result_split(line);
+    if (lines.empty()) return;
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Split"));
+    auto* layout = new QVBoxLayout(&dialog);
+
+    auto* table = new QTableWidget(static_cast<int>(lines.size()), 3);
+    table->setHorizontalHeaderLabels({tr("Category"), tr("Amount"), tr("Memo")});
+    table->verticalHeader()->setVisible(false);
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setFont(appFont_);
+    for (int r = 0; r < static_cast<int>(lines.size()); ++r) {
+        const reg::SplitLine& row = lines[static_cast<std::size_t>(r)];
+        table->setItem(r, 0, new QTableWidgetItem(QString::fromStdString(row.category)));
+        setAmount(table, r, 1, row.amount);
+        table->setItem(r, 2, new QTableWidgetItem(QString::fromStdString(row.memo)));
+    }
+    table->resizeColumnsToContents();
+    table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    layout->addWidget(table);
+
+    auto* buttons = new QHBoxLayout;
+    buttons->addStretch();
+    auto* close = new QPushButton(tr("Close"));
+    connect(close, &QPushButton::clicked, &dialog, &QDialog::accept);
+    buttons->addWidget(close);
+    layout->addLayout(buttons);
+    dialog.resize(520, 260);
+    dialog.exec();
+}
+
 // What the import decided the line already was, read off the book. A look, not
 // a decision: the tick in the review is where the decision is made, so this
 // changes nothing and only has to be closed.
@@ -2061,6 +2303,10 @@ MainWindow::TabWidgets MainWindow::makeRegisterTab(int tabPosition) {
             [this, reg](const QPoint& at) { registerMenu(tabs_->indexOf(reg) + 1, at); });
     t.reg->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
     t.reg->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
+    // Thirty thousand lines are reached by the scroll bar more than by
+    // anything else, and the click made most is the one in the empty part of
+    // it.
+    pagesTheView(t.reg);
 
     // A tab made after the font was chosen has to be brought into step with
     // it: the app font reaches the table, but not the row heights, which are
@@ -2310,7 +2556,8 @@ void MainWindow::refreshReviewPanel() {
         reviewTable_->setItem(r, 3, text(row.account, row.account));
         reviewTable_->setItem(r, 4, text(row.category, row.category));
         setAmount(reviewTable_, r, 5, row.amount);
-        reviewTable_->setItem(r, 6, text(row.disposition));
+        reviewTable_->setItem(
+            r, 6, text(ui::disposition_reading(row.disposition, row.notes)));
     }
     reviewTable_->resizeColumnsToContents();
     reviewTable_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);

@@ -11,7 +11,10 @@
 #include "date.h"
 #include "ledger.h"
 #include "money.h"
+#include "import_review.h"
 #include "ofx_import.h"
+#include "qif_import.h"
+#include "register_entry.h"
 #include "ofx_reader.h"
 #include "posting.h"
 #include "report.h"
@@ -1209,9 +1212,115 @@ public:
         ADD_FAILURE() << "Not implemented: examples_businessrule_when_the_number_in_a_download_is_the_number_on_an_account";
     }
 
-    void examples_businessrule_a_download_arrives_cleared_and_only_a_typed_transaction_is_not(const std::vector<ClearedOnArrivalString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_a_download_arrives_cleared_and_only_a_typed_transaction_is_not";
+    // What a reader makes of one transaction, asked of each reader in turn:
+    // there is no one place in the program that decides this, which is the
+    // reason the rule is written down. "As the file says" is checked both ways
+    // round -- the same history read with the marker and without it -- because
+    // one reading alone cannot tell being obeyed from being ignored.
+    void examples_businessrule_a_download_arrives_cleared_and_only_a_typed_transaction_is_not(
+            const std::vector<ClearedOnArrivalString>& values) {
+        ASSERT_FALSE(values.empty());
+        for (const ClearedOnArrivalString& value : values) {
+            const std::string& how = value.howitarrived;
+            std::string got;
+            if (how == "Read from an OFX download") {
+                got = arrived_as_a_download(ofx_download());
+            } else if (how == "Read from a CSV download") {
+                got = arrived_as_a_download(csv_download());
+            } else if (how == "Read from a QIF statement") {
+                got = arrived_from_a_qif(qif_download(true), true);
+                EXPECT_EQ("Cleared", arrived_from_a_qif(qif_download(false), true))
+                    << "a statement with no marker in it is cleared all the same";
+            } else if (how == "Read from a QIF history") {
+                const std::string marked = arrived_from_a_qif(qif_download(true), false);
+                const std::string unmarked = arrived_from_a_qif(qif_download(false), false);
+                got = marked == "Cleared" && unmarked == "Uncleared"
+                          ? "As the file says"
+                          : marked + " marked and " + unmarked + " unmarked";
+            } else if (how == "Typed into the register") {
+                got = arrived_by_hand(false);
+            } else if (how == "Typed as a split") {
+                got = arrived_by_hand(true);
+            } else {
+                FAIL() << "nothing arrives here by " << how;
+            }
+            EXPECT_EQ(value.cleared, got) << how;
+        }
+    }
+
+    // The chart the readers below are pointed at. Small on purpose: what is
+    // being read off them is the cleared status and nothing else.
+    static chart::Chart arriving_into() {
+        chart::Chart c;
+        const std::pair<const char*, types::AccountType> wanted[] = {
+            {"Assets:Checking", types::AccountType::Checking},
+            {"Expenses:Uncategorized", types::AccountType::Expense},
+            {"Expenses:Groceries", types::AccountType::Expense}};
+        for (const auto& one : wanted) {
+            chart::Account a;
+            a.path = types::AccountPath(one.first);
+            a.type = one.second;
+            c.put(a);
+        }
+        return c;
+    }
+
+    static std::string ofx_download() {
+        return one_transaction_file("DEBIT", "-45.00");
+    }
+
+    static std::string csv_download() {
+        return "Date,Description,Amount\n01/15/2024,HARRIS TEETER,-45.00\n";
+    }
+
+    // A one-record QIF, with the cleared marker in it or without it.
+    static std::string qif_download(bool marked) {
+        return std::string("!Type:Bank\nD01/15/2024\nT-45.00\nPHARRIS TEETER\n") +
+               (marked ? "C*\n" : "") + "^\n";
+    }
+
+    // An OFX or a CSV, read the way the program reads one: through the review,
+    // which is where the transaction that will be stored is prepared.
+    static std::string arrived_as_a_download(const std::string& text) {
+        chart::Chart accounts = arriving_into();
+        const review::Prepared prepared =
+            review::from_file(text, "Assets:Checking", {}, &accounts, {});
+        if (prepared.refused) return "refused -- " + prepared.refusal;
+        if (prepared.rows.empty()) return "nothing was read";
+        return types::to_string(prepared.rows.front().cleared);
+    }
+
+    // The same reader for both QIF cases; which question asked for the file is
+    // the whole of the difference, and as_a_statement is how that is said.
+    static std::string arrived_from_a_qif(const std::string& text, bool as_a_statement) {
+        qif::Importer importer;
+        importer.start_from(arriving_into());
+        importer.import_into("Assets:Checking");
+        if (as_a_statement) importer.as_a_statement();
+        const qif::Imported out = importer.run(text);
+        if (out.refused) return "refused -- " + out.refusal;
+        if (out.transactions.empty()) return "nothing was read";
+        return types::to_string(out.transactions.front().cleared);
+    }
+
+    // A line typed into the register and left, as one category or as a split.
+    static std::string arrived_by_hand(bool as_a_split) {
+        chart::Chart accounts = arriving_into();
+        reg::BlankLine line = reg::blank_line_on(types::Date{2024, 1, 15});
+        line.payee = "HARRIS TEETER";
+        line.category = "Expenses:Groceries";
+        line.payment = Money("45.00");
+        reg::Committed done;
+        if (as_a_split) {
+            reg::SplitLine only;
+            only.category = "Expenses:Groceries";
+            only.amount = Money("45.00");
+            done = reg::commit_split(line, "Assets:Checking", {only}, 0, &accounts);
+        } else {
+            done = reg::commit(line, "Assets:Checking", 0, &accounts);
+        }
+        if (!done.committed) return "not committed -- " + done.reason;
+        return types::to_string(done.transaction.cleared);
     }
 
     void examples_businessrule_the_date_windows_and_why_they_differ(

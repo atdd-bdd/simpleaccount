@@ -61,13 +61,20 @@ public:
     // The dialog in front of an import. Returns the account to import into,
     // or nothing at all if it was cancelled.
     std::string confirmImportAccount(const ui::Workspace::ImportConfirmation& proposed);
+    // The program's own file dialog, which an import uses so that the newest
+    // file is the first one offered.
+    QString chooseImportFile(const QString& title, const QString& filter);
+    // A QIF read into the review panel. Reached from the one import item rather
+    // than from a menu item of its own.
+    void importQifForReviewFrom(const QString& path);
+    // The question a new book opens with: which accounts it starts from, and a
+    // history file to take them out of if there is one.
+    void askTheNewBookQuestion(const QString& name);
 
 private slots:
     void newBook();
     void openBook();
     void newAccount();
-    void importHistory();
-    void importQifForReview();
     void importTransactions();
     void editRules();
     void assignPayeesAccordingToRules();
@@ -157,6 +164,11 @@ private:
     // of UserInterface.spectable.
     void reviewMenu(const QPoint& at);
     void showDuplicate();
+    // The menu on a find result, which offers the transaction and, when the
+    // result is a split, the lines the row cannot show. See the find-results
+    // menu section of UserInterface.spectable.
+    void findResultMenu(const QPoint& at);
+    void showFindResultSplit(int line);
     // The menu on a line of the tree on the left. A group heading offers only
     // a new account, a heading being nothing in the book.
     void treeMenu(const QPoint& at);

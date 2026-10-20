@@ -769,7 +769,6 @@ Then transaction notes are : TransactionNote
 # ordinary case for a check and the reason the window exists, so nothing is
 # said about that.
 
-$TBD
 Scenario A duplicate the payees disagree about is still a duplicate, with a note
 Description The one note that has no worked example above. No payee rule covers
 \ this name and the loose comparison cannot join it either --- OIL is
@@ -957,7 +956,6 @@ Then transactions are : ImportedTransaction
 # The payee is the raw NAME from the file. Tidying it is the business of
 # Payees, so that this file has one job.
 
-$TBD
 BusinessRule A download arrives cleared and only a typed transaction is not
 Description Cleared means the bank has said this happened. A download is the
 \ bank saying so, so everything read out of one is cleared. A

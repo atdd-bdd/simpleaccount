@@ -20,7 +20,10 @@ FetchContent_MakeAvailable(googletest)
 # little build time and removes a failure that looks exactly like a passing
 # suite.
 if(MSVC)
-  add_compile_options(/FS)
+  # /bigobj because one generated test file per spec table means one very
+  # large translation unit, and UserInterface has outgrown the section count
+  # an ordinary object file can hold.
+  add_compile_options(/FS /bigobj)
 endif()
 
 enable_testing()
