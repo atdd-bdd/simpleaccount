@@ -19,3 +19,7 @@ testdata/
 
 # Python bytecode from the comparison tools in tools/.
 __pycache__/
+
+# Probes and one-off scripts written while working. Nothing here is read by a
+# build or a test, and none of it is meant to outlive the session that made it.
+scratchpad/
