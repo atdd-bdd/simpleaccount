@@ -8,6 +8,7 @@
 #include "ledger.h"
 #include "money.h"
 #include "text_types.h"
+#include "transaction_id.h"
 
 // Changing a transaction that is already in the book.
 //
@@ -22,6 +23,94 @@ struct Outcome {
     bool changed = false;
     std::string reason;
 };
+
+// What an account starts from. There is no opening balance field on an account:
+// what the dialog shows is the transaction against Equity:Opening Balances,
+// read back off the book, and editing the field edits that transaction. So the
+// book balances from its first day whichever way the figure was entered, and
+// the figure lives in one place rather than in two that would have to be kept
+// in step. See the starting-balance section of Accounts.spectable.
+inline const char* kOpeningBalances = "Equity:Opening Balances";
+
+struct Starting {
+    bool exists = false;
+    // The way the statement reads: a card balance owed is positive, the same
+    // direction it is entered in when the account is created.
+    Money stated;
+    types::Date on{2005, 1, 1};
+};
+
+inline const ledger::Transaction* starting_transaction_of(
+        const chart::Chart& accounts,
+        const std::vector<ledger::Transaction>& transactions,
+        const std::string& account) {
+    const chart::Ref self = accounts.ref_for_path(account);
+    const chart::Ref opening = accounts.ref_for_path(kOpeningBalances);
+    if (self.is_none() || opening.is_none()) return nullptr;
+    for (const ledger::Transaction& t : transactions)
+        if (t.source_account == self && t.destination == opening) return &t;
+    return nullptr;
+}
+
+inline Starting starting_balance_of(const chart::Chart& accounts,
+                                    const std::vector<ledger::Transaction>& transactions,
+                                    const std::string& account) {
+    Starting out;
+    const ledger::Transaction* t =
+        starting_transaction_of(accounts, transactions, account);
+    if (t == nullptr) return out;
+    const chart::Account* a = accounts.find(account);
+    out.exists = true;
+    out.stated = (a != nullptr && types::display_sign(a->type) < 0) ? -t->amount
+                                                                   : t->amount;
+    out.on = t->date;
+    return out;
+}
+
+// Setting it: the one transaction is written, changed, or taken away. Changed
+// rather than added to, because a second one would read as the sum of the two
+// and the dialog would then show a figure nobody entered. Zero is no starting
+// balance, as it is when an account is created, so what is left is an account
+// with none rather than an account with a transaction for nothing -- and both
+// sides of it go, which is the difference between this and a delete.
+inline Outcome set_starting_balance(chart::Chart* accounts,
+                                    std::vector<ledger::Transaction>* transactions,
+                                    const std::string& account,
+                                    const Money& stated, const types::Date& on) {
+    const chart::Account* a = accounts->find(account);
+    if (a == nullptr) return {false, "there is no account " + account};
+    const Money amount = types::display_sign(a->type) < 0 ? -stated : stated;
+
+    const chart::Ref self = accounts->ref_for_path(account);
+    const chart::Ref opening = accounts->ref_for_path(kOpeningBalances);
+    if (!self.is_none() && !opening.is_none())
+        for (auto it = transactions->begin(); it != transactions->end(); ++it) {
+            if (!(it->source_account == self && it->destination == opening)) continue;
+            if (stated.cents() == 0) {
+                transactions->erase(it);
+                return {true, ""};
+            }
+            it->amount = amount;
+            it->date = on;
+            return {true, ""};
+        }
+
+    if (stated.cents() == 0) return {false, ""};
+
+    // A book whose chart has never needed opening equity gets it here, the same
+    // way an import creates the categories it needs.
+    accounts->add(types::AccountPath(kOpeningBalances), types::AccountType::Equity);
+    ledger::Transaction t;
+    t.id = ledger::new_id();
+    t.ref = types::TransactionRef("T" + std::to_string(transactions->size() + 1));
+    t.date = on;
+    t.payee = types::PayeeName("Opening Balance");
+    t.source_account = accounts->ref_for_path(account);
+    t.destination = accounts->ref_for_path(kOpeningBalances);
+    t.amount = amount;
+    transactions->push_back(t);
+    return {true, ""};
+}
 
 // Repoints the side named by Account at another. Naming which side is what
 // makes this usable on a split, where there is more than one to choose

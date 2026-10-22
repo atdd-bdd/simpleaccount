@@ -9,6 +9,15 @@ set -u
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 export PATH="$PATH:/c/Qt/6.10.0/msvc2022_64/bin"
+
+# The suite writes books, and left to itself it writes them beside the real
+# one in %ProgramData%\SimpleAccount. Nothing it does names the real book, but
+# a test run has no business in that folder at all, so it is sent somewhere of
+# its own. store::books_folder reads this.
+mkdir -p "$ROOT/scratchpad/books"
+# As a Windows path: the program opens books with fopen, which has never
+# heard of /c/Users.
+export SIMPLEACCOUNT_BOOKS="$(cd "$ROOT/scratchpad/books" && pwd -W)"
 # 0.9.2 or later, and not by preference: the spec writes its wrapped
 # Descriptions as continuation lines, which 0.9.1 reads as an unrecognized
 # keyword per line. That ends the block the comment belonged to, so its

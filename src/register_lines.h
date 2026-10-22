@@ -2,13 +2,15 @@
 #include <algorithm>
 #include <map>
 #include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 #include "account_type.h"
 #include "chart.h"
 #include "date.h"
 #include "ledger.h"
 #include "money.h"
-#include "posting.h"
+#include "transaction.h"
 #include "register_view.h"
 #include "text_types.h"
 
@@ -33,10 +35,27 @@ struct Line {
     // its own, and this is what it stands for.
     std::string category_detail;
     std::string memo;
+    // The tag field the transaction carries, shown as one column. A split's
+    // parts carry the transaction's tags, so an expansion line shows the same
+    // field; see the tag rule in UserInterface.spectable.
+    std::string tag;
     Money payment;          // money out of this account
     Money deposit;          // money into it
     types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
     Money balance;          // running, with the display sign of the account
+
+    // Where the line came when the register was built: date order, then the
+    // order the transactions were entered in. A sort carries this, so sorting
+    // back to Date puts the lines back where they were rather than nearly
+    // where they were.
+    std::size_t seq = 0;
+    // What the balance column said in that order. A sort empties the balance
+    // rather than throwing it away, so sorting back to Date shows the same
+    // figures again -- not a recomputation over whatever is on screen now,
+    // which for a register filtered to a date range would start from the
+    // wrong number. See "Sorting back by date brings the running balance
+    // back" in TransactionRegister.spectable.
+    Money balance_in_date_order;
 };
 
 // How an account reads when it is the other side of a line rather than the
@@ -96,7 +115,7 @@ public:
             if (at != where_.end()) parts_[at->second].push_back(&s);
         }
         for (const ledger::Transaction& t : transactions)
-            ++starts_from_[t.source_account.value()];
+            ++points_at_[{t.source_account.value(), t.destination.value()}];
         // Date, then the order the transactions were entered. Entry order is
         // stable: importing more never reshuffles lines already there, so the
         // running balance against a line does not change under the reader.
@@ -132,20 +151,24 @@ public:
         return split_parts(position_of(id));
     }
 
-    // How many transactions start from this account, which is what says
-    // whether a transfer into it is matched.
-    int starts_from(const chart::Ref& account) const {
-        const auto at = starts_from_.find(account.value());
-        return at == starts_from_.end() ? 0 : at->second;
+    // How many transactions start from one account and name the other, which
+    // is what says whether a transfer into an account is matched: the other
+    // half of a movement of money points back at where it came from.
+    int points_at(const chart::Ref& from, const chart::Ref& to) const {
+        const auto at = points_at_.find({from.value(), to.value()});
+        return at == points_at_.end() ? 0 : at->second;
     }
 
 private:
     const chart::Chart* accounts_;
     const std::vector<ledger::Transaction>* transactions_;
     chart::RefIndex refs_;
-    std::map<std::string, std::size_t> where_;
+    // Hashed rather than ordered: an id is thirty characters and nothing here
+    // reads the index in id order, so every lookup was a run of string
+    // compares for no purpose. See decisions.md.
+    std::unordered_map<std::string, std::size_t> where_;
     std::vector<std::vector<const ledger::TransactionSplit*>> parts_;
-    std::map<long long, int> starts_from_;
+    std::map<std::pair<long long, long long>, int> points_at_;
     std::vector<std::size_t> order_;
 };
 
@@ -172,6 +195,7 @@ inline std::vector<Line> lines_for(const BookIndex& book, const std::string& acc
             line.check_no = t.check_no.value();
             line.payee = t.payee.value();
             line.memo = t.memo;
+            line.tag = t.tag;
             line.cleared = t.cleared;
             if (t.amount.cents() < 0) line.payment = -t.amount;
             else line.deposit = t.amount;
@@ -213,6 +237,7 @@ inline std::vector<Line> lines_for(const BookIndex& book, const std::string& acc
                 line.check_no = t.check_no.value();
                 line.payee = t.payee.value();
                 line.memo = s.memo.empty() ? t.memo : s.memo;
+                line.tag = t.tag;
                 line.cleared = types::ClearedStatus::Uncleared;
                 if (s.amount.cents() < 0) line.payment = -s.amount;
                 else line.deposit = s.amount;
@@ -230,13 +255,22 @@ inline std::vector<Line> lines_for(const BookIndex& book, const std::string& acc
         const std::string& dest_path = index.path_for(t.destination);
         if (!chart::Chart::is_descendant_or_self(dest_path, account)) continue;
 
-        // A real destination that is itself another transaction's own
-        // SourceAccount is a matched transfer; that other transaction already
-        // shows this movement from its own side, so showing it again here
-        // would be the same line twice. See the two-rows-for-a-transfer rule
-        // in Transactions.spectable.
+        // A matched transfer: the account this points at has a transaction of
+        // its own pointing back here, so that other transaction already shows
+        // this movement from its own side and showing it again would be the
+        // same line twice. That is what matching two entries by hand leaves
+        // behind -- each one naming the other's account, neither deleted --
+        // see the assignment rule in Transactions.spectable.
+        //
+        // It is the pointing back that says so, not merely that the other
+        // account has transactions of its own. A card register is full of its
+        // own purchases, and a payment transferred into it from checking is
+        // not shown by any of them; counting them made the payment vanish from
+        // the card register, which is what "Choosing none leaves an uncleared
+        // line in the other register" in UserInterface.spectable says it must
+        // not do.
         if (index.is_real(t.destination)) {
-            int others = book.starts_from(t.destination);
+            int others = book.points_at(t.destination, t.source_account);
             // This transaction is counted in that figure if it is the one
             // whose two sides are the same account, and it is not its own
             // other half.
@@ -251,6 +285,7 @@ inline std::vector<Line> lines_for(const BookIndex& book, const std::string& acc
         line.check_no = t.check_no.value();
         line.payee = t.payee.value();
         line.memo = t.memo;
+        line.tag = t.tag;
         line.cleared = t.cleared;
         const Money here_amount = -t.amount;
         if (here_amount.cents() < 0) line.payment = -here_amount;
@@ -261,6 +296,13 @@ inline std::vector<Line> lines_for(const BookIndex& book, const std::string& acc
         running += here_amount;
         line.balance = sign < 0 ? -running : running;
         out.push_back(line);
+    }
+    // The order they are in here is the order Date means, and the balance is
+    // the figure that order adds up to. Recorded in one place at the end
+    // rather than at each of the three points a line is made.
+    for (std::size_t i = 0; i < out.size(); ++i) {
+        out[i].seq = i;
+        out[i].balance_in_date_order = out[i].balance;
     }
     return out;
 }
@@ -284,38 +326,6 @@ inline std::vector<Line> lines_for(
 // and tested without one: a widget decides where the cursor is, and these decide
 // what there is to look at.
 
-// Sorting by something other than date. Allowed, because sorting by payee is how
-// a person finds something -- but the running balance goes away, because a
-// running balance down a list that is not in date order is a column of
-// meaningless numbers. Emptying it is honest; filling it in is not.
-struct Sorted {
-    std::vector<Line> lines;
-    bool balance_shown = true;
-    std::string reason;
-};
-
-inline Sorted sorted_by(const std::vector<Line>& lines, const std::string& column) {
-    Sorted out;
-    out.lines = lines;
-    if (column == "Date" || column.empty()) return out;
-
-    out.balance_shown = false;
-    out.reason = "The register is not in date order";
-    const auto key = [&](const Line& line) -> std::string {
-        if (column == "Payee")    return line.payee;
-        if (column == "Category") return line.category;
-        if (column == "Memo")     return line.memo;
-        if (column == "CheckNo")  return line.check_no;
-        return line.payee;
-    };
-    // Stable, so lines that sort the same keep the order they were in and the
-    // list does not reshuffle itself every time it is sorted.
-    std::stable_sort(out.lines.begin(), out.lines.end(),
-                     [&](const Line& x, const Line& y) { return key(x) < key(y); });
-    for (Line& line : out.lines) line.balance = Money();
-    return out;
-}
-
 namespace detail {
 
 inline std::string fold(const std::string& text) {
@@ -329,7 +339,87 @@ inline bool holds(const std::string& haystack, const std::string& needle) {
     return fold(haystack).find(fold(needle)) != std::string::npos;
 }
 
+// A check number as a number, with the blank ones first: 7 is above 100, and a
+// line with no number on it is not scattered through the list and not dropped.
+// A number nobody can read as one -- ATM, EFT -- sorts with the numbered lines
+// and keeps the order it was in, which is as much as can be said for it.
+inline std::pair<int, long long> check_key(const Line& line) {
+    if (line.check_no.empty()) return {0, 0};
+    long long n = 0;
+    bool any = false;
+    for (const char c : line.check_no)
+        if (c >= '0' && c <= '9') { n = n * 10 + (c - '0'); any = true; }
+    return {1, any ? n : 0};
+}
+
+// What a column sorts on: the thing the column means, rather than the text it
+// happens to show. Amount is the one this matters most for -- a register sorted
+// on the printed text puts 9.99 after 100.00, and the person who clicked the
+// heading was looking for the largest payment. See "What each column sorts on"
+// in TransactionRegister.spectable.
+inline bool sorts_before(const std::string& column, const Line& x, const Line& y) {
+    if (column == "Payee")    return fold(x.payee) < fold(y.payee);
+    if (column == "Category") return x.category < y.category;
+    if (column == "Memo")     return x.memo < y.memo;
+    if (column == "Tag")      return fold(x.tag) < fold(y.tag);
+    if (column == "CheckNo")  return check_key(x) < check_key(y);
+    if (column == "Amount")
+        return x.deposit.cents() - x.payment.cents() < y.deposit.cents() - y.payment.cents();
+    if (column == "Cleared")
+        return static_cast<int>(x.cleared) < static_cast<int>(y.cleared);
+    // Date, and anything a heading does not name: the date, then the order the
+    // lines were already in.
+    return std::make_pair(x.date, x.seq) < std::make_pair(y.date, y.seq);
+}
+
 }  // namespace detail
+
+// Sorting by something other than date. Allowed, because sorting by payee is how
+// a person finds something -- but the running balance goes away, because a
+// running balance down a list that is not in date order is a column of
+// meaningless numbers. Emptying it is honest; filling it in is not.
+struct Sorted {
+    std::vector<Line> lines;
+    bool balance_shown = true;
+    std::string reason;
+};
+
+// Which way round a sort starts. Every column starts ascending: Date because
+// that is the order the register is already in and a first click on Date should
+// look like no change rather than a jump to the far end of the file, Amount
+// because ascending puts the largest payment first and a person sorting by
+// amount is looking for a big one, the rest because A to Z and
+// uncleared-first are what the column is for. The second click reverses it,
+// which is what every list in every program does; the heading is a toggle.
+inline std::string first_direction_for(const std::string& /*column*/) {
+    return "Ascending";
+}
+
+inline Sorted sorted_by(const std::vector<Line>& lines, const std::string& column,
+                        const std::string& direction = "Ascending") {
+    Sorted out;
+    out.lines = lines;
+    const bool descending = direction == "Descending";
+    // Stable, so lines the sort cannot tell apart keep the order they were in
+    // and clicking a heading never reshuffles what the person is looking at.
+    std::stable_sort(out.lines.begin(), out.lines.end(),
+                     [&](const Line& x, const Line& y) {
+                         return descending ? detail::sorts_before(column, y, x)
+                                           : detail::sorts_before(column, x, y);
+                     });
+
+    if (column == "Date" || column.empty()) {
+        // Back in date order, so the balance column means something again and
+        // says what it said before.
+        for (Line& line : out.lines) line.balance = line.balance_in_date_order;
+        return out;
+    }
+
+    out.balance_shown = false;
+    out.reason = "The register is not in date order";
+    for (Line& line : out.lines) line.balance = Money();
+    return out;
+}
 
 // Searching the register. Matches the payee, the memo, the category and either
 // amount column, because a person searching a register is looking for a
@@ -370,6 +460,13 @@ struct Filtered {
     // first line so the running balance has somewhere to start from.
     types::Date opening_as_at{2024, 1, 1};
     Money opening;
+    // Whether there is an opening line at all. A range that begins at the first
+    // transaction has nothing before it, and nothing before it is no line
+    // rather than a line reading zero.
+    bool has_opening = false;
+    // What the register says about itself where an empty list would otherwise
+    // look like a fault. See the hide-before rule below.
+    std::string note;
 };
 
 inline Filtered between(const std::vector<Line>& lines, const types::Date& from,
@@ -380,10 +477,102 @@ inline Filtered between(const std::vector<Line>& lines, const types::Date& from,
         if (line.date < from) {
             // Everything before the range is what the range opens with.
             out.opening = line.balance;
+            out.has_opening = true;
             continue;
         }
         if (to < line.date) continue;
         out.lines.push_back(line);
+    }
+    return out;
+}
+
+// --- the ranges a register offers by name -----------------------------------
+//
+// A range the user picks by name rather than by typing two dates. Each one is
+// worked out from today every time it is applied rather than stored, so a book
+// left open overnight into January shows the new year the next time the range is
+// applied -- and nothing is recomputed behind the user, because the range in
+// force is the one they chose. See "The date ranges the register offers by name"
+// in TransactionRegister.spectable.
+struct DateRange {
+    types::Date from{2024, 1, 1};
+    types::Date to{2024, 12, 31};
+};
+
+// Everything there is, which is what a register with no range chosen shows --
+// All dates being a named range too keeps those two the same register. The rule
+// writes its To as Today; this runs on past the last line where the register
+// holds a transaction dated after today, because the register with no range
+// shows those lines and this one is meant to show the same ones.
+//
+// The lines arrive in date order, which is the order a register is built in, so
+// the first of them is the first transaction.
+inline DateRange all_dates(const std::vector<Line>& lines, const types::Date& today) {
+    DateRange out;
+    out.from = lines.empty() ? today : lines.front().date;
+    out.to = today;
+    for (const Line& line : lines)
+        if (out.to < line.date) out.to = line.date;
+    return out;
+}
+
+inline DateRange named_range(const std::string& name, const types::Date& today,
+                             const std::vector<Line>& lines, const std::string& since) {
+    DateRange out = all_dates(lines, today);
+    // The calendar year, not the fiscal one: the register is a list of what
+    // happened and the user reading it means the year on the calendar. The
+    // fiscal year start is a reporting decision and does not move this.
+    if (name == "This year" || name == "Year to date") {
+        out.from = types::Date(today.year(), 1, 1);
+        out.to = today;
+        return out;
+    }
+    if (name == "Last year") {
+        out.from = types::Date(today.year() - 1, 1, 1);
+        out.to = types::Date(today.year() - 1, 12, 31);
+        return out;
+    }
+    if (name == "Past two years") {
+        // Two years back from today rather than from January, so the range
+        // rolls with today. The clamp is for one day in four years: two years
+        // back from the 29th of February is the 28th.
+        const int day = std::min(
+            today.day(), types::Date::days_in_month(today.year() - 2, today.month()));
+        out.from = types::Date(today.year() - 2, today.month(), day);
+        out.to = today;
+        return out;
+    }
+    if (name == "Since a date") {
+        const auto typed = types::Date::from_iso(since);
+        if (typed) out.from = *typed;
+        out.to = today;
+        return out;
+    }
+    return out;  // All dates, and any name this does not know
+}
+
+// What the register shows, once the book's hide-before date has had its say.
+//
+// Hidden is not deleted and not left out of the arithmetic: the balance brought
+// forward onto the opening line includes every hidden transaction, so the first
+// visible line reads the balance it read before the date was set. A range the
+// user picks inside the hidden years shows nothing and says why -- that is the
+// book's setting winning, which is the point of it being on the book, and an
+// empty register with no explanation reads as a defect. See "A book may hide
+// everything before a date".
+//
+// The date arrives as the book stores it: an ISO date, or the word none, or
+// nothing at all, which is a book that hides nothing.
+inline Filtered in_range(const std::vector<Line>& lines, const DateRange& range,
+                         const std::string& hide_before) {
+    const auto hidden = types::Date::from_iso(hide_before);
+    types::Date from = range.from;
+    if (hidden.has_value() && from < *hidden) from = *hidden;
+    Filtered out = between(lines, from, range.to);
+    if (hidden.has_value() && range.to < *hidden) {
+        out.lines.clear();
+        out.has_opening = false;
+        out.note = "This book hides transactions before " + hidden->iso();
     }
     return out;
 }

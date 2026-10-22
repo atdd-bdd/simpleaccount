@@ -78,6 +78,7 @@ Examples: BookScope
 | Reconciliations              | PerBook  |                                           |
 | Fiscal year start            | PerBook  | A business year need not be a personal one |
 | CSV bank profiles            | PerBook  | Duplicated rather than shared; see above  |
+| Import options               | PerBook  | Whether a CSV import clears is a fact about the book, not the machine |
 | CSV header aliases           | PerBook  | Likewise                                  |
 | The QIF profile              | Machine  | How Quicken writes, not what a book holds |
 | Window size and column order | Settings | The program's, not a book's               |
@@ -122,7 +123,6 @@ Then payee rules in force in Personal are : PayeeRules
 | Pattern | MatchType | Payee | Category |
 # No rows.
 
-$TBD
 Scenario A CSV profile set up for one book is not in the other
 Description The headings of a CSV file from a bank are the same whichever
 \ account they describe, so a shared profile would save the second
@@ -158,7 +158,6 @@ Attributes CurrentBook
 | Attribute | Type | Default |
 | Name      | Text |         |
 
-$TBD
 Scenario A bank number known to one book is unknown to the other
 Description Two accounts at one bank, one business and one personal, have two
 \ different numbers and belong in two different books. Each book's
@@ -231,6 +230,12 @@ When register entry committed : RegisterEntry Vertical
 Then rejected because : Rejection
 | Reason                                                              |
 | Expenses:Consulting Fees is not an account in this book             |
+# Left $TBD on purpose, and not for want of code. reg::commit creates a
+# category typed into the register rather than refusing it, which is the
+# register's own settled rule with its reasoning written into the function.
+# Both outcomes keep the books apart -- what gets created here is a Personal
+# account of the same name, with Business never consulted. Which of the two
+# rules wins is a decision, so see questions.md section 10.
 
 Scenario Money moving between the two books is two transactions
 Description A draw from the business is the case that makes people want one
@@ -417,7 +422,7 @@ Details The version is read before anything else. A file written by a later
 Examples: BookInfrastructure
 | Table  | Columns                        | Notes                              |
 | schema | version                        | One row; read before anything else |
-| book   | name, fiscal_year_start, check_window_days, last_id_used | One row; the Book entity's own data, and the id counter |
+| book   | name, fiscal_year_start, check_window_days, set_cleared_on_csv_import, last_id_used | One row; the Book entity's own data, its settings, and the id counter |
 
 Attributes BookInfrastructure
 | Attribute | Type   | Default |
@@ -425,6 +430,40 @@ Attributes BookInfrastructure
 | Columns   | String |         |
 | Notes     | String | none    |
 
+
+BusinessRule A tag table of its own, once there is a list of tags
+Description The tag a transaction carries is a name. The names themselves are a
+\ table, so that a list can be shown and a misspelling can be told
+\ from a new tag.
+Details Not in the infrastructure rule above until the schema has it: that
+\ rule is checked against the real database, so a column named there
+\ before it exists turns a live test red. This rule is the statement
+\ of what is coming.
+\
+\ The transaction keeps the tag as a name rather than as an id, which
+\ is the one place this book departs from the identity rule for
+\ accounts. A tag is a label and not a thing with a balance: renaming
+\ one is a rename of every use of it, which is the behaviour wanted,
+\ and nothing refers to a tag except the transactions that carry it.
+\ The table exists to list and to spell-check, not to be pointed at.
+\
+\ A tag is one word, because the field on the transaction holds words
+\ and every word in it is a tag; see the typing rule in UserInterface.
+\ So a row of this table is a word, and the table is the vocabulary
+\ rather than a list of fields that have been typed.
+\
+\ A tag in use by no transaction stays in the table. The list is the
+\ author's vocabulary -- Rental, WarpAndByte -- and a year with no
+\ rental transactions in it is not a reason to forget the word.
+Examples: TagInfrastructure
+| Table | Columns    | Notes                                              |
+| tag   | id, name   | One row per tag; name is unique, and the id is for the table's own sake rather than for a reference |
+
+Attributes TagInfrastructure
+| Attribute | Type   | Default |
+| Table     | String |         |
+| Columns   | String |         |
+| Notes     | String | none    |
 BusinessRule How an attribute becomes a column
 Description Mechanically, by its type, so that no column is a judgement call.
 Examples: ColumnType
@@ -779,6 +818,45 @@ When a book is opened named : BookName Vertical
 Then the book is refused saying
 """
 Business was written by a later version of SimpleAccount
+"""
+
+BusinessRule A book of any version but this one is refused
+Description There is nothing left to migrate. Every book this program has
+\ written was deleted while the shape was still being settled, so the
+\ only books in existence are this version's, and a file claiming any
+\ other version is a file this program did not write.
+Details The upgrade path was seven steps long and each one was a guess about a
+\ book that no longer exists. Keeping it meant keeping seven paths through
+\ storage that nothing exercises, and the first thing an unexercised
+\ migration does when it finally runs is quietly drop a column.
+\ Refusing is not the same as failing. The book is left on disk exactly as
+\ it was, and the message says which version wrote it, so a file that
+\ matters can be opened by the program that understands it. The same rule
+\ in both directions: a later version is refused because this program does
+\ not know what it added, an earlier one because this program no longer
+\ knows what it meant.
+Examples: VersionRefusal
+| TheBooksVersion | Then                                               |
+| This one        | Opened                                             |
+| Later than this | Refused, saying a later version wrote it            |
+| Earlier         | Refused, saying an earlier version wrote it         |
+| Absent          | Refused, saying the file is not a SimpleAccount book |
+
+Attributes VersionRefusal
+| Attribute       | Type   | Default |
+| TheBooksVersion | String |         |
+| Then            | String |         |
+
+Scenario A book from an earlier version of the program is refused
+Description Left untouched, like a book from a later one. An earlier book is
+\ not brought up to date because there are none to bring: the shape
+\ was still being settled when the last of them was deleted.
+Given a book whose schema version is 9
+When a book is opened named : BookName Vertical
+| Name | Business |
+Then the book is refused saying
+"""
+Business was written by an earlier version of SimpleAccount
 """
 
 Scenario The books in the folder are listed by name

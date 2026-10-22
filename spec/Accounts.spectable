@@ -27,7 +27,6 @@ Uses AccountPath and AccountType from CoreTypes
 | Placeholder | Boolean     | false   | A grouping node; takes no entries   |
 | Hidden      | Boolean     | false   | Kept out of pickers, history kept   |
 | Alias       | Text        | none    | A short way to type it; see finding a category |
-| PaymentPayee | Text       | none    | What a payment to this account is called on the paying account's statement; see ImportOfx |
 | Bank        | Text        | none    | Which institution it is at; see what is kept about an account |
 | BankId      | Text        | none    | What the institution calls itself in a download -- its routing number |
 | AccountNumber | Text      | none    | The number on the statement, kept as written |
@@ -73,7 +72,6 @@ Given the chart of accounts is : ChartOfAccounts
 # Creating accounts
 # ---------------------------------------------------------------------------
 
-$TBD
 Scenario Adding an account under a parent
 Given the chart of accounts is as previous
 When account added : Account Vertical
@@ -85,7 +83,6 @@ Then account is : Account Vertical
 | Placeholder | false                   |
 | Hidden      | false                   |
 
-$TBD
 Scenario A missing parent is created as a placeholder
 Description Importing twenty years of data names deep categories that were
 \ never created by hand, so the missing levels are filled in and
@@ -101,7 +98,6 @@ Then accounts created are : ChartOfAccounts
 | Expenses:Home:Garden:Seeds | Expense | false       |
 # The first two were filled in; the third is the one that was asked for.
 
-$TBD
 Scenario A filled-in parent takes the type of its child
 Description A placeholder created on the way to an Expense is itself an Expense,
 \ so the roll-up in a report adds up.
@@ -563,11 +559,13 @@ Details These are facts about the account and not about any transaction, so
 
 Attributes AccountSettings
 Description What the dialog of one account holds.
-| Attribute     | Type        | Default |
-| Path          | AccountPath |         |
-| Bank          | Text        | none    |
-| BankId        | Text        | none    |
-| AccountNumber | Text        | none    |
+| Attribute       | Type        | Default    |
+| Path            | AccountPath |            |
+| Bank            | Text        | none       |
+| BankId          | Text        | none       |
+| AccountNumber   | Text        | none       |
+| StartingBalance | Money       | 0.00       |
+| StartingDate    | Date        | 2005-01-01 |
 
 Scenario An account starts with nothing known about it but its name
 Description Nothing is required. An account with no bank and no number works
@@ -585,10 +583,7 @@ Then account settings are : AccountSettings Vertical
 | BankId        | none            |
 | AccountNumber | none            |
 
-# The bank and the number round-trip today; the routing number has nowhere
-# to be kept yet. Tagged rather than trimmed back to two fields, because
-# what it is here to say is that all three are the account's.
-$TBD
+# All three are the account's, so all three are written with it.
 Scenario The bank and the number are kept with the book
 Description Written when they are entered, because a book is a file and not a
 \ session. See the saving rule in Books.
@@ -635,6 +630,148 @@ Then account settings are : AccountSettings
 # The tilde in the table is a space, so the second number is written with a
 # leading blank and is kept without it. The leading zeros of the first survive,
 # which they would not if a number were read as a number.
+
+# ---------------------------------------------------------------------------
+# The starting balance, in the dialog rather than only at creation
+# ---------------------------------------------------------------------------
+
+Description The dialog shows what the account starts from -- an amount and the
+\ date it starts on -- and both can be set there, not only in the
+\ moment the account is created.
+Details There is still no opening balance field on an account. What the dialog
+\ shows is the transaction against Equity:Opening Balances, read back
+\ off the book, and editing the field edits that transaction. So the
+\ book balances from its first day whichever way the figure was
+\ entered, and the figure lives in one place rather than in two that
+\ would have to be kept in step. See the opening balances section
+\ above, which is the decision this follows.
+\
+\ An account that came from a QIF history already has one, posted by
+\ the import. An account typed in by hand has none, and the dialog is
+\ where that is put right: the usual reason is a statement from 2005
+\ in a drawer, and the usual motive is wanting the register to
+\ reconcile.
+\
+\ A starting balance of zero is no starting balance, as it is at
+\ creation, and the date beside it then says nothing. Reading a date
+\ out of a dialog that has no amount to go with it is not worth
+\ asking after, so the scenarios that have no balance do not care
+\ what it says.
+
+Scenario The dialog shows the starting balance the account was given
+Description Read off the transaction rather than out of a field, because the
+\ transaction is where it is.
+Given the chart of accounts is as previous
+Given transactions are : Transaction
+| Ref | SourceAccount  | Date       | Destination             | Amount  |
+| T1  | Assets:Savings | 2005-01-01 | Equity:Opening Balances | 1200.00 |
+When account settings opened : AccountSelect
+| Path           |
+| Assets:Savings |
+Then account settings are : AccountSettings Vertical
+| Path            | Assets:Savings |
+| StartingBalance | 1200.00        |
+| StartingDate    | 2005-01-01     |
+
+Scenario An account with no starting balance shows none
+Description Most accounts in a book imported from Quicken have one. An account
+\ typed in afterwards does not, and the dialog says so rather than
+\ showing a figure nobody entered.
+Given the chart of accounts is as previous
+When account settings opened : AccountSelect
+| Path            |
+| Assets:Checking |
+Then account settings are : AccountSettings Vertical
+| Path            | Assets:Checking |
+| StartingBalance | 0.00            |
+| StartingDate    | ?DNC?           |
+
+Scenario A starting balance entered in the dialog posts the opening transaction
+Description The account was typed in with nothing in it and the statement it
+\ starts from turned up later.
+Given the chart of accounts is as previous
+When account settings changed : AccountSettings Vertical
+| Path            | Assets:Savings |
+| StartingBalance | 1200.00        |
+| StartingDate    | 2005-01-01     |
+Then balances are : AccountBalance
+| Account                 | RawBalance | DisplayBalance | Notes                  |
+| Assets:Savings          | 1200.00    | 1200.00        | What it started from   |
+| Equity:Opening Balances | -1200.00   | 1200.00        | The other side of it   |
+
+Scenario Changing the starting balance changes the transaction it already has
+Description Not a second one. The dialog is editing the transaction it showed,
+\ which is the whole reason the figure is not kept twice.
+Given the chart of accounts is as previous
+Given transactions are : Transaction
+| Ref | SourceAccount  | Date       | Destination             | Amount  |
+| T1  | Assets:Savings | 2005-01-01 | Equity:Opening Balances | 1200.00 |
+When account settings changed : AccountSettings Vertical
+| Path            | Assets:Savings |
+| StartingBalance | 1450.00        |
+| StartingDate    | 2005-01-01     |
+Then balances are : AccountBalance
+| Account        | RawBalance | DisplayBalance | Notes                            |
+| Assets:Savings | 1450.00    | 1450.00        | The figure as changed, not added |
+# A second transaction would read 2650.00 here, so the balance is the whole of
+# what has to be checked: there is nothing a duplicate could hide behind.
+
+Scenario The date a balance starts from can be changed on its own
+Description The amount was right and the date was a guess, which is what
+\ happens when a statement is found after the account was opened.
+Given the chart of accounts is as previous
+Given transactions are : Transaction
+| Ref | SourceAccount  | Date       | Destination             | Amount  |
+| T1  | Assets:Savings | 2005-01-01 | Equity:Opening Balances | 1200.00 |
+When account settings changed : AccountSettings Vertical
+| Path            | Assets:Savings |
+| StartingBalance | 1200.00        |
+| StartingDate    | 2004-07-31     |
+When account settings opened : AccountSelect
+| Path           |
+| Assets:Savings |
+Then account settings are : AccountSettings Vertical
+| Path            | Assets:Savings |
+| StartingBalance | 1200.00        |
+| StartingDate    | 2004-07-31     |
+
+Scenario A starting balance cleared to zero takes its transaction away
+Description Zero is no starting balance, so what is left is an account with
+\ none -- not an account with a transaction for nothing.
+Given the chart of accounts is as previous
+Given transactions are : Transaction
+| Ref | SourceAccount  | Date       | Destination             | Amount  |
+| T1  | Assets:Savings | 2005-01-01 | Equity:Opening Balances | 1200.00 |
+When account settings changed : AccountSettings Vertical
+| Path            | Assets:Savings |
+| StartingBalance | 0.00           |
+| StartingDate    | 2005-01-01     |
+Then balances are : AccountBalance
+| Account                 | RawBalance | DisplayBalance | Notes                  |
+| Assets:Savings          | 0.00       | 0.00           | Nothing to start from  |
+| Equity:Opening Balances | 0.00       | 0.00           | And nothing owed to it |
+# Both sides, because taking one of them away and leaving the other is what
+# going at this with a delete rather than with a transaction would do.
+
+Scenario A card's starting balance is entered the way the statement reads
+Description As an amount owed, like the one entered when a card is created,
+\ and shown back the same way. A person reading a card statement is
+\ not thinking in signs.
+Given the chart of accounts is as previous
+When account settings changed : AccountSettings Vertical
+| Path            | Liabilities:Visa |
+| StartingBalance | 300.00           |
+| StartingDate    | 2005-01-01       |
+When account settings opened : AccountSelect
+| Path             |
+| Liabilities:Visa |
+Then account settings are : AccountSettings Vertical
+| Path            | Liabilities:Visa |
+| StartingBalance | 300.00           |
+| StartingDate    | 2005-01-01       |
+Then balances are : AccountBalance
+| Account          | RawBalance | DisplayBalance | Notes            |
+| Liabilities:Visa | -300.00    | 300.00         | Owed, as entered |
 
 # ---------------------------------------------------------------------------
 # Finding a category

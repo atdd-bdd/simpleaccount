@@ -1,4 +1,5 @@
 #pragma once
+#include <QElapsedTimer>
 #include <QFont>
 #include <QMainWindow>
 #include <QMenu>
@@ -9,8 +10,9 @@
 #include <vector>
 #include "chart.h"
 #include "ledger.h"
-#include "posting.h"
+#include "transaction.h"
 #include "payee_rules.h"
+#include "progress.h"
 #include "register_entry.h"
 #include "report.h"
 #include "store_sqlite.h"
@@ -27,6 +29,8 @@ class QCheckBox;
 class QDialog;
 class QLineEdit;
 class QFormLayout;
+class QProgressBar;
+class QPushButton;
 
 // The window. Three regions: the account list on the left, a tab bar of
 // registers and reports on the right, and -- only while an import is waiting
@@ -61,6 +65,7 @@ public:
     // The dialog in front of an import. Returns the account to import into,
     // or nothing at all if it was cancelled.
     std::string confirmImportAccount(const ui::Workspace::ImportConfirmation& proposed);
+    void askAboutTransfers();
     // The program's own file dialog, which an import uses so that the newest
     // file is the first one offered.
     QString chooseImportFile(const QString& title, const QString& filter);
@@ -78,6 +83,21 @@ private slots:
     void importTransactions();
     void editRules();
     void assignPayeesAccordingToRules();
+    // The converter tables: one window of two tabs, because the two are read
+    // together -- a name is converted and then the converted name is
+    // categorised -- and kept apart, because the columns differ. See
+    // decisions.md.
+    void editPayeeTables();
+    void convertPayeesInTheBook();
+    void assignCategoriesInTheBook();
+    // The book's own settings, which are about the book rather than about any
+    // register in it: the check window, whether a CSV import arrives cleared,
+    // the date before which nothing shows, and the fiscal year start.
+    void editBookSettings();
+    // The tag vocabulary, with how many transactions carry each word.
+    void showTagListing();
+    void sortRegisterBy(int tabPosition, int column);
+    void registerRangeChanged(int tabPosition);
     // The two listings, which show the chart itself rather than the work done
     // in it. See the listings section of UserInterface.spectable.
     void showAccountListing();
@@ -105,10 +125,25 @@ private:
     struct TabWidgets {
         bool isReport = false;
         QWidget* widget = nullptr;   // what is added to the tab bar
+        // Whether what this tab shows is older than the book. A tab nobody is
+        // looking at is not brought up to date, because filling thirty
+        // thousand Qt cells nobody can see is the whole of why switching
+        // registers took a noticeable time. It is filled when it is shown.
+        // See decisions.md.
+        bool stale = false;
 
-        // A register.
+        // A register. The controls above the table are a register's view of
+        // itself: the date range it shows, and -- when that range is Since a
+        // date -- the date it starts at. The column it is sorted by and which
+        // way round are the same kind of thing, and both are per tab, because
+        // two registers open at once are two views of two accounts.
         QTableWidget* reg = nullptr;
         reg::BlankLine blank;
+        QComboBox* range = nullptr;
+        QDateEdit* since = nullptr;
+        QLabel* note = nullptr;
+        std::string sortColumn = "Date";
+        std::string sortDirection = "Ascending";
 
         // A report. run() redraws reportTable and totals from the controls
         // above it; shown is what the table is currently showing, kept so
@@ -207,6 +242,15 @@ private:
     // The book's payee rules, held with it because they are part of it: an
     // import asks them for the payee and the category of every row.
     std::vector<payees::Rule> rules_;
+    // The two converter tables and the tag vocabulary, held with the book the
+    // same way. Each is an ordered list: the first row that matches acts, so
+    // the order is the user's and is kept.
+    std::vector<payees::Conversion> conversions_;
+    std::vector<payees::Categorisation> categorisations_;
+    std::vector<std::string> tagVocabulary_;
+    // The book's hide-before date, as the book stores it: an ISO date, the
+    // word none, or nothing at all. Every register reads it.
+    std::string hideBefore_;
     std::unique_ptr<ui::Workspace> workspace_;
     bool showHidden_ = false;
     QFont appFont_;
@@ -254,10 +298,35 @@ private:
     QFormLayout* findForm_ = nullptr;
     QComboBox* findAmountMatch_ = nullptr;
     QLabel* findAmountLabel_ = nullptr;
+    QLabel* findAmountToLabel_ = nullptr;
     QLineEdit* findAmount_ = nullptr;
     QLineEdit* findAmountTo_ = nullptr;
     QLineEdit* findAccount_ = nullptr;
     QComboBox* findScope_ = nullptr;
+
+    // --- saying that something long is going on -----------------------------
+    //
+    // The words and the two numbers are progress::Report's, which has no Qt in
+    // it and is stated in UserInterface.spectable; these three are the painting
+    // of it. In the status bar rather than in a window of its own, because a
+    // window over the work hides what the work is about and because nothing is
+    // being asked. advanceProgress returns whether to carry on, which is false
+    // only once there is a way to stop -- see questions.md.
+    void beginProgress(const std::string& what, long long total,
+                       const std::string& unit = std::string());
+    bool advanceProgress(long long done);
+    void endProgress();
+
+    progress::Report progress_;
+    QElapsedTimer progressSince_;
+    QLabel* progressText_ = nullptr;
+    QProgressBar* progressBar_ = nullptr;
+    bool progressShowing_ = false;
+
+    // The other half of a transfer entered by hand, asked about from the
+    // register. Separate from recordBlankLine because it is a question and a
+    // merge rather than part of committing the line.
+    void offerTheOtherHalf(const reg::Committed& done, const std::string& own);
 
     QLabel* status_ = nullptr;
 };

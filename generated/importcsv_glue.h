@@ -14,8 +14,11 @@
 #include "csv_reader.h"
 #include "date.h"
 #include "ledger.h"
+#include "ofx_import.h"
+#include "ofx_reader.h"
+#include "register_entry.h"
 #include "money.h"
-#include "posting.h"
+#include "transaction.h"
 #include "text_types.h"
 #include "transaction_id.h"
 
@@ -106,7 +109,6 @@ public:
             a.placeholder = parse_bool_cell(value.placeholder);
             a.hidden = parse_bool_cell(value.hidden);
             a.alias = blank(value.alias);
-            a.payment_payee = blank(value.paymentpayee);
             chart_.put(a);
         }
     }
@@ -156,7 +158,8 @@ public:
         rows_ = csv::rows_of(file_, matching_, order(), style(), outward());
         decided_ = csv::decide(chart_, rows_.rows, target_, transactions_);
         const std::vector<ledger::Transaction> made =
-            csv::transactions_for(decided_, target_, ledger::transaction_count(transactions_), &chart_);
+            csv::transactions_for(decided_, target_, ledger::transaction_count(transactions_),
+                                  &chart_, {}, clear_csv_import_);
         created_.clear();
         for (const ledger::Transaction& t : made) created_.push_back(t);
         transactions_.insert(transactions_.end(), made.begin(), made.end());
@@ -523,7 +526,8 @@ public:
             const std::string one = ofx::detail::fingerprint(*one_date, Money(value.amounta));
             const std::string two = ofx::detail::fingerprint(*two_date, Money(value.amountb));
             const bool same = one == two &&
-                ofx::detail::payees_agree(blank(value.payeea), blank(value.payeeb), {});
+                ofx::detail::payees_agree(blank(value.payeea), std::string(),
+                                          blank(value.payeeb), {});
             EXPECT_EQ(parse_bool_cell(value.same), same)
                 << "\"" << value.payeea << "\" against \"" << value.payeeb << "\"";
         }
@@ -681,10 +685,9 @@ private:
         one.memo_column = blank(value.memocolumn);
         one.check_column = blank(value.checkcolumn);
         one.category_column = blank(value.categorycolumn);
-        // CsvProfile in the specification names no balance column, so a profile
-        // stated in a table cannot say which column it is. One recognised by its
-        // signature can, because the alias table places it. Worth raising: a
-        // profile ought to be able to name every column of its file.
+        // A profile names its balance column like any other, which is how a bank
+        // whose heading the alias table does not know can still be checked.
+        one.balance_column = blank(value.balancecolumn);
         if (value.amountstyle.value != DNCString && !value.amountstyle.value.empty())
             one.amount_style = csv::amount_style_from_string(value.amountstyle);
         one.amount_column = blank(value.amountcolumn);
@@ -747,30 +750,63 @@ private:
         ledger::Transaction t;
         t.id = ledger::new_id();
         t.ref = types::TransactionRef("T1");
+        t.date = types::Date(2024, 1, 15);
         t.payee = types::PayeeName("STARBUCKS");
         t.source_account = chart_.ref_for_path(kAccount);
         t.amount = Money("-4.75");
         t.destination = chart_.ref_for_path("Expenses:Uncategorized");
 
         if (test == "1") {
-            // The same fingerprint: same day, same amount, same payee.
-            t.date = types::Date(2024, 1, 15);
-            t.cleared = types::ClearedStatus::Cleared;
-        } else if (test == "2") {
-            // Uncleared, same amount and check number, and far enough away that
-            // the five-day test could not have claimed it.
-            t.date = types::Date(2023, 11, 1);
+            // A reference the file carried, kept under the name of the source
+            // that gave it. Everything else about the two is different, so this
+            // is the only test that can settle it.
+            //
+            // The CSV reader has no column for a reference today -- a header
+            // called Reference is read as a check number -- so the rule itself
+            // is asked, with the row scoped to Csv exactly as the importer
+            // scopes it. That the one rule can be asked this way is the point
+            // of its being one rule rather than two.
+            t.date = types::Date(2024, 2, 2);
+            t.payee = types::PayeeName("SOMEWHERE ELSE");
+            t.amount = Money("-91.40");
+            ledger::stamp(&t, types::ImportSource::Csv, "R-4471");
+            transactions_ = {t};
+            std::vector<ofx::detail::Existing> already = ofx::existing_in(
+                chart_, transactions_, kAccount, types::ImportSource::Csv);
+            ofx::Candidate one;
+            one.date = row.date;
+            one.amount = row.amount;
+            one.payee = row.payee;
+            one.source_id = "R-4471";
+            const std::vector<ofx::Judgement> judged = ofx::judge(
+                &already, {one}, true, {}, ofx::kCheckWindow, nullptr);
+            EXPECT_EQ(1u, judged.size());
+            return judged.empty() ? ofx::Disposition::New : judged.front().disposition;
+        }
+
+        if (test == "2") {
+            // One piece of paper: the same number, the same amount, the same
+            // payee, a day apart -- which is the window a new book starts
+            // with. A different day, so nothing counted could claim it first.
+            t.date = types::Date(2024, 1, 14);
             t.check_no = types::CheckNumber("2041");
             row.check_no = "2041";
-            row.payee = "COUNTY TAX OFFICE";    // so the fingerprint cannot match
         } else if (test == "3") {
-            // Uncleared, same amount, five days earlier, a different payee.
-            t.date = types::Date(2024, 1, 10);
+            // One row against one transaction of the same day and amount. The
+            // payee differs, because the payee is not part of what is counted.
             t.payee = types::PayeeName("SOMEWHERE ELSE");
-        } else {
-            // Test 4: an empty book.
+        } else if (test == "4") {
+            // Two in the book like the one row in the file. Nothing says which
+            // of them it is, so it is a question rather than an answer.
+            a_book_of_identical_transactions(2);
             const csv::Imported got = csv::decide(chart_, {row}, kAccount, transactions_);
-            EXPECT_EQ(1u, got.decided.size());
+            EXPECT_EQ(1u, got.decided.size()) << "test " << test;
+            return got.decided.empty() ? ofx::Disposition::New
+                                       : got.decided.front().disposition;
+        } else {
+            // Test 5: an empty book, so nothing above applies.
+            const csv::Imported got = csv::decide(chart_, {row}, kAccount, transactions_);
+            EXPECT_EQ(1u, got.decided.size()) << "test " << test;
             return got.decided.empty() ? ofx::Disposition::New
                                        : got.decided.front().disposition;
         }
@@ -859,5 +895,194 @@ public:
                 << value.notes;
         }
     }
+
+public:
+
+    // Only the CSV cleared option matters in this file; the check-number window
+    // is asked about in ImportOfx, where the rule it belongs to lives.
+    void given_the_book_setting_is(const std::vector<BookSettingString>& values) {
+        for (const BookSettingString& value : values)
+            clear_csv_import_ = parse_bool_cell(value.setclearedoncsvimport);
+    }
+
+    // Each row is the same two movements over the same opening position, written
+    // with the balance column the row describes. What is asserted is how many
+    // rows were checked -- none, both, or only the one carrying a balance -- and
+    // that nothing read as a disagreement that was not one.
+    void examples_businessrule_when_the_balance_column_is_checked_and_when_it_is_left_alone(
+            const std::vector<BalanceColumnUseString>& values) {
+        for (const BalanceColumnUseString& value : values) {
+            const bool profile_names_it = value.whattheprofilenames != "Nothing";
+            const bool some_cells_empty =
+                value.whatthefilehas == "That column, some cells empty";
+            std::string text = file_without_a_balance();
+            if (value.whatthefilehas == "A known balance heading")
+                text = file_with_a_known_balance_heading();
+            else if (value.whatthefilehas == "That column")
+                text = file_with_a_named_balance_column();
+            else if (some_cells_empty)
+                text = file_with_a_balance_cell_left_empty();
+            const std::vector<csv::BalanceAtRow> got = checks_over(text, profile_names_it);
+            const std::size_t wanted = value.whathappens.rfind("No check", 0) == 0
+                                           ? std::size_t(0)
+                                           : some_cells_empty ? std::size_t(1)
+                                                              : std::size_t(2);
+            EXPECT_EQ(wanted, got.size())
+                << value.whattheprofilenames << " / " << value.whatthefilehas
+                << ": " << value.whathappens;
+            for (const csv::BalanceAtRow& one : got)
+                EXPECT_TRUE(one.agrees) << "line " << one.line << " of a file with "
+                                        << value.whatthefilehas;
+        }
+    }
+
+    // Each row is driven through the thing it names: the CSV importer with the
+    // option as the row sets it, the OFX importer, which is never told about the
+    // option at all, and the register, which clears nothing.
+    void examples_businessrule_a_book_may_say_not_to_clear_what_a_csv_import_brings_in(const std::vector<CsvClearedOptionString>& values) {
+        for (const CsvClearedOptionString& value : values) {
+            const bool option_is_on = value.setting != "Off";
+            types::ClearedStatus got = types::ClearedStatus::Uncleared;
+            if (value.whatisimported == "A CSV file") got = csv_import_clears(option_is_on);
+            else if (value.whatisimported == "An OFX file") got = ofx_import_clears();
+            else if (value.whatisimported == "Typed in") got = typing_clears();
+            else FAIL() << "nothing imports " << value.whatisimported;
+            const bool wanted = value.whatthetransactionis.rfind("Cleared", 0) == 0;
+            EXPECT_EQ(wanted, got == types::ClearedStatus::Cleared)
+                << value.setting << ", " << value.whatisimported;
+        }
+    }
+
+private:
+    // One row of groceries, read the way the scenarios above read a file.
+    static types::ClearedStatus csv_import_clears(bool option_is_on) {
+        chart::Chart accounts = starting_chart();
+        const csv::Read file = csv::read(one_grocery_row());
+        const csv::Matching matching = csv::match_headers(file.headings);
+        const csv::Rows rows = csv::rows_of(file, matching, types::DateOrder::MDY,
+                                            csv::AmountStyle::Signed,
+                                            csv::OutwardSign::Negative);
+        const csv::Imported decided =
+            csv::decide(accounts, rows.rows, "Assets:Checking", {});
+        const std::vector<ledger::Transaction> made = csv::transactions_for(
+            decided, "Assets:Checking", 0, &accounts, {}, option_is_on);
+        return made.empty() ? types::ClearedStatus::Uncleared : made.front().cleared;
+    }
+
+    // The same movement as a download. Built rather than parsed, because what is
+    // being asked is what the importer does with it, not how a file reads.
+    static types::ClearedStatus ofx_import_clears() {
+        chart::Chart accounts = starting_chart();
+        ofx::Transaction row;
+        row.trn_type = "DEBIT";
+        row.date_posted = types::Date{2024, 1, 15};
+        row.amount = Money("-45.00");
+        row.fit_id = "1";
+        row.name = "Harris Teeter";
+        ofx::Statement statement;
+        statement.transactions.push_back(row);
+        const ofx::Imported decided =
+            ofx::decide(statement, "Assets:Checking", {}, accounts);
+        const std::vector<ledger::Transaction> made =
+            ofx::transactions_for(decided, "Assets:Checking", 0, &accounts);
+        return made.empty() ? types::ClearedStatus::Uncleared : made.front().cleared;
+    }
+
+    // A line typed into the register, which is the one thing here that nobody
+    // but the typist has seen.
+    static types::ClearedStatus typing_clears() {
+        chart::Chart accounts = starting_chart();
+        reg::BlankLine line;
+        line.date = types::Date{2024, 1, 15};
+        line.payee = "Harris Teeter";
+        line.category = "Expenses:Groceries";
+        line.payment = Money("45.00");
+        const reg::Committed done = reg::commit(line, "Assets:Checking", 0, &accounts);
+        return done.transaction.cleared;
+    }
+
+    static chart::Chart starting_chart() {
+        chart::Chart accounts;
+        accounts.add(types::AccountPath("Assets:Checking"), types::AccountType::Checking);
+        accounts.add(types::AccountPath("Expenses:Groceries"), types::AccountType::Expense);
+        accounts.add(types::AccountPath("Expenses:Uncategorized"), types::AccountType::Expense);
+        return accounts;
+    }
+
+    static std::string one_grocery_row() {
+        return R"(Date,Payee,Category,Amount
+01/15/2024,Harris Teeter,Expenses:Groceries,-45.00
+)";
+    }
+
+    // The same two rows written four ways: with no balance column at all, with
+    // one the alias table knows by its heading, with one only a profile can
+    // place, and with that column's first cell left empty.
+    static std::string file_without_a_balance() {
+        return R"(Date,Description,Amount
+01/15/2024,HARRIS TEETER,-45.00
+01/16/2024,SHELL,-52.00
+)";
+    }
+
+    static std::string file_with_a_known_balance_heading() {
+        return R"(Date,Description,Amount,Running Balance
+01/15/2024,HARRIS TEETER,-45.00,1705.00
+01/16/2024,SHELL,-52.00,1653.00
+)";
+    }
+
+    static std::string file_with_a_named_balance_column() {
+        return R"(Date,Description,Amount,Position
+01/15/2024,HARRIS TEETER,-45.00,1705.00
+01/16/2024,SHELL,-52.00,1653.00
+)";
+    }
+
+    static std::string file_with_a_balance_cell_left_empty() {
+        return R"(Date,Description,Amount,Position
+01/15/2024,HARRIS TEETER,-45.00,
+01/16/2024,SHELL,-52.00,1653.00
+)";
+    }
+
+    // The check over one file, against a book standing at 1750.00 the day before
+    // the first row. A profile naming Position is used or not used; either way
+    // the balance is read, compared, and thrown away.
+    static std::vector<csv::BalanceAtRow> checks_over(const std::string& text,
+                                                      bool profile_names_the_column) {
+        chart::Chart accounts;
+        accounts.add(types::AccountPath("Assets:Checking"), types::AccountType::Checking);
+        accounts.add(types::AccountPath("Expenses:Uncategorized"), types::AccountType::Expense);
+        ledger::Transaction opening;
+        opening.id = ledger::new_id();
+        opening.ref = types::TransactionRef("T0");
+        opening.date = types::Date(2024, 1, 1);
+        opening.source_account = accounts.ref_for_path("Assets:Checking");
+        opening.amount = Money("1750.00");
+        ledger::Ledger book;
+        ledger::add_to_book(&book, accounts, {opening}, {});
+        csv::Profile named;
+        named.name = "Odd Heading Bank";
+        named.date_column = "Date";
+        named.payee_column = "Description";
+        named.amount_column = "Amount";
+        named.balance_column = "Position";
+        const csv::Read file = csv::read(text);
+        std::map<std::string, csv::Field> columns;
+        if (profile_names_the_column)
+            for (const auto& entry : csv::columns_of(named)) columns.insert(entry);
+        const csv::Matching matching = csv::match_headers(file.headings, columns);
+        const csv::Rows rows = csv::rows_of(file, matching, types::DateOrder::MDY,
+                                            csv::AmountStyle::Signed,
+                                            csv::OutwardSign::Negative);
+        return csv::balance_checks(rows.rows, book, "Assets:Checking");
+    }
+
+    // Whether a CSV import clears what it brings in, as the book would say. On
+    // unless a scenario says otherwise, which is the default on a new book.
+    bool clear_csv_import_ = true;
+
+public:
 
 };

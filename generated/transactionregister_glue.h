@@ -11,7 +11,7 @@
 #include "date.h"
 #include "ledger.h"
 #include "money.h"
-#include "posting.h"
+#include "transaction.h"
 #include "register_entry.h"
 #include "register_lines.h"
 #include "register_view.h"
@@ -46,7 +46,6 @@ public:
             a.placeholder = parse_bool_cell(value.placeholder);
             a.hidden = parse_bool_cell(value.hidden);
             a.alias = blank(value.alias);
-            a.payment_payee = blank(value.paymentpayee);
             chart_.put(a);
         }
     }
@@ -106,14 +105,21 @@ public:
     void when_register_opened_on(const std::vector<AccountSelectString>& values) {
         ASSERT_FALSE(values.empty());
         account_ = values.front().path;
-        lines_ = reg::lines_for(chart_, transactions_, splits_, account_);
+        open_lines_ = reg::lines_for(chart_, transactions_, splits_, account_);
+        // The book's hide-before date applies to every register the book opens,
+        // so it is applied by opening one rather than by a filter the user asks
+        // for.
+        filtered_ = reg::in_range(open_lines_, reg::all_dates(open_lines_, today_),
+                                  hide_before_);
+        lines_ = filtered_.lines;
         balance_shown_ = true;
     }
 
     void when_register_sorted_by(const std::vector<SortByString>& values) {
         ASSERT_FALSE(values.empty());
         open_if_needed();
-        const reg::Sorted sorted = reg::sorted_by(lines_, values.front().column);
+        const reg::Sorted sorted =
+            reg::sorted_by(lines_, values.front().column, values.front().direction);
         lines_ = sorted.lines;
         balance_shown_ = sorted.balance_shown;
         balance_reason_ = sorted.reason;
@@ -131,7 +137,10 @@ public:
         const auto from = types::Date::from_iso(values.front().from);
         const auto to = types::Date::from_iso(values.front().to);
         ASSERT_TRUE(from.has_value() && to.has_value());
-        filtered_ = reg::between(lines_, *from, *to);
+        // Over the register as it was built rather than over what a previous
+        // filter left, so that choosing a range after a range is choosing a
+        // range rather than narrowing one.
+        filtered_ = reg::in_range(open_lines_, reg::DateRange{*from, *to}, hide_before_);
         lines_ = filtered_.lines;
     }
 
@@ -144,6 +153,11 @@ public:
     // Typing on the blank line. Nothing is committed by typing: the line holds
     // what has been entered and leaving it decides.
     void when_blank_line_filled(const std::vector<RegisterLineString>& values) {
+        // A scenario about one column of the blank line says nothing about
+        // which register it is typed into, because the chart says: there is one
+        // account that takes postings. Without this the commit below has no
+        // account and goes nowhere, and the register comes out empty.
+        open_if_needed();
         ASSERT_FALSE(values.empty());
         const RegisterLineString& value = values.front();
         blank_ = reg::blank_line_on(today_);
@@ -154,6 +168,7 @@ public:
         if (value.payee.value != DNCString) blank_.payee = blank(value.payee.value);
         if (value.category != DNCString) blank_.category = blank(value.category);
         if (value.memo != DNCString) blank_.memo = blank(value.memo);
+        if (value.tag != DNCString) blank_.tag = blank(value.tag);
         if (value.checkno.value != DNCString) blank_.check_no = blank(value.checkno.value);
         if (value.payment.value != DNCString && !value.payment.value.empty())
             blank_.payment = Money(value.payment);
@@ -163,6 +178,7 @@ public:
     }
 
     void when_blank_line_left() {
+        open_if_needed();
         if (!filled_) blank_ = reg::blank_line_on(today_);
         const reg::Committed done =
             reg::commit(blank_, account_, ledger::transaction_count(transactions_), &chart_);
@@ -186,6 +202,7 @@ public:
             got.payee = lines_[i].payee.empty() ? "none" : lines_[i].payee;
             got.category = lines_[i].category.empty() ? "none" : lines_[i].category;
             got.memo = lines_[i].memo.empty() ? "none" : lines_[i].memo;
+            got.tag = lines_[i].tag.empty() ? "none" : lines_[i].tag;
             got.cleared = types::to_string(lines_[i].cleared);
             // Amounts through Money, so a figure written either way is the same
             // figure, and a column the table did not name stays unasserted.
@@ -280,7 +297,14 @@ public:
     }
 
     void then_opening_balance_line_is(const std::vector<OpeningLineString>& values) {
-        ASSERT_FALSE(values.empty());
+        if (values.empty()) {
+            // A table with no rows: there is nothing before the range, so there
+            // is no opening line at all rather than one reading zero.
+            EXPECT_FALSE(filtered_.has_opening)
+                << "an opening line of " << filtered_.opening.in_register()
+                << " as at " << filtered_.opening_as_at.iso();
+            return;
+        }
         OpeningLineString got = values.front();
         got.asat = filtered_.opening_as_at.iso();
         if (values.front().balance.value != DNCString)
@@ -409,6 +433,13 @@ private:
     struct PendingSecondRow { Money amount; std::string memo; };
     std::map<std::string, PendingSecondRow> second_row_amount_;
     std::vector<reg::Line> lines_;
+    // The register as it was built, before any filter the user asked for. A
+    // named range is chosen over the register rather than over what the last
+    // range left, which is what lets All dates put it back.
+    std::vector<reg::Line> open_lines_;
+    // The book's own date, as the book stores it: empty for a book that hides
+    // nothing.
+    std::string hide_before_;
     std::vector<reg::SplitLine> split_;
     reg::Filtered filtered_;
     reg::BlankLine blank_;
@@ -434,7 +465,8 @@ private:
             account_ = a.path.value();
             break;
         }
-        lines_ = reg::lines_for(chart_, transactions_, splits_, account_);
+        open_lines_ = reg::lines_for(chart_, transactions_, splits_, account_);
+        lines_ = open_lines_;
     }
 
     static std::string blank(const std::string& s) {
@@ -519,6 +551,240 @@ public:
             s.amount = Money(value.amount);
             s.memo = blank(value.memo);
             splits_.push_back(s);
+        }
+    }
+
+public:
+
+    // Of the settings a book carries, the register reads one: the date before
+    // which it shows nothing. The fiscal year start is a reporting decision and
+    // the register does not read it, which is what the calendar-year scenario
+    // is about; the other two belong to importing.
+    void given_the_book_setting_is(const std::vector<BookSettingString>& values) {
+        ASSERT_FALSE(values.empty());
+        hide_before_ = blank(values.front().hidebefore);
+    }
+
+    void when_register_filtered_to_named_range(
+            const std::vector<NamedRangeSelectString>& values) {
+        ASSERT_FALSE(values.empty());
+        open_if_needed();
+        const reg::DateRange range =
+            reg::named_range(values.front().name, today_, open_lines_,
+                             blank(values.front().since));
+        filtered_ = reg::in_range(open_lines_, range, hide_before_);
+        lines_ = filtered_.lines;
+    }
+
+    void then_register_note_is(const std::vector<RegisterNoteString>& values) {
+        ASSERT_FALSE(values.empty());
+        RegisterNoteString got = values.front();
+        got.note = filtered_.note.empty() ? "none" : filtered_.note;
+        EXPECT_EQ(values.front(), got) << "wanted " << values.front().to_string()
+                                       << " got " << got.to_string();
+    }
+
+    // A register with a transaction in the years a book might hide, one just
+    // after them and one in the current year: the three lines the rows about
+    // ranges and hiding are stated over.
+    static std::vector<reg::Line> dated_sample() {
+        chart::Chart accounts;
+        accounts.add(types::AccountPath("Assets:Checking"), types::AccountType::Checking);
+        accounts.add(types::AccountPath("Expenses:Groceries"), types::AccountType::Expense);
+        const char* dates[] = {"2012-03-01", "2016-02-20", "2024-02-20"};
+        const char* amounts[] = {"1000.00", "-52.00", "-10.00"};
+        std::vector<ledger::Transaction> transactions;
+        for (int i = 0; i < 3; ++i) {
+            ledger::Transaction t;
+            t.id = ledger::new_id();
+            t.ref = types::TransactionRef("T" + std::to_string(i + 1));
+            const auto on = types::Date::from_iso(dates[i]);
+            if (on) t.date = *on;
+            t.payee = types::PayeeName("Shop");
+            t.source_account = accounts.ref_for_path("Assets:Checking");
+            t.destination = accounts.ref_for_path("Expenses:Groceries");
+            t.amount = Money(amounts[i]);
+            transactions.push_back(t);
+        }
+        return reg::lines_for(accounts, transactions, {}, "Assets:Checking");
+    }
+
+    static std::string refs_of(const std::vector<reg::Line>& lines) {
+        std::string out;
+        for (const reg::Line& line : lines) {
+            if (!out.empty()) out += ",";
+            out += line.ref;
+        }
+        return out;
+    }
+
+    // Each row is checked against a handful of lines built for it, chosen so
+    // that sorting on what the column means and sorting on the text it shows
+    // come out in different orders. The refs say which order was got, so a row
+    // whose SortsOn is prose is still measured rather than read.
+    void examples_businessrule_what_each_column_sorts_on(
+            const std::vector<SortKeyString>& values) {
+        for (const SortKeyString& value : values) {
+            std::vector<reg::Line> lines;
+            std::vector<std::string> wanted;
+            if (value.column == "Date") {
+                lines.push_back(sort_sample("T1", "2024-01-20", "Shop", "-10.00"));
+                lines.push_back(sort_sample("T2", "2024-01-15", "Shop", "-20.00"));
+                wanted = {"T2", "T1"};
+            } else if (value.column == "Payee") {
+                lines.push_back(sort_sample("T1", "2024-01-10", "amazon", "-10.00"));
+                lines.push_back(sort_sample("T2", "2024-01-11", "Bravo", "-20.00"));
+                lines.push_back(sort_sample("T3", "2024-01-12", "AMAZON", "-30.00"));
+                wanted = {"T1", "T3", "T2"};
+            } else if (value.column == "Category") {
+                lines.push_back(sort_sample("T1", "2024-01-10", "Shop", "-10.00"));
+                lines.back().category = "Expenses:Groceries";
+                lines.push_back(sort_sample("T2", "2024-01-11", "Shop", "-20.00"));
+                lines.back().category = "--Split--";
+                wanted = {"T2", "T1"};
+            } else if (value.column == "Amount") {
+                lines.push_back(sort_sample("T1", "2024-01-10", "Shop", "-9.99"));
+                lines.push_back(sort_sample("T2", "2024-01-11", "Shop", "-100.00"));
+                lines.push_back(sort_sample("T3", "2024-01-12", "Shop", "20.00"));
+                wanted = {"T2", "T1", "T3"};
+            } else if (value.column == "CheckNo") {
+                lines.push_back(sort_sample("T1", "2024-01-10", "Shop", "-10.00"));
+                lines.back().check_no = "100";
+                lines.push_back(sort_sample("T2", "2024-01-11", "Shop", "-20.00"));
+                lines.push_back(sort_sample("T3", "2024-01-12", "Shop", "-30.00"));
+                lines.back().check_no = "7";
+                wanted = {"T2", "T3", "T1"};
+            } else if (value.column == "Cleared") {
+                lines.push_back(sort_sample("T1", "2024-01-10", "Shop", "-10.00"));
+                lines.back().cleared = types::ClearedStatus::Cleared;
+                lines.push_back(sort_sample("T2", "2024-01-11", "Shop", "-20.00"));
+                wanted = {"T2", "T1"};
+            } else if (value.column == "Memo") {
+                // Blank ones first, then the text as it reads -- so a memo
+                // sorted on would not be in this order by any other key.
+                lines.push_back(sort_sample("T1", "2024-01-10", "Shop", "-10.00"));
+                lines.back().memo = "zebra";
+                lines.push_back(sort_sample("T2", "2024-01-11", "Shop", "-20.00"));
+                lines.push_back(sort_sample("T3", "2024-01-12", "Shop", "-30.00"));
+                lines.back().memo = "apple";
+                wanted = {"T2", "T3", "T1"};
+            } else if (value.column == "Tag") {
+                // The field, not the words in it: T2's field begins with Zulu
+                // and holds Apple, so a sort on the words would bring it to the
+                // front and a sort on the field puts it last. T1 and T3 differ
+                // only in case, so they stay in the order they were in.
+                lines.push_back(sort_sample("T1", "2024-01-10", "Shop", "-10.00"));
+                lines.back().tag = "rental";
+                lines.push_back(sort_sample("T2", "2024-01-11", "Shop", "-20.00"));
+                lines.back().tag = "Zulu Apple";
+                lines.push_back(sort_sample("T3", "2024-01-12", "Shop", "-30.00"));
+                lines.back().tag = "RENTAL";
+                wanted = {"T1", "T3", "T2"};
+            } else {
+                ADD_FAILURE() << "no sample for column " << value.column;
+                continue;
+            }
+            const reg::Sorted sorted = reg::sorted_by(lines, value.column, "Ascending");
+            ASSERT_EQ(wanted.size(), sorted.lines.size()) << value.column;
+            for (std::size_t i = 0; i < wanted.size(); ++i)
+                EXPECT_EQ(wanted[i], sorted.lines[i].ref)
+                    << value.column << " sorts on " << value.sortson << " -- line " << i + 1;
+            // Date is the only order the balance column means anything in.
+            EXPECT_EQ(value.column == "Date", sorted.balance_shown) << value.column;
+        }
+    }
+
+    // A line with nothing on it but the fields a sort reads, in the order the
+    // register would have built them.
+    static reg::Line sort_sample(const std::string& ref, const std::string& date,
+                                 const std::string& payee, const std::string& amount) {
+        reg::Line line;
+        line.ref = ref;
+        const auto on = types::Date::from_iso(date);
+        if (on) line.date = *on;
+        line.payee = payee;
+        const Money money{amount};
+        if (money.cents() < 0) line.payment = -money;
+        else line.deposit = money;
+        return line;
+    }
+
+    void examples_businessrule_which_way_round_a_sort_starts(
+            const std::vector<SortStartString>& values) {
+        for (const SortStartString& value : values)
+            EXPECT_EQ(value.firstclick, reg::first_direction_for(value.column))
+                << value.column << ": " << value.whatthatshows;
+    }
+
+    // Each row's two dates are prose, so each is worked out here for one
+    // stated today and compared: the middle of May 2024, over a register whose
+    // first line is well before it.
+    void examples_businessrule_the_date_ranges_the_register_offers_by_name(
+            const std::vector<NamedDateRangeString>& values) {
+        const types::Date today(2024, 5, 15);
+        const std::vector<reg::Line> lines = dated_sample();
+        for (const NamedDateRangeString& value : values) {
+            const reg::DateRange got =
+                reg::named_range(value.name, today, lines, "2021-07-04");
+            std::string from = "2012-03-01";  // the first transaction
+            std::string to = "2024-05-15";    // today
+            if (value.name == "This year" || value.name == "Year to date") {
+                from = "2024-01-01";
+            } else if (value.name == "Last year") {
+                from = "2023-01-01";
+                to = "2023-12-31";
+            } else if (value.name == "Past two years") {
+                from = "2022-05-15";
+            } else if (value.name == "Since a date") {
+                from = "2021-07-04";
+            }
+            EXPECT_EQ(from, got.from.iso()) << value.name << " from " << value.from;
+            EXPECT_EQ(to, got.to.iso()) << value.name << " to " << value.to;
+        }
+    }
+
+    // The four rows over the same three lines: what is shown, what is brought
+    // forward onto the opening line, and whether the register says why it is
+    // empty.
+    void examples_businessrule_a_book_may_hide_everything_before_a_date(
+            const std::vector<HideBeforeUseString>& values) {
+        const types::Date today(2024, 5, 15);
+        for (const HideBeforeUseString& value : values) {
+            const std::vector<reg::Line> lines = dated_sample();
+            const std::string hides =
+                value.thebooksays == "Nothing" ? std::string() : std::string("2015-01-01");
+            const bool asks_for_the_hidden_years = value.theuserasksfor == "2012 to 2013";
+            const reg::DateRange range =
+                asks_for_the_hidden_years
+                    ? reg::DateRange{types::Date(2012, 1, 1), types::Date(2013, 12, 31)}
+                    : reg::named_range(value.theuserasksfor, today, lines, "");
+            const reg::Filtered got = reg::in_range(lines, range, hides);
+            const std::string shown = refs_of(got.lines);
+
+            if (asks_for_the_hidden_years) {
+                EXPECT_EQ("", shown) << value.whattheregistershows;
+                EXPECT_EQ("This book hides transactions before 2015-01-01", got.note)
+                    << value.whattheregistershows;
+                continue;
+            }
+            EXPECT_EQ("", got.note) << value.whattheregistershows;
+            if (hides.empty()) {
+                // Everything, as now, and nothing before the first line.
+                EXPECT_EQ("T1,T2,T3", shown) << value.whattheregistershows;
+                EXPECT_FALSE(got.has_opening) << value.whattheregistershows;
+            } else if (value.theuserasksfor == "All dates") {
+                // 2015 onwards, with the hidden year's balance brought forward.
+                EXPECT_EQ("T2,T3", shown) << value.whattheregistershows;
+                EXPECT_TRUE(got.has_opening) << value.whattheregistershows;
+                EXPECT_EQ(Money("1000.00"), got.opening) << value.whattheregistershows;
+                EXPECT_EQ("2014-12-31", got.opening_as_at.iso())
+                    << value.whattheregistershows;
+            } else {
+                // This year, as it would have been anyway.
+                EXPECT_EQ("T3", shown) << value.whattheregistershows;
+                EXPECT_TRUE(got.has_opening) << value.whattheregistershows;
+                EXPECT_EQ(Money("948.00"), got.opening) << value.whattheregistershows;
+            }
         }
     }
 

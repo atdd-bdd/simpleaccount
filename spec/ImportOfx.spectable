@@ -231,7 +231,6 @@ Details There is no table of mappings. An account carries the name of its
 \ into such an account is where they arrive; see what a download
 \ teaches an account, below.
 
-$TBD
 Scenario A statement whose number is on no account asks which account it is
 Description The first download from an institution names a number that means
 \ nothing yet. The import stops and asks, rather than inventing an
@@ -257,7 +256,6 @@ Description What the dialog is told about a statement no account claims.
 | OfxAcctType  | OfxAcctType | CHECKING |
 | Suggestion   | AccountPath | none     |
 
-$TBD
 Scenario A download whose number is on an account imports without asking
 Description Which is every month after the first. The account was told the
 \ bank's numbers once and nobody is asked again.
@@ -277,7 +275,6 @@ Attributes ImportTarget
 | AccountPath | AccountPath |         |
 | Asked       | Boolean     | false   |
 
-$TBD
 BusinessRule When the number in a download is the number on an account
 Description Asked of every real account in the chart. One account saying yes is
 \ the account it goes to; none, and the import asks. Two is also
@@ -340,7 +337,6 @@ Details This is the whole of how the numbers get onto an account without
 \ So a disagreement leaves the account alone and writes a note, and
 \ the account dialog is where it is settled.
 
-$TBD
 Scenario The first download confirmed for an account tells it the bank's numbers
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder | BankId | AccountNumber |
@@ -365,7 +361,6 @@ Description The two things on an account that a download is matched against.
 | BankId        | Text        | none    |
 | AccountNumber | Text        | none    |
 
-$TBD
 Scenario A number already on the account is left as it is and noted
 Description The account says one number, the file says another, and the person
 \ confirmed that account anyway. Which of the two is right is not
@@ -386,7 +381,6 @@ Then account numbering is : AccountNumbering
 Then import finishes with : ImportCompletion Vertical CompareOnly
 | NoteCount | 1 |
 
-$TBD
 Scenario A bank id arrives for an account that only knew its number
 Description The number was typed in the account dialog and the routing number
 \ was not, because nobody reads a routing number off a statement to
@@ -429,7 +423,7 @@ Examples: EnumerationValues
 | New       | Not seen before; a transaction is created                       |
 | Duplicate | Already in the book; the one there is cleared and kept, nothing is created |
 | Possible  | The same date and amount is there, but the counts disagree; asks |
-| Completed | Created, and it filled in the other half of a payment already here |
+| Completed | Created, and named on the half of a payment already here, because somebody said the two were the same |
 
 DataType DuplicateNote
 Description What did not fit about a duplicate. Written on the transaction in
@@ -530,8 +524,11 @@ Examples: DispositionRule
 | 2    | This is a checking account, and a transaction in it has the same check number, amount and payee, dated within the book's check-number window | Duplicate |
 | 3    | The rows and the transactions in this account with this date and this amount are equal in number | Duplicate |
 | 4    | There are transactions in this account with this date and this amount, and they are not equal in number to the rows | Possible |
-| 5    | This row is the other half of a payment already here, waiting with its own side unassigned | Completed |
-| 6    | Nothing above applies                                                 | New         |
+| 5    | Nothing above applies                                                 | New         |
+# A row that is the other half of a payment already in the book is still New
+# here. Whether it is that half is asked after the judging, on the amount and
+# the date, and answered by a person -- see the rule about a half already in
+# the book.
 
 Attributes DispositionRule
 | Attribute   | Type              | Default |
@@ -1115,7 +1112,6 @@ Description Something the import saw and could not decide, kept against the
 | Kind      | Text |         |
 | Detail    | Text |         |
 
-$TBD
 Scenario A wider check-number window reaches a check that took a fortnight
 Description The same check sixteen days later, in a book whose window is thirty
 \ days. The number settles it, so the one entered by hand is cleared
@@ -1147,9 +1143,14 @@ Then import notes are : ImportNote
 
 Attributes BookSetting
 Description A setting the book carries, in its own single row. Defaulted here as
-\ it is defaulted on a new book.
-| Attribute       | Type    | Default |
-| CheckWindowDays | Integer | 1       |
+\ it is defaulted on a new book. HideBefore is a date or the word none,
+\ so Text rather than Date: a book that hides nothing has no date to
+\ state, and a Date attribute would have to default to one.
+| Attribute             | Type    | Default |
+| CheckWindowDays       | Integer | 1       |
+| SetClearedOnCsvImport | Boolean | true    |
+| FiscalYearStart       | Integer | 1       |
+| HideBefore            | Text    | none    |
 
 Scenario The notes are shown when the import finishes
 Description An import that wrote notes says so at the end, with the notes. A
@@ -1217,7 +1218,6 @@ Attributes PossibleAnswer
 | TheOneAlreadyThere | String |         |
 | TheDownloadedRow   | String |         |
 
-$TBD
 Scenario Answering that one of two offered rows is the transaction already there
 Description Two coffees, or one coffee entered by hand and read back. The file
 \ has the same amount twice on the same day and the book has it once,
@@ -1261,7 +1261,6 @@ Description Which offered row is being answered, and what the answer is.
 | FitId     | FitId |         |
 | Answer    | Text  | TheSame |
 
-$TBD
 Scenario Answering that both offered rows are different transactions
 Description Three genuine visits to one shop on one day for one amount: one
 \ typed, two downloaded, and the bank is describing two the book does
@@ -1296,7 +1295,6 @@ Then transactions are : ImportedTransaction
 # all. The identifiers are on the new ones only, so a later file naming F003 is
 # a duplicate of the second visit and nothing else.
 
-$TBD
 Scenario An unanswered possible duplicate changes nothing and is asked again
 Description Which is what makes it safe to put an import down and come back to
 \ it. Nothing is created, nothing is stamped and nothing is cleared,
@@ -1363,7 +1361,6 @@ Description One proposed pairing, with everything the user needs to judge it.
 | DaysApart   | Integer                | 0          |
 | State       | TransferCandidateState | Proposed   |
 
-$TBD
 BusinessRule When two new transactions are proposed as one transfer
 Description All of these, and then it is proposed rather than done.
 Details The window is two days, wider than the same day a download is
@@ -1391,16 +1388,16 @@ BusinessRule A payment is completed by whichever import arrives second
 Description A payment from a bank account to a credit card is downloaded twice,
 \ once from each side, and the two downloads usually happen on
 \ different days in either order. Whichever arrives first records the
-\ payment with its other side Unassigned. Whichever arrives second
-\ finds that transaction and completes it, rather than recording the
-\ same payment again.
+\ payment as an ordinary row. Whichever arrives second finds that
+\ transaction, asks whether the two are the same payment, and on being
+\ told they are completes it rather than recording the payment again.
 Details So the two halves of a transfer do not have to arrive together, which
 \ the first version of this rule required and which no real month looks
 \ like. The side that arrives second brings two things: the account, which
-\ fills in the first side's Unassigned Destination, and a row of its
-\ own -- a transaction is one account's own download, so the second half
-\ is a transaction in its own right, not a rewrite of the first, and it
-\ carries its own identifier rather than a second one squeezed onto the
+\ replaces the Uncategorized other side the first row was given, and a row
+\ of its own -- a transaction is one account's own download, so the second
+\ half is a transaction in its own right, not a rewrite of the first, and
+\ it carries its own identifier rather than a second one squeezed onto the
 \ first's.
 \
 \ Each side's payee is whatever its own file called it. A bank calls it
@@ -1409,14 +1406,19 @@ Details So the two halves of a transfer do not have to arrive together, which
 \ nothing to overwrite, since each is its own transaction.
 \
 \ Matching needs the amount equal and opposite and the dates within the
-\ transfer window. What it must not do is search every account in the
-\ book: two cards paid in the same week for similar amounts would pair
-\ with each other's payments. The payment payee is what narrows it.
+\ transfer window, and that is the whole of the evidence. It does not
+\ shortlist by payee first, which an earlier version of this rule did.
+\ The two sides of a transfer are called different things by the two
+\ banks that wrote them, and requiring a payee recorded against the
+\ account in advance meant that a payment nobody had set that up for
+\ was never found at all -- which is the case that sent this back to be
+\ rewritten. Weaker evidence is exactly why nothing is paired without
+\ being asked: see the rule below.
 Examples: PaymentCompletion
-| WhichArrivesFirst | WhatItRecords                         | WhatTheSecondDoes              |
-| The bank          | The payment, other side Unassigned    | Fills in the card, stamps its id |
-| The card          | The payment, other side Unassigned    | Fills in the bank, stamps its id |
-| Only one ever     | The payment, other side Unassigned    | Nothing; it stays to be assigned |
+| WhichArrivesFirst | WhatItRecords                            | WhatTheSecondDoes                 |
+| The bank          | The payment, other side Uncategorized    | Asks, then names the card on it   |
+| The card          | The payment, other side Uncategorized    | Asks, then names the bank on it   |
+| Only one ever     | The payment, other side Uncategorized    | Nothing; it is already a true row |
 
 Attributes PaymentCompletion
 | Attribute         | Type   | Default |
@@ -1424,146 +1426,68 @@ Attributes PaymentCompletion
 | WhatItRecords     | String |         |
 | WhatTheSecondDoes | String |         |
 
-BusinessRule The payment payee says which accounts a payment could belong to
-Description A credit card is paid by a transfer that appears on the bank
-\ statement as a payee -- CHASEBANK, say. Recording that payee against
-\ the card account is what lets a payment on the bank side find the
-\ card side without searching the whole book.
-Details One payee can belong to several accounts, because several cards are paid
-\ from one bank and all of them say CHASEBANK. So the payee narrows the
-\ search to the accounts that carry it, and among those the amount and the
-\ date decide. Two cards from one bank paid different amounts in the same
-\ week are told apart by the amount; paid the same amount in the same week
-\ they are not, and that is asked rather than guessed.
+BusinessRule A half already in the book is found on the amount and the date
+Description Every account a register can be opened on is searched, not a
+\ shortlist. Equal and opposite, within the window, in some other
+\ account: that is a candidate, and a candidate is put to the user
+\ rather than acted on.
+Details The amount and the date are weaker evidence than a payee recorded
+\ against the account in advance would have been, and the dialog is what
+\ makes that safe. It names both halves, both accounts and the gap in
+\ days, and asks whether they are the same payment. Two separate
+\ payments of the same amount in the same week are exactly what this
+\ would otherwise merge, and nobody but the person who made them can
+\ tell. So the search is as wide as it can be and the answer is always
+\ asked for, which is the opposite trade from the one the payee rule
+\ made: it searched narrowly so that it could act quietly, and the cost
+\ was every payment it never found.
 \
-\ Where the payee matches nothing, there is no narrowing and no match: the
-\ payment is recorded with its other side Unassigned and waits for a
-\ person. That is the honest outcome -- a payment whose destination nobody
-\ can work out is not improved by being attached to the wrong card.
-Examples: PaymentPayeeNarrowing
-| TheyPayeeMatches        | ThenTheSearchIs                                  |
-| One account             | That account, on amount and date                  |
-| Several accounts        | Each of them, on amount and date                  |
-| Several, and all match  | Asked, because only a person knows which          |
-| No account              | Not searched; the payment stays Unassigned        |
+\ The first side to arrive is therefore an ordinary row with an
+\ Uncategorized other side, like anything else whose category is not
+\ known. It is not held in a staging account waiting for a partner. It
+\ is a finished transaction that may later be told what the other side
+\ of it was, and if no partner ever arrives it is already right.
+\
+\ Several halves already here can match one downloaded row. Each pairing
+\ is then offered in its own right rather than one of them being picked,
+\ and approving one takes the rest off the table, because the row they
+\ were about is spoken for.
+Examples: AlreadyHereSearch
+| WhatTheSearchFinds         | WhatHappens                                   |
+| One half, in another account | Asked, naming that account and the gap       |
+| Several halves             | Each asked, until one of them is approved     |
+| None                       | Nothing asked; an ordinary new row            |
+| A half in the same account | Not a candidate; a transfer has two accounts  |
 
-Attributes PaymentPayeeNarrowing
-| Attribute        | Type   | Default |
-| TheyPayeeMatches | String |         |
-| ThenTheSearchIs  | String |         |
+Attributes AlreadyHereSearch
+| Attribute          | Type   | Default |
+| WhatTheSearchFinds | String |         |
+| WhatHappens        | String |         |
 
-Scenario A card payment downloaded from the bank waits with its other side unassigned
-Description The bank is read first. It knows the money left and it knows the payee,
-\ and it does not know which card was paid, because the card has not
-\ been read yet.
+Scenario A card payment downloaded from the bank is an ordinary row until the card arrives
+Description The bank is read first. It knows the money left and it does not know
+\ which card was paid, because the card has not been read yet -- so
+\ there is nothing in the book to pair it with and nothing to ask.
 Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type       | Placeholder | PaymentPayee |
-| Assets:Checking        | Checking   | false       | none         |
-| Liabilities:Chase Visa | CreditCard | false       | CHASEBANK    |
-| Unassigned             | OtherAsset | false       | none         |
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Checking   | false       |
+| Liabilities:Chase Visa | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount   | FitId  | Name      | Memo | CheckNum |
 | XFER    | 2026-04-10 | -1200.00 | BNK-77 | CHASEBANK | none | none     |
 Then transactions are : ImportedTransaction
-| Ref | SourceAccount   | Date       | Payee     | Destination | Amount   | Cleared | FitId  |
-| T1  | Assets:Checking | 2026-04-10 | CHASEBANK | Unassigned  | -1200.00 | Cleared | BNK-77 |
-# Unassigned rather than Uncategorized: this is not a question about which
-# expense it was, it is a question about which account the money went to.
-
-$TBD
-Scenario The card import completes the payment the bank import recorded
-Description The card is read a week later. It finds the payment already there with
-\ its other side unassigned, and completes it rather than recording the
-\ same payment again.
-Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type       | Placeholder | PaymentPayee |
-| Assets:Checking        | Checking   | false       | none         |
-| Liabilities:Chase Visa | CreditCard | false       | CHASEBANK    |
-| Unassigned             | OtherAsset | false       | none         |
-Given transactions are : ImportedTransaction
-| Ref | SourceAccount   | Date       | Payee     | Destination | Amount   | Cleared | FitId  |
-| T1  | Assets:Checking | 2026-04-10 | CHASEBANK | Unassigned  | -1200.00 | Cleared | BNK-77 |
-Given import target is : ImportTarget Vertical
-| AccountPath | Liabilities:Chase Visa |
-When transactions imported : OfxTransactions
-| TrnType | DatePosted | Amount  | FitId  | Name             | Memo | CheckNum |
-| XFER    | 2026-04-11 | 1200.00 | CC-901 | PAYMENT RECEIVED | none | none     |
-Then import summary is : ImportSummary Vertical
-| New       | 0 |
-| Completed | 1 |
-Then transactions are : ImportedTransaction
-| Ref | SourceAccount          | Date       | Payee            | Destination            | Amount   | Cleared | FitId  |
-| T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | Liabilities:Chase Visa | -1200.00 | Cleared | BNK-77 |
-| T2  | Liabilities:Chase Visa | 2026-04-11 | PAYMENT RECEIVED | Assets:Checking        | 1200.00  | Cleared | CC-901 |
-# Two transactions, not one: a transaction is one account's own download, so
-# completing a payment adds the card's own row rather than rewriting the
-# bank's. T1's Destination is filled in with Liabilities:Chase Visa and T2 is
-# new, naming T1's account back -- each keeps its own payee, the word the
-# account it is in actually heard, and its own identifier, which is why an
-# identifier belongs to a transaction now rather than to a transaction.
-
-$TBD
-Scenario Two cards from one bank are told apart by the amount
-Description Both cards say CHASEBANK, so the payee narrows the search to both and
-\ the amount decides between them.
-Given the chart of accounts is : ChartOfAccounts
-| Path                    | Type       | Placeholder | PaymentPayee |
-| Assets:Checking         | Checking   | false       | none         |
-| Liabilities:Chase Visa  | CreditCard | false       | CHASEBANK    |
-| Liabilities:Chase Amazon | CreditCard | false      | CHASEBANK    |
-| Unassigned              | OtherAsset | false       | none         |
-Given transactions are : ImportedTransaction
-| Ref | SourceAccount   | Date       | Payee     | Destination | Amount   | Cleared | FitId  |
-| T1  | Assets:Checking | 2026-04-10 | CHASEBANK | Unassigned  | -1200.00 | Cleared | BNK-77 |
-| T2  | Assets:Checking | 2026-04-10 | CHASEBANK | Unassigned  | -340.00  | Cleared | BNK-78 |
-Given import target is : ImportTarget Vertical
-| AccountPath | Liabilities:Chase Amazon |
-When transactions imported : OfxTransactions
-| TrnType | DatePosted | Amount | FitId  | Name             | Memo | CheckNum |
-| XFER    | 2026-04-11 | 340.00 | CC-902 | PAYMENT RECEIVED | none | none     |
-Then import summary is : ImportSummary Vertical
-| New       | 0 |
-| Completed | 1 |
-Then transactions are : ImportedTransaction
-| Ref | SourceAccount            | Date       | Payee            | Destination              | Amount   | Cleared | FitId  |
-| T1  | Assets:Checking          | 2026-04-10 | CHASEBANK        | Unassigned               | -1200.00 | Cleared | BNK-77 |
-| T2  | Assets:Checking          | 2026-04-10 | CHASEBANK        | Liabilities:Chase Amazon | -340.00  | Cleared | BNK-78 |
-| T3  | Liabilities:Chase Amazon | 2026-04-11 | PAYMENT RECEIVED | Assets:Checking          | 340.00   | Cleared | CC-902 |
-# The twelve hundred is still waiting for the Visa file. Nothing about reading
-# the Amazon card tells us anything about it. T3 is the new row this import
-# added -- the card's own side of the payment it completed.
-
-Scenario A row whose payee matches no account is money leaving the book
-Description There is no account for it to be a transfer to, so it is not a
-\ transfer and nothing is waiting: the other side is a category, like
-\ any other payment to anyone the book does not keep.
-\
-\ This is the common case and not a failure. Most of what leaves a
-\ current account goes to somebody outside the book, and a payee that
-\ matches no PaymentPayee is how that is recognised.
-Given the chart of accounts is : ChartOfAccounts
-| Path                   | Type       | Placeholder | PaymentPayee |
-| Assets:Checking        | Checking   | false       | none         |
-| Liabilities:Chase Visa | CreditCard | false       | CHASEBANK    |
-| Expenses:Uncategorized | Expense    | false       | none         |
-| Unassigned             | OtherAsset | false       | none         |
-Given import target is : ImportTarget Vertical
-| AccountPath | Assets:Checking |
-When transactions imported : OfxTransactions
-| TrnType | DatePosted | Amount  | FitId  | Name          | Memo | CheckNum |
-| XFER    | 2026-04-10 | -500.00 | BNK-79 | SOME OTHER CO | none | none     |
-Then transactions are : ImportedTransaction
-| Ref | SourceAccount   | Date       | Payee         | Destination            | Amount  | Cleared | FitId  |
-| T1  | Assets:Checking | 2026-04-10 | SOME OTHER CO | Expenses:Uncategorized | -500.00 | Cleared | BNK-79 |
-Then balances are : AccountBalance CompareOnly
-| Account    | RawBalance |
-| Unassigned | 0.00       |
-# Unassigned is empty, because nothing is waiting. An XFER type in the file does
-# not make something a transfer: what makes it one is both halves being accounts
-# this book keeps, and that is decided by the payee, not by the type.
-
+| Ref | SourceAccount   | Date       | Payee     | Destination            | Amount   | Cleared | FitId  |
+| T1  | Assets:Checking | 2026-04-10 | CHASEBANK | Expenses:Uncategorized | -1200.00 | Cleared | BNK-77 |
+Then transfer candidates are : TransferCandidate
+| FromAccount | FromDate | ToAccount | ToDate | Amount | DaysApart | State |
+# No rows: the card has not been read, so there is no other half to find.
+# Uncategorized, and no staging account: a payment whose other side is not
+# known yet is not a different kind of thing from a payment whose category is
+# not known yet, and it is a finished transaction either way. An XFER type in
+# the file does not make something a transfer; two halves do.
 
 BusinessRule The date windows and why they differ
 Description Written down together because having four windows in one program
@@ -1824,7 +1748,6 @@ Then transfer candidates are : TransferCandidate
 # The three 3,000.00 pairs are not interchangeable even though they look
 # alike: each is paired with the half of its own date, closest date first.
 
-$TBD
 BusinessRule Which half pairs with which when several match
 Description Closest date first, and then the order the files were read. A half
 \ that has been paired is out of the running for the rest.

@@ -26,6 +26,7 @@ Details Payment and Deposit are headed differently for different account types;
 | Payee     | PayeeName      | none       |
 | Category  | Text           | none       |
 | Memo      | Text           | none       |
+| Tag       | Text           | none       |
 | Payment   | Money          | 0.00       |
 | Deposit   | Money          | 0.00       |
 | Cleared   | ClearedStatus  | Uncleared  |
@@ -240,11 +241,188 @@ Examples: EnumerationValues
 | Amount  |                                        |
 | CheckNo |                                        |
 | Cleared |                                        |
+| Memo    |                                        |
+| Tag     |                                        |
 
 Attributes BalanceColumnState
 | Attribute | Type    | Default |
 | Shown     | Boolean | true    |
 | Reason    | Text    | none    |
+
+# ---------------------------------------------------------------------------
+# Sorting by a column other than the date
+# ---------------------------------------------------------------------------
+
+BusinessRule What each column sorts on
+Description Every column heading sorts the register, and what a column sorts on
+\ is the thing the column means rather than the text it happens to show.
+Details Amount is the one this matters most for. A register sorted on the
+\ printed text puts 9.99 after 100.00, because that is alphabetical
+\ order, and the person who clicked the heading was looking for the
+\ largest payment. Amount sorts on the signed number, so the biggest
+\ payment is at one end and the biggest deposit at the other, and the
+\ Payment and Deposit columns are two views of that one number rather
+\ than two sorts.
+\
+\ Date is the only order in which the running balance means anything,
+\ so it is the only one that keeps the balance column; see the rule
+\ above. Sorting back to Date restores it.
+\
+\ A column with nothing in it on some lines -- a check number, a memo --
+\ puts the empty ones together at the start of an ascending sort. They
+\ are not scattered through the list and they are not dropped.
+Examples: SortKey
+| Column   | SortsOn                        | Notes                                                  |
+| Date     | The date, then the entry order | The default, and the only order the balance adds up in |
+| Payee    | The payee name, ignoring case  | So that AMAZON and Amazon are together                 |
+| Category | The destination as it is shown | Split sorts as the word, since that is all there is    |
+| Amount   | The signed amount, as a number | Not the printed text; 100.00 is above 9.99             |
+| CheckNo  | The check number, as a number  | 7 is above 100, and blank ones first                   |
+| Cleared  | Uncleared before cleared       | The ones still to reconcile come to the top            |
+| Memo     | The memo text, as it reads     | Blank ones first, like the check number               |
+| Tag      | The tag field, ignoring case   | The field, not the words in it, so one sort per column |
+
+Attributes SortKey
+| Attribute | Type   | Default |
+| Column    | String |         |
+| SortsOn   | String |         |
+| Notes     | String | none    |
+
+Scenario Sorting by amount orders the numbers, not the printed text
+Description Three transactions whose alphabetical order and whose numeric order
+\ differ. Ascending puts the largest payment first, because a payment
+\ is the most negative signed amount.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
+| T1  | Assets:Checking | 2024-01-10 | Shop A | Expenses:Groceries | -9.99   |
+| T2  | Assets:Checking | 2024-01-11 | Shop B | Expenses:Groceries | -100.00 |
+| T3  | Assets:Checking | 2024-01-12 | Shop C | Expenses:Groceries | 20.00   |
+When register sorted by : SortBy
+| Column | Direction |
+| Amount | Ascending |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Payee  | Payment | Deposit |
+| T2  | Shop B | 100.00  | 0.00    |
+| T1  | Shop A | 9.99    | 0.00    |
+| T3  | Shop C | 0.00    | 20.00   |
+
+Scenario Sorting by cleared brings the unreconciled lines to the top
+Description What the column is for. Reconciling means working through the
+\ lines the bank has not reported yet, and they are easier to find
+\ together.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount | Cleared   |
+| T1  | Assets:Checking | 2024-01-10 | Shop A | Expenses:Groceries | -10.00 | Cleared   |
+| T2  | Assets:Checking | 2024-01-11 | Shop B | Expenses:Groceries | -20.00 | Uncleared |
+| T3  | Assets:Checking | 2024-01-12 | Shop C | Expenses:Groceries | -30.00 | Cleared   |
+When register sorted by : SortBy
+| Column  | Direction |
+| Cleared | Ascending |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Payee  | Cleared   |
+| T2  | Shop B | Uncleared |
+| T1  | Shop A | Cleared   |
+| T3  | Shop C | Cleared   |
+# The two cleared lines keep the order they were already in; see the tie rule.
+
+Scenario Sorting by the same column twice reverses it
+Description The heading is a toggle, which is what every list in every program
+\ does. The second click does not sort by something else and it does
+\ not clear the sort.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount |
+| T1  | Assets:Checking | 2024-01-10 | Shop A | Expenses:Groceries | -10.00 |
+| T2  | Assets:Checking | 2024-01-11 | Shop B | Expenses:Groceries | -20.00 |
+| T3  | Assets:Checking | 2024-01-12 | Shop C | Expenses:Groceries | -30.00 |
+When register sorted by : SortBy
+| Column | Direction  |
+| Payee  | Descending |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Payee  |
+| T3  | Shop C |
+| T2  | Shop B |
+| T1  | Shop A |
+
+Scenario Sorting back by date brings the running balance back
+Description The balance is emptied by a sort, not thrown away, so returning to
+\ date order shows it again with the same figures as before.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount |
+| T1  | Assets:Checking | 2024-01-10 | Shop A | Expenses:Groceries | -10.00 |
+| T2  | Assets:Checking | 2024-01-11 | Shop B | Expenses:Groceries | -20.00 |
+When register sorted by : SortBy
+| Column | Direction |
+| Payee  | Ascending |
+When register sorted by : SortBy
+| Column | Direction |
+| Date   | Ascending |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Payee  | Balance |
+| T1  | 2024-01-10 | Shop A | -10.00  |
+| T2  | 2024-01-11 | Shop B | -30.00  |
+Then running balance is shown : BalanceColumnState Vertical
+| Shown | true |
+
+Scenario A sort leaves tied lines in the order they were already in
+Description The entry-order tie rule is not only about dates. Two lines a sort
+\ cannot tell apart stay in the order they were in, so clicking a
+\ heading never reshuffles anything the person is looking at.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given transactions in entry order are : SequencedTransaction
+| EntrySeq | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount |
+| 1        | T1  | Assets:Checking | 2024-01-20 | Shop A | Expenses:Groceries | -10.00 |
+| 2        | T2  | Assets:Checking | 2024-01-15 | Shop A | Expenses:Groceries | -20.00 |
+| 3        | T3  | Assets:Checking | 2024-01-18 | Shop A | Expenses:Groceries | -30.00 |
+When register sorted by : SortBy
+| Column | Direction |
+| Payee  | Ascending |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Payee  |
+| T2  | Shop A |
+| T3  | Shop A |
+| T1  | Shop A |
+# Date order first, then the sort: the lines were in date order when the sort
+# was asked for, and a sort that cannot tell them apart keeps them that way.
+
+BusinessRule Which way round a sort starts
+Description The first click on a heading sorts the way the column is most
+\ useful, and the second reverses it.
+Details Date starts ascending, oldest first, because that is the order the
+\ register is already in and a first click on Date should look like no
+\ change at all rather than a jump to the far end of the file. Amount
+\ starts ascending as well, which puts the largest payment first; a
+\ person sorting by amount is looking for a big one.
+Examples: SortStart
+| Column  | FirstClick | WhatThatShows                            |
+| Date    | Ascending  | Oldest first, as the register already is |
+| Payee   | Ascending  | A to Z                                   |
+| Amount  | Ascending  | The largest payment first                |
+| Cleared | Ascending  | Uncleared first, ready to reconcile      |
+
+Attributes SortStart
+| Attribute     | Type   | Default |
+| Column        | String |         |
+| FirstClick    | String |         |
+| WhatThatShows | String |         |
 
 # ---------------------------------------------------------------------------
 # Splits in the register
@@ -441,6 +619,223 @@ Attributes OpeningLine
 | Balance   | Money | 0.00       |
 
 # ---------------------------------------------------------------------------
+# Date ranges with names, and a book that hides its early years
+# ---------------------------------------------------------------------------
+
+BusinessRule The date ranges the register offers by name
+Description A range the user picks by name rather than by typing two dates.
+\ Each one is worked out from today, every time it is applied.
+Details A migrated book holds twenty years. The register that opens on it is
+\ not useful at that length, and typing two dates to see this year is
+\ work the program can do.
+\
+\ The names are worked out from today rather than stored, so a book
+\ left open overnight into January shows the new year the next time
+\ the range is applied. Nothing is recomputed behind the user: the
+\ range in force is the one they chose, and it is applied again when
+\ the register is reopened.
+\
+\ All dates is a named range too, and it is the one that is in force
+\ when no range has been chosen. That keeps a register with no filter
+\ and a register filtered to everything the same thing.
+\
+\ A named range is a filter, so the rule above holds: the running
+\ balance against a line is the balance of the account and not of the
+\ list, and an opening balance line carries what came before.
+Examples: NamedDateRange
+| Name           | From                            | To    | Notes                                    |
+| All dates      | The first transaction            | Today | What a register with no filter shows     |
+| This year      | The first of January this year   | Today | Calendar year, not fiscal                |
+| Last year      | The first of January last year   | The last of December last year | A whole year, closed |
+| Past two years | Two years back from today        | Today | Rolling, so it moves with today          |
+| Year to date   | The first of January this year   | Today | The same range as This year, named as a report names it |
+| Since a date   | A date the user types            | Today | What the two-date filter already does    |
+
+Attributes NamedDateRange
+| Attribute | Type   | Default |
+| Name      | String |         |
+| From      | String |         |
+| To        | String |         |
+| Notes     | String | none    |
+
+Scenario This year shows the calendar year, not the fiscal one
+Description The register is a list of what happened, and the user reading it
+\ means the year on the calendar. The fiscal year start is a reporting
+\ decision and does not move this range; see the fiscal year rule in
+\ Reports.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given the book setting is : BookSetting Vertical
+| FiscalYearStart | 7 |
+Given today is : Today Vertical
+| Date | 2024-05-15 |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
+| T1  | Assets:Checking | 2023-12-20 | Shop A | Expenses:Groceries | 1000.00 |
+| T2  | Assets:Checking | 2024-01-15 | Shop B | Expenses:Groceries | -45.00  |
+| T3  | Assets:Checking | 2024-02-20 | Shop C | Expenses:Groceries | -52.00  |
+When register filtered to named range : NamedRangeSelect Vertical
+| Name | This year |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Balance |
+| T2  | 2024-01-15 | 955.00  |
+| T3  | 2024-02-20 | 903.00  |
+Then opening balance line is : OpeningLine Vertical
+| AsAt    | 2023-12-31 |
+| Balance | 1000.00    |
+
+Scenario Past two years counts back from today and not from January
+Description A rolling range. Two years back from the middle of May 2024 is the
+\ middle of May 2022, so a transaction in March 2022 is outside it
+\ even though 2022 is one of the two years.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given today is : Today Vertical
+| Date | 2024-05-15 |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
+| T1  | Assets:Checking | 2022-03-01 | Shop A | Expenses:Groceries | 1000.00 |
+| T2  | Assets:Checking | 2022-06-01 | Shop B | Expenses:Groceries | -45.00  |
+| T3  | Assets:Checking | 2024-02-20 | Shop C | Expenses:Groceries | -52.00  |
+When register filtered to named range : NamedRangeSelect Vertical
+| Name | Past two years |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Balance |
+| T2  | 2022-06-01 | 955.00  |
+| T3  | 2024-02-20 | 903.00  |
+Then opening balance line is : OpeningLine Vertical
+| AsAt    | 2022-05-14 |
+| Balance | 1000.00    |
+
+Scenario All dates is what a register with no range chosen shows
+Description Stated so that the two cannot drift apart. Choosing All dates
+\ after another range puts the register back as it opened, opening
+\ balance line and all.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given today is : Today Vertical
+| Date | 2024-05-15 |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
+| T1  | Assets:Checking | 2022-03-01 | Shop A | Expenses:Groceries | 1000.00 |
+| T2  | Assets:Checking | 2024-02-20 | Shop B | Expenses:Groceries | -52.00  |
+When register filtered to named range : NamedRangeSelect Vertical
+| Name | This year |
+When register filtered to named range : NamedRangeSelect Vertical
+| Name | All dates |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Balance |
+| T1  | 2022-03-01 | 1000.00 |
+| T2  | 2024-02-20 | 948.00  |
+Then opening balance line is : OpeningLine
+| AsAt | Balance |
+# No rows: there is nothing before the first transaction, so there is no
+# opening line at all rather than one reading zero.
+
+Attributes NamedRangeSelect
+Description The range the user picked, by name. Since a date carries the date
+\ they typed; every other name works its own dates out from today.
+| Attribute | Type | Default   |
+| Name      | Text |           |
+| Since     | Text | none      |
+
+BusinessRule A book may hide everything before a date
+Description A book-wide date before which nothing is shown anywhere. It is one
+\ setting on the book, and it applies to every register the book opens.
+Details This is not the same thing as a named range. A named range is what
+\ one register is showing at the moment and the user changes it all
+\ day. The hide-before date is a statement about the book -- the
+\ years before it were migrated for the record and are not being
+\ worked on -- and it is set once in the book's settings.
+\
+\ Hidden is not deleted and not excluded from arithmetic. The balance
+\ brought forward onto the opening line includes every hidden
+\ transaction, so the first visible line reads the same balance it
+\ read before the date was set, and a report over the hidden years
+\ still reports them. Only the register's list is shortened.
+\
+\ A range the user picks inside the hidden years shows nothing. That
+\ is the book's setting winning, which is the point of it being on
+\ the book, and the register says why the list is empty rather than
+\ looking broken.
+\
+\ The date is stored on the book's own row, beside the fiscal year
+\ start and the check window, so it travels with the book.
+Examples: HideBeforeUse
+| TheBookSays       | TheUserAsksFor | WhatTheRegisterShows                              |
+| Nothing           | All dates      | Everything, as now                                |
+| Hide before 2015  | All dates      | 2015 onwards, with the earlier balance brought forward |
+| Hide before 2015  | This year      | This year, as it would be anyway                  |
+| Hide before 2015  | 2012 to 2013   | Nothing, and a line saying the book hides it      |
+
+Attributes HideBeforeUse
+| Attribute            | Type   | Default |
+| TheBookSays          | String |         |
+| TheUserAsksFor       | String |         |
+| WhatTheRegisterShows | String |         |
+
+Scenario A book that hides the early years brings their balance forward
+Description The whole of the setting in one scenario. The 2012 transaction is
+\ not a line, and it is in the opening balance.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given the book setting is : BookSetting Vertical
+| HideBefore | 2015-01-01 |
+Given today is : Today Vertical
+| Date | 2024-05-15 |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
+| T1  | Assets:Checking | 2012-03-01 | Shop A | Expenses:Groceries | 1000.00 |
+| T2  | Assets:Checking | 2016-02-20 | Shop B | Expenses:Groceries | -52.00  |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Balance |
+| T2  | 2016-02-20 | 948.00  |
+Then opening balance line is : OpeningLine Vertical
+| AsAt    | 2014-12-31 |
+| Balance | 1000.00    |
+
+Scenario A range inside the hidden years shows nothing, and says why
+Description An empty register with no explanation reads as a defect. The book
+\ is hiding the rows and the register says so.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given the book setting is : BookSetting Vertical
+| HideBefore | 2015-01-01 |
+Given today is : Today Vertical
+| Date | 2024-05-15 |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
+| T1  | Assets:Checking | 2012-03-01 | Shop A | Expenses:Groceries | 1000.00 |
+| T2  | Assets:Checking | 2016-02-20 | Shop B | Expenses:Groceries | -52.00  |
+When register filtered to dates : DateRange Vertical
+| From | 2012-01-01 |
+| To   | 2013-12-31 |
+Then register lines are : RegisterLine CompareOnly
+| Ref |
+# No rows.
+Then register note is : RegisterNote Vertical
+| Note | This book hides transactions before 2015-01-01 |
+
+Attributes RegisterNote
+Description A line the register shows about itself, when an empty list would
+\ otherwise look like a fault.
+| Attribute | Type | Default |
+| Note      | Text | none    |
+
+# ---------------------------------------------------------------------------
 # Finding things
 # ---------------------------------------------------------------------------
 
@@ -527,6 +922,80 @@ When blank line left
 Then register lines are : RegisterLine CompareOnly
 | Ref |
 # No rows: nothing was committed.
+
+Scenario The blank line shows no category and commits to Uncategorized
+Description The two halves of the default-destination rule, seen from the
+\ register. The empty line at the end is not a transaction, so it
+\ shows nothing in the category column -- defaulting there would put a
+\ category against a line nobody has entered. Filling in a payee and
+\ an amount and leaving the line commits it, and only then is the
+\ default applied, because only then is the sign known.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given today is : Today Vertical
+| Date | 2024-05-15 |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then blank line is : RegisterLine CompareOnly
+| Date       | Category | Payment | Deposit |
+| 2024-05-15 | none     | 0.00    | 0.00    |
+When blank line filled : RegisterLine Vertical CompareOnly
+| Payee   | Harris Teeter |
+| Payment | 45.00         |
+When blank line left
+Then register lines are : RegisterLine CompareOnly
+| Date       | Payee         | Category               | Payment | Deposit |
+| 2024-05-15 | Harris Teeter | Expenses:Uncategorized | 45.00   | 0.00    |
+# See the default-destination rule in Transactions.spectable. The category
+# column of the committed line is not blank, and the one above it still is.
+
+Scenario A tag typed on the blank line is kept on the transaction
+Description The register has a Tag column, between the memo and the amounts,
+\ because the tag is the third thing a transaction says about itself
+\ and a column somebody has to open an editor to reach is a column
+\ nobody fills in. What is typed is a field of words and every word in
+\ it is a tag; see the tag rules in UserInterface.spectable. Nothing
+\ completes it here, for the same reason nothing completes the
+\ category column here: the two columns behave the same way, which is
+\ what the typing rule asks for.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given today is : Today Vertical
+| Date | 2024-05-15 |
+When blank line filled : RegisterLine Vertical CompareOnly
+| Payee    | Harris Teeter  |
+| Category | Expenses:Groceries |
+| Tag      | Rental~Kitchen |
+| Payment  | 45.00          |
+When blank line left
+Then register lines are : RegisterLine CompareOnly
+| Date       | Payee         | Category           | Tag            | Payment |
+| 2024-05-15 | Harris Teeter | Expenses:Groceries | Rental~Kitchen | 45.00   |
+
+Scenario A register line shows the tag the transaction carries
+Description Read off the transaction, not worked out: the field is one column on
+\ the transaction and one column in the register.
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type     | Placeholder |
+| Assets:Checking           | Checking | false       |
+| Expenses:Home:Maintenance | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination               | Amount  | Tag    |
+| T1  | Assets:Checking | 2024-01-10 | Home Depot | Expenses:Home:Maintenance | -100.00 | Rental |
+| T2  | Assets:Checking | 2024-01-11 | Home Depot | Expenses:Home:Maintenance | -50.00  | none   |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Payee      | Tag    | Payment |
+| T1  | Home Depot | Rental | 100.00  |
+| T2  | Home Depot | none   | 50.00   |
+
 
 # ---------------------------------------------------------------------------
 # A register line can read directly off the new shape

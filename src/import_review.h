@@ -8,7 +8,7 @@
 #include "ofx_import.h"
 #include "ofx_reader.h"
 #include "payee_rules.h"
-#include "posting.h"
+#include "transaction.h"
 #include "ui_model.h"
 
 // Turning a downloaded file into the rows of an import review.
@@ -70,7 +70,9 @@ inline void add_row(const chart::Chart& accounts, ui::ReviewRow* row,
 inline Prepared from_ofx(const std::string& text, const std::string& account,
                          const std::vector<ledger::Transaction>& existing,
                          chart::Chart* accounts,
-                         const std::vector<payees::Rule>& rules) {
+                         const std::vector<payees::Rule>& rules,
+                         const std::vector<payees::Conversion>& conversions = {},
+                         const std::vector<payees::Categorisation>& categories = {}) {
     Prepared out;
     out.into = account;
     const ofx::Read parsed = ofx::read(text);
@@ -90,7 +92,7 @@ inline Prepared from_ofx(const std::string& text, const std::string& account,
         // Asked with the rules in force, so the review shows the payee and the
         // category the user will actually get.
         const std::vector<ledger::Transaction> prepared = ofx::transactions_for(
-            decided, account, existing.size(), accounts, rules);
+            decided, account, existing.size(), accounts, rules, conversions, categories);
 
         std::size_t next = 0;
         for (const ofx::Decided& one : decided.decided) {
@@ -127,7 +129,10 @@ inline Prepared from_ofx(const std::string& text, const std::string& account,
 inline Prepared from_csv(const std::string& text, const std::string& account,
                          const std::vector<ledger::Transaction>& existing,
                          chart::Chart* accounts,
-                         const std::vector<payees::Rule>& rules) {
+                         const std::vector<payees::Rule>& rules,
+                         bool clear_what_is_imported = true,
+                         const std::vector<payees::Conversion>& conversions = {},
+                         const std::vector<payees::Categorisation>& categories = {}) {
     Prepared out;
     out.into = account;
     const csv::Read file = csv::read(text);
@@ -173,7 +178,8 @@ inline Prepared from_csv(const std::string& text, const std::string& account,
     const csv::Imported decided =
         csv::decide(*accounts, rows.rows, account, existing, rules);
     const std::vector<ledger::Transaction> prepared = csv::transactions_for(
-        decided, account, existing.size(), accounts, rules);
+        decided, account, existing.size(), accounts, rules, clear_what_is_imported,
+        conversions, categories);
 
     int line = 0;
     std::size_t next = 0;
@@ -218,13 +224,41 @@ inline bool looks_like_a_csv(const std::string& text) {
     return false;
 }
 
+// The book's CSV cleared option is passed here rather than asked for inside,
+// because nothing below this knows which book it is working in. An OFX file
+// states a cleared status of its own and so is never told.
 inline Prepared from_file(const std::string& text, const std::string& account,
                           const std::vector<ledger::Transaction>& existing,
                           chart::Chart* accounts,
-                          const std::vector<payees::Rule>& rules) {
+                          const std::vector<payees::Rule>& rules,
+                          bool clear_what_a_csv_brings_in = true,
+                          const std::vector<payees::Conversion>& conversions = {},
+                          const std::vector<payees::Categorisation>& categories = {}) {
     return looks_like_a_csv(text)
-               ? from_csv(text, account, existing, accounts, rules)
-               : from_ofx(text, account, existing, accounts, rules);
+               ? from_csv(text, account, existing, accounts, rules,
+                          clear_what_a_csv_brings_in, conversions, categories)
+               : from_ofx(text, account, existing, accounts, rules, conversions,
+                          categories);
+}
+
+// The two things a download carries that came from the bank rather than from
+// this program, as the file wrote them and not reformatted, so that they can be
+// read against a statement. A CSV and a QIF say nothing of the kind, so both
+// are empty; a QFX states them whether or not an account in this book carries
+// the number, which is the case where they matter most -- they are then the
+// whole of what the person has to go on when asked which account the download
+// belongs to. See the confirmation attributes in UserInterface.spectable.
+struct FileNumbers {
+    std::string bank_id;
+    std::string account_number;
+};
+
+inline FileNumbers numbers_in_file(const std::string& text) {
+    if (looks_like_a_csv(text)) return {};
+    const ofx::Read read = ofx::read(text);
+    if (read.refused || read.statements.empty()) return {};
+    const ofx::Statement& s = read.statements.front();
+    return {s.bank_id, s.account_id};
 }
 
 // What the file itself says about the account it is for, asked before a row of

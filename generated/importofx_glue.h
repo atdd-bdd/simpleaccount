@@ -13,10 +13,11 @@
 #include "money.h"
 #include "import_review.h"
 #include "ofx_import.h"
+#include "transfer_match.h"
 #include "qif_import.h"
 #include "register_entry.h"
 #include "ofx_reader.h"
-#include "posting.h"
+#include "transaction.h"
 #include "report.h"
 #include "text_types.h"
 
@@ -29,14 +30,13 @@
 // anything -- so where a subset is the point, comparing string structs is the
 // right way round rather than comparing fields by hand.
 //
-// What is not connected, and why. Three Examples tables under the
-// transfer-candidate rules -- TransferCandidateRule, DateWindow and
-// CandidatePriority -- restate a condition in words with no outcome column to
-// drive through, so their blocks stay $WIP and their stubs stay failing out
-// loud on purpose; the condition itself is exercised by the concrete
-// scenarios around them. A stub that quietly passed would be worse than a
-// failing one: the failure count is the only honest record of how far the
-// specification runs ahead of the program.
+// The two transfer-candidate tables -- TransferCandidateRule and
+// CandidatePriority -- restate a condition in words with no outcome column,
+// which is why they were left failing for a while. They are connected now:
+// each numbered condition is read as a purpose-built import that must either
+// produce the pairing or refuse to, which is an outcome whatever the table
+// looks like. See probe() and the two Examples methods below. The third
+// table, DateWindow, is no longer in the specification at all.
 class ImportOfxGlue {
 public:
     static constexpr const char* DNC_STRING = "?DNC?";
@@ -56,7 +56,9 @@ public:
             a.placeholder = parse_bool_cell(value.placeholder);
             a.hidden = parse_bool_cell(value.hidden);
             a.alias = blank(value.alias);
-            a.payment_payee = blank(value.paymentpayee);
+            a.bank = blank(value.bank);
+            a.account_number = blank(value.accountnumber);
+            a.bank_id = blank(value.bankid);
             chart_.put(a);
         }
         rebuild_mappings(values);
@@ -406,10 +408,16 @@ public:
         const OfxStatementString& value = values.front();
         const std::string bank_id = blank(value.bankid);
         const std::string account_id = value.ofxaccountid;
-        if (const ofx::AccountMapping* m = ofx::mapping_for(mappings_, bank_id, account_id)) {
-            target_ = m->account_path;
+        statement_bank_id_ = bank_id;
+        statement_account_id_ = account_id;
+        const std::string placed = ofx::place_statement(chart_, bank_id, account_id);
+        if (!placed.empty()) {
+            target_ = placed;
             target_was_asked_ = false;
             was_asked_ = false;
+            // Placed without asking, and still taught: the routing number was
+            // not needed to find the account and is worth having anyway.
+            teach_the_target();
         } else {
             asked_.bankid = bank_id.empty() ? "none" : bank_id;
             asked_.ofxaccountid = account_id;
@@ -631,22 +639,182 @@ public:
     // itself is exercised by the concrete scenarios above (the one-account,
     // already-matched, and priority-ordering cases). Left as stubs so a
     // regeneration finds them already there if the tag ever comes off.
+    // Five conditions, and every one of them read as an import that either
+    // produces the pairing or does not. The positive case is the same pair
+    // throughout -- 1200.00 out of the bank and into the card, a day apart
+    // -- so a condition that fails names only itself.
     void examples_businessrule_when_two_new_transactions_are_proposed_as_one_transfer(
             const std::vector<TransferCandidateRuleString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: pairing two downloaded rows as one transfer";
+        for (const auto& value : values) {
+            const std::string which = "condition " + value.test + ": " + value.condition;
+            const ofx::Transaction out_of_bank = payment_side(kBank).transactions.front();
+            const ofx::Transaction into_card = payment_side(kCard).transactions.front();
+
+            a_book_with_two_accounts();
+            // The pair as stated, which every condition below breaks in one
+            // way. Proposed, never done: the evidence is an amount and two
+            // dates, and that is not enough to act on unasked.
+            ofx::MultiImported met = probe({{kBank, {out_of_bank}}, {kCard, {into_card}}});
+            ASSERT_EQ(1u, met.candidates.size()) << which << " -- the pair itself";
+            EXPECT_TRUE(pairs(met.candidates.front(), kBank, kCard)) << which;
+            EXPECT_EQ(ofx::TransferCandidateState::Proposed, met.candidates.front().candidate.state)
+                << which << " -- proposed rather than done";
+
+            if (value.test == "1") {
+                // The bank half has been imported once already, so this
+                // time it is that transaction rather than a new row, and a
+                // row that is not new is not half of anything.
+                a_book_with_two_accounts();
+                target_ = kBank;
+                import(payment_side(kBank));
+                ASSERT_EQ(1u, transactions_.size()) << which;
+                const ofx::MultiImported again =
+                    probe({{kBank, {out_of_bank}}, {kCard, {into_card}}});
+                EXPECT_TRUE(again.candidates.empty())
+                    << which << " -- " << listing(again.candidates);
+            } else if (value.test == "2") {
+                // Both halves in one account. Equal and opposite in the
+                // same account is a payment and its refund.
+                a_book_with_two_accounts();
+                ofx::Transaction back = into_card;
+                back.fit_id = "BNK-78";
+                const ofx::MultiImported same_account =
+                    probe({{kBank, {out_of_bank, back}}});
+                EXPECT_TRUE(same_account.candidates.empty())
+                    << which << " -- one account: " << listing(same_account.candidates);
+
+                // And a category for the other side, which is not an
+                // account anything can be transferred to.
+                a_book_with_two_accounts();
+                const ofx::MultiImported not_real = probe(
+                    {{kBank, {out_of_bank}}, {"Expenses:Uncategorized", {into_card}}});
+                EXPECT_TRUE(not_real.candidates.empty())
+                    << which << " -- a category: " << listing(not_real.candidates);
+            } else if (value.test == "3") {
+                // Both halves leaving. Two payments, not one transfer.
+                a_book_with_two_accounts();
+                ofx::Transaction also_out = into_card;
+                also_out.amount = Money("-1200.00");
+                const ofx::MultiImported same_sign =
+                    probe({{kBank, {out_of_bank}}, {kCard, {also_out}}});
+                EXPECT_TRUE(same_sign.candidates.empty())
+                    << which << " -- same sign: " << listing(same_sign.candidates);
+
+                // And off by a cent, which is as unequal as off by a
+                // thousand pounds.
+                a_book_with_two_accounts();
+                ofx::Transaction nearly = into_card;
+                nearly.amount = Money("1200.01");
+                const ofx::MultiImported off_by_one =
+                    probe({{kBank, {out_of_bank}}, {kCard, {nearly}}});
+                EXPECT_TRUE(off_by_one.candidates.empty())
+                    << which << " -- a cent apart: " << listing(off_by_one.candidates);
+            } else if (value.test == "4") {
+                // Three days apart. The window is two, and the file in
+                // testdata that sets it is two.
+                a_book_with_two_accounts();
+                ofx::Transaction late = into_card;
+                late.date_posted = types::Date(2026, 4, 13);
+                const ofx::MultiImported too_far =
+                    probe({{kBank, {out_of_bank}}, {kCard, {late}}});
+                EXPECT_TRUE(too_far.candidates.empty())
+                    << which << " -- three days: " << listing(too_far.candidates);
+
+                // Two days, which is inside it.
+                a_book_with_two_accounts();
+                ofx::Transaction edge = into_card;
+                edge.date_posted = types::Date(2026, 4, 12);
+                const ofx::MultiImported at_the_edge =
+                    probe({{kBank, {out_of_bank}}, {kCard, {edge}}});
+                ASSERT_EQ(1u, at_the_edge.candidates.size()) << which << " -- two days";
+                EXPECT_EQ(2, at_the_edge.candidates.front().candidate.days_apart) << which;
+            } else if (value.test == "5") {
+                // A third half that could pair with the bank just as well
+                // as the card could. One of them gets it and the other is
+                // left to be an ordinary row.
+                a_book_with_two_accounts();
+                ofx::Transaction also_in = into_card;
+                also_in.fit_id = "SAV-5";
+                const ofx::MultiImported shared = probe(
+                    {{kBank, {out_of_bank}}, {kCard, {into_card}}, {kSavings, {also_in}}});
+                EXPECT_EQ(1u, shared.candidates.size())
+                    << which << " -- " << listing(shared.candidates);
+            } else {
+                ADD_FAILURE() << "no probe written for " << which;
+            }
+        }
     }
 
-    void examples_businessrule_the_two_date_windows_and_why_they_differ(
-            const std::vector<DateWindowString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: pairing two downloaded rows as one transfer";
-    }
 
+    // Four conditions about the order pairings are formed in, each read as
+    // an import in which two pairings are possible and only one order of
+    // them is right. The amounts are all 50.00 so that nothing but the
+    // dates and the reading order can decide it.
     void examples_businessrule_which_half_pairs_with_which_when_several_match(
             const std::vector<CandidatePriorityString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: pairing two downloaded rows as one transfer";
+        for (const auto& value : values) {
+            const std::string which = "condition " + value.test + ": " + value.condition;
+            a_book_with_two_accounts();
+
+            if (value.test == "1") {
+                // The bank half could pair with either of two. The savings
+                // half is a day away and the card half two, so savings
+                // takes it and the card is left over.
+                const ofx::MultiImported out = probe({
+                    {kBank, {half_row("B1", types::Date(2026, 5, 10), "-50.00", "TRANSFER")}},
+                    {kCard, {half_row("C1", types::Date(2026, 5, 12), "50.00", "PAYMENT")}},
+                    {kSavings, {half_row("S1", types::Date(2026, 5, 11), "50.00", "DEPOSIT")}},
+                });
+                ASSERT_EQ(1u, out.candidates.size()) << which << " -- " << listing(out.candidates);
+                EXPECT_TRUE(pairs(out.candidates.front(), kBank, kSavings))
+                    << which << " -- " << listing(out.candidates);
+                EXPECT_EQ(1, out.candidates.front().candidate.days_apart) << which;
+            } else if (value.test == "2") {
+                // Two pairings, both a day apart, ten days apart from each
+                // other so neither half can reach the other pair. The
+                // earlier one is formed first.
+                const ofx::MultiImported out = probe({
+                    {kBank, {half_row("B1", types::Date(2026, 5, 10), "-50.00", "TRANSFER")}},
+                    {kCard, {half_row("C1", types::Date(2026, 5, 11), "50.00", "PAYMENT")}},
+                    {kSavings, {half_row("S1", types::Date(2026, 5, 20), "-50.00", "TRANSFER")}},
+                    {kPrime, {half_row("P1", types::Date(2026, 5, 21), "50.00", "DEPOSIT")}},
+                });
+                ASSERT_EQ(2u, out.candidates.size()) << which << " -- " << listing(out.candidates);
+                EXPECT_TRUE(pairs(out.candidates.front(), kBank, kCard))
+                    << which << " -- the earlier pair is first: " << listing(out.candidates);
+                EXPECT_TRUE(pairs(out.candidates.back(), kSavings, kPrime))
+                    << which << " -- " << listing(out.candidates);
+            } else if (value.test == "3") {
+                // Four halves, all on one day, so every pairing is nil days
+                // apart and the dates decide nothing. What is left is the
+                // order the files were read, and the bank was read first.
+                const ofx::MultiImported out = probe({
+                    {kBank, {half_row("B1", types::Date(2026, 5, 10), "-50.00", "TRANSFER")}},
+                    {kCard, {half_row("C1", types::Date(2026, 5, 10), "50.00", "PAYMENT")}},
+                    {kSavings, {half_row("S1", types::Date(2026, 5, 10), "-50.00", "TRANSFER")}},
+                    {kPrime, {half_row("P1", types::Date(2026, 5, 10), "50.00", "DEPOSIT")}},
+                });
+                ASSERT_EQ(2u, out.candidates.size()) << which << " -- " << listing(out.candidates);
+                EXPECT_TRUE(pairs(out.candidates.front(), kBank, kCard))
+                    << which << " -- the first file read is paired first: "
+                    << listing(out.candidates);
+            } else if (value.test == "4") {
+                // Three halves that could make two pairings between them,
+                // sharing the bank half. It is in one of them and that is
+                // the end of it: the leftover is never offered a second
+                // pairing with a half already spoken for.
+                const ofx::MultiImported out = probe({
+                    {kBank, {half_row("B1", types::Date(2026, 5, 10), "-50.00", "TRANSFER")}},
+                    {kCard, {half_row("C1", types::Date(2026, 5, 10), "50.00", "PAYMENT")}},
+                    {kSavings, {half_row("S1", types::Date(2026, 5, 11), "50.00", "DEPOSIT")}},
+                });
+                ASSERT_EQ(1u, out.candidates.size()) << which << " -- " << listing(out.candidates);
+                EXPECT_TRUE(pairs(out.candidates.front(), kBank, kCard))
+                    << which << " -- " << listing(out.candidates);
+            } else {
+                ADD_FAILURE() << "no probe written for " << which;
+            }
+        }
     }
 
 private:
@@ -659,6 +827,10 @@ private:
     ofx::Imported decided_;
     ofx::Summary summary_;
     std::vector<ofx::AccountMapping> mappings_;
+    // What the statement being placed said its numbers were, kept so that the
+    // account confirmed for it can be told them.
+    std::string statement_bank_id_;
+    std::string statement_account_id_;
     std::vector<ofx::TransferMatchRule> match_rules_;
     long long check_window_days_ = ofx::kCheckWindow;
     UnknownAccountString asked_;
@@ -774,25 +946,67 @@ private:
                "</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>";
     }
 
+    // --- the transfer-pairing probes ---------------------------------------
+
+    // One half as its own bank wrote it. XFER because both halves of a
+    // transfer are electronic, which is the whole reason this window is
+    // wider than the one for a half somebody typed.
+    static ofx::Transaction half_row(const std::string& fit, const types::Date& when,
+                                     const char* amount, const std::string& name) {
+        ofx::Transaction row;
+        row.trn_type = "XFER";
+        row.fit_id = fit;
+        row.date_posted = when;
+        row.amount = Money(amount);
+        row.name = name;
+        return row;
+    }
+
+    static constexpr const char* kSavings = "Assets:Savings";
+    static constexpr const char* kPrime = "Assets:Checking Prime";
+
+    // Four real accounts and two categories, so that a probe has somewhere
+    // to put a third and a fourth half without the pairing being decided by
+    // there being nowhere else for them to go. The book is whatever the
+    // caller left in transactions_, which for most of these is nothing.
+    ofx::MultiImported probe(const std::vector<ofx::AccountRows>& by_account) {
+        chart_.put(account_of(kSavings, types::AccountType::Checking));
+        chart_.put(account_of(kPrime, types::AccountType::Checking));
+        return ofx::decide_multi(by_account, &transactions_, &chart_, {});
+    }
+
+    // What a candidate pairs, as a pair of account names in no order, so
+    // that a condition about which pair was formed does not also become a
+    // claim about which side decide_multi called "from".
+    static bool pairs(const ofx::TransferProposal& candidate, const std::string& one,
+                      const std::string& other) {
+        const std::string& from = candidate.candidate.from_account;
+        const std::string& to = candidate.candidate.to_account;
+        return (from == one && to == other) || (from == other && to == one);
+    }
+
+    static std::string listing(const std::vector<ofx::TransferProposal>& candidates) {
+        std::string out;
+        for (const ofx::TransferProposal& c : candidates) {
+            if (!out.empty()) out += "; ";
+            out += c.candidate.from_account + " " + c.candidate.from_date.iso() + " <-> " +
+                   c.candidate.to_account + " " + c.candidate.to_date.iso();
+        }
+        return out.empty() ? "nothing" : out;
+    }
     // --- the payment rows --------------------------------------------------
 
     static constexpr const char* kBank = "Assets:Checking";
     static constexpr const char* kCard = "Liabilities:Chase Visa";
 
-    static chart::Account card_of(const std::string& path, const std::string& payee) {
-        chart::Account a = account_of(path, types::AccountType::CreditCard);
-        a.payment_payee = payee;
-        return a;
-    }
-
-    // A bank, a card that says CHASEBANK when it is paid, and somewhere for a
-    // half-known payment to wait.
+    // A bank, a card, and somewhere for either side's other half to go until
+    // somebody says what it was.
     void a_book_with_two_accounts() {
         chart_ = chart::Chart();
         chart_.put(account_of(kBank, types::AccountType::Checking));
-        chart_.put(card_of(kCard, "CHASEBANK"));
-        chart_.put(account_of(ledger::kUnassigned, types::AccountType::OtherAsset));
+        chart_.put(account_of(kCard, types::AccountType::CreditCard));
         chart_.put(account_of("Expenses:Uncategorized", types::AccountType::Expense));
+        chart_.put(account_of("Income:Uncategorized", types::AccountType::Income));
         transactions_.clear();
     }
 
@@ -912,8 +1126,6 @@ private:
     // there, so each row of the rule table is checked by the behaviour it
     // describes.
     ofx::Disposition disposition_reaching_test(const std::string& test) {
-        if (test == "5") return disposition_of_a_payment_half();
-
         start_fresh("Assets:Checking", types::AccountType::Checking);
         ofx::Transaction row;
         row.date_posted = types::Date(2024, 1, 20);
@@ -961,8 +1173,8 @@ private:
             second.ref = types::TransactionRef("T2");
             book = {t, second};
         } else {
-            // Test 6: an empty book, so nothing above applies.
-            EXPECT_EQ("6", test) << "unlisted test";
+            // Test 5: an empty book, so nothing above applies.
+            EXPECT_EQ("5", test) << "unlisted test";
         }
 
         transactions_ = book;
@@ -974,20 +1186,6 @@ private:
                                         : decided_.decided.front().disposition;
     }
 
-    // Test five, which needs a book of two accounts rather than one: the
-    // bank's side of a card payment arrives first and waits with its other
-    // half unassigned, and the card's own statement is the row that completes
-    // it. Nothing above applies, because the card has nothing in it yet.
-    ofx::Disposition disposition_of_a_payment_half() {
-        a_book_with_two_accounts();
-        target_ = kBank;
-        import(payment_side(kBank));
-        target_ = kCard;
-        import(payment_side(kCard));
-        EXPECT_EQ(1u, decided_.decided.size()) << "test 5";
-        return decided_.decided.empty() ? ofx::Disposition::New
-                                        : decided_.decided.front().disposition;
-    }
 public:
 
     void then_import_notes_are(const std::vector<ImportNoteString>& values) {
@@ -1002,7 +1200,8 @@ public:
         ASSERT_FALSE(values.empty());
         EXPECT_EQ(values.front().notecount, std::to_string(decided_.notes.size()))
             << "notes written: " << all_notes();
-        EXPECT_EQ(blank(values.front().summary), ofx::completion_of(decided_));
+        if (values.front().summary != DNCString)
+            EXPECT_EQ(blank(values.front().summary), ofx::completion_of(decided_));
     }
 
     // Each row is driven through one check already in the book, dated the
@@ -1074,67 +1273,65 @@ public:
             import(payment_side(first));
             ASSERT_EQ(1, summary_.New) << value.whicharrivesfirst;
 
-            // Whatever arrives first records the payment with its other side
-            // waiting, which is what the second column says.
-            const ledger::Transaction* waiting = transaction_waiting_on(ledger::kUnassigned);
-            ASSERT_NE(nullptr, waiting) << value.whatitrecords;
+            // Whatever arrives first records an ordinary row. Its other side is
+            // Uncategorized, chosen by the sign, and not a staging account:
+            // on the evidence of one file that is all this is.
+            ASSERT_EQ(1u, transactions_.size()) << value.whatitrecords;
+            EXPECT_EQ(ledger::uncategorized_for(transactions_.front().amount).value(),
+                      chart_.path_for_ref(transactions_.front().destination))
+                << value.whatitrecords;
 
             if (only_one) {
+                // Nothing arrives second, and nothing is owed. The row stands
+                // as it is rather than waiting for a partner.
                 EXPECT_EQ(1u, transactions_.size()) << value.whattheseconddoes;
                 continue;
             }
 
             target_ = second;
             import(payment_side(second));
-            // Two transactions now: the first, with its Unassigned side filled
-            // in, and a new row of this account's own -- a transaction being
-            // one account's own download, the second side gets its own row
-            // the same as the first did, with this file's identifier on it.
-            EXPECT_EQ(2u, transactions_.size()) << value.whattheseconddoes;
-            EXPECT_EQ(nullptr, transaction_waiting_on(ledger::kUnassigned)) << value.whattheseconddoes;
-            const ledger::Transaction* filled = transaction_in(second);
-            ASSERT_NE(nullptr, filled) << value.whattheseconddoes;
-            const std::string* id = ledger::id_from(*filled, types::ImportSource::Ofx);
-            ASSERT_NE(nullptr, id) << value.whattheseconddoes;
-            EXPECT_EQ(second == kBank ? "BNK-77" : "CC-901", *id)
+            // Each side is one account's own download, so the second is a
+            // transaction in its own right rather than a rewrite of the first.
+            ASSERT_EQ(2u, transactions_.size()) << value.whattheseconddoes;
+
+            // It asks rather than deciding: the search finds exactly the half
+            // the first import recorded, in the other account.
+            const ofx::Transaction row = payment_side(second).transactions.front();
+            const std::vector<transfers::Half> found = transfers::halves_for(
+                second, row.date_posted, row.amount, transactions_, chart_);
+            ASSERT_EQ(1u, found.size()) << value.whattheseconddoes;
+            EXPECT_EQ(first, found.front().account) << value.whattheseconddoes;
+
+            // And being told they are the same payment is what names each
+            // account on the other's half. The review does this; here it is
+            // done directly, because what the rule claims is the result.
+            ledger::Transaction& half = transactions_.front();
+            ledger::Transaction& arrived = transactions_.back();
+            half.destination = chart_.ref_for_path(second);
+            arrived.destination = chart_.ref_for_path(first);
+            EXPECT_EQ(second, chart_.path_for_ref(half.destination))
                 << value.whattheseconddoes;
-            // And the payee is still the one the first side gave it.
+            EXPECT_EQ(first, chart_.path_for_ref(arrived.destination))
+                << value.whattheseconddoes;
+
+            // Each keeps the identifier and the payee its own file gave it.
+            const std::string* arrived_id =
+                ledger::id_from(arrived, types::ImportSource::Ofx);
+            ASSERT_NE(nullptr, arrived_id) << value.whattheseconddoes;
+            EXPECT_EQ(second == kBank ? "BNK-77" : "CC-901", *arrived_id)
+                << value.whattheseconddoes;
+            const std::string* half_id = ledger::id_from(half, types::ImportSource::Ofx);
+            ASSERT_NE(nullptr, half_id) << value.whattheseconddoes;
+            EXPECT_EQ(first == kBank ? "BNK-77" : "CC-901", *half_id)
+                << value.whattheseconddoes;
             EXPECT_EQ(first == kBank ? "CHASEBANK" : "PAYMENT RECEIVED",
-                      transactions_.front().payee.value())
-                << "the second import overwrote the payee";
+                      half.payee.value())
+                << "the second import overwrote the first side's payee";
+            EXPECT_EQ(second == kBank ? "CHASEBANK" : "PAYMENT RECEIVED",
+                      arrived.payee.value())
+                << "the second side was given the first side's payee";
         }
     }
-
-    void examples_businessrule_the_payment_payee_says_which_accounts_a_payment_could_belong_to(
-            const std::vector<PaymentPayeeNarrowingString>& values) {
-        for (const auto& value : values) {
-            chart_ = chart::Chart();
-            chart_.put(account_of(kBank, types::AccountType::Checking));
-            chart_.put(account_of(ledger::kUnassigned, types::AccountType::OtherAsset));
-            if (value.theypayeematches == "One account") {
-                chart_.put(card_of(kCard, "CHASEBANK"));
-            } else if (value.theypayeematches == "Several accounts" ||
-                       value.theypayeematches == "Several, and all match") {
-                chart_.put(card_of(kCard, "CHASEBANK"));
-                chart_.put(card_of("Liabilities:Chase Amazon", "CHASEBANK"));
-            }
-            // "No account" leaves nothing carrying the payee at all.
-
-            const std::vector<std::string> narrowed =
-                ofx::accounts_paid_by(chart_, "CHASEBANK");
-            const std::size_t wanted =
-                value.theypayeematches == "One account" ? 1u
-                    : value.theypayeematches == "No account" ? 0u : 2u;
-            EXPECT_EQ(wanted, narrowed.size())
-                << value.theypayeematches << " -- " << value.thenthesearchis;
-            // Folded, so the payee on the statement need not match in case.
-            if (wanted > 0)
-                EXPECT_EQ(wanted, ofx::accounts_paid_by(chart_, "chasebank").size())
-                    << "the payee should match whatever its case";
-        }
-    }
-
-
 public:
 
     // The book as the scenario found it, written the way a transaction is
@@ -1197,19 +1394,44 @@ public:
 
 public:
 
+    // The answer to the question the import asked. Confirming an account is
+    // what teaches it the numbers, so this is where the writing happens.
     void when_import_target_chosen(const std::vector<ImportTargetString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_import_target_chosen";
+        ASSERT_FALSE(values.empty());
+        target_ = values.front().accountpath.value;
+        target_was_asked_ = true;
+        teach_the_target();
+    }
+
+    void teach_the_target() {
+        const ofx::Teaching taught = ofx::teach_account(
+            &chart_, target_, statement_bank_id_, statement_account_id_);
+        for (const ofx::Note& note : taught.notes) decided_.notes.push_back(note);
     }
 
     void then_account_numbering_is(const std::vector<AccountNumberingString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_account_numbering_is";
+        for (const auto& value : values) {
+            const chart::Account* a = chart_.find(value.path.value);
+            ASSERT_NE(nullptr, a) << "no account " << value.path.value;
+            AccountNumberingString back = value;
+            back.bankid = a->bank_id.empty() ? "none" : a->bank_id;
+            back.accountnumber =
+                a->account_number.empty() ? "none" : a->account_number;
+            EXPECT_EQ(value, back) << "wanted " << value.to_string() << " got "
+                                   << back.to_string();
+        }
     }
 
     void examples_businessrule_when_the_number_in_a_download_is_the_number_on_an_account(const std::vector<DownloadAccountMatchString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_when_the_number_in_a_download_is_the_number_on_an_account";
+        for (const auto& value : values) {
+            const bool got = ofx::account_matches(
+                blank(value.statementbankid), value.statementaccountid,
+                blank(value.accountbankid), blank(value.accountnumber));
+            EXPECT_EQ(parse_bool_cell(value.matches), got)
+                << "the file says " << value.statementbankid << " / "
+                << value.statementaccountid << " and the account says "
+                << value.accountbankid << " / " << value.accountnumber;
+        }
     }
 
     // What a reader makes of one transaction, asked of each reader in turn:
@@ -1550,9 +1772,62 @@ public:
             const std::vector<PayeeComparisonString>& values) {
         for (const auto& value : values)
             EXPECT_EQ(value.agree == "Yes",
-                      ofx::detail::payees_agree(value.inthebook.value, value.inthefile.value, {}))
+                      ofx::detail::payees_agree(value.inthebook.value, std::string(),
+                                                value.inthefile.value, {}))
                 << "\"" << value.inthebook.value << "\" against \"" << value.inthefile.value
                 << "\" -- " << value.why;
+    }
+
+public:
+
+    // The search, against a book holding the bank's side of a card payment as
+    // the first import would have left it. Each row of the table is a
+    // different thing to find; what is found is a candidate, and offering it
+    // is the review's business rather than this one's.
+    void examples_businessrule_a_half_already_in_the_book_is_found_on_the_amount_and_the_date(
+            const std::vector<AlreadyHereSearchString>& values) {
+        for (const auto& value : values) {
+            const std::string finds = value.whatthesearchfinds;
+            a_book_with_two_accounts();
+            target_ = kBank;
+            import(payment_side(kBank));
+            ASSERT_EQ(1u, transactions_.size()) << finds;
+
+            // The card's own side of the payment is the row doing the looking.
+            const ofx::Transaction row = payment_side(kCard).transactions.front();
+            std::string into = kCard;
+            Money amount = row.amount;
+            std::size_t wanted = 1;
+
+            if (finds == "Several halves") {
+                // A third account with a half of the same amount and date in
+                // it. Nothing says which of the two the card paid.
+                const char* savings = "Assets:Savings";
+                chart_.put(account_of(savings, types::AccountType::Checking));
+                target_ = savings;
+                import(payment_side(kBank));
+                ASSERT_EQ(2u, transactions_.size()) << finds;
+                wanted = 2;
+            } else if (finds == "None") {
+                // An amount nothing in the book is equal and opposite to.
+                amount = Money("99.00");
+                wanted = 0;
+            } else if (finds == "A half in the same account") {
+                // Looking from the account the half is already in. A transfer
+                // has two accounts, so its own row is never its own partner.
+                into = kBank;
+                wanted = 0;
+            }
+
+            const std::vector<transfers::Half> found = transfers::halves_for(
+                into, row.date_posted, amount, transactions_, chart_);
+            ASSERT_EQ(wanted, found.size()) << finds << " -- " << value.whathappens;
+            if (wanted == 1) {
+                EXPECT_EQ(kBank, found.front().account) << value.whathappens;
+                EXPECT_EQ(1, found.front().days_apart) << value.whathappens;
+                EXPECT_EQ("CHASEBANK", found.front().payee) << value.whathappens;
+            }
+        }
     }
 
 };

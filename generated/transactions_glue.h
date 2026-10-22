@@ -8,7 +8,7 @@
 #include "common/common.h"
 #include "text_types.h"
 #include "qif_lexer.h"
-#include "posting.h"
+#include "transaction.h"
 #include "money.h"
 #include "date_parse.h"
 #include "date.h"
@@ -16,6 +16,7 @@
 #include "ledger.h"
 #include "register_entry.h"
 #include "transaction_edit.h"
+#include "split_edit.h"
 
 // Glue for Transactions.spectable.
 //
@@ -33,6 +34,8 @@ public:
 
     void given_the_chart_of_accounts_is(const std::vector<AccountString>& values) {
         chart_ = chart::Chart();
+        given_paths_.clear();
+        for (const auto& value : values) given_paths_.insert(value.path);
         for (const auto& value : values) {
             chart::Account a;
             a.path = types::AccountPath(value.path);
@@ -40,7 +43,6 @@ public:
             a.placeholder = parse_bool_cell(value.placeholder);
             a.hidden = parse_bool_cell(value.hidden);
             a.alias = blank(value.alias);
-            a.payment_payee = blank(value.paymentpayee);
             chart_.put(a);
         }
     }
@@ -82,6 +84,10 @@ public:
             l.amount = Money(value.amount);
             l.memo = blank(value.memo);
             lines.push_back(l);
+        }
+        if (split_window_open_) {
+            typed_lines_ = lines;
+            return;
         }
         const reg::Committed done = reg::commit_split(
             pending_line_, pending_account_, lines, ledger::transaction_count(transactions_), &chart_);
@@ -371,10 +377,65 @@ public:
     // computes), and the scenarios that give them teeth -- the deposit that
     // stays a category, the entry that gets matched or doesn't -- are
     // implemented and live above. See the Details on each rule in the spec.
+    // Each row is driven through a chart that has the halves the row talks
+    // about in it. The row names its situation in English, so the English is
+    // turned into the account it means here -- a row this glue has not been
+    // told about fails rather than passing quietly, which is what makes adding
+    // a row to the table a thing that asks for code.
     void examples_businessrule_whether_the_other_side_is_an_account_or_a_category(
             const std::vector<WhereTheOtherSideLivesString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_whether_the_other_side_is_an_account_or_a_category";
+        chart::Chart book;
+        for (const auto& one : {
+                 std::make_pair("Assets:Checking", types::AccountType::Checking),
+                 std::make_pair("Assets:Savings", types::AccountType::Savings),
+                 std::make_pair("Liabilities:Visa", types::AccountType::CreditCard),
+                 std::make_pair("Income:Salary", types::AccountType::Income),
+                 std::make_pair("Income:Royalties", types::AccountType::Income),
+                 std::make_pair("Income:Retirement", types::AccountType::Income),
+                 // The two the table gained: an IRA this book does hold, which
+                 // makes the other side an account, and a shop, which never is
+                 // one.
+                 std::make_pair("Assets:IRA", types::AccountType::IRA),
+                 std::make_pair("Expenses:Shops", types::AccountType::Expense)}) {
+            chart::Account a;
+            a.id = chart::AccountId(book.all().size() + 1);
+            a.path = types::AccountPath(one.first);
+            a.type = one.second;
+            book.put(a);
+        }
+
+        for (const auto& value : values) {
+            std::string other;
+            if (value.therow == "A payment to a card the book keeps")
+                other = "Liabilities:Visa";
+            else if (value.therow == "A transfer between two bank accounts")
+                other = "Assets:Savings";
+            else if (value.therow == "A paycheck")
+                other = "Income:Salary";
+            else if (value.therow == "A royalty")
+                other = "Income:Royalties";
+            else if (value.therow == "A distribution from an IRA not held here")
+                other = "Income:Retirement";
+            else if (value.therow == "A distribution from an IRA held here")
+                other = "Assets:IRA";
+            else if (value.therow == "A card charge")
+                other = "Expenses:Shops";
+            else
+                FAIL() << "no account stands for " << value.therow;
+
+            const bool an_account = book.is_real(book.ref_for_path(other));
+            const bool table_says_category =
+                value.theotherside.find("category") != std::string::npos;
+            EXPECT_EQ(table_says_category, !an_account)
+                << value.therow << " -- the other side is " << other;
+            // And the Because column is the same statement again: both halves
+            // in the book is exactly what makes the other side an account.
+            const bool because_both =
+                value.because.find("in the book") != std::string::npos &&
+                value.because.find("not in the book") == std::string::npos;
+            EXPECT_EQ(an_account, because_both)
+                << value.therow << " -- " << value.because;
+        }
     }
 
     void examples_businessrule_assigning_an_account_asks_whether_the_other_entry_already_exists(
@@ -383,10 +444,36 @@ public:
         ADD_FAILURE() << "Not implemented: examples_businessrule_assigning_an_account_asks_whether_the_other_entry_already_exists";
     }
 
+    // One name per row, taken from the generator every one of those four
+    // creators uses. The row says the name comes from the clock to the
+    // millisecond, so that is what is checked: the shape of a moment, and that
+    // no two are the same however quickly they are asked for.
     void examples_businessrule_a_transaction_is_named_when_it_is_created_and_keeps_that_name(
             const std::vector<TransactionNamingString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_a_transaction_is_named_when_it_is_created_and_keeps_that_name";
+        std::set<std::string> given;
+        std::string previous;
+        for (const auto& value : values) {
+            EXPECT_EQ("The clock, to the millisecond", value.thenamecomesfrom)
+                << value.createdby << " -- no other name is given out";
+            const std::string name = ledger::new_id().value();
+            // YYYYMMDD, a T, then the time to the millisecond: eighteen
+            // characters, and every one of them a digit but the ninth.
+            ASSERT_EQ(18u, name.size()) << name;
+            EXPECT_EQ('T', name[8]) << name;
+            for (std::size_t i = 0; i < name.size(); ++i) {
+                if (i == 8) continue;
+                EXPECT_TRUE(name[i] >= '0' && name[i] <= '9') << name;
+            }
+            EXPECT_TRUE(given.insert(name).second) << name << " was given twice";
+            if (!previous.empty())
+                EXPECT_LT(previous, name) << "a name sorts into the order given out";
+            previous = name;
+            // Kept: a transaction created now and read back has the name it
+            // was given, and nothing else about it changes that.
+            ledger::Transaction made;
+            made.id = types::TransactionId(name);
+            EXPECT_EQ(name, made.id.value()) << value.createdby;
+        }
     }
 
 private:
@@ -434,6 +521,11 @@ private:
         t.amount = Money(value.amount);
         if (value.cleared.value != DNCString && !value.cleared.value.empty())
             t.cleared = types::cleared_status_from_string(value.cleared);
+        // A table that leaves the destination out is a transaction nobody gave
+        // one, which is the case the default is for. The chart gains the
+        // category where it had not got it, which is what the Then about
+        // accounts created reads back.
+        ledger::give_default_destination(&t, &chart_);
         return t;
     }
 
@@ -457,6 +549,26 @@ private:
         s.amount = t.amount.in_register();
         s.cleared = types::to_string(t.cleared);
         return s;
+    }
+
+    // Writing what the window holds over the split it was opened on. The
+    // transaction's own amount does not move: what the bank took is not in
+    // question here, only where it went.
+    void write_split_lines(const std::vector<reg::SplitLine>& lines) {
+        std::vector<ledger::TransactionSplit> kept;
+        for (const ledger::TransactionSplit& one : splits_)
+            if (one.transaction_id.value() != split_subject_.value())
+                kept.push_back(one);
+        for (const reg::SplitLine& line : lines) {
+            ledger::TransactionSplit one;
+            one.transaction_id = split_subject_;
+            one.destination = chart_.ref_for_path(line.category);
+            one.amount = line.amount;
+            one.memo = line.memo;
+            kept.push_back(one);
+        }
+        splits_ = kept;
+        rebuild_book();
     }
 
     void rebuild_book() {
@@ -484,6 +596,14 @@ private:
     // See the matching member in transactionregister_glue.h.
     struct PendingSecondRow { Money amount; std::string memo; };
     std::map<std::string, PendingSecondRow> second_row_amount_;
+    // The split window: whether it is open, what it was opened on, what it has
+    // been told its lines are, and what it said when the save did not add up.
+    // Nothing here is written to the book until a save that matches.
+    bool split_window_open_ = false;
+    types::TransactionId split_subject_;
+    Money split_total_;
+    std::vector<reg::SplitLine> typed_lines_;
+    edit::SplitCheck split_said_;
 public:
 
     void when_transaction_entered(const std::vector<TransactionString>& values) {
@@ -632,44 +752,181 @@ public:
 
 public:
 
+    // The split window opens on a transaction that already has an amount, so
+    // it knows what its lines are supposed to come to, and it opens with the
+    // lines the split already has in it.
     void when_split_opened_on(const std::vector<TransactionSelectString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_split_opened_on";
+        ASSERT_FALSE(values.empty());
+        const ledger::Transaction* t = find_by_ref(values.front().ref);
+        ASSERT_NE(nullptr, t) << "no transaction " << values.front().ref;
+        split_subject_ = t->id;
+        last_entered_id_ = t->id;
+        // The total is a magnitude: a payment of 184.50 is written -184.50 and
+        // its lines are positive.
+        split_total_ = t->amount.cents() < 0 ? -t->amount : t->amount;
+        split_window_open_ = true;
+        split_said_ = edit::SplitCheck();
+        typed_lines_.clear();
+        for (const ledger::TransactionSplit& one :
+             ledger::split_lines_of(splits_, t->id)) {
+            reg::SplitLine line;
+            line.category = chart_.path_for_ref(one.destination);
+            line.amount = one.amount;
+            line.memo = one.memo;
+            typed_lines_.push_back(line);
+        }
     }
 
+    // Saving. A split that matches its total is written without a word; one
+    // that does not is not quietly written, and the window waits for an answer.
     void when_split_saved() {
-        ADD_FAILURE() << "Not implemented: when_split_saved";
+        ASSERT_TRUE(split_window_open_) << "no split window is open";
+        split_said_ = edit::split_save_check(split_total_, typed_lines_);
+        if (!split_said_.matches) return;
+        write_split_lines(typed_lines_);
+        split_window_open_ = false;
     }
 
     void then_not_matching_is_said(const std::vector<SplitMismatchString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_not_matching_is_said";
+        ASSERT_FALSE(values.empty());
+        const SplitMismatchString& want = values.front();
+        EXPECT_FALSE(split_said_.matches) << "the lines matched the total";
+        if (want.message != DNCString)
+            EXPECT_EQ(blank(want.message), split_said_.message) << "the message";
+        EXPECT_EQ(Money(want.total).cents(), split_said_.total.cents()) << "total";
+        EXPECT_EQ(Money(want.allocated).cents(), split_said_.allocated.cents())
+            << "allocated";
+        EXPECT_EQ(Money(want.remainder).cents(), split_said_.remainder.cents())
+            << "remainder";
+        if (want.options != DNCString)
+            EXPECT_EQ(blank(want.options), split_said_.options) << "the options";
     }
 
     void when_not_matching_answered(const std::vector<SplitMismatchAnswerString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_not_matching_answered";
+        ASSERT_FALSE(values.empty());
+        const edit::SplitAnswer answer = edit::answered(
+            edit::split_choice_from_string(values.front().choice), typed_lines_,
+            split_said_.remainder);
+        if (answer.save) write_split_lines(answer.lines);
+        typed_lines_ = answer.lines;
+        split_window_open_ = answer.still_open;
     }
 
     void examples_businessrule_a_split_is_saved_only_when_its_lines_match_the_total_it_was_opened_on(const std::vector<SplitSaveCheckString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_a_split_is_saved_only_when_its_lines_match_the_total_it_was_opened_on";
+        for (const auto& value : values) {
+            const edit::SplitCheck said =
+                edit::split_save_check(Money(value.total), Money(value.allocated));
+            EXPECT_EQ(Money(value.remainder).cents(), said.remainder.cents())
+                << "remainder of " << value.to_string();
+            const std::string saved =
+                said.matches ? "Saved; nothing is said"
+                             : "Not matching; cancel, edit or add the remainder";
+            EXPECT_EQ(blank(value.saved), saved) << value.to_string();
+        }
     }
 
     void examples_datatype_splitmismatchchoice(const std::vector<EnumerationValuesString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_datatype_splitmismatchchoice";
+        for (const auto& value : values)
+            EXPECT_EQ(value.value,
+                      edit::to_string(edit::split_choice_from_string(value.value)))
+                << "the answer " << value.value;
     }
 
 public:
 
     void then_the_split_window_is_closed() {
-        ADD_FAILURE() << "Not implemented: then_the_split_window_is_closed";
+        EXPECT_FALSE(split_window_open_) << "the split window is still open";
     }
 
+    // Still there, with the lines as they were typed: this is the difference
+    // between editing and cancelling, and the only thing about the dialog
+    // anyone has to think about.
     void then_the_split_window_is_open_on(const std::vector<SplitLineString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_the_split_window_is_open_on";
+        EXPECT_TRUE(split_window_open_) << "the split window has closed";
+        ASSERT_EQ(values.size(), typed_lines_.size()) << "lines in the window";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            EXPECT_EQ(blank(values[i].category), typed_lines_[i].category)
+                << "line " << i + 1;
+            EXPECT_EQ(Money(values[i].amount).cents(), typed_lines_[i].amount.cents())
+                << "line " << i + 1;
+            if (values[i].memo != DNCString)
+                EXPECT_EQ(blank(values[i].memo), typed_lines_[i].memo)
+                    << "line " << i + 1;
+        }
+    }
+
+public:
+
+    // What the chart gained that the Given did not put there, in path order --
+    // which for Income and Income:Uncategorized is the order a table names them
+    // in, the placeholder existing because its child does.
+    void then_accounts_created_are(const std::vector<AccountString>& values) {
+        std::vector<chart::Account> created;
+        for (const chart::Account& a : chart_.all())
+            if (given_paths_.find(a.path.value()) == given_paths_.end())
+                created.push_back(a);
+        ASSERT_EQ(values.size(), created.size()) << "accounts created";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            EXPECT_EQ(values[i].path.value, created[i].path.value()) << "account " << i + 1;
+            EXPECT_EQ(types::to_string(types::account_type_from_string(values[i].type)),
+                      types::to_string(created[i].type))
+                << created[i].path.value() << " type";
+            EXPECT_EQ(parse_bool_cell(values[i].placeholder), created[i].placeholder)
+                << created[i].path.value() << " placeholder";
+        }
+    }
+
+    // Everything the Given named, so that the Then above can say what the
+    // default added rather than what the book holds.
+    std::set<std::string> given_paths_;
+
+    // Each row is entered on the blank line of a register over the same chart,
+    // and what is read back is the destination the committed transaction got.
+    // The register rather than a table, because entering is where the default
+    // belongs: by the time a line is committed the amount is known, and so is
+    // its sign.
+    void examples_businessrule_a_destination_nobody_named_is_uncategorized(
+            const std::vector<DefaultDestinationString>& values) {
+        for (const DefaultDestinationString& value : values) {
+            chart::Chart accounts;
+            accounts.add(types::AccountPath("Assets:Checking"), types::AccountType::Checking);
+            accounts.add(types::AccountPath("Assets:Savings"), types::AccountType::Savings);
+            accounts.add(types::AccountPath("Expenses:Groceries"), types::AccountType::Expense);
+            accounts.add(types::AccountPath(ledger::kUnassigned), types::AccountType::OtherAsset);
+
+            reg::BlankLine line;
+            line.date = types::Date(2024, 5, 15);
+            line.payee = "Harris Teeter";
+            line.payment = Money("45.00");
+            if (value.whatisentered == "A deposit, with no category") {
+                line.payee = "ACME PAYROLL";
+                line.payment = Money();
+                line.deposit = Money("3000.00");
+            } else if (value.whatisentered == "A category, typed in") {
+                line.category = "Expenses:Groceries";
+            } else if (value.whatisentered == "A real account, typed in") {
+                line.category = "Assets:Savings";
+            } else if (value.whatisentered == "A transfer whose account is not known yet") {
+                line.category = ledger::kUnassigned;
+            } else if (value.whatisentered == "A zero-amount line, left") {
+                line.payment = Money();
+            }
+
+            const reg::Committed done =
+                reg::commit(line, "Assets:Checking", 0, &accounts);
+            if (value.whatthedestinationbecomes.rfind("Nothing", 0) == 0) {
+                EXPECT_FALSE(done.committed) << value.whatisentered << ": " << value.why;
+                continue;
+            }
+            ASSERT_TRUE(done.committed) << value.whatisentered << ": " << done.reason;
+            std::string wanted = value.whatthedestinationbecomes;
+            if (wanted == "That category") wanted = "Expenses:Groceries";
+            else if (wanted == "That account, as a transfer") wanted = "Assets:Savings";
+            EXPECT_EQ(wanted, accounts.path_for_ref(done.transaction.destination))
+                << value.whatisentered << ": " << value.why;
+            if (value.whatthedestinationbecomes == "That account, as a transfer")
+                EXPECT_TRUE(done.is_transfer) << value.whatisentered;
+        }
     }
 
 };

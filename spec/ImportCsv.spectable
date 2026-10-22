@@ -38,6 +38,7 @@ Details A column is named by its heading when the file has a header row, and by
 | CategoryColumn | Text         | none     | For a file that carries categories |
 | AmountStyle   | AmountStyle   | Signed   |                                   |
 | AmountColumn  | Text          | none     | For the Signed style              |
+| BalanceColumn | Text          | none     | A running balance, to check against |
 | DebitColumn   | Text          | none     | For the two-column styles         |
 | CreditColumn  | Text          | none     | For the two-column styles         |
 | OutwardSign   | OutwardSign   | Negative | What money leaving looks like     |
@@ -564,6 +565,124 @@ Attributes BalanceColumnCheck
 | Agrees          | Boolean | false   |
 
 # ---------------------------------------------------------------------------
+# A balance column the profile names itself
+# ---------------------------------------------------------------------------
+
+BusinessRule When the balance column is checked and when it is left alone
+Description The check is worth having only where there is something to check
+\ against, and a column that is absent or empty says nothing.
+Details The balance is never stored and never becomes a transaction. It is
+\ read, compared against the position the rows themselves arrive at,
+\ and then forgotten -- so nothing here can make an import wrong. The
+\ worst a missing balance column can do is leave the import unchecked,
+\ which is what every CSV import did before there was one.
+Examples: BalanceColumnUse
+| WhatTheProfileNames        | WhatTheFileHas          | WhatHappens                                     |
+| Nothing                    | No balance column       | No check, as before                             |
+| Nothing                    | A known balance heading | Checked, placed by the alias table              |
+| A column the file has      | That column             | Checked against the column the profile named    |
+| A column the file lacks    | No such heading         | No check, and the import is not refused         |
+| A column the file has      | That column, some cells empty | Checked on the rows that have a balance   |
+
+Attributes BalanceColumnUse
+| Attribute           | Type   | Default |
+| WhatTheProfileNames | String |         |
+| WhatTheFileHas      | String |         |
+| WhatHappens         | String |         |
+
+Scenario A profile names the balance column when the heading is one nobody knows
+Description The alias table places a column headed Running Balance without
+\ being told. A bank whose balance column is headed something else can
+\ still be checked, by naming the column in the profile, which is what
+\ BalanceColumn is for.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Amount  |
+| T0  | Assets:Checking | 2024-01-01 | 1750.00 |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Given the csv profile is : CsvProfile Vertical
+| Name          | Odd Heading Bank |
+| DateColumn    | Date             |
+| PayeeColumn   | Description      |
+| AmountColumn  | Amount           |
+| BalanceColumn | Position         |
+Given the file contains
+"""
+Date,Description,Amount,Position
+01/15/2024,HARRIS TEETER,-45.00,1705.00
+01/16/2024,SHELL,-52.00,1653.00
+"""
+When rows imported
+Then balance column check is : BalanceColumnCheck
+| Line | RowBalance | ComputedBalance | Agrees |
+| 2    | 1705.00    | 1705.00         | true   |
+| 3    | 1653.00    | 1653.00         | true   |
+
+Scenario A balance column the file does not have is not a reason to refuse
+Description A profile is reused across every file a bank sends, and one of them
+\ may be an export that leaves the balance out. The rows are still
+\ transactions; all that is lost is the check.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Given the csv profile is : CsvProfile Vertical
+| Name          | Odd Heading Bank |
+| DateColumn    | Date             |
+| PayeeColumn   | Description      |
+| AmountColumn  | Amount           |
+| BalanceColumn | Position         |
+Given the file contains
+"""
+Date,Description,Amount
+01/15/2024,HARRIS TEETER,-45.00
+"""
+When rows imported
+Then rows read are : CsvRowRead
+| Date       | Payee         | Amount |
+| 2024-01-15 | HARRIS TEETER | -45.00 |
+Then balance column check is : BalanceColumnCheck
+| Line | RowBalance | ComputedBalance | Agrees |
+# No rows. Nothing was checked, because the file carried no balance.
+
+Scenario A row with nothing in the balance column is not checked
+Description Several banks write the balance on the last row of the day only.
+\ A blank is not a balance of zero, and reading it as one would report
+\ every such row as a disagreement.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Amount  |
+| T0  | Assets:Checking | 2024-01-01 | 1750.00 |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+Given the csv profile is : CsvProfile Vertical
+| Name          | Odd Heading Bank |
+| DateColumn    | Date             |
+| PayeeColumn   | Description      |
+| AmountColumn  | Amount           |
+| BalanceColumn | Position         |
+Given the file contains
+"""
+Date,Description,Amount,Position
+01/15/2024,HARRIS TEETER,-45.00,
+01/16/2024,SHELL,-52.00,1653.00
+"""
+When rows imported
+Then balance column check is : BalanceColumnCheck
+| Line | RowBalance | ComputedBalance | Agrees |
+| 3    | 1653.00    | 1653.00         | true   |
+# The first row is absent from the check rather than failing it.
+
+# ---------------------------------------------------------------------------
 # Reading the rows
 # ---------------------------------------------------------------------------
 
@@ -1023,6 +1142,101 @@ Then transactions are : Transaction
 | T1  | Assets:Checking | 2024-03-01 | Transfer | Assets:Savings | -500.00 | Cleared |
 
 # ---------------------------------------------------------------------------
+# Whether a CSV import clears what it brings in
+# ---------------------------------------------------------------------------
+
+BusinessRule A book may say not to clear what a CSV import brings in
+Description A CSV file from a bank is a statement in everything but name, so
+\ what it carries arrives cleared, the same as an OFX download. A CSV
+\ file is also what a spreadsheet of one's own looks like, and that is
+\ not a statement at all. The book says which kind it gets.
+Details Written positively -- the option is whether to clear, defaulting to
+\ true -- because a setting whose name contains a negative is read
+\ wrongly by somebody eventually. The author's own words for it were
+\ "do not set cleared flag on CSV import", which is this option off.
+\
+\ Only a CSV import asks. An OFX file states a ledger balance and a
+\ cleared status of its own, so there is nothing for a book-wide
+\ option to decide there, and a transaction typed into a register is
+\ uncleared whatever the book says.
+\
+\ Stored on the book's own row, beside the fiscal year start and the
+\ check window, so it travels with the book.
+Examples: CsvClearedOption
+| Setting        | WhatIsImported | WhatTheTransactionIs      |
+| On, by default | A CSV file     | Cleared                   |
+| Off            | A CSV file     | Uncleared                 |
+| Off            | An OFX file    | Cleared, as the file says |
+| Either         | Typed in       | Uncleared                 |
+
+Attributes CsvClearedOption
+| Attribute            | Type   | Default |
+| Setting              | String |         |
+| WhatIsImported       | String |         |
+| WhatTheTransactionIs | String |         |
+
+Scenario A book that says not to clear leaves a CSV import uncleared
+Description The same file as the category scenario above, in a book whose
+\ option is off. Nothing else about the import changes -- the rows,
+\ the categories and the accounts created are what they were.
+Given the book setting is : BookSetting Vertical
+| SetClearedOnCsvImport | false |
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Groceries     | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given the csv profile is : CsvProfile Vertical
+| Name           | Quicken Export |
+| DateColumn     | Date           |
+| PayeeColumn    | Payee          |
+| CategoryColumn | Category       |
+| AmountStyle    | Signed         |
+| AmountColumn   | Amount         |
+Given the file contains
+"""
+Date,Payee,Category,Amount
+01/15/2024,Harris Teeter,Expenses:Groceries,-45.00
+"""
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When rows imported
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared   |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Uncleared |
+
+Scenario A book that says nothing clears a CSV import
+Description The default, stated as a scenario of its own so that the option
+\ cannot be added later with the wrong sense and nothing notice. This
+\ is the behaviour every live CSV scenario in this file already
+\ asserts; the difference is that here the setting is named.
+Given the book setting is : BookSetting Vertical
+| SetClearedOnCsvImport | true |
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Groceries     | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given the csv profile is : CsvProfile Vertical
+| Name           | Quicken Export |
+| DateColumn     | Date           |
+| PayeeColumn    | Payee          |
+| CategoryColumn | Category       |
+| AmountStyle    | Signed         |
+| AmountColumn   | Amount         |
+Given the file contains
+"""
+Date,Payee,Category,Amount
+01/15/2024,Harris Teeter,Expenses:Groceries,-45.00
+"""
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When rows imported
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Cleared |
+
+# ---------------------------------------------------------------------------
 # Duplicates, without an identifier to go on
 # ---------------------------------------------------------------------------
 
@@ -1037,7 +1251,6 @@ Details The date and the amount are the key. The payee is not part of it,
 \ TEETER #231. What the payee decides is the note. See two payees are
 \ compared after the rules and then loosely, in ImportOfx.
 
-$TBD
 BusinessRule How a CSV row is tested against what is already there
 Description The tests of ImportOfx, less the one about identifiers, which a CSV
 \ file usually has nothing for. Where a file does carry a reference of
@@ -1247,6 +1460,52 @@ Then import summary is : ImportSummary Vertical
 | New       | 0 |
 | Duplicate | 1 |
 | Possible  | 0 |
+
+
+Scenario Re-importing a file only half of which was accepted asks about the other half
+Description The remaining case of reading a file twice. Three rows were
+\ accepted and two were left unticked, so the book has three of the
+\ five. The second read has to say Duplicate three times and New
+\ twice, and it does, because the counting is per date and amount
+\ rather than per file.
+Details This is the shape the author's report was about -- the same file
+\ read a second time -- and it is the one that cannot be got right by
+\ remembering which files have been read. A file is not a unit of
+\ anything after the review: what the book has is whatever was
+\ ticked, and the second import has to work that out from the book.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type    | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Uncategorized | Expense | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination            | Amount |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Uncategorized | -45.00 |
+| T2  | Assets:Checking | 2024-01-16 | Shell         | Expenses:Uncategorized | -52.00 |
+| T3  | Assets:Checking | 2024-01-17 | Joe Coffee    | Expenses:Uncategorized | -4.75  |
+Given the csv profile is : CsvProfile Vertical
+| Name         | Quicken Export |
+| DateColumn   | Date           |
+| PayeeColumn  | Payee          |
+| AmountStyle  | Signed         |
+| AmountColumn | Amount         |
+Given the file contains
+"""
+Date,Payee,Amount
+01/15/2024,Harris Teeter,-45.00
+01/16/2024,Shell,-52.00
+01/17/2024,Joe Coffee,-4.75
+01/18/2024,Harris Teeter,-31.20
+01/19/2024,Shell,-48.00
+"""
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When rows imported
+Then import summary is : ImportSummary Vertical
+| New       | 2 |
+| Duplicate | 3 |
+| Possible  | 0 |
+# Nothing is Possible: each of the three has one row and one transaction, so
+# the counts agree date by date and amount by amount.
 
 BusinessRule What a fingerprint ignores
 Description Two rows that differ only in how the payee is spaced, cased or

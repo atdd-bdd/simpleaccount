@@ -12,7 +12,7 @@
 #include "money.h"
 #include "ofx_import.h"
 #include "payee_rules.h"
-#include "posting.h"
+#include "transaction.h"
 #include "text_types.h"
 #include "transaction_edit.h"
 #include "transaction_id.h"
@@ -41,7 +41,6 @@ public:
             a.placeholder = parse_bool_cell(value.placeholder);
             a.hidden = parse_bool_cell(value.hidden);
             a.alias = blank(value.alias);
-            a.payment_payee = blank(value.paymentpayee);
             chart_.put(a);
         }
     }
@@ -84,8 +83,20 @@ public:
         const ofx::Imported decided =
             ofx::decide(statement, target_, transactions_, chart_);
         const std::vector<ledger::Transaction> made = ofx::transactions_for(
-            decided, target_, ledger::transaction_count(transactions_), &chart_, rules_);
+            decided, target_, ledger::transaction_count(transactions_), &chart_, rules_,
+            conversions_, categories_);
         transactions_.insert(transactions_.end(), made.begin(), made.end());
+        // A row whose payee has a split remembered against it opens the split
+        // window rather than taking a category, so the offer is what the
+        // import has to say about it.
+        offer_ = payees::SplitOffer();
+        for (const ledger::Transaction& t : made) {
+            const std::string raw = t.raw_name.empty() ? t.payee.value() : t.raw_name;
+            const payees::SplitRule* rule = payees::split_rule_for(split_rules_, raw);
+            if (rule == nullptr) continue;
+            offer_ = payees::offer_split(*rule, t.amount);
+            break;
+        }
     }
 
     // No Background in this file, so this establishes nothing and no scenario
@@ -108,24 +119,54 @@ public:
         }
     }
 
+    // The rule comes first and the lines are added to it, which is the order
+    // the scenarios state them in: a split rule with no lines offers nothing.
     void given_payee_split_rules_are(const std::vector<PayeeSplitRuleString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: remembered splits";
+        for (const auto& value : values) {
+            payees::SplitRule rule;
+            rule.pattern = blank(value.pattern);
+            rule.match_type = payees::match_type_from_string(value.matchtype);
+            rule.payee = blank(value.payee);
+            rule.shape = payees::split_shape_from_string(value.shape);
+            split_rules_.push_back(rule);
+        }
     }
 
     void given_remembered_split_lines_are(const std::vector<RememberedSplitLineString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: remembered splits";
+        ASSERT_FALSE(split_rules_.empty()) << "no split rule to remember lines against";
+        for (const auto& value : values) {
+            payees::RememberedSplitLine line;
+            line.category = blank(value.category);
+            line.amount = Money(value.amount);
+            line.percent = std::stod(value.percent);
+            line.memo = blank(value.memo);
+            split_rules_.back().lines.push_back(line);
+        }
     }
 
     void then_split_offered_is(const std::vector<OfferedSplitString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: remembered splits";
+        ASSERT_TRUE(offer_.offered) << "no split was offered";
+        ASSERT_EQ(values.size(), offer_.lines.size()) << "lines offered";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            OfferedSplitString back = values[i];
+            back.category = offer_.lines[i].category;
+            back.amount = offer_.lines[i].amount.in_register();
+            back.memo = offer_.lines[i].memo.empty() ? "none" : offer_.lines[i].memo;
+            EXPECT_EQ(values[i], back) << "line " << i + 1 << ": wanted "
+                                       << values[i].to_string() << " got "
+                                       << back.to_string();
+        }
     }
 
     void then_split_shortfall_is(const std::vector<SplitShortfallString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "No code yet: remembered splits";
+        ASSERT_FALSE(values.empty());
+        const auto& want = values.front();
+        EXPECT_EQ(Money(want.total).cents(), offer_.total.cents()) << "the total";
+        EXPECT_EQ(Money(want.allocated).cents(), offer_.allocated.cents())
+            << "what the lines come to";
+        EXPECT_EQ(Money(want.shortfall).cents(), offer_.shortfall.cents())
+            << "the shortfall";
+        EXPECT_EQ(parse_bool_cell(want.balanced), offer_.balanced) << "balanced";
     }
 
     void given_payee_split_rules_are_as_previous() {
@@ -254,13 +295,23 @@ public:
     }
 
     void examples_datatype_splitshape(const std::vector<EnumerationValuesString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_datatype_splitshape";
+        for (const auto& value : values)
+            EXPECT_EQ(value.value,
+                      payees::to_string(payees::split_shape_from_string(value.value)))
+                << "the shape " << value.value;
     }
 
     void examples_businessrule_how_a_percentage_split_rounds(const std::vector<PercentageSplitString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_how_a_percentage_split_rounds";
+        for (const auto& value : values) {
+            const std::vector<Money> amounts = payees::percentage_amounts(
+                Money(value.total),
+                {std::stod(value.percenta), std::stod(value.percentb)});
+            ASSERT_EQ(2u, amounts.size());
+            EXPECT_EQ(Money(value.amounta).in_register(), amounts[0].in_register())
+                << "the first line -- " << value.notes;
+            EXPECT_EQ(Money(value.amountb).in_register(), amounts[1].in_register())
+                << "the second line -- " << value.notes;
+        }
     }
 
 
@@ -272,11 +323,18 @@ private:
     std::vector<ledger::TransactionSplit> splits_;
     payees::BookApplication applied_;
     std::vector<payees::Rule> rules_;
+    // The splits remembered against a payee, and the offer the last import
+    // made from them. Nothing is written to the book: a remembered split is
+    // offered and the window is where it is accepted.
+    std::vector<payees::SplitRule> split_rules_;
+    payees::SplitOffer offer_;
     payees::Refusal refusal_;
     std::string target_ = "Assets:Checking";
     payees::Rule offered_rule_;
     payees::BookApplication rule_application_;
     payees::PayeeSuggestion suggested_;
+    std::vector<payees::Conversion> conversions_;
+    std::vector<payees::Categorisation> categories_;
 
     ledger::Transaction* find_by_ref(const std::string& ref) {
         for (ledger::Transaction& t : transactions_)
@@ -284,20 +342,11 @@ private:
         return nullptr;
     }
 
-    // A table cell cannot hold a leading or trailing blank, so a value that is
-    // one is written in double quotes in the spec and the quotes come off here.
-    // Safe on every cell: one that is not quoted is returned as it stands.
-    static std::string unquoted(const std::string& s) {
-        if (s.size() >= 2 && s.front() == '"' && s.back() == '"')
-            return s.substr(1, s.size() - 2);
-        return s;
-    }
-
     static payees::Rule rule_from(const RuleEditString& edit) {
         payees::Rule rule;
-        rule.pattern = unquoted(edit.pattern);
+        rule.pattern = blank(edit.pattern);
         rule.match_type = payees::match_type_from_string(edit.matchtype);
-        rule.payee = unquoted(edit.payee);
+        rule.payee = blank(edit.payee);
         rule.category = blank(edit.category);
         rule.enabled = parse_bool_cell(edit.enabled);
         return rule;
@@ -364,7 +413,7 @@ public:
         ASSERT_FALSE(values.empty());
         const RuleEditString& edit = values.front();
         refusal_ = payees::change(
-            &rules_, unquoted(edit.waspattern),
+            &rules_, blank(edit.waspattern),
             payees::match_type_from_string(edit.wasmatchtype), rule_from(edit));
         EXPECT_FALSE(refusal_.refused) << refusal_.reason;
     }
@@ -487,6 +536,88 @@ public:
                 EXPECT_EQ(Money(want.amount).cents(), got.amount.cents()) << where << " amount";
             if (want.cleared.value != DNCString && !want.cleared.value.empty())
                 EXPECT_EQ(want.cleared.value, types::to_string(got.cleared)) << where << " cleared";
+        }
+    }
+
+    // ----------------------------------------------- the two payee fields
+
+    void given_payee_conversions_are(const std::vector<PayeeConversionString>& values) {
+        conversions_.clear();
+        for (const auto& value : values)
+            conversions_.push_back(payees::Conversion{value.match, blank(value.converted)});
+    }
+
+    void given_payee_categories_are(const std::vector<PayeeCategoryString>& values) {
+        categories_.clear();
+        for (const auto& value : values)
+            categories_.push_back(
+                payees::Categorisation{value.payee, blank(value.category)});
+    }
+
+    void when_payees_converted() {
+        payees::convert_payees(conversions_, &transactions_);
+    }
+
+    void when_categories_assigned() {
+        applied_ = payees::assign_categories(categories_, chart_, &transactions_);
+    }
+
+    // Both fields of every transaction, by the Ref of the table that made it.
+    // A raw name nothing wrote is reported as the literal word, which is what
+    // the table says where a row was left as it was.
+    void then_payee_names_are(const std::vector<PayeeNameRowString>& values) {
+        ASSERT_EQ(values.size(), transactions_.size()) << "number of transactions";
+        for (const auto& want : values) {
+            const ledger::Transaction* t = find_by_ref(want.ref.value);
+            ASSERT_NE(nullptr, t) << "no transaction " << want.ref.value;
+            EXPECT_EQ(blank(want.rawname), t->raw_name)
+                << want.ref.value << " raw name";
+            EXPECT_EQ(blank(want.payee), t->payee.value())
+                << want.ref.value << " payee";
+        }
+    }
+
+    void examples_businessrule_how_a_conversion_pattern_is_matched(
+            const std::vector<ConversionCaseString>& values) {
+        for (const auto& value : values) {
+            EXPECT_EQ(parse_bool_cell(value.matches),
+                      payees::conversion_matches(value.match, value.rawname))
+                << "\"" << value.match << "\" against \"" << value.rawname
+                << "\" -- " << value.notes;
+        }
+    }
+
+    // Driven with the two rows in the order the table lists them, which is the
+    // whole of the rule: the first that matches is the one that answers.
+    void examples_businessrule_which_conversion_is_used_when_several_match(
+            const std::vector<ConversionOrderString>& values) {
+        for (const auto& value : values) {
+            const std::vector<payees::Conversion> table = {
+                payees::Conversion{value.firstmatch, value.firstconverted.value},
+                payees::Conversion{value.secondmatch, value.secondconverted.value},
+            };
+            const payees::Conversion* got = payees::conversion_for(table, value.rawname);
+            ASSERT_NE(nullptr, got) << value.rawname << " -- " << value.notes;
+            EXPECT_EQ(value.converted.value, got->converted)
+                << value.rawname << " -- " << value.notes;
+        }
+    }
+
+    // One row in the table, offered both names. What is asserted is whether it
+    // applied and which of the two it was written against.
+    void examples_businessrule_the_converted_name_is_tried_first_and_the_name_the_bank_sent_second(
+            const std::vector<WhichNameCategorisedString>& values) {
+        for (const auto& value : values) {
+            const std::vector<payees::Categorisation> table = {
+                payees::Categorisation{value.pattern, "Expenses:Groceries"},
+            };
+            const payees::Categorised got = payees::category_for(
+                table, blank(value.converted), blank(value.rawname));
+            EXPECT_EQ(parse_bool_cell(value.applies), got.found)
+                << value.pattern << " -- " << value.notes;
+            const std::string against =
+                !got.found ? "none" : (got.against_converted ? "Converted" : "RawName");
+            EXPECT_EQ(value.against, against) << value.pattern << " -- " << value.notes;
         }
     }
 

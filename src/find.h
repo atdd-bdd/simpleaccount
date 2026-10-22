@@ -45,6 +45,27 @@ inline std::optional<AmountMatch> amount_match_from(const std::string& text) {
     return std::nullopt;
 }
 
+// The amount fields the dialog shows, which is the one thing about the find
+// that the dropdown decides rather than the criteria. On Exact there is one
+// field, labelled Amount; on Range there are two, and the first one's label
+// changes to say which end it is. Stated here rather than in the window so
+// that the words are in one place and can be read back in a table. See "The
+// second amount field is only there for a range" in UserInterface.spectable.
+struct AmountFields {
+    int shown = 1;
+    std::string first_label = "Amount";
+    std::string second_label;
+};
+
+inline AmountFields amount_fields(AmountMatch match) {
+    AmountFields out;
+    if (match == AmountMatch::Exact) return out;
+    out.shown = 2;
+    out.first_label = "Amount from";
+    out.second_label = "to";
+    return out;
+}
+
 // What was typed into the dialog. A field left out is not a filter: no text
 // matches every payee and memo, a missing date bound is open-ended, no amount
 // matches every amount, and no account matches every account.

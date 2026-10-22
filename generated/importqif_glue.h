@@ -14,7 +14,7 @@
 #include "date_parse.h"
 #include "ledger.h"
 #include "money.h"
-#include "posting.h"
+#include "transaction.h"
 #include "qif_import.h"
 #include "qif_lexer.h"
 #include "qif_reader.h"

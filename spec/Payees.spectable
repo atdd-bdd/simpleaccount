@@ -225,7 +225,6 @@ Details A mortgage payment is the case this exists for: the same division of
 | Payee     | PayeeName   |         |                                    |
 | Shape     | SplitShape  | Amounts | How the lines divide the total     |
 
-$TBD
 DataType SplitShape
 Description Whether the remembered split lines are amounts or proportions.
 Examples: EnumerationValues
@@ -240,7 +239,6 @@ Attributes RememberedSplitLine
 | Percent   | Decimal     | 0       |
 | Memo      | Text        | none    |
 
-$TBD
 Scenario A remembered split in fixed amounts is offered
 Description The escrow and principal are the amounts last used. The total of the
 \ downloaded transaction differs, so the shortfall is reported rather
@@ -291,7 +289,6 @@ Attributes SplitShortfall
 | Shortfall | Money   | 0.00    |
 | Balanced  | Boolean | false   |
 
-$TBD
 Scenario A remembered split whose amounts no longer add up reports the shortfall
 Description The payment went up by twenty dollars in January, as it does. The
 \ remembered amounts are offered unchanged and the difference is
@@ -324,7 +321,6 @@ Then split shortfall is : SplitShortfall Vertical
 | Shortfall | 20.00   |
 | Balanced  | false   |
 
-$TBD
 Scenario A remembered split in percentages divides the total
 Description Percentages are applied to the downloaded total, so the lines always
 \ add up. The rounding goes to the largest line, so that the sum is
@@ -359,7 +355,6 @@ Then split shortfall is : SplitShortfall Vertical
 | Shortfall | 0.00    |
 | Balanced  | true    |
 
-$TBD
 BusinessRule How a percentage split rounds
 Description Each line is rounded to the cent, and whatever is left over after
 \ that is added to the largest line.
@@ -368,7 +363,7 @@ Examples: PercentageSplit
 | 1000.00 | 70       | 30       | 700.00  | 300.00  | Exact                       |
 | 1000.01 | 70       | 30       | 700.01  | 300.00  | The odd cent to the larger  |
 | 100.00  | 33       | 67       | 33.00   | 67.00   | Exact                       |
-| 10.00   | 33       | 33       | 3.34    | 3.30    | Percentages need not total 100 |
+| 10.00   | 33       | 33       | 3.30    | 3.30    | Percentages need not total 100, and the rest is a shortfall |
 
 Attributes PercentageSplit
 | Attribute | Type    | Default |
@@ -911,7 +906,7 @@ Description A pattern of nothing is contained in every name, so the rule would
 \ rename every payee in the book. It is refused where it is typed
 \ rather than being allowed to reach the rules.
 When rule added : RuleEdit Vertical
-| Pattern   | ""                 |
+| Pattern   | none               |
 | MatchType | Contains           |
 | Payee     | Harris Teeter      |
 | Category  | Expenses:Groceries |
@@ -927,7 +922,7 @@ Description The point of a rule is the name it records instead. One with no
 When rule added : RuleEdit Vertical
 | Pattern   | HARRIS TEETER      |
 | MatchType | Contains           |
-| Payee     | ""                 |
+| Payee     | none               |
 | Category  | Expenses:Groceries |
 | Enabled   | true               |
 Then rule refused because : RuleRefusal Vertical
@@ -944,3 +939,348 @@ When rule disabled : RuleSelect Vertical
 Then rule list rows are : RuleListRow
 | Position | Pattern   | MatchType | Payee | Category           | Enabled |
 | 1        | SHELL OIL | Contains  | Shell | Expenses:Auto:Fuel | false   |
+
+# ---------------------------------------------------------------------------
+# Two names, and the two tables between them
+# ---------------------------------------------------------------------------
+
+Description A transaction carries two payee fields. The first is the name the
+\ import wrote on it, exactly as the file had it. The second is the
+\ converted name, which is what the register shows and what a report
+\ groups by.
+Details Keeping both is what makes the rest of this section possible. The name
+\ the file wrote is the only field two readings of the same statement are
+\ certain to agree on, so it is what a re-import is tested against; the
+\ converted name is the one a person chose, so it is what is read.
+\ Neither can do the other's job: a duplicate test against the converted
+\ name fails the moment a conversion is added, and a report grouped by
+\ the name the bank wrote has one line per branch and per visit.
+\
+\ An import always records what the file wrote, whether or not anything
+\ converted it, because that is the field a later import asks about. A
+\ conversion run over transactions already in the book records the name
+\ it found there, and only where it changes it -- a row nothing matched
+\ has no previous name to keep.
+\
+\ Two tables act on the two fields, and they are separate because they
+\ answer different questions and are edited at different times. The
+\ converter table says what a name reads as. The categorisation table
+\ says where the money goes. A shop whose name needs tidying does not
+\ always take one category, and a category worth recording does not
+\ always need the name tidied.
+
+Entity PayeeConversion
+Description One row of the converter table: what to look for in the name the
+\ file wrote, and the name to read instead of it.
+| Attribute | Type      | Default | Notes                                      |
+| Match     | Text      |         | With * standing for any number of characters |
+| Converted | PayeeName |         | The name the second field is given          |
+
+Collection PayeeConversions
+| DataType        | Minimum | Maximum | Notes                   |
+| PayeeConversion | 0       | 10000   | Match need not be unique |
+
+BusinessRule How a conversion pattern is matched
+Description Simple wildcards and nothing else. The pattern is matched against
+\ the whole name, with * standing for any number of characters
+\ including none, so a pattern with no * in it is an exact comparison.
+Details Case is ignored, because a bank writes in capitals and a person does
+\ not. There is no other syntax -- no anchors, no character classes, no
+\ counts -- because this table is edited by the person who keeps the book
+\ and a pattern that is wrong in a way they cannot see would rename
+\ payees quietly.
+\
+\ A blank in a pattern is a character like any other, so HARRIS TEETER *
+\ matches the name with something after it and does not match the bare
+\ name, while HARRIS TEETER* matches both. That is the one trap in the
+\ syntax and it is left in: a * that stood for a blank in some positions
+\ and not in others would be the worse surprise.
+Examples: ConversionCase
+| Match           | RawName                      | Matches | Notes                                     |
+| HARRIS TEETER * | HARRIS TEETER #231 DURHAM NC | true    | The usual shape of a rule                 |
+| HARRIS TEETER * | HARRIS TEETER                | false   | Nothing to stand where the blank is       |
+| HARRIS TEETER*  | HARRIS TEETER                | true    | The blank is inside the wildcard          |
+| harris teeter * | HARRIS TEETER #231 DURHAM NC | true    | Case is ignored                           |
+| *AMAZON*        | AMZN AMAZON MKTP US          | true    | Anywhere in the name                      |
+| SHELL           | SHELL OIL 4471               | false   | No wildcard is an exact comparison        |
+| SHELL           | shell                        | true    | The same comparison, ignoring case        |
+| SHELL*OIL       | SHELLOIL 4471                | false   | The pattern ends at OIL and the name does not |
+
+Attributes ConversionCase
+| Attribute | Type    | Default |
+| Match     | Text    |         |
+| RawName   | Text    |         |
+| Matches   | Boolean | false   |
+| Notes     | String  | none    |
+
+BusinessRule Which conversion is used when several match
+Description The first row of the table that matches, in the order the table
+\ lists them.
+Details First wins because the table is in the order the person put it in and
+\ they are looking at it. A hidden ranking -- longest pattern, fewest
+\ wildcards -- would mean the row that acted was not the row they read,
+\ and the fix for a conversion that is too broad is then to move the
+\ specific row above it, which is a thing they can see themselves doing.
+\
+\ This is not how the payee rules above rank, and the difference is
+\ deliberate: those are a set of independent rules with no order a user
+\ ever sees, and this is a list.
+Examples: ConversionOrder
+| FirstMatch         | FirstConverted     | SecondMatch        | SecondConverted    | RawName                 | Converted          | Notes                                  |
+| *AMAZON*           | Amazon             | AMAZON MKTPLACE*   | Amazon Marketplace | AMAZON MKTPLACE PMTS WA | Amazon             | The general row is first, so it answers |
+| AMAZON MKTPLACE*   | Amazon Marketplace | *AMAZON*           | Amazon             | AMAZON MKTPLACE PMTS WA | Amazon Marketplace | The specific row moved above it         |
+| *WHOLE FOODS*      | Whole Foods        | *AMAZON*           | Amazon             | AMAZON MKTPLACE PMTS WA | Amazon             | Only one of them matches at all         |
+
+Attributes ConversionOrder
+| Attribute       | Type      | Default |
+| FirstMatch      | Text      |         |
+| FirstConverted  | PayeeName |         |
+| SecondMatch     | Text      |         |
+| SecondConverted | PayeeName |         |
+| RawName         | Text      |         |
+| Converted       | PayeeName |         |
+| Notes           | String    | none    |
+
+Entity PayeeCategory
+Description One row of the categorisation table: a payee, and where its other
+\ side is posted.
+| Attribute | Type        | Default | Notes                                       |
+| Payee     | Text        |         | Matched the way a conversion pattern is     |
+| Category  | AccountPath |         | Where the other side goes                   |
+
+Collection PayeeCategories
+| DataType      | Minimum | Maximum | Notes                  |
+| PayeeCategory | 0       | 10000   | Payee need not be unique |
+
+BusinessRule The converted name is tried first and the name the bank sent second
+Description Both fields are offered to the categorisation table. The converted
+\ name is tried first, and the name the file wrote is tried only
+\ because the converted name matched nothing.
+Details Two fields rather than one because the two tables are written at
+\ different times. A categorisation written before any conversion existed
+\ names what the bank sent; one written after names what the person
+\ reads. Both are worth keeping, and neither needs rewriting when the
+\ other table changes.
+\
+\ The converted name goes first because it is the one the person chose.
+\ Where both match, the row written against the chosen name is the later
+\ decision and the one meant.
+Examples: WhichNameCategorised
+| Pattern         | Converted     | RawName                      | Applies | Against   | Notes                                    |
+| Harris Teeter   | Harris Teeter | HARRIS TEETER #231 DURHAM NC | true    | Converted | Written against the name that is read    |
+| HARRIS TEETER * | Harris Teeter | HARRIS TEETER #231 DURHAM NC | true    | RawName   | Written before the conversion existed    |
+| HARRIS*         | Harris Teeter | HARRIS TEETER #231 DURHAM NC | true    | Converted | Matches both; the converted name answers |
+| Whole Foods     | Harris Teeter | HARRIS TEETER #231 DURHAM NC | false   | none      | Neither field is this shop               |
+
+Attributes WhichNameCategorised
+| Attribute | Type      | Default |
+| Pattern   | Text      |         |
+| Converted | PayeeName | none    |
+| RawName   | Text      | none    |
+| Applies   | Boolean   | false   |
+| Against   | Text      | none    |
+| Notes     | String    | none    |
+
+Attributes PayeeNameRow
+Description The two fields of one transaction, named by the Ref of the table
+\ that made it.
+| Attribute | Type           | Default |
+| Ref       | TransactionRef |         |
+| RawName   | Text           | none    |
+| Payee     | PayeeName      | none    |
+
+Scenario A conversion gives the transaction its second name
+Description What the file wrote is kept and what the person reads is written
+\ beside it. One import, one row, both fields.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Groceries     | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given payee conversions are : PayeeConversions
+| Match           | Converted     |
+| HARRIS TEETER * | Harris Teeter |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name                         | Memo | CheckNum |
+| DEBIT   | 2024-01-15 | -45.00 | 20240115001 | HARRIS TEETER #231 DURHAM NC | none | none     |
+Then payee names are : PayeeNameRow
+| Ref | RawName                      | Payee         |
+| T1  | HARRIS TEETER #231 DURHAM NC | Harris Teeter |
+
+Scenario A name no conversion matches is still kept as the file wrote it
+Description The first field is written on every imported row, matched or not,
+\ because it is what the next reading of the same statement will be
+\ tested against.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Groceries     | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given payee conversions are : PayeeConversions
+| Match           | Converted     |
+| HARRIS TEETER * | Harris Teeter |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId | Name              | Memo | CheckNum |
+| DEBIT   | 2024-02-02 | -12.00 | A2    | SOME SHOP 4471 NC | none | none     |
+Then payee names are : PayeeNameRow
+| Ref | RawName           | Payee             |
+| T1  | SOME SHOP 4471 NC | SOME SHOP 4471 NC |
+
+Scenario Converting the transactions already in the book
+Description The second use of the table: a set of transactions already here,
+\ converted in one pass. The name found is kept as the first field
+\ where the conversion changes it, and a row nothing matched is left
+\ exactly as it was.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Groceries     | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee                        | Destination            | Amount | Cleared   |
+| T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231 DURHAM NC | Expenses:Uncategorized | -45.00 | Uncleared |
+| T2  | Assets:Checking | 2024-01-16 | SOME SHOP 4471 NC            | Expenses:Uncategorized | -12.00 | Uncleared |
+| T3  | Assets:Checking | 2024-01-17 | HARRIS TEETER #418           | Expenses:Groceries     | -31.00 | Reconciled |
+Given payee conversions are : PayeeConversions
+| Match           | Converted     |
+| HARRIS TEETER * | Harris Teeter |
+When payees converted
+Then payee names are : PayeeNameRow
+| Ref | RawName                      | Payee                        |
+| T1  | HARRIS TEETER #231 DURHAM NC | Harris Teeter                |
+| T2  | none                         | SOME SHOP 4471 NC            |
+| T3  | none                         | HARRIS TEETER #418           |
+# T3 is reconciled, so it is left alone, name included. A bulk change that
+# altered the name beside a balance agreed with a statement would be
+# disturbing something nobody asked it to touch.
+
+Scenario A second reading of a statement is tested against the name the file wrote
+Description The row has no identifier, so it is the weaker tests that have to
+\ catch it, and the payee is one of them. The book holds Harris
+\ Teeter and the file says HARRIS TEETER #231 DURHAM NC, which are
+\ the same row only because the first field says so.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Groceries     | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given payee conversions are : PayeeConversions
+| Match           | Converted     |
+| HARRIS TEETER * | Harris Teeter |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId | Name                         | Memo | CheckNum |
+| DEBIT   | 2024-01-15 | -45.00 | none  | HARRIS TEETER #231 DURHAM NC | none | none     |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId | Name                         | Memo | CheckNum |
+| DEBIT   | 2024-01-15 | -45.00 | none  | HARRIS TEETER #231 DURHAM NC | none | none     |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination            | Amount | Cleared |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Uncategorized | -45.00 | Cleared |
+# One transaction, not two. Compared on the converted name the two would have
+# looked like different shops, and the statement would have been imported
+# twice -- which is the whole reason the first field is kept.
+
+Scenario The converted name chooses the category
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Groceries     | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given payee conversions are : PayeeConversions
+| Match           | Converted     |
+| HARRIS TEETER * | Harris Teeter |
+Given payee categories are : PayeeCategories
+| Payee         | Category           |
+| Harris Teeter | Expenses:Groceries |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name                         | Memo | CheckNum |
+| DEBIT   | 2024-01-15 | -45.00 | 20240115001 | HARRIS TEETER #231 DURHAM NC | none | none     |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Cleared |
+
+Scenario A categorisation written for the name the bank sent still applies
+Description Written before the converter table existed, and not rewritten for
+\ it. The converted name matches nothing in the table, so the name
+\ the file wrote is tried, and it is this shop.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Groceries     | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given payee conversions are : PayeeConversions
+| Match           | Converted     |
+| HARRIS TEETER * | Harris Teeter |
+Given payee categories are : PayeeCategories
+| Payee           | Category           |
+| HARRIS TEETER * | Expenses:Groceries |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name                         | Memo | CheckNum |
+| DEBIT   | 2024-01-15 | -45.00 | 20240115001 | HARRIS TEETER #231 DURHAM NC | none | none     |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Cleared |
+
+Scenario Where both names match the converted one decides
+Description The table has a row for each name and they disagree. The row
+\ written against the name the person reads is the later decision.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Groceries     | Expense  | false       |
+| Expenses:Shopping      | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given payee conversions are : PayeeConversions
+| Match           | Converted     |
+| HARRIS TEETER * | Harris Teeter |
+Given payee categories are : PayeeCategories
+| Payee           | Category           |
+| Harris Teeter   | Expenses:Groceries |
+| HARRIS TEETER * | Expenses:Shopping  |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name                         | Memo | CheckNum |
+| DEBIT   | 2024-01-15 | -45.00 | 20240115001 | HARRIS TEETER #231 DURHAM NC | none | none     |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Cleared |
+
+Scenario Assigning categories over the transactions already there
+Description The same two tables over a set that is already in the book. Only a
+\ posting still in Uncategorized is moved: a category chosen by hand
+\ is a decision, and a reconciled transaction is left alone entirely.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Groceries     | Expense  | false       |
+| Expenses:Shopping      | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee                        | Destination            | Amount | Cleared    |
+| T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231 DURHAM NC | Expenses:Uncategorized | -45.00 | Uncleared  |
+| T2  | Assets:Checking | 2024-01-16 | HARRIS TEETER #418           | Expenses:Shopping      | -31.00 | Uncleared  |
+| T3  | Assets:Checking | 2024-01-17 | HARRIS TEETER #231 DURHAM NC | Expenses:Uncategorized | -22.00 | Reconciled |
+Given payee conversions are : PayeeConversions
+| Match           | Converted     |
+| HARRIS TEETER * | Harris Teeter |
+Given payee categories are : PayeeCategories
+| Payee         | Category           |
+| Harris Teeter | Expenses:Groceries |
+When payees converted
+When categories assigned
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee                        | Destination            | Amount | Cleared    |
+| T1  | Assets:Checking | 2024-01-15 | Harris Teeter                | Expenses:Groceries     | -45.00 | Uncleared  |
+| T2  | Assets:Checking | 2024-01-16 | Harris Teeter                | Expenses:Shopping      | -31.00 | Uncleared  |
+| T3  | Assets:Checking | 2024-01-17 | HARRIS TEETER #231 DURHAM NC | Expenses:Uncategorized | -22.00 | Reconciled |

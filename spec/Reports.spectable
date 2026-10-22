@@ -914,12 +914,27 @@ Then payee report rows are : PayeeReportRow
 | Payee      | Amount | Count |
 | Home Depot | 184.50 | 1     |
 
-$TBD
 Scenario A payee report for one category only
 Description What was spent at the hardware store on the garden, rather than
 \ what was spent there altogether.
-Given the chart of accounts is as previous
-Given transactions are as previous
+# Spelled out rather than "as previous", which this file's Background makes a
+# trap: it resolves to the Background's chart and transactions rather than to
+# the split above, and the Background has no Expenses:Home:Garden and no Home
+# Depot in it -- so the report came out empty. See CLAUDE.md.
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type    | Placeholder |
+| Assets:Checking           | Checking | false       |
+| Expenses:Home:Maintenance | Expense | false       |
+| Expenses:Home:Garden      | Expense | false       |
+| Expenses:Auto:Repairs     | Expense | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
+| T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
+Given split lines are : TransactionSplit
+| Destination               | Amount |
+| Expenses:Home:Maintenance | 100.00 |
+| Expenses:Home:Garden      | 54.50  |
+| Expenses:Auto:Repairs     | 30.00  |
 When report run for category : CategoryFilter Vertical
 | Category | Expenses:Home:Garden |
 | From     | 2024-01-01           |

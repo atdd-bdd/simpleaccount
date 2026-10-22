@@ -394,8 +394,12 @@ Attributes SearchTerm
 | Term      | SearchText |         |
 
 Attributes SortBy
-| Attribute | Type       | Default |
-| Column    | SortColumn |         |
+Description Which column the register is sorted by, and which way round.
+\ Direction is defaulted so that a table naming only a column still
+\ says what it used to say.
+| Attribute | Type       | Default   |
+| Column    | SortColumn |           |
+| Direction | Text       | Ascending |
 
 Attributes TransactionSelect
 | Attribute | Type           | Default |

@@ -12,14 +12,16 @@
 #include "common/common.h"
 #include "account_type.h"
 #include "chart.h"
+#include "csv_import.h"
 #include "date.h"
 #include "ledger.h"
 #include "money.h"
 #include "owner_draw.h"
 #include "payee_rules.h"
-#include "posting.h"
+#include "transaction.h"
 #include "report.h"
 #include "report_ranges.h"
+#include "ofx_import.h"
 #include "store_sqlite.h"
 #include "transaction_id.h"
 #include "text_types.h"
@@ -109,9 +111,77 @@ public:
         }
     }
 
-    void given_saved_profiles_are(const std::vector<SavedProfileString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: given_saved_profiles_are";
+    // The file being matched, the profiles of the book that is open, and
+    // which of them it turned out to be -- kept from the When to the Then.
+    csv::Read file_;
+    std::vector<csv::Profile> saved_profiles_;
+    const csv::Profile* recognised_ = nullptr;
+
+    // --- csv profiles, which are the book's own ----------------------------
+
+    // A Signature in a table is the file's headings in file order. Which
+    // column means what is not what these scenarios are about, so each
+    // heading goes through the alias table exactly as the ImportCsv glue
+    // does it, and the profile that comes out expects that set of headings.
+    static csv::Profile profile_from(const std::string& name,
+                                     const std::string& signature) {
+        csv::Profile one;
+        one.name = name;
+        std::string heading;
+        std::vector<std::string> headings;
+        for (char c : signature) {
+            if (c == ',') { headings.push_back(heading); heading.clear(); }
+            else heading += c;
+        }
+        if (!heading.empty()) headings.push_back(heading);
+        for (const std::string& one_heading : headings) {
+            const auto field = csv::field_for_heading(one_heading);
+            if (!field.has_value()) continue;
+            switch (*field) {
+                case csv::Field::Date:     one.date_column = one_heading; break;
+                case csv::Field::Payee:    one.payee_column = one_heading; break;
+                case csv::Field::Memo:     one.memo_column = one_heading; break;
+                case csv::Field::CheckNo:  one.check_column = one_heading; break;
+                case csv::Field::Category: one.category_column = one_heading; break;
+                case csv::Field::Balance:  one.balance_column = one_heading; break;
+                case csv::Field::Amount:   one.amount_column = one_heading; break;
+                case csv::Field::Debit:    one.debit_column = one_heading; break;
+                case csv::Field::Credit:   one.credit_column = one_heading; break;
+                case csv::Field::Ignore:   break;
+            }
+        }
+        return one;
+    }
+
+    // Saved into the book named, with nothing else about it disturbed: a
+    // profile is one more thing the book holds, so it goes through the same
+    // write the chart does.
+    void write_profiles(const std::string& name,
+                        const std::vector<SavedProfileString>& values) {
+        make_if_needed(name);
+        current_book_ = name;
+        chart::Chart accounts;
+        std::vector<ledger::Transaction> transactions;
+        std::vector<ledger::TransactionSplit> splits;
+        std::vector<payees::Rule> rules;
+        ASSERT_TRUE(read_book_with_rules(name, &accounts, &transactions, &rules, &splits));
+        std::vector<csv::Profile> profiles;
+        for (const auto& value : values)
+            profiles.push_back(profile_from(value.name, value.signature));
+        store::Book opened;
+        const store::Failure where = store::Book::open_named(name, &opened);
+        ASSERT_FALSE(where.refused) << where.reason;
+        const store::Failure no =
+            opened.write(accounts, transactions, rules, splits, {}, profiles);
+        ASSERT_FALSE(no.refused) << no.reason;
+    }
+
+    void given_saved_profiles_of_business_are(const std::vector<SavedProfileString>& values) {
+        write_profiles("Business", values);
+    }
+
+    void given_saved_profiles_of_personal_are(const std::vector<SavedProfileString>& values) {
+        write_profiles("Personal", values);
     }
 
     void given_the_current_book_is(const std::vector<CurrentBookString>& values) {
@@ -120,17 +190,43 @@ public:
     }
 
     void given_the_file_contains(const std::string& value) {
-        std::cout << value << "\n";
-        ADD_FAILURE() << "Not implemented: given_the_file_contains";
+        file_ = csv::read(value);
+        ASSERT_FALSE(file_.refused) << file_.refusal;
     }
 
+    // The headings matched against the profiles of the book that is open,
+    // read back off its own file. Nothing reaches into the other book,
+    // which is the whole of the scenario: the same bank set up twice is the
+    // repetition this decision accepts.
     void when_headers_matched() {
-        ADD_FAILURE() << "Not implemented: when_headers_matched";
+        ASSERT_FALSE(current_book_.empty()) << "no book is open";
+        store::Book opened;
+        const store::Failure where = store::Book::open_named(current_book_, &opened);
+        ASSERT_FALSE(where.refused) << where.reason;
+        chart::Chart accounts;
+        ledger::Ledger unused;
+        std::vector<ledger::Transaction> transactions;
+        std::vector<payees::Rule> rules;
+        std::vector<ledger::TransactionSplit> splits;
+        std::map<std::string, int> widths;
+        saved_profiles_.clear();
+        const store::Failure no = opened.read(&accounts, &unused, &transactions,
+                                              &rules, &splits, &widths,
+                                              &saved_profiles_);
+        ASSERT_FALSE(no.refused) << no.reason;
+        recognised_ = csv::profile_for(saved_profiles_, file_.headings);
     }
 
+    // MatchedBy is left as the table states it: what this scenario is about
+    // is whether the other book's profile was found, and an unrecognised
+    // file is read through the alias table either way.
     void then_profile_recognised_is(const std::vector<ProfileRecognitionString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_profile_recognised_is";
+        ASSERT_FALSE(values.empty());
+        ProfileRecognitionString got = values.front();
+        got.name = recognised_ == nullptr ? "none" : recognised_->name;
+        got.asked = recognised_ == nullptr ? "true" : "false";
+        EXPECT_EQ(values.front(), got) << "wanted " << values.front().to_string()
+                                      << " got " << got.to_string();
     }
 
     void given_account_mappings_of_business_are(const std::vector<AccountMappingString>& values) {
@@ -143,15 +239,47 @@ public:
         ADD_FAILURE() << "Not implemented: given_account_mappings_of_personal_are";
     }
 
+    // Placing a download in the book that is open, and only in that book.
+    // The chart is read back off the current book rather than kept in a
+    // member, because the point of the scenario is that the other book's
+    // chart is not consulted -- and a member would hold whichever book was
+    // written last, which is exactly the bug it is testing for.
     void when_statement_imported(const std::vector<OfxStatementString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: when_statement_imported";
+        ASSERT_FALSE(values.empty());
+        ASSERT_FALSE(current_book_.empty()) << "no book is open";
+        chart::Chart accounts;
+        std::vector<ledger::Transaction> transactions;
+        ASSERT_TRUE(read_book(current_book_, &accounts, &transactions));
+        const OfxStatementString& value = values.front();
+        const std::string bank_id = blank(value.bankid);
+        const std::string account_id = value.ofxaccountid;
+        placed_ = ofx::place_statement(accounts, bank_id, account_id);
+        // No account in this book claims the number, so the import has
+        // nowhere to put the statement and has to ask.
+        was_asked_ = placed_.empty();
+        UnknownAccountString asked;
+        asked.bankid = bank_id.empty() ? "none" : bank_id;
+        asked.ofxaccountid = account_id;
+        asked.ofxaccttype = value.ofxaccttype.value;
+        asked.suggestion = "none";
+        asked_ = asked;
     }
 
+    // What the dialog is told. A suggestion of "none" is the case this
+    // scenario is about: the number does exist on an account, in the other
+    // book, and nothing is allowed to find it there.
     void then_asked_to_choose_an_account_for(const std::vector<UnknownAccountString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: then_asked_to_choose_an_account_for";
+        ASSERT_FALSE(values.empty());
+        ASSERT_TRUE(was_asked_) << "the statement was placed in " << placed_
+                                << " rather than asked about";
+        EXPECT_EQ(values.front(), asked_);
     }
+
+    // Where the last statement went, and what the dialog was told when it
+    // went nowhere. Kept only from the When to the Then of one scenario.
+    std::string placed_;
+    bool was_asked_ = false;
+    UnknownAccountString asked_;
 
     void given_transactions_of_business_are(const std::vector<TransactionString>& v) {
         write_transactions("Business", v);
@@ -510,7 +638,6 @@ public:
             a.placeholder = parse_bool_cell(value.placeholder);
             a.hidden = parse_bool_cell(value.hidden);
             a.alias = blank(value.alias);
-            a.payment_payee = blank(value.paymentpayee);
             chart_.put(a);
         }
     }
@@ -610,7 +737,6 @@ public:
             else if (value.thing == "Transactions and splits") wanted = {"transactions", "transaction_splits"};
             else if (value.thing == "Payee rules") wanted = {"payee_rules"};
             else if (value.thing == "Remembered splits") wanted = {"payee_split_rules"};
-            else if (value.thing == "Account mappings for OFX") wanted = {"ofx_account_mappings"};
             else if (value.thing == "Fiscal year start") wanted = {"book"};
             else if (value.thing == "CSV bank profiles") wanted = {"csv_profiles"};
             else if (value.thing == "CSV header aliases") wanted = {"csv_header_matches"};
@@ -816,7 +942,14 @@ private:
             a.placeholder = parse_bool_cell(value.placeholder);
             a.hidden = parse_bool_cell(value.hidden);
             a.alias = blank(value.alias);
-            a.payment_payee = blank(value.paymentpayee);
+            // The bank, its identifier and the account number are the
+            // account's own, which is the whole point of the scenario that
+            // says one book knowing a number leaves the other not knowing
+            // it. Leaving them off here wrote a chart that could not state
+            // what the table stated.
+            a.bank = blank(value.bank);
+            a.bank_id = blank(value.bankid);
+            a.account_number = blank(value.accountnumber);
             accounts.put(a);
         }
         write_back(name, accounts, transactions);
@@ -1081,15 +1214,7 @@ public:
 
 public:
 
-    void given_saved_profiles_of_business_are(const std::vector<SavedProfileString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: given_saved_profiles_of_business_are";
-    }
 
-    void given_saved_profiles_of_personal_are(const std::vector<SavedProfileString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: given_saved_profiles_of_personal_are";
-    }
 
     void when_the_book_is_saved() {
         ASSERT_TRUE(store_.is_open()) << "no book was made";
@@ -1402,5 +1527,110 @@ private:
         }
         return rules;
     }
+
+public:
+
+    // A book from an earlier version, written the way the later one is:
+    // through SQLite directly, because the store will not write a version it
+    // does not know, and 9 is the version before this one.
+    void given_a_book_whose_schema_version_is_9() {
+        store::Book made;
+        const store::Failure no =
+            store::Book::create(store::path_for("Business"), "Business", &made);
+        ASSERT_FALSE(no.refused) << no.reason;
+        made = store::Book();
+        stamp_version("Business", 9);
+    }
+
+public:
+
+    // Against a real book, the same way the infrastructure rule is checked:
+    // the table is in the file or the rule is not true yet.
+    void examples_businessrule_a_tag_table_of_its_own_once_there_is_a_list_of_tags(
+            const std::vector<TagInfrastructureString>& values) {
+        store::Book made;
+        const store::Failure no =
+            store::Book::create(store::path_for("Tagged"), "Tagged", &made);
+        ASSERT_FALSE(no.refused) << no.reason;
+        const std::string path = store::path_for("Tagged");
+
+        for (const auto& value : values) {
+            const std::vector<std::string> columns = columns_of(path, value.table);
+            ASSERT_FALSE(columns.empty()) << "no table " << value.table;
+            for (const std::string& wanted : split(value.columns))
+                EXPECT_TRUE(std::find(columns.begin(), columns.end(), wanted) != columns.end())
+                    << value.table << " has no column " << wanted << " -- " << value.notes;
+            // Unique as the notes say, read off the file's own definition
+            // rather than taken on trust: two spellings of one word are one
+            // word, and that is the database's promise to keep.
+            const std::vector<std::string> sql =
+                query(path, "SELECT sql FROM sqlite_master WHERE name = '" +
+                            value.table + "'");
+            ASSERT_FALSE(sql.empty()) << "no definition of " << value.table;
+            EXPECT_NE(std::string::npos, sql.front().find("UNIQUE"))
+                << value.table << " does not promise a unique name -- " << value.notes;
+            // A vocabulary, so a new book has none: the rows arrive as words
+            // are typed rather than being a list of fields that have been.
+            EXPECT_EQ(0, rows_in(path, value.table)) << value.table << " in a new book";
+        }
+    }
+
+    // Each row is a book of its own, made by the store and then stamped with
+    // the version the row describes -- or stripped of the schema table
+    // altogether, which is what a file this program never wrote looks like.
+    // The book is opened afterwards, because refusing is a thing open does.
+    void examples_businessrule_a_book_of_any_version_but_this_one_is_refused(const std::vector<VersionRefusalString>& values) {
+        int which = 0;
+        for (const VersionRefusalString& value : values) {
+            const std::string name = "Book" + std::to_string(++which);
+            store::Book made;
+            const store::Failure no = store::Book::create(store::path_for(name), name, &made);
+            ASSERT_FALSE(no.refused) << no.reason;
+            made = store::Book();
+
+            const std::string& says = value.thebooksversion;
+            if (says == "Later than this") stamp_version(name, store::kSchemaVersion + 1);
+            else if (says == "Earlier") stamp_version(name, store::kSchemaVersion - 1);
+            else if (says == "Absent") drop_schema_table(name);
+            else ASSERT_EQ("This one", says) << "a version this rule does not describe";
+
+            store::Book opened;
+            const store::Failure got = store::Book::open_named(name, &opened);
+            const std::string& then = value.then;
+            if (then == "Opened") {
+                EXPECT_FALSE(got.refused) << name << ": " << got.reason;
+                continue;
+            }
+            EXPECT_TRUE(got.refused) << name << " was not refused";
+            if (then.find("later") != std::string::npos)
+                EXPECT_EQ(name + " was written by a later version of SimpleAccount", got.reason);
+            else if (then.find("earlier") != std::string::npos)
+                EXPECT_EQ(name + " was written by an earlier version of SimpleAccount", got.reason);
+            else
+                EXPECT_EQ(name + " is not a SimpleAccount book", got.reason);
+        }
+    }
+
+private:
+    // The version a book says it is, set behind the store's back.
+    static void stamp_version(const std::string& name, int version) {
+        run_sql(name, "UPDATE schema SET version = " + std::to_string(version));
+    }
+
+    // A file with no schema table at all: a SQLite database this program did
+    // not write, which is the only way a book has no version to read.
+    static void drop_schema_table(const std::string& name) {
+        run_sql(name, "DROP TABLE schema");
+    }
+
+    static void run_sql(const std::string& name, const std::string& sql) {
+        sqlite3* db = nullptr;
+        ASSERT_EQ(SQLITE_OK, sqlite3_open(store::path_for(name).c_str(), &db));
+        const int done = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, nullptr);
+        sqlite3_close(db);
+        ASSERT_EQ(SQLITE_OK, done) << sql;
+    }
+
+public:
 
 };

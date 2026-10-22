@@ -1,0 +1,12 @@
+
+Every transaction should have two payee fields.  The first field is the one created during the import.   The second field is a converted payee field.    
+
+Duplicate detection on imports should use the first field.  A transaction in an import file will have that name on it.  
+
+Transactions (either on an import or on a selected set of transactions) will create the converted payee field, according to a payee convertor table. 
+
+The payee convertor table will have records that show a conversion.   The first field contains a matching value.  For example,  "HARRIS TEETER *" matches any payee field that begins with the string. It should use simple regex (e.g. * for any number of characters) The second field shows what it should be converted to, e.g. "Harris Teeter"  
+
+The automatic categorization will check both the converted payee field and the original payee field.  The automatic categorization has two fields - one denoting the payee and the second denoting the category.   If the payee matches the converted payee, the rule is applied.  Otherwise, if the payee matches the original payee, the rule is applied.  
+
+Automatic categorization will take place on import or on a selected set of transactions.   

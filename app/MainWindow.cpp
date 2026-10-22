@@ -15,6 +15,8 @@
 #include <QLineEdit>
 #include <QFontDialog>
 #include <QSettings>
+#include <QCoreApplication>
+#include <QEventLoop>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFont>
@@ -26,6 +28,7 @@
 #include <QListWidget>
 #include <QModelIndex>
 #include <QMessageBox>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSignalBlocker>
@@ -39,7 +42,10 @@
 #include <QKeyEvent>
 #include <QKeySequence>
 #include <QMouseEvent>
+#include <QScreen>
+#include <QScrollArea>
 #include <QScrollBar>
+#include <QSpinBox>
 #include <QStyle>
 #include <QStyleOptionSlider>
 #include <functional>
@@ -56,10 +62,49 @@
 #include "register_lines.h"
 #include "register_view.h"
 #include "scrolling.h"
+#include "tags.h"
+#include "transaction_edit.h"
+#include "transfer_match.h"
 
 namespace {
 
 QString money(const Money& m) { return QString::fromStdString(m.in_register()); }
+
+// A window built here lays its content out on itself, so content taller than
+// the screen has nowhere to go: the buttons sit below the bottom edge and the
+// window cannot be made small enough to bring them back. This gives the
+// dialog a scroll area filling it and returns the widget the content goes
+// into, so the content stays as tall as it wants to be while the window does
+// not. The register's scroll bar is the same promise made about a pane; see
+// the scroll bar rule in UserInterface.spectable.
+//
+// It is called in place of the dialog as the layout's parent --
+// new QFormLayout(scrollingBody(&dialog)) -- and nothing else changes: a
+// widget made with the dialog as its parent is reparented when it is added
+// to a layout, so every pointer the caller already holds stays good.
+QWidget* scrollingBody(QDialog* dialog) {
+    auto* area = new QScrollArea(dialog);
+    area->setWidgetResizable(true);
+    area->setFrameShape(QFrame::NoFrame);
+    auto* body = new QWidget(area);
+    area->setWidget(body);
+    auto* outer = new QVBoxLayout(dialog);
+    outer->setContentsMargins(0, 0, 0, 0);
+    outer->addWidget(area);
+    return body;
+}
+
+// Never larger than the screen it opened on, with room left for the frame and
+// the task bar. A window that asks for more than this is what the scroll area
+// above is for; one that asks for less is left at the size it asked for.
+void fitToScreen(QDialog* dialog) {
+    const QScreen* screen = dialog->screen();
+    if (screen == nullptr) return;
+    const QRect room = screen->availableGeometry();
+    const QSize wanted = dialog->sizeHint().expandedTo(dialog->size());
+    dialog->resize(qMin(wanted.width(), room.width() - 48),
+                   qMin(wanted.height(), room.height() - 96));
+}
 
 // A negative figure is the one worth seeing at a glance, so it is the only thing
 // coloured. Nothing else here depends on colour.
@@ -187,7 +232,7 @@ public:
     RuleForm(QWidget* parent, const QString& title, const payees::Rule& start)
         : QDialog(parent) {
         setWindowTitle(title);
-        auto* form = new QFormLayout(this);
+        auto* form = new QFormLayout(scrollingBody(this));
 
         pattern_ = new QLineEdit(QString::fromStdString(start.pattern));
         // Said here because it is the one thing about a rule that is not obvious:
@@ -220,6 +265,7 @@ public:
         form->addRow(buttons);
         connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
         connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+        fitToScreen(this);
     }
 
     payees::Rule rule() const {
@@ -301,6 +347,7 @@ public:
             }
         ok_->setEnabled(list_->currentItem() != nullptr);
         typed_->setFocus();
+        fitToScreen(this);
     }
 
     // Empty when nothing was chosen, which the caller treats as a refusal.
@@ -467,6 +514,18 @@ MainWindow::MainWindow() {
     status_ = new QLabel;
     statusBar()->addWidget(status_);
 
+    // Hidden until there is something long to say. Permanent rather than
+    // ordinary widgets so that the strip keeps its place at the right-hand end
+    // and the status text is not pushed about when it appears.
+    progressText_ = new QLabel;
+    progressBar_ = new QProgressBar;
+    progressBar_->setMaximumWidth(220);
+    progressBar_->setTextVisible(false);
+    progressText_->hide();
+    progressBar_->hide();
+    statusBar()->addPermanentWidget(progressText_);
+    statusBar()->addPermanentWidget(progressBar_);
+
     buildMenus();
 
     // Start about twice the size the toolkit would give, which is small on a
@@ -524,7 +583,8 @@ void MainWindow::applyFont(const QFont& font) {
 // account types, and the width is not.
 static std::string registerColumnName(int column) {
     static const char* const names[] = {"Date",    "CheckNo", "Payee",   "Category",
-                                        "Memo",    "Payment", "Deposit", "Balance"};
+                                        "Memo",    "Tag",     "Payment", "Deposit",
+                                        "Balance"};
     if (column < 0 || column >= static_cast<int>(sizeof(names) / sizeof(names[0])))
         return {};
     return names[column];
@@ -597,6 +657,7 @@ void MainWindow::showAccountListing() {
         editAccountSettings(item->text());
         fill();
     });
+    fitToScreen(&dialog);
     dialog.exec();
 }
 
@@ -644,6 +705,7 @@ void MainWindow::showCategoryListing() {
         editCategorySettings(item->text());
         fill();
     });
+    fitToScreen(&dialog);
     dialog.exec();
 }
 
@@ -655,17 +717,37 @@ void MainWindow::editAccountSettings(const QString& path) {
 
     QDialog dialog(this);
     dialog.setWindowTitle("Account settings");
-    auto* form = new QFormLayout(&dialog);
+    auto* form = new QFormLayout(scrollingBody(&dialog));
     form->addRow("Account", new QLabel(path, &dialog));
     auto* bank = new QLineEdit(QString::fromStdString(existing->bank), &dialog);
     auto* number = new QLineEdit(QString::fromStdString(existing->account_number), &dialog);
     form->addRow("Bank", bank);
     form->addRow("Number on the statement", number);
+
+    // The starting balance is shown here rather than only at creation, because
+    // the figure a statement opens with is often not known on the day the
+    // account is made. Blank, or zero, is an account with none: the one
+    // transaction against opening equity goes rather than being left at zero,
+    // which is what set_starting_balance does.
+    const edit::Starting was = edit::starting_balance_of(chart_, transactions_,
+                                                         path.toStdString());
+    auto* starting = new QLineEdit(&dialog);
+    starting->setPlaceholderText("0.00");
+    if (was.exists) starting->setText(QString::fromStdString(was.stated.in_register()));
+    auto* startingOn = new QDateEdit(
+        was.exists ? QDate(was.on.year(), was.on.month(), was.on.day())
+                   : QDate::currentDate(),
+        &dialog);
+    startingOn->setCalendarPopup(true);
+    startingOn->setDisplayFormat("yyyy-MM-dd");
+    form->addRow("Starting balance", starting);
+    form->addRow("As at", startingOn);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
                                          &dialog);
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     form->addRow(buttons);
+    fitToScreen(&dialog);
     if (dialog.exec() != QDialog::Accepted) return;
 
     chart::Account a = *existing;
@@ -674,6 +756,21 @@ void MainWindow::editAccountSettings(const QString& path) {
     a.bank = bank->text().trimmed().toStdString();
     a.account_number = number->text().trimmed().toStdString();
     chart_.put(a);
+
+    const QString said = starting->text().trimmed();
+    const Money stated = moneyTyped(said);
+    if (!said.isEmpty() && stated.cents() == 0 && said != "0" && said != "0.00") {
+        QMessageBox::warning(this, "SimpleAccount",
+                             QString("\"%1\" is not an amount; the starting balance "
+                                     "was left as it was.").arg(said));
+    } else if (was.exists || stated.cents() != 0) {
+        const edit::Outcome done = edit::set_starting_balance(
+            &chart_, &transactions_, path.toStdString(), stated,
+            asDate(startingOn->date()));
+        if (!done.changed && !done.reason.empty())
+            QMessageBox::warning(this, "SimpleAccount",
+                                 QString::fromStdString(done.reason));
+    }
     save();
     rebuildWorkspace();
     refresh();
@@ -689,7 +786,7 @@ void MainWindow::editCategorySettings(const QString& path) {
 
     QDialog dialog(this);
     dialog.setWindowTitle("Category settings");
-    auto* form = new QFormLayout(&dialog);
+    auto* form = new QFormLayout(scrollingBody(&dialog));
     form->addRow("Category", new QLabel(path, &dialog));
     const std::string was = asAccount != nullptr ? asAccount->alias : asCategory->alias;
     auto* alias = new QLineEdit(QString::fromStdString(was), &dialog);
@@ -699,6 +796,7 @@ void MainWindow::editCategorySettings(const QString& path) {
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     form->addRow(buttons);
+    fitToScreen(&dialog);
     if (dialog.exec() != QDialog::Accepted) return;
 
     if (asAccount != nullptr) {
@@ -798,6 +896,8 @@ void MainWindow::buildMenus() {
     // Find is modeless and its results are a tab, so it belongs with the
     // things done to what is already in the book rather than with the file.
     QMenu* edit = menuBar()->addMenu("&Edit");
+    edit->addAction("&Book settings...", this, &MainWindow::editBookSettings);
+    edit->addSeparator();
     auto* find = edit->addAction("&Find...", this, &MainWindow::showFind);
     find->setShortcut(QKeySequence::Find);
 
@@ -808,9 +908,15 @@ void MainWindow::buildMenus() {
     accounts->addAction("&Category listing...", this, &MainWindow::showCategoryListing);
     accounts->addSeparator();
     accounts->addAction("Payee &rules...", this, &MainWindow::editRules);
+    accounts->addAction("Payee &tables...", this, &MainWindow::editPayeeTables);
+    accounts->addAction("&Tags...", this, &MainWindow::showTagListing);
     accounts->addSeparator();
     accounts->addAction("&Assign payees according to rules", this,
                         &MainWindow::assignPayeesAccordingToRules);
+    accounts->addAction("&Convert the payees in the book", this,
+                        &MainWindow::convertPayeesInTheBook);
+    accounts->addAction("Assign the &categories in the book", this,
+                        &MainWindow::assignCategoriesInTheBook);
 
     QMenu* reports = menuBar()->addMenu("&Reports");
     reports->addAction("&Spending by category...", this, &MainWindow::showReport);
@@ -879,6 +985,10 @@ void MainWindow::newBook() {
     book_ = ledger::Ledger();
     transactions_.clear();
     rules_.clear();
+    conversions_.clear();
+    categorisations_.clear();
+    tagVocabulary_.clear();
+    hideBefore_.clear();
     // Another book: the registers that were open were of accounts this one
     // does not have, so the workspace starts over rather than being handed
     // the new book.
@@ -900,7 +1010,7 @@ void MainWindow::askTheNewBookQuestion(const QString& name) {
 
     QDialog dialog(this);
     dialog.setWindowTitle("New book");
-    auto* layout = new QVBoxLayout(&dialog);
+    auto* layout = new QVBoxLayout(scrollingBody(&dialog));
     auto* asked = new QLabel(
         QString("%1 has nothing in it yet. Where do its accounts come from?").arg(name),
         &dialog);
@@ -933,6 +1043,8 @@ void MainWindow::askTheNewBookQuestion(const QString& name) {
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok, &dialog);
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     layout->addWidget(buttons);
+
+    fitToScreen(&dialog);
 
     // The loop is for the two ways the answer can be no answer: the history
     // chosen without naming a file, and a file the importer would not read.
@@ -1030,6 +1142,15 @@ void MainWindow::openNamed(const QString& name) {
     rules_ = rules;
     splits_ = splits;
     columnWidths_ = widths;
+    // The side tables are read through the store rather than through read(),
+    // which already takes five things: each is a list of its own, edited in a
+    // window of its own, and nothing about the book changes when one does.
+    conversions_ = store_.conversions();
+    categorisations_ = store_.categorisations();
+    tagVocabulary_ = store_.tags();
+    // The one book setting a register reads, kept here rather than asked of
+    // the store on every refresh.
+    hideBefore_ = store_.info().hide_before;
     workspace_.reset();   // another book, so another set of tabs
     rememberRecent(name);
     bookChanged(name);
@@ -1173,7 +1294,7 @@ void MainWindow::newAccount() {
     asAt->setCalendarPopup(true);
     asAt->setDisplayFormat("yyyy-MM-dd");
 
-    auto* form = new QFormLayout(&dialog);
+    auto* form = new QFormLayout(scrollingBody(&dialog));
     form->addRow("Name", name);
     form->addRow("Type", type);
     form->addRow("Under", parent);
@@ -1185,6 +1306,7 @@ void MainWindow::newAccount() {
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     name->setFocus();
+    fitToScreen(&dialog);
 
     if (dialog.exec() != QDialog::Accepted) return;
 
@@ -1405,12 +1527,26 @@ std::string MainWindow::confirmImportAccount(
                       "register you are in.";
             break;
         case importing::TargetSource::NoneOffered:
+            because = "Neither the file nor the name of it says which account it is "
+                      "for, so there is nothing to propose. Choose it here.";
             break;
     }
 
-    auto* layout = new QVBoxLayout(&dialog);
+    auto* layout = new QVBoxLayout(scrollingBody(&dialog));
     layout->addWidget(new QLabel(
         QString("Import %1 into:").arg(QString::fromStdString(proposed.file_name)), &dialog));
+
+    // The two lines that came from the bank rather than from this program, and
+    // so the two a person compares against the statement in their hand. A file
+    // that stated neither leaves them out rather than showing an empty line.
+    if (!proposed.bank_id.empty())
+        layout->addWidget(new QLabel(
+            QString("Bank id %1").arg(QString::fromStdString(proposed.bank_id)), &dialog));
+    if (!proposed.account_number.empty())
+        layout->addWidget(new QLabel(
+            QString("Account number %1")
+                .arg(QString::fromStdString(proposed.account_number)),
+            &dialog));
 
     auto* accounts = new QComboBox(&dialog);
     for (const std::string& path : importing::candidates(chart_))
@@ -1429,9 +1565,35 @@ std::string MainWindow::confirmImportAccount(
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     layout->addWidget(buttons);
+    fitToScreen(&dialog);
 
     if (dialog.exec() != QDialog::Accepted) return {};
     return accounts->currentText().toStdString();
+}
+
+// Every pairing the import found between a row being reviewed and a half the
+// book already has. One question at a time, and no answer writes anything:
+// yes puts each half on the other's account in the review, and accepting the
+// review is what writes. Each side is quoted as its own file wrote it, with
+// the gap in days, which is the thing a person most needs in order to
+// disagree -- see the transfer question in UserInterface.spectable.
+void MainWindow::askAboutTransfers() {
+    while (workspace_->transfer_question().shown) {
+        const ui::Workspace::TransferQuestion q = workspace_->transfer_question();
+        std::string said = "Are these the same payment?\n\n";
+        said += q.from_account + "    " + q.from_date.iso() + "    " + q.from_payee + "\n";
+        said += q.to_account + "    " + q.to_date.iso() + "    " + q.to_payee + "\n\n";
+        said += q.amount.in_register() + ", " + std::to_string(q.days_apart) +
+                (q.days_apart == 1 ? " day apart." : " days apart.");
+        QMessageBox ask(this);
+        ask.setWindowTitle("Import");
+        ask.setIcon(QMessageBox::Question);
+        ask.setText(QString::fromStdString(said));
+        QPushButton* yes = ask.addButton("One payment", QMessageBox::YesRole);
+        ask.addButton("Two payments", QMessageBox::NoRole);
+        ask.exec();
+        workspace_->answer_transfer_question(ask.clickedButton() == yes);
+    }
 }
 
 void MainWindow::importTransactionsFrom(const QString& path) {
@@ -1457,13 +1619,11 @@ void MainWindow::importTransactionsFrom(const QString& path) {
     // table is not read here yet, so a QFX is placed by the account number
     // written on the chart; the dialog is what covers the rest.
     const std::string in_file = review::account_in_file(text, chart_, {});
-    const ui::Workspace::ActiveRegister where = workspace_->choose_import_file(
-        QFileInfo(path).fileName().toStdString(), in_file);
-    if (where.refused) {
-        QMessageBox::information(this, "SimpleAccount",
-                                 QString::fromStdString(where.reason));
-        return;
-    }
+    const review::FileNumbers numbers = review::numbers_in_file(text);
+    // The dialog opens whatever the file turned out to say, including when it
+    // said nothing at all, which is the case the numbers are shown for.
+    workspace_->choose_import_file(QFileInfo(path).fileName().toStdString(), in_file,
+                                   numbers.bank_id, numbers.account_number);
     const std::string account = confirmImportAccount(workspace_->import_confirmation());
     if (account.empty()) {
         workspace_->cancel_import_confirmation();
@@ -1473,8 +1633,12 @@ void MainWindow::importTransactionsFrom(const QString& path) {
     // Everything about reading the file is production code with no Qt in it, so
     // what happens here is the same as what the command line does.
     chart::Chart accounts = chart_;
+    // Whether a CSV arrives cleared is the book's own setting, read off its row
+    // rather than remembered here. See the CSV cleared rule in ImportCsv.spectable.
+    const bool clear_a_csv = !store_.is_open() || store_.info().set_cleared_on_csv_import;
     const review::Prepared prepared = review::from_file(
-        text, account, transactions_, &accounts, rules_);
+        text, account, transactions_, &accounts, rules_, clear_a_csv, conversions_,
+        categorisations_);
     if (prepared.refused) {
         workspace_->cancel_import_confirmation();
         QMessageBox::warning(this, "SimpleAccount",
@@ -1498,6 +1662,7 @@ void MainWindow::importTransactionsFrom(const QString& path) {
     // dialog of its own.
     rebuildWorkspace();
     workspace_->confirm_import_into(account, prepared.rows);
+    askAboutTransfers();
     refresh();
 
     // Said out loud rather than swallowed. A note nobody is shown is a note
@@ -1564,7 +1729,23 @@ MainWindow::TabWidgets MainWindow::makeReportTab(int tabPosition, const std::str
     chooser->addStretch(1);
     chooser->addWidget(t.quicken);
     chooser->addWidget(t.zero);
-    layout->addLayout(chooser);
+
+    // The chooser is a single row and nothing in it wraps, so a narrow window
+    // would squeeze the dates down to nothing and then hide the check boxes
+    // altogether. It scrolls sideways instead, at the height one row needs
+    // plus room for the bar; the report below it scrolls on its own.
+    auto* chooserHolder = new QWidget;
+    chooser->setContentsMargins(0, 0, 0, 0);
+    chooserHolder->setLayout(chooser);
+    auto* chooserScroll = new QScrollArea;
+    chooserScroll->setWidgetResizable(true);
+    chooserScroll->setFrameShape(QFrame::NoFrame);
+    chooserScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    chooserScroll->setWidget(chooserHolder);
+    chooserScroll->setFixedHeight(
+        chooserHolder->sizeHint().height() +
+        chooserScroll->horizontalScrollBar()->sizeHint().height() + 2);
+    layout->addWidget(chooserScroll);
 
     t.reportTable = new QTableWidget;
     t.reportTable->verticalHeader()->setVisible(false);
@@ -1970,6 +2151,425 @@ void MainWindow::editRules() {
     box.exec();
 }
 
+// The converter tables. One window of two tabs: a conversion says what to call
+// a name the bank keeps sending, a categorisation says where that payee's money
+// goes, and the two are read one after the other -- convert, then categorise --
+// which is why they are in one window. Two tables and not one because a single
+// table would have a blank in one of its columns on nearly every row. See
+// decisions.md and the converter section of Payees.spectable.
+//
+// Edited in place rather than through a row dialog, because these are lists
+// somebody puts in an order and reorders: the row that acts is the first that
+// matches, so moving a row is the fix for a pattern that is too broad, and that
+// wants to be one click rather than a form.
+void MainWindow::editPayeeTables() {
+    if (!store_.is_open()) {
+        QMessageBox::information(this, "SimpleAccount",
+                                 "Open a book before working on its payee tables.");
+        return;
+    }
+
+    QDialog box(this);
+    box.setWindowTitle("Payee tables");
+    box.resize(900, 560);
+    auto* layout = new QVBoxLayout(&box);
+
+    auto* explain = new QLabel(
+        "The first row that matches is the one that acts, so a row above "
+        "another wins. A pattern is matched against the whole name with * "
+        "standing for any run of characters, and case is ignored.");
+    explain->setWordWrap(true);
+    layout->addWidget(explain);
+
+    auto* tabs = new QTabWidget;
+    layout->addWidget(tabs, 1);
+
+    const auto makeTable = [](const QStringList& headings) {
+        auto* t = new QTableWidget;
+        t->setColumnCount(headings.size());
+        t->setHorizontalHeaderLabels(headings);
+        t->verticalHeader()->setVisible(false);
+        t->setSelectionBehavior(QAbstractItemView::SelectRows);
+        t->setSelectionMode(QAbstractItemView::SingleSelection);
+        for (int c = 0; c < headings.size(); ++c)
+            t->horizontalHeader()->setSectionResizeMode(c, QHeaderView::Stretch);
+        return t;
+    };
+
+    auto* conversions = makeTable({"The name in the file", "What to call it"});
+    auto* categories = makeTable({"Payee", "Category"});
+    for (std::size_t i = 0; i < conversions_.size(); ++i) {
+        conversions->insertRow(static_cast<int>(i));
+        conversions->setItem(static_cast<int>(i), 0, text(conversions_[i].match));
+        conversions->setItem(static_cast<int>(i), 1, text(conversions_[i].converted));
+    }
+    for (std::size_t i = 0; i < categorisations_.size(); ++i) {
+        categories->insertRow(static_cast<int>(i));
+        categories->setItem(static_cast<int>(i), 0, text(categorisations_[i].payee));
+        categories->setItem(static_cast<int>(i), 1, text(categorisations_[i].category));
+    }
+
+    // Each tab carries its own row buttons, so the buttons act on the table
+    // being looked at and there is nothing to work out about which is which.
+    const auto pageFor = [&](QTableWidget* table, const QString& applyWords) {
+        auto* page = new QWidget;
+        auto* down = new QVBoxLayout(page);
+        down->addWidget(table, 1);
+        auto* row = new QHBoxLayout;
+        auto* add = new QPushButton("&Add row");
+        auto* drop = new QPushButton("&Delete row");
+        auto* up = new QPushButton("Move &up");
+        auto* below = new QPushButton("Move do&wn");
+        auto* apply = new QPushButton(applyWords);
+        row->addWidget(add);
+        row->addWidget(drop);
+        row->addWidget(up);
+        row->addWidget(below);
+        row->addStretch(1);
+        row->addWidget(apply);
+        down->addLayout(row);
+
+        QObject::connect(add, &QPushButton::clicked, page, [table]() {
+            const int at = table->rowCount();
+            table->insertRow(at);
+            for (int c = 0; c < table->columnCount(); ++c)
+                table->setItem(at, c, new QTableWidgetItem(QString()));
+            table->setCurrentCell(at, 0);
+            table->editItem(table->item(at, 0));
+        });
+        QObject::connect(drop, &QPushButton::clicked, page, [table]() {
+            const int at = table->currentRow();
+            if (at >= 0) table->removeRow(at);
+        });
+        // Moving a row is taking the text out and putting it back one place
+        // along: a QTableWidget has no move, and swapping the items by pointer
+        // leaves the selection on a row that is no longer the one moved.
+        const auto swap = [table](int a, int b) {
+            if (a < 0 || b < 0 || a >= table->rowCount() || b >= table->rowCount()) return;
+            const int column = table->currentColumn() < 0 ? 0 : table->currentColumn();
+            for (int c = 0; c < table->columnCount(); ++c) {
+                const QString first = table->item(a, c) != nullptr
+                                          ? table->item(a, c)->text() : QString();
+                const QString second = table->item(b, c) != nullptr
+                                           ? table->item(b, c)->text() : QString();
+                table->setItem(a, c, new QTableWidgetItem(second));
+                table->setItem(b, c, new QTableWidgetItem(first));
+            }
+            table->setCurrentCell(b, column);
+        };
+        QObject::connect(up, &QPushButton::clicked, page, [table, swap]() {
+            swap(table->currentRow(), table->currentRow() - 1);
+        });
+        QObject::connect(below, &QPushButton::clicked, page, [table, swap]() {
+            swap(table->currentRow(), table->currentRow() + 1);
+        });
+        return std::make_pair(page, apply);
+    };
+
+    const std::pair<QWidget*, QPushButton*> conversionPage =
+        pageFor(conversions, "Apply to the &book...");
+    const std::pair<QWidget*, QPushButton*> categoryPage =
+        pageFor(categories, "Apply to the &book...");
+    tabs->addTab(conversionPage.first, "Conversions");
+    tabs->addTab(categoryPage.first, "Categories");
+
+    auto* bottom = new QHBoxLayout;
+    auto* close = new QPushButton("&Close");
+    close->setDefault(true);
+    bottom->addStretch(1);
+    bottom->addWidget(close);
+    layout->addLayout(bottom);
+
+    // Reading the tables back. A row with nothing in either column is a row
+    // somebody started and left, and is dropped rather than stored as a pattern
+    // of nothing -- which would match every name.
+    const auto readBack = [&]() {
+        conversions_.clear();
+        for (int r = 0; r < conversions->rowCount(); ++r) {
+            const QString pattern = conversions->item(r, 0) != nullptr
+                                        ? conversions->item(r, 0)->text().trimmed()
+                                        : QString();
+            const QString becomes = conversions->item(r, 1) != nullptr
+                                        ? conversions->item(r, 1)->text().trimmed()
+                                        : QString();
+            if (pattern.isEmpty() || becomes.isEmpty()) continue;
+            conversions_.push_back({pattern.toStdString(), becomes.toStdString()});
+        }
+        categorisations_.clear();
+        QStringList unknown;
+        for (int r = 0; r < categories->rowCount(); ++r) {
+            const QString payee = categories->item(r, 0) != nullptr
+                                      ? categories->item(r, 0)->text().trimmed()
+                                      : QString();
+            const QString into = categories->item(r, 1) != nullptr
+                                     ? categories->item(r, 1)->text().trimmed()
+                                     : QString();
+            if (payee.isEmpty() || into.isEmpty()) continue;
+            // Kept either way: a category typed before it exists is a row the
+            // user will want to find again, and a silent drop would lose it.
+            if (chart_.ref_for_path(into.toStdString()).is_none() && !unknown.contains(into))
+                unknown.append(into);
+            categorisations_.push_back({payee.toStdString(), into.toStdString()});
+        }
+        if (!unknown.isEmpty())
+            QMessageBox::warning(&box, "SimpleAccount",
+                                 QString("There is no category %1. The row is kept, "
+                                         "and nothing is posted there until the "
+                                         "category exists.")
+                                     .arg(unknown.join(", ")));
+        store::Failure no = store_.write_conversions(conversions_);
+        if (no.refused) {
+            QMessageBox::warning(&box, "SimpleAccount", QString::fromStdString(no.reason));
+            return false;
+        }
+        no = store_.write_categorisations(categorisations_);
+        if (no.refused) {
+            QMessageBox::warning(&box, "SimpleAccount", QString::fromStdString(no.reason));
+            return false;
+        }
+        return true;
+    };
+
+    QObject::connect(conversionPage.second, &QPushButton::clicked, &box, [&]() {
+        if (!readBack()) return;
+        convertPayeesInTheBook();
+    });
+    QObject::connect(categoryPage.second, &QPushButton::clicked, &box, [&]() {
+        if (!readBack()) return;
+        assignCategoriesInTheBook();
+    });
+    QObject::connect(close, &QPushButton::clicked, &box, &QDialog::accept);
+
+    box.exec();
+    readBack();
+}
+
+// The converter table over transactions already entered. Counted and reported,
+// because a book of twenty years is too many to check by eye, and asked first,
+// because it changes a name on every row it matches.
+void MainWindow::convertPayeesInTheBook() {
+    if (conversions_.empty()) {
+        QMessageBox::information(this, "SimpleAccount",
+                                 "There are no conversions to apply.");
+        return;
+    }
+    const QMessageBox::StandardButton said = QMessageBox::question(
+        this, "Convert the payees?",
+        QString("Rename the payees of every transaction these %1 rows match?\n\n"
+                "The name the file wrote is kept, and a reconciled transaction "
+                "is left alone.")
+            .arg(static_cast<int>(conversions_.size())),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (said != QMessageBox::Yes) return;
+
+    const int changed = payees::convert_payees(conversions_, &transactions_);
+    if (changed > 0) {
+        save();
+        rebuildWorkspace();
+        refresh();
+    }
+    QMessageBox::information(
+        this, "SimpleAccount",
+        QString("%1 transaction%2 renamed.").arg(changed).arg(changed == 1 ? "" : "s"));
+}
+
+void MainWindow::assignCategoriesInTheBook() {
+    if (categorisations_.empty()) {
+        QMessageBox::information(this, "SimpleAccount",
+                                 "There are no categorisations to apply.");
+        return;
+    }
+    const QMessageBox::StandardButton said = QMessageBox::question(
+        this, "Assign the categories?",
+        QString("Post every uncategorised transaction these %1 rows match?\n\n"
+                "A category chosen by hand is a decision and is left alone, as "
+                "are splits, transfers and reconciled transactions.")
+            .arg(static_cast<int>(categorisations_.size())),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (said != QMessageBox::Yes) return;
+
+    const payees::BookApplication done =
+        payees::assign_categories(categorisations_, chart_, &transactions_);
+    if (done.matched > 0) {
+        save();
+        rebuildWorkspace();
+        refresh();
+    }
+    QMessageBox::information(
+        this, "SimpleAccount",
+        QString("%1 categorised, %2 already in the right place, %3 left alone.")
+            .arg(done.matched)
+            .arg(done.already_correct)
+            .arg(done.skipped));
+}
+
+// What the book holds about itself. Each of these is a statement about the book
+// rather than about a register in it, which is why they are in one dialog here
+// and not in the account settings. See the settings rules in Books.spectable.
+void MainWindow::editBookSettings() {
+    if (!store_.is_open()) {
+        QMessageBox::information(this, "SimpleAccount",
+                                 "Open a book before working on its settings.");
+        return;
+    }
+    const store::BookInfo was = store_.info();
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("Book settings");
+    auto* form = new QFormLayout(scrollingBody(&dialog));
+    form->addRow("Book", new QLabel(QString::fromStdString(was.name), &dialog));
+
+    auto* fiscal = new QComboBox(&dialog);
+    for (int month = 1; month <= 12; ++month)
+        fiscal->addItem(QDate(2000, month, 1).toString("MMMM"), month);
+    fiscal->setCurrentIndex(
+        was.fiscal_year_start >= 1 && was.fiscal_year_start <= 12
+            ? was.fiscal_year_start - 1
+            : 0);
+
+    auto* window = new QSpinBox(&dialog);
+    window->setRange(0, 365);
+    window->setValue(was.check_window_days);
+    window->setSuffix(" days");
+
+    auto* clears = new QCheckBox("A CSV import arrives cleared", &dialog);
+    clears->setChecked(was.set_cleared_on_csv_import);
+
+    auto* hides = new QCheckBox("Hide everything before", &dialog);
+    auto* before = new QDateEdit(&dialog);
+    before->setCalendarPopup(true);
+    before->setDisplayFormat("yyyy-MM-dd");
+    const QDate said =
+        QDate::fromString(QString::fromStdString(was.hide_before), "yyyy-MM-dd");
+    hides->setChecked(said.isValid());
+    before->setDate(said.isValid() ? said : QDate(QDate::currentDate().year(), 1, 1));
+    before->setEnabled(said.isValid());
+    QObject::connect(hides, &QCheckBox::toggled, before, &QDateEdit::setEnabled);
+
+    form->addRow("Fiscal year starts", fiscal);
+    form->addRow("A check number is trusted for", window);
+    form->addRow(clears);
+    form->addRow(hides, before);
+
+    auto* buttons =
+        new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    form->addRow(buttons);
+    fitToScreen(&dialog);
+    if (dialog.exec() != QDialog::Accepted) return;
+
+    store::BookInfo now = was;
+    now.fiscal_year_start = fiscal->currentData().toInt();
+    now.check_window_days = window->value();
+    now.set_cleared_on_csv_import = clears->isChecked();
+    now.hide_before = hides->isChecked()
+                          ? before->date().toString("yyyy-MM-dd").toStdString()
+                          : std::string();
+    const store::Failure no = store_.set_info(now);
+    if (no.refused) {
+        QMessageBox::warning(this, "SimpleAccount", QString::fromStdString(no.reason));
+        return;
+    }
+    // The hide-before date changes what every register shows, so the registers
+    // are built again rather than left showing years the book now hides.
+    hideBefore_ = now.hide_before;
+    rebuildWorkspace();
+    refresh();
+}
+
+// The tag vocabulary and the use of it. A word is in the list because it is in
+// the book's table or because a transaction carries it, and a word nothing
+// carries is still a row: the list is the author's vocabulary, not a count of
+// this year's work. See the tag table rule in Books.spectable.
+void MainWindow::showTagListing() {
+    if (!store_.is_open()) {
+        QMessageBox::information(this, "SimpleAccount",
+                                 "Open a book before working on its tags.");
+        return;
+    }
+
+    QDialog box(this);
+    box.setWindowTitle("Tags");
+    box.resize(520, 480);
+    auto* layout = new QVBoxLayout(&box);
+
+    auto* table = new QTableWidget;
+    table->setColumnCount(2);
+    table->setHorizontalHeaderLabels({"Tag", "Transactions"});
+    table->verticalHeader()->setVisible(false);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setSelectionMode(QAbstractItemView::SingleSelection);
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    table->setFont(appFont_);
+    layout->addWidget(table, 1);
+
+    std::vector<tags::Row> shown;
+    const auto fill = [&](const QString& select) {
+        std::vector<std::string> fields;
+        fields.reserve(transactions_.size());
+        for (const ledger::Transaction& t : transactions_) fields.push_back(t.tag);
+        shown = tags::listing(tagVocabulary_, fields);
+        table->setRowCount(static_cast<int>(shown.size()));
+        for (std::size_t i = 0; i < shown.size(); ++i) {
+            const int at = static_cast<int>(i);
+            table->setItem(at, 0, text(shown[i].name));
+            table->setItem(at, 1, text(std::to_string(shown[i].used)));
+            if (QString::fromStdString(shown[i].name) == select) table->selectRow(at);
+        }
+    };
+    fill(QString());
+
+    auto* row = new QHBoxLayout;
+    auto* add = new QPushButton("&Add...");
+    auto* rename = new QPushButton("&Rename...");
+    auto* close = new QPushButton("&Close");
+    close->setDefault(true);
+    row->addWidget(add);
+    row->addWidget(rename);
+    row->addStretch(1);
+    row->addWidget(close);
+    layout->addLayout(row);
+
+    QObject::connect(add, &QPushButton::clicked, &box, [&]() {
+        bool said = false;
+        const QString word =
+            QInputDialog::getText(&box, "Add a tag", "Tag", QLineEdit::Normal, QString(),
+                                  &said)
+                .trimmed();
+        if (!said || word.isEmpty()) return;
+        tagVocabulary_ = tags::accepted(tagVocabulary_, word.toStdString());
+        store_.write_tags(tagVocabulary_);
+        fill(word);
+    });
+
+    QObject::connect(rename, &QPushButton::clicked, &box, [&]() {
+        const int at = table->currentRow();
+        if (at < 0 || static_cast<std::size_t>(at) >= shown.size()) return;
+        const std::string was = shown[static_cast<std::size_t>(at)].name;
+        bool said = false;
+        const QString now =
+            QInputDialog::getText(&box, "Rename a tag", "Tag", QLineEdit::Normal,
+                                  QString::fromStdString(was), &said)
+                .trimmed();
+        if (!said || now.isEmpty() || now.toStdString() == was) return;
+        // A rename of a tag is a rename of every use of it, which is the whole
+        // reason a transaction keeps the name and not an id.
+        for (ledger::Transaction& t : transactions_)
+            t.tag = tags::renamed_field(t.tag, was, now.toStdString());
+        tagVocabulary_ = tags::renamed(tagVocabulary_, was, now.toStdString());
+        store_.write_tags(tagVocabulary_);
+        save();
+        rebuildWorkspace();
+        refresh();
+        fill(now);
+    });
+
+    QObject::connect(close, &QPushButton::clicked, &box, &QDialog::accept);
+    box.exec();
+}
+
 // The lines selected in a register, counting from one, in the order shown.
 void MainWindow::registerMenu(int tabPosition, const QPoint& at) {
     TabWidgets& p = tabWidgets_[static_cast<std::size_t>(tabPosition - 1)];
@@ -2083,6 +2683,7 @@ void MainWindow::showFindResultSplit(int line) {
     buttons->addWidget(close);
     layout->addLayout(buttons);
     dialog.resize(520, 260);
+    fitToScreen(&dialog);
     dialog.exec();
 }
 
@@ -2126,6 +2727,7 @@ void MainWindow::showDuplicate() {
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     layout->addWidget(buttons);
     dialog.resize(640, 240);
+    fitToScreen(&dialog);
     dialog.exec();
     workspace_->close_duplicate_look();
 }
@@ -2259,10 +2861,35 @@ MainWindow::TabWidgets MainWindow::makeRegisterTab(int tabPosition) {
     t.blank = reg::blank_line_on(asDate(QDate::currentDate()));
 
     t.reg = new QTableWidget;
-    t.widget = t.reg;
-    t.reg->setColumnCount(8);
-    t.reg->setHorizontalHeaderLabels(
-        {"Date", "Num", "Payee", "Category", "Memo", "Payment", "Deposit", "Balance"});
+    // A register is the table and the strip of controls above it. The strip
+    // says which stretch of time is shown and what the register wants to say
+    // about itself -- the balance brought forward, or why it is empty. Each
+    // range is worked out from today when it is applied rather than stored,
+    // so a book left open overnight into January shows the new year the next
+    // time one is chosen. See the named-ranges section of
+    // TransactionRegister.spectable.
+    auto* container = new QWidget;
+    auto* stack = new QVBoxLayout(container);
+    stack->setContentsMargins(0, 0, 0, 0);
+    auto* bar = new QHBoxLayout;
+    bar->addWidget(new QLabel("Show", container));
+    t.range = new QComboBox(container);
+    t.range->addItems({"All dates", "This year", "Last year", "Past two years",
+                       "Since a date"});
+    bar->addWidget(t.range);
+    t.since = new QDateEdit(QDate(QDate::currentDate().year(), 1, 1), container);
+    t.since->setCalendarPopup(true);
+    t.since->setDisplayFormat("yyyy-MM-dd");
+    t.since->setVisible(false);
+    bar->addWidget(t.since);
+    t.note = new QLabel(container);
+    bar->addWidget(t.note, 1);
+    stack->addLayout(bar);
+    stack->addWidget(t.reg, 1);
+    t.widget = container;
+    t.reg->setColumnCount(9);
+    t.reg->setHorizontalHeaderLabels({"Date", "Num", "Payee", "Category", "Memo", "Tag",
+                                      "Payment", "Deposit", "Balance"});
     t.reg->verticalHeader()->setVisible(false);
     t.reg->setSelectionBehavior(QAbstractItemView::SelectRows);
     // Dragging a divider is how a width is set. It goes to the workspace, is
@@ -2291,8 +2918,8 @@ MainWindow::TabWidgets MainWindow::makeRegisterTab(int tabPosition) {
                            QAbstractItemView::EditKeyPressed |
                            QAbstractItemView::AnyKeyPressed);
     QTableWidget* reg = t.reg;
-    t.reg->installEventFilter(new EnterRecords(t.reg, [this, reg]() {
-        recordBlankLine(tabs_->indexOf(reg) + 1);
+    t.reg->installEventFilter(new EnterRecords(t.reg, [this, container]() {
+        recordBlankLine(tabs_->indexOf(container) + 1);
     }));
     // Shift and control already extend and add to the selection; this is what
     // offers to do something with it. See the register-menu section of
@@ -2300,7 +2927,24 @@ MainWindow::TabWidgets MainWindow::makeRegisterTab(int tabPosition) {
     t.reg->setSelectionMode(QAbstractItemView::ExtendedSelection);
     t.reg->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(t.reg, &QTableWidget::customContextMenuRequested, this,
-            [this, reg](const QPoint& at) { registerMenu(tabs_->indexOf(reg) + 1, at); });
+            [this, container](const QPoint& at) {
+                registerMenu(tabs_->indexOf(container) + 1, at);
+            });
+    // The heading is a toggle: a click sorts by that column and a second click
+    // on the same one reverses it. See the sorting section of
+    // TransactionRegister.spectable.
+    connect(t.reg->horizontalHeader(), &QHeaderView::sectionClicked, this,
+            [this, container](int column) {
+                sortRegisterBy(tabs_->indexOf(container) + 1, column);
+            });
+    connect(t.range, &QComboBox::currentTextChanged, this,
+            [this, container](const QString&) {
+                registerRangeChanged(tabs_->indexOf(container) + 1);
+            });
+    connect(t.since, &QDateEdit::dateChanged, this,
+            [this, container](const QDate&) {
+                registerRangeChanged(tabs_->indexOf(container) + 1);
+            });
     t.reg->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
     t.reg->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
     // Thirty thousand lines are reached by the scroll bar more than by
@@ -2316,6 +2960,48 @@ MainWindow::TabWidgets MainWindow::makeRegisterTab(int tabPosition) {
     return t;
 }
 
+// A click on a heading sorts the register by that column, and a second click on
+// the same heading reverses it: the heading is a toggle, which is what every
+// list in every program does. Payment and Deposit are two views of one signed
+// number, so both sort on Amount; Balance sorts by date, because a running
+// balance only means anything in date order. See "What each column sorts on"
+// in TransactionRegister.spectable.
+void MainWindow::sortRegisterBy(int tabPosition, int column) {
+    if (refreshing_) return;
+    if (tabPosition < 1 ||
+        static_cast<std::size_t>(tabPosition - 1) >= tabWidgets_.size())
+        return;
+    TabWidgets& p = tabWidgets_[static_cast<std::size_t>(tabPosition - 1)];
+    if (p.isReport || p.reg == nullptr) return;
+    std::string name = registerColumnName(column);
+    if (name.empty()) return;
+    if (name == "Payment" || name == "Deposit") name = "Amount";
+    if (name == "Balance") name = "Date";
+    if (p.sortColumn == name)
+        p.sortDirection = p.sortDirection == "Ascending" ? "Descending" : "Ascending";
+    else {
+        p.sortColumn = name;
+        p.sortDirection = reg::first_direction_for(name);
+    }
+    refresh();
+}
+
+// The stretch of time the register shows, chosen from the strip above the
+// table. Since a date is the only range that needs a date typed, so the date
+// field is only there for that one -- the same reason the find panel's second
+// amount field is only there for a range.
+void MainWindow::registerRangeChanged(int tabPosition) {
+    if (refreshing_) return;
+    if (tabPosition < 1 ||
+        static_cast<std::size_t>(tabPosition - 1) >= tabWidgets_.size())
+        return;
+    TabWidgets& p = tabWidgets_[static_cast<std::size_t>(tabPosition - 1)];
+    if (p.isReport || p.reg == nullptr || p.range == nullptr) return;
+    if (p.since != nullptr)
+        p.since->setVisible(p.range->currentText() == "Since a date");
+    refresh();
+}
+
 void MainWindow::refresh() {
     const bool was = refreshing_;
     refreshing_ = true;
@@ -2325,8 +3011,20 @@ void MainWindow::refresh() {
     // are all read from the same book, and the sort and the three lookups a
     // register needs are the same for all of them.
     const reg::BookIndex book(chart_, transactions_, splits_);
-    for (int position = 1; position <= tabs_->count(); ++position)
-        refreshPane(position, book);
+    // Only the tab in front. The others are marked and filled when they are
+    // shown, which is what tabChanged is for: a register nobody is looking at
+    // shows nothing to be wrong about.
+    const int showing = tabs_->currentIndex() + 1;
+    for (int position = 1; position <= tabs_->count(); ++position) {
+        const std::size_t at = static_cast<std::size_t>(position - 1);
+        if (at >= tabWidgets_.size()) continue;
+        if (position == showing) {
+            refreshPane(position, book);
+            tabWidgets_[at].stale = false;
+        } else {
+            tabWidgets_[at].stale = true;
+        }
+    }
     refreshReviewPanel();
     refreshFindPanel();
     refreshing_ = was;
@@ -2430,28 +3128,69 @@ void MainWindow::refreshPane(int tabPosition, const reg::BookIndex& book) {
         static_cast<std::size_t>(tabPosition - 1) < rows.size()
             ? rows[static_cast<std::size_t>(tabPosition - 1)].account
             : std::string();
-    const std::vector<reg::Line> lines = reg::lines_for(book, account);
+    const std::vector<reg::Line> all = reg::lines_for(book, account);
+    // What this register shows, and the order it shows it in. The range is
+    // applied first, because the balance brought forward is worked out by
+    // walking the lines in date order -- which is the order they arrive in --
+    // and the sort may take them out of it. A range that begins at the first
+    // transaction has nothing before it, and nothing before it is no line
+    // rather than a line reading zero.
+    std::vector<reg::Line> lines = all;
+    bool balanceShown = true;
+    std::string says;
+    if (p.range != nullptr) {
+        const types::Date today = asDate(QDate::currentDate());
+        const reg::DateRange range = reg::named_range(
+            p.range->currentText().toStdString(), today, all,
+            p.since == nullptr ? std::string() : asDate(p.since->date()).iso());
+        const reg::Filtered kept = reg::in_range(all, range, hideBefore_);
+        lines = kept.lines;
+        says = kept.note;
+        if (says.empty() && kept.has_opening)
+            says = "Balance on " + kept.opening_as_at.iso() + "  " +
+                   kept.opening.in_register();
+        const reg::Sorted order = reg::sorted_by(lines, p.sortColumn, p.sortDirection);
+        lines = order.lines;
+        balanceShown = order.balance_shown;
+        if (!order.reason.empty())
+            says = says.empty() ? order.reason : says + "   --   " + order.reason;
+    }
+    if (p.note != nullptr) p.note->setText(QString::fromStdString(says));
     // The two amount columns are headed with the words the account uses: a
     // credit card is charged and paid, not paid and deposited into.
     const chart::Account* a = account.empty() ? nullptr : chart_.find(account);
     const reg::ColumnHeadings headings =
         reg::headings_for(a ? a->type : types::AccountType::Checking);
-    p.reg->setHorizontalHeaderLabels({"Date", "Num", "Payee", "Category", "Memo",
+    p.reg->setHorizontalHeaderLabels({"Date", "Num", "Payee", "Category", "Memo", "Tag",
                                       QString::fromStdString(headings.out_column),
                                       QString::fromStdString(headings.in_column),
                                       "Balance"});
     p.reg->setRowCount(static_cast<int>(lines.size()));
+    // Filling the cells is the wait a person actually sits through -- thirty
+    // thousand lines of twenty years, nine cells each -- and it is a count with
+    // a total, so the strip can say how far it has got. Nothing here is written
+    // to the book: this is the painting of what the book already says.
+    beginProgress("Showing " + (account.empty() ? std::string("the register") : account),
+                  static_cast<long long>(lines.size()), "lines");
     for (int r = 0; r < static_cast<int>(lines.size()); ++r) {
+        // Once every two hundred rows. Asking the clock and repainting on every
+        // cell would be most of the cost of filling them.
+        if (r % 200 == 0) advanceProgress(r);
         const reg::Line& line = lines[static_cast<std::size_t>(r)];
         p.reg->setItem(r, 0, text(line.date.iso()));
         p.reg->setItem(r, 1, text(line.check_no));
         p.reg->setItem(r, 2, text(line.payee, line.payee));
         p.reg->setItem(r, 3, text(line.category, line.category_detail));
         p.reg->setItem(r, 4, text(line.memo, line.memo));
-        setAmount(p.reg, r, 5, line.payment);
-        setAmount(p.reg, r, 6, line.deposit);
-        setAmount(p.reg, r, 7, line.balance);
+        p.reg->setItem(r, 5, text(line.tag, line.tag));
+        setAmount(p.reg, r, 6, line.payment);
+        setAmount(p.reg, r, 7, line.deposit);
+        // A running balance down a list that is not in date order is a column
+        // of meaningless numbers, so it is emptied rather than filled in.
+        if (balanceShown) setAmount(p.reg, r, 8, line.balance);
+        else p.reg->setItem(r, 8, text(std::string()));
     }
+    endProgress();
     // The blank line: one more row at the end, which is where a transaction is
     // entered. It is not in the book and nothing is written until an amount is
     // typed -- see the entry section of TransactionRegister.spectable.
@@ -2471,14 +3210,15 @@ void MainWindow::refreshPane(int tabPosition, const reg::BookIndex& book) {
         p.reg->setItem(at, 2, typed(line.payee));
         p.reg->setItem(at, 3, typed(line.category));
         p.reg->setItem(at, 4, typed(line.memo));
-        p.reg->setItem(at, 5, typed(line.payment.cents() == 0
+        p.reg->setItem(at, 5, typed(line.tag));
+        p.reg->setItem(at, 6, typed(line.payment.cents() == 0
                                         ? std::string() : line.payment.in_register()));
-        p.reg->setItem(at, 6, typed(line.deposit.cents() == 0
+        p.reg->setItem(at, 7, typed(line.deposit.cents() == 0
                                         ? std::string() : line.deposit.in_register()));
         auto* balance = new QTableWidgetItem;
         balance->setFlags(Qt::ItemIsEnabled);
-        p.reg->setItem(at, 7, balance);
-        for (int c = 0; c <= 7; ++c)
+        p.reg->setItem(at, 8, balance);
+        for (int c = 0; c <= 8; ++c)
             p.reg->item(at, c)->setBackground(QColor(248, 248, 230));
     }
 
@@ -2635,6 +3375,7 @@ void MainWindow::buildFindDialog() {
     form->addRow("Amount", amountRow);
     findAmountLabel_ = qobject_cast<QLabel*>(form->labelForField(amountRow));
     form->addRow("to", findAmountTo_);
+    findAmountToLabel_ = qobject_cast<QLabel*>(form->labelForField(findAmountTo_));
     form->setRowVisible(findAmountTo_, false);
     connect(findAmountMatch_, &QComboBox::currentIndexChanged,
             this, &MainWindow::findAmountMatchChanged);
@@ -2665,12 +3406,22 @@ void MainWindow::showFind() {
 // Range leaves the first field alone: the amount already typed is the sensible
 // lower end.
 void MainWindow::findAmountMatchChanged() {
-    const bool range =
-        findAmountMatch_->currentData().toString() == QStringLiteral("Range");
+    // How many fields there are and what they are called is ui::amount_fields
+    // and not this window's own idea, so that the rule about the second field
+    // in UserInterface.spectable is the one thing deciding it. The labels used
+    // to be written out here as well, which is two places to change and one of
+    // them with no test over it.
+    const auto match = ui::amount_match_from(
+        findAmountMatch_->currentData().toString().toStdString());
+    const ui::AmountFields fields =
+        ui::amount_fields(match.value_or(ui::AmountMatch::Exact));
+    const bool range = fields.shown > 1;
     if (!range) findAmountTo_->clear();
     findForm_->setRowVisible(findAmountTo_, range);
     if (findAmountLabel_ != nullptr)
-        findAmountLabel_->setText(range ? "Amount from" : "Amount");
+        findAmountLabel_->setText(QString::fromStdString(fields.first_label));
+    if (findAmountToLabel_ != nullptr)
+        findAmountToLabel_->setText(QString::fromStdString(fields.second_label));
 }
 
 void MainWindow::performFind() {
@@ -2713,6 +3464,17 @@ void MainWindow::tabChanged(int index) {
     // clicking back to a report that had lost focus did nothing, and the next
     // redraw snapped the bar back to whichever register was last read.
     workspace_->select_tab(index + 1);
+    // A tab already showing what the book says needs nothing done to it. The
+    // account list still follows the tab, because which register is in front
+    // is what it highlights.
+    const std::size_t at = static_cast<std::size_t>(index);
+    if (at < tabWidgets_.size() && !tabWidgets_[at].stale) {
+        const bool was = refreshing_;
+        refreshing_ = true;
+        refreshAccounts();
+        refreshing_ = was;
+        return;
+    }
     refresh();
 }
 
@@ -2733,8 +3495,9 @@ void MainWindow::readBlankLine(int tabPosition) {
     p.blank.payee = cell(2).trimmed().toStdString();
     p.blank.category = cell(3).trimmed().toStdString();
     p.blank.memo = cell(4).trimmed().toStdString();
-    p.blank.payment = moneyTyped(cell(5));
-    p.blank.deposit = moneyTyped(cell(6));
+    p.blank.tag = cell(5).trimmed().toStdString();
+    p.blank.payment = moneyTyped(cell(6));
+    p.blank.deposit = moneyTyped(cell(7));
 }
 
 void MainWindow::recordBlankLine(int tabPosition) {
@@ -2758,6 +3521,21 @@ void MainWindow::recordBlankLine(int tabPosition) {
     }
     transactions_.push_back(done.transaction);
     if (done.is_transfer) transactions_.push_back(done.other_side);
+    // A real account in the destination column is a transfer, and the account
+    // named may already have its own line for this payment -- entered by hand
+    // or arrived in a download. So it is asked about here. A category and an
+    // Unassigned destination are not transfers and are never asked about; see
+    // the destination-column rule in UserInterface.spectable.
+    if (done.is_transfer) offerTheOtherHalf(done, row.account);
+    // A word typed in the Tag column that is not in the vocabulary joins it:
+    // typing is the one place a tag is created, so the table need not be
+    // opened first. See the tag rules in UserInterface.spectable.
+    const std::vector<std::string> grown =
+        tags::accepted(tagVocabulary_, done.transaction.tag);
+    if (grown.size() != tagVocabulary_.size()) {
+        tagVocabulary_ = grown;
+        store_.write_tags(tagVocabulary_);
+    }
     ledger::add_to_book(&book_, chart_, transactions_, splits_);
     // A book is a file rather than a session, so an entry is written as it is
     // made. The next blank line keeps the date just used, because entering a
@@ -2770,4 +3548,131 @@ void MainWindow::recordBlankLine(int tabPosition) {
     status_->setText(QString("Recorded %1  --  %2 transactions")
                          .arg(QString::fromStdString(done.transaction.payee.value()))
                          .arg(transactions_.size()));
+}
+
+// The other half of a transfer just entered by hand. The evidence is the
+// import's evidence and nothing more: equal and opposite to the cent, in the
+// account the destination column just named, within the two-day window, and
+// not already paired with something. The payee is not consulted, because
+// narrowing by payee loses every payment nobody recorded a payee for -- which
+// is most of them. Closest in days is offered first.
+void MainWindow::offerTheOtherHalf(const reg::Committed& done, const std::string& own) {
+    const std::string named = chart_.path_for_ref(done.transaction.destination);
+    const std::vector<transfers::Half> halves = transfers::halves_in(
+        named, own, done.transaction.date, done.transaction.amount,
+        transactions_, chart_);
+    // Nothing equal and opposite in that account is silence. A dialog that says
+    // there is nothing to ask is worse than no dialog.
+    if (halves.empty()) return;
+
+    QStringList offered;
+    for (const transfers::Half& half : halves)
+        offered << QString("%1   %2   %3   (%4 day%5 apart)")
+                       .arg(QString::fromStdString(half.account))
+                       .arg(QString::fromStdString(half.date.iso()))
+                       .arg(QString::fromStdString(
+                           half.payee.empty() ? std::string("no payee") : half.payee))
+                       .arg(half.days_apart)
+                       .arg(half.days_apart == 1 ? "" : "s");
+    const QString none = "None of them";
+    offered << none;
+
+    bool said = false;
+    const QString chose = QInputDialog::getItem(
+        this, "The other half of this transfer",
+        QString("%1 already has a line that could be the other side of this %2.\n"
+                "Is one of them the same payment?")
+            .arg(QString::fromStdString(named))
+            .arg(money(done.transaction.amount)),
+        offered, 0, false, &said);
+    // Answering none creates nothing and unpicks nothing: the line just entered
+    // already names both accounts, so the other register has its own row either
+    // way. What none rules out is the merge, not the transfer.
+    if (!said || chose == none) return;
+    const int at = offered.indexOf(chose);
+    if (at < 0 || static_cast<std::size_t>(at) >= halves.size()) return;
+    const transfers::Half& half = halves[static_cast<std::size_t>(at)];
+
+    // A merge and not a link. What the line in the other register knew and this
+    // one does not -- that the bank had reported it, and the identifier a
+    // download gave it -- comes across, and then it is gone. The row this
+    // commit made for that same account stands in its place, so it is the one
+    // that carries the cleared status forward: the statement that cleared the
+    // line being replaced is that account's statement, not this one's.
+    types::ClearedStatus theirs = types::ClearedStatus::Uncleared;
+    for (const ledger::Transaction& t : transactions_)
+        if (t.id.value() == half.transaction_id) theirs = t.cleared;
+    const std::string other_side =
+        done.is_transfer ? done.other_side.id.value() : std::string();
+    if (!transfers::merge(done.transaction.id.value(), half.transaction_id,
+                          &transactions_))
+        return;
+    if (!other_side.empty())
+        for (ledger::Transaction& t : transactions_)
+            if (t.id.value() == other_side &&
+                static_cast<int>(theirs) > static_cast<int>(t.cleared))
+                t.cleared = theirs;
+
+    ledger::add_to_book(&book_, chart_, transactions_, splits_);
+    save();
+    rebuildWorkspace();
+    status_->setText(QString("Paired with the line of %1 in %2")
+                         .arg(QString::fromStdString(half.date.iso()))
+                         .arg(QString::fromStdString(half.account)));
+}
+
+// --- saying that something long is going on ---------------------------------
+//
+// The report is asked for at the start and shown only if the work is still
+// going a second later, because a strip that appears and goes in the same blink
+// is worse than none at all: the person sees a flicker and looks for what it
+// said. progress::shows is where that second lives.
+void MainWindow::beginProgress(const std::string& what, long long total,
+                               const std::string& unit) {
+    progress_ = progress::Report();
+    progress_.what = what;
+    progress_.total = total;
+    progress_.unit = unit;
+    progressShowing_ = false;
+    progressSince_.start();
+}
+
+// Returns whether to carry on, which is always true today: there is nothing on
+// the strip to press, because the work runs on the thread that would deliver
+// the click. The return is here so that the callers already read it when there
+// is. See questions.md.
+bool MainWindow::advanceProgress(long long done) {
+    progress_ = progress::advanced(progress_, done);
+    const double running = static_cast<double>(progressSince_.elapsed()) / 1000.0;
+    if (!progress::shows(progress_, running)) return true;
+    if (!progressShowing_) {
+        progressShowing_ = true;
+        progressText_->show();
+        progressBar_->show();
+    }
+    progressText_->setText(QString::fromStdString(progress::reads(progress_)));
+    if (progress_.total > 0) {
+        progressBar_->setRange(0, static_cast<int>(progress_.total));
+        progressBar_->setValue(static_cast<int>(progress_.done));
+    } else {
+        // A count with no total is not an estimate, so the bar says only that
+        // something is going on.
+        progressBar_->setRange(0, 0);
+    }
+    // Repaints only. A click arriving in the middle of a half-filled table
+    // would be answered against a register that does not yet exist, so user
+    // input waits until the work is done -- which is the same reason there is
+    // nothing on the strip to click.
+    QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+    return true;
+}
+
+// Finishing takes the report away. The strip is not a log, and what the work
+// did is said in the work's own notes.
+void MainWindow::endProgress() {
+    progress_ = progress::stopped(progress_);
+    if (!progressShowing_) return;
+    progressShowing_ = false;
+    progressText_->hide();
+    progressBar_->hide();
 }

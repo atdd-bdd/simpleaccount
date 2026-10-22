@@ -220,6 +220,27 @@ inline types::AccountPath uncategorized_for(const Money& known_amount) {
                                                        : "Expenses:Uncategorized");
 }
 
+// Applying that default to a transaction on its way into the book. A
+// destination nobody named is the Uncategorized account its own sign asks for,
+// and that account is created if this book has never needed one -- the two
+// steps an import already takes, in one place, so that nothing reaches a
+// register with a destination of nothing. An empty destination is a third kind
+// of unknown and there are meant to be two: see the default-destination rule in
+// Transactions.spectable.
+//
+// Only an unset destination defaults. Split is a destination, Unassigned is a
+// destination, and Unassigned in particular is chosen by a person or by an
+// importer with a half to pair -- never arrived at by leaving a field alone.
+// Returns true where it did something, so a caller can say what it created.
+inline bool give_default_destination(Transaction* t, chart::Chart* accounts) {
+    if (!t->destination.is_none()) return false;
+    const types::AccountPath path = uncategorized_for(t->amount);
+    accounts->add(path, t->amount.cents() > 0 ? types::AccountType::Income
+                                              : types::AccountType::Expense);
+    t->destination = accounts->ref_for_path(path.value());
+    return true;
+}
+
 // Where the other side of a payment goes until the account is known. A different
 // unknown from Uncategorized and so a different account: Uncategorized asks what
 // the money was for and may be left for ever, Unassigned asks which account it

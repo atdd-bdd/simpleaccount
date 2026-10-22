@@ -8,7 +8,7 @@
 #include "date.h"
 #include "ledger.h"
 #include "money.h"
-#include "posting.h"
+#include "transaction.h"
 #include "register_lines.h"
 #include "transaction_id.h"
 
@@ -34,6 +34,10 @@ struct BlankLine {
     std::string payee;
     std::string category;
     std::string memo;
+    // The words typed into the Tag column, kept as typed: the field holds
+    // words and every word in it is a tag. See the tag rules in
+    // UserInterface.spectable.
+    std::string tag;
     Money payment;      // money out of the account the register is of
     Money deposit;      // money into it
     types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
@@ -132,6 +136,7 @@ inline Committed commit(const BlankLine& line, const std::string& account,
     t.payee = types::PayeeName(line.payee);
     t.check_no = types::CheckNumber(line.check_no);
     t.memo = line.memo;
+    t.tag = line.tag;
     t.source_account = accounts->ref_for_path(account);
     t.destination = accounts->ref_for_path(other);
     t.amount = amount;
@@ -211,6 +216,7 @@ inline Committed commit_split(const BlankLine& line, const std::string& account,
     t.payee = types::PayeeName(line.payee);
     t.check_no = types::CheckNumber(line.check_no);
     t.memo = line.memo;
+    t.tag = line.tag;
     t.source_account = accounts->ref_for_path(account);
     t.destination = chart::split_ref();
     t.amount = amount;

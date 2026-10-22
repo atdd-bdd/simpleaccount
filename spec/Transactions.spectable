@@ -115,10 +115,99 @@ Description Assigning the other account of a transfer by hand, in the register.
 | Account   | AccountPath    |         |
 
 # ---------------------------------------------------------------------------
+# A destination nobody named
+# ---------------------------------------------------------------------------
+
+BusinessRule A destination nobody named is Uncategorized
+Description Every transaction has a destination. One nobody has named is
+\ Uncategorized -- by the sign, so money out asks what it was for and
+\ money in asks where it came from -- rather than being left empty.
+Details An empty destination is a third kind of unknown, and there are meant
+\ to be two. It reads as nothing in a register, is counted nowhere in a
+\ spending report, and the person looking at the register cannot tell
+\ it from a category called nothing. Uncategorized is a real category
+\ with a real balance: it shows up in a report as money nobody has
+\ classified, which is the thing a person wants to be told.
+\
+\ Unassigned is still chosen rather than defaulted. It means "this went
+\ to another account of mine and I have not worked out which", and only
+\ a person or an importer with a half to pair knows that. Nothing
+\ arrives at Unassigned by having a field left alone.
+\
+\ The blank line at the end of a register is not a transaction and shows
+\ no category. The default is applied when the line is committed, by
+\ which time the amount is known and so is its sign.
+\
+\ This changes what many tables in this specification assert: a table
+\ that reads a blank destination today reads Expenses:Uncategorized or
+\ Income:Uncategorized once this is implemented. Those tables are the
+\ work of this item, not an oversight in it, and the count is the
+\ reason the item is sized Medium rather than Small -- the files it
+\ touches most are ImportOfx, UserInterface, Payees and Reports.
+Examples: DefaultDestination
+| WhatIsEntered                      | WhatTheDestinationBecomes | Why                                          |
+| A payment, with no category        | Expenses:Uncategorized    | Money out asks what it was for               |
+| A deposit, with no category        | Income:Uncategorized      | Money in asks where it came from             |
+| A category, typed in               | That category             | Nothing to default                           |
+| A real account, typed in           | That account, as a transfer | Nothing to default                         |
+| A transfer whose account is not known yet | Unassigned         | Chosen by a person, never defaulted          |
+| A zero-amount line, left           | Nothing; it is discarded  | The blank line rule, which is unchanged      |
+
+Attributes DefaultDestination
+| Attribute                 | Type   | Default |
+| WhatIsEntered             | String |         |
+| WhatTheDestinationBecomes | String |         |
+| Why                       | String |         |
+
+Scenario A payment committed with no category is Uncategorized
+Description Typed into the register, the category column left alone. The
+\ transaction is complete and the register reads Expenses:Uncategorized
+\ rather than a blank.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination | Amount |
+| T1  | Assets:Checking | 2024-05-15 | Harris Teeter | none        | -45.00 |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination            | Amount |
+| T1  | Assets:Checking | 2024-05-15 | Harris Teeter | Expenses:Uncategorized | -45.00 |
+
+Scenario A deposit committed with no category is Income Uncategorized
+Description The same, the other way round. The sign chooses which of the two
+\ Uncategorized categories it is, because a deposit nobody has
+\ classified is income nobody has classified.
+Given the chart of accounts is : ChartOfAccounts
+| Path                 | Type     | Placeholder |
+| Assets:Checking      | Checking | false       |
+| Income:Uncategorized | Income   | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination | Amount  |
+| T1  | Assets:Checking | 2024-05-31 | ACME PAYROLL | none        | 3000.00 |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination          | Amount  |
+| T1  | Assets:Checking | 2024-05-31 | ACME PAYROLL | Income:Uncategorized | 3000.00 |
+
+Scenario The category nobody named is created if the book has not got it
+Description A book whose chart has never needed Income:Uncategorized gets it
+\ when the first unclassified deposit arrives, the same way an import
+\ creates the categories it needs.
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type     | Placeholder |
+| Assets:Checking | Checking | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination | Amount  |
+| T1  | Assets:Checking | 2024-05-31 | ACME PAYROLL | none        | 3000.00 |
+Then accounts created are : ChartOfAccounts
+| Path                 | Type   | Placeholder |
+| Income               | Income | true        |
+| Income:Uncategorized | Income | false       |
+
+# ---------------------------------------------------------------------------
 # Money from outside the book
 # ---------------------------------------------------------------------------
 
-$TBD
 BusinessRule Whether the other side is an account or a category
 Description The other side of a downloaded row is an account when the money came
 \ from or went to something this book keeps, and a category when it did
@@ -137,11 +226,14 @@ Details A payment from the bank to a credit card the book keeps is a transfer an
 \ not itself hold -- money arriving from outside is income, however
 \ institutional the sender.
 \
-\ This is why a payee that matches no account's PaymentPayee is not a
-\ failed transfer. It is an ordinary deposit, and recording it as a
-\ category is correct rather than second best. Unassigned is only for a row
-\ that is known to have another side in this book and does not yet know
-\ which.
+\ This is why a downloaded row that pairs with nothing in the book is not
+\ a failed transfer. It is an ordinary deposit, and recording it as a
+\ category is correct rather than second best -- which is also why the
+\ first half of a real transfer is given a category and not held
+\ anywhere: on the evidence of one file it is indistinguishable from
+\ money that simply left. Unassigned is for a row a person knows has
+\ another side in this book and cannot yet say which, which is a thing
+\ only a person can know.
 Examples: WhereTheOtherSideLives
 | TheRow                                | TheOtherSide          | Because                               |
 | A payment to a card the book keeps    | The card account      | Both halves are in the book           |
@@ -204,7 +296,7 @@ Details Making a new entry is right when the other account has no row for this
 Examples: AssignmentOutcome
 | TheOtherAccount                | WhatHappens                                        |
 | Has no row for this money      | One transaction names it, and shows in both registers    |
-| Has the row, found by the user | Each points at the other's account; neither is deleted |
+| Has the row, found by the user | The two become one transaction naming both accounts      |
 | Has the row, not found         | A new entry is made; the duplicate is left to be seen later |
 
 Attributes AssignmentOutcome
@@ -256,7 +348,6 @@ Attributes OfferedEntry
 # Naming a transaction
 # ---------------------------------------------------------------------------
 
-$TBD
 BusinessRule A transaction is named when it is created and keeps that name
 Description The name is the moment it was created: the date and the time to the
 \ millisecond. The generator waits if the clock has not moved since the
@@ -638,7 +729,6 @@ Then rejected because : Rejection
 | Reason                                     |
 | The split is 30.00 short of 184.50         |
 
-$TBD
 BusinessRule A split is saved only when its lines match the total it was opened on
 Description A split is edited in a window of its own, on a transaction that
 \ already has an amount, so the window knows what its lines are
@@ -694,7 +784,6 @@ Attributes SplitSaveCheck
 | Remainder | Money  | 0.00    |
 | Saved     | String |         |
 
-$TBD
 DataType SplitMismatchChoice
 Description What the user answers when a split does not match its total.
 Examples: EnumerationValues
@@ -703,7 +792,6 @@ Examples: EnumerationValues
 | EditSplit    | Back to the window with the lines as typed; nothing saved   |
 | AddRemainder | The difference becomes a line under Expenses:Uncategorized  |
 
-$TBD
 Scenario Saving a split whose lines do not match the total says so
 Description The window is opened on a split of 184.50 and one of its lines is
 \ taken out, so the lines now come to 154.50. The save says what the
@@ -747,7 +835,6 @@ Attributes SplitMismatch
 | Remainder | Money | 0.00    |
 | Options   | Text  |         |
 
-$TBD
 Scenario Cancelling the save leaves the stored split as it was
 Description Nothing is written, so the split is still the three lines it was
 \ opened on, and the window has gone with the typed lines in it. The
@@ -789,7 +876,6 @@ Attributes SplitMismatchAnswer
 | Attribute | Type                | Default |
 | Choice    | SplitMismatchChoice |         |
 
-$TBD
 Scenario Choosing to edit the split goes back to the lines as they were typed
 Description The answer for somebody who has now seen the two figures and knows
 \ which of them is wrong. Nothing is written and nothing is thrown
@@ -832,7 +918,6 @@ Then split lines are : TransactionSplit
 | Expenses:Home:Garden      | 54.50  | Compost      |
 | Expenses:Auto:Repairs     | 30.00  | Wiper blades |
 
-$TBD
 Scenario Adding the remainder balances the split and saves it
 Description The 30.00 that was taken out comes back as a line of its own under
 \ Uncategorized. The transaction's own amount does not move -- what
@@ -872,7 +957,6 @@ Then transaction is : Transaction Vertical CompareOnly
 | Destination | Split   |
 | Amount      | -184.50 |
 
-$TBD
 Scenario A split whose lines come to more than the total is the same question
 Description Over by thirty rather than short by thirty, and the remainder is
 \ negative. Adding it is still the honest answer: a line of -30.00
@@ -906,7 +990,6 @@ Then not matching is said : SplitMismatch Vertical
 | Remainder | -30.00                                           |
 | Options   | Cancel save, Edit the split, Add the remainder   |
 
-$TBD
 Scenario A split whose lines match the total is saved without a word
 Description The ordinary case, stated so that the dialog above is known to be
 \ the exception rather than a step in saving a split.

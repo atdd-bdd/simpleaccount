@@ -10,7 +10,7 @@
 #include "date_parse.h"
 #include "ledger.h"
 #include "money.h"
-#include "posting.h"
+#include "transaction.h"
 #include "transaction_id.h"
 #include "qif_reader.h"
 

@@ -13,7 +13,7 @@
 #include "import_target.h"
 #include "ledger.h"
 #include "money.h"
-#include "posting.h"
+#include "transaction.h"
 #include "transaction_id.h"
 #include "payee_rules.h"
 #include "qif_import.h"
@@ -22,6 +22,7 @@
 #include "standard_chart.h"
 #include "text_types.h"
 #include "transaction_edit.h"
+#include "transfer_match.h"
 
 // What the windows show, and what selecting things does -- with no Qt in it, so
 // that it can be tested headlessly and the widgets stay a thin view over it.
@@ -658,6 +659,12 @@ public:
         std::string file_name;
         std::string account;
         importing::TargetSource source = importing::TargetSource::NoneOffered;
+        // As the file wrote them. They are the only part of the dialog that did
+        // not come from this program, which is why they are shown at all; a
+        // download that states neither leaves both lines out rather than
+        // showing an empty one.
+        std::string bank_id;
+        std::string account_number;
     };
 
     // A file has been chosen and nothing has been read out of it yet. What the
@@ -666,10 +673,14 @@ public:
     // window's. Everything else is here: what the name of the file fits, and
     // the register in front if one is.
     //
-    // Refused only when all three have nothing to say. That is the one case
-    // where the window has no account to offer and will not invent one.
+    // Never refused. Where all three have nothing to say the dialog is shown
+    // all the same, with an empty account line waiting to be filled in, and the
+    // person who has the statement in front of them answers what the program
+    // could not work out.
     ActiveRegister choose_import_file(const std::string& file_name,
-                                      const std::string& account_in_file) {
+                                      const std::string& account_in_file,
+                                      const std::string& bank_id = std::string(),
+                                      const std::string& account_number = std::string()) {
         const std::string from_name =
             importing::account_from_file_name(accounts_, file_name);
         std::string active;
@@ -677,12 +688,12 @@ public:
             active = tabs_[active_tab_].account;
 
         const importing::Proposal p = importing::propose(account_in_file, from_name, active);
-        if (p.source == importing::TargetSource::NoneOffered) {
-            confirming_ = ImportConfirmation();
-            return {true, "Open the register this statement is for, then import into it.",
-                    std::string()};
-        }
-        confirming_ = ImportConfirmation{true, file_name, p.account, p.source};
+        // Nothing to propose is still a question worth asking, so NoneOffered is
+        // now a state of the dialog rather than the reason it never opened.
+        // Importing into whichever register happened to be open last is how a
+        // statement ends up in the wrong account; asking is not.
+        confirming_ = ImportConfirmation{true, file_name, p.account, p.source,
+                                         bank_id, account_number};
         return {false, std::string(), p.account};
     }
 
@@ -723,6 +734,54 @@ public:
         review_open_ = true;
         review_account_ = into;
         select(into);
+        ask_about_transfers(into);
+    }
+
+    // --------------------------------------- are these the same payment
+
+    // One pairing put to the person: a row being reviewed and a half the book
+    // already has, with both accounts, both dates, both payees as their own
+    // files wrote them, and the gap in days -- which is the thing a person
+    // most needs in order to disagree. Shown is false when there is nothing
+    // left to ask.
+    struct TransferQuestion {
+        bool shown = false;
+        std::string from_account;
+        types::Date from_date;
+        std::string from_payee;
+        std::string to_account;
+        types::Date to_date;
+        std::string to_payee;
+        Money amount;
+        long long days_apart = 0;
+        // What answering acts on, rather than anything the question shows.
+        int line = 0;
+        std::string already_here;
+        std::string already_here_account;
+    };
+
+    const TransferQuestion& transfer_question() const { return asking_; }
+
+    // Yes puts each half on the other's account: the row being reviewed takes
+    // the account of the half already here as its category, and that half is
+    // noted as needing its own other side rewritten when the review is
+    // accepted. Doing one and not the other is the half-done state this
+    // question exists to avoid.
+    //
+    // No changes nothing and is as final as yes, for this pairing: the
+    // question does not come back during this review. Leaving it unanswered
+    // says the same thing without being asked to say it, which is why an
+    // unanswered question is not a refusal.
+    void answer_transfer_question(bool same_payment) {
+        if (!asking_.shown) return;
+        if (same_payment) {
+            for (ReviewRow& r : review_)
+                if (r.line == asking_.line) r.category = asking_.already_here_account;
+            pairings_.push_back({asking_.already_here, review_account_});
+            paired_lines_.insert(asking_.line);
+            paired_halves_.insert(asking_.already_here);
+        }
+        next_transfer_question();
     }
 
     void tick(int line) { set_accepted(line, true); }
@@ -732,12 +791,16 @@ public:
     // register of the same account so the result can be read where the import was.
     void accept_import() {
         accepted_.clear();
+        // The ref counter is read once and carried, rather than counting the
+        // book again for every row -- which was a scan of the whole book per
+        // accepted transaction. See decisions.md.
+        int next_ref = ledger::transaction_count(transactions_) + 1;
         for (const ReviewRow& r : review_) {
             if (!r.accepted) continue;
             ledger::Transaction t;
             t.id = ledger::new_id();
-            t.ref = types::TransactionRef(
-                "T" + std::to_string(ledger::transaction_count(transactions_) + 1));
+            t.ref = types::TransactionRef("T" + std::to_string(next_ref));
+            ++next_ref;
             t.date = r.date;
             t.payee = types::PayeeName(r.payee);
             t.raw_name = r.raw_name;
@@ -762,6 +825,35 @@ public:
             book_.add({r.date, types::AccountPath(r.account), t.amount});
             book_.add({r.date, types::AccountPath(r.category), other_amount});
         }
+        // The halves already in the book that an answer paired with a row of
+        // this import. Their other side stops being a category and names the
+        // account the row was for, which is what keeps a payment out of the
+        // spending on both sides rather than on one of them.
+        bool paired_anything = false;
+        if (!pairings_.empty()) {
+            // The pairings name transactions by id, so one pass over the book
+            // settles all of them. It was a pass per pairing.
+            std::map<std::string, const Pairing*> by_id;
+            for (const Pairing& pairing : pairings_) by_id[pairing.transaction_id] = &pairing;
+            for (ledger::Transaction& t : transactions_) {
+                const auto at = by_id.find(t.id.value());
+                if (at == by_id.end()) continue;
+                if (accounts_.find(at->second->becomes) == nullptr) continue;
+                t.destination = accounts_.ref_for_path(at->second->becomes);
+                paired_anything = true;
+            }
+        }
+        // Two transactions that name each other are one movement, and the one
+        // place that knows it is ledger::add_to_book -- which posts a matched
+        // transfer once rather than twice. The postings added row by row above
+        // cannot know, since the half they pair with is only now being
+        // rewritten, so a pairing makes the book be built again instead.
+        if (paired_anything) rebuild_book();
+        pairings_.clear();
+        paired_lines_.clear();
+        paired_halves_.clear();
+        asking_ = TransferQuestion();
+        questions_.clear();
         committed_ = true;
         ++changes_;
         // The review was there to compare the import against the register
@@ -776,6 +868,11 @@ public:
         review_.clear();
         accepted_.clear();
         committed_ = false;
+        pairings_.clear();
+        paired_lines_.clear();
+        paired_halves_.clear();
+        asking_ = TransferQuestion();
+        questions_.clear();
         close_review();
     }
 
@@ -1404,6 +1501,74 @@ private:
     std::vector<Tab> tabs_;
     std::size_t active_tab_ = 0;
     ImportConfirmation confirming_;
+
+    // A half already in the book whose other side an accepted review will
+    // rewrite, because somebody said the two were one payment.
+    struct Pairing {
+        std::string transaction_id;
+        std::string becomes;
+    };
+    std::vector<Pairing> pairings_;
+    std::vector<TransferQuestion> questions_;
+    std::set<int> paired_lines_;
+    std::set<std::string> paired_halves_;
+    TransferQuestion asking_;
+
+    // Every pairing this import raises, asked about one at a time. A row can
+    // pair with several halves already here and nothing in the file says
+    // which, so each pairing is offered in its own right.
+    void ask_about_transfers(const std::string& into) {
+        questions_.clear();
+        pairings_.clear();
+        paired_lines_.clear();
+        paired_halves_.clear();
+        asking_ = TransferQuestion();
+        // One index of the book for the whole review rather than a scan of it
+        // per row; see the speed note in decisions.md.
+        const transfers::Book book(transactions_);
+        for (const ReviewRow& r : review_) {
+            // Only a row that will be added. A duplicate adds nothing, so
+            // there is no half of anything for it to be.
+            if (r.disposition != "New") continue;
+            for (const transfers::Half& half : transfers::halves_for(
+                     into, r.date, r.amount, book, accounts_)) {
+                TransferQuestion q;
+                // From is the account the money left, whichever side of the
+                // pairing that is, and the amount is stated the way a person
+                // would say it rather than signed.
+                const bool row_is_from = r.amount.cents() < 0;
+                q.from_account = row_is_from ? into : half.account;
+                q.from_date = row_is_from ? r.date : half.date;
+                q.from_payee = row_is_from ? r.payee : half.payee;
+                q.to_account = row_is_from ? half.account : into;
+                q.to_date = row_is_from ? half.date : r.date;
+                q.to_payee = row_is_from ? half.payee : r.payee;
+                q.amount = row_is_from ? -r.amount : r.amount;
+                q.days_apart = half.days_apart;
+                q.line = r.line;
+                q.already_here = half.transaction_id;
+                q.already_here_account = half.account;
+                questions_.push_back(q);
+            }
+        }
+        next_transfer_question();
+    }
+
+    // The next pairing worth asking about. A row that has been paired is
+    // accounted for and so is the half it was paired with, so the rest of
+    // their pairings come off the table rather than being asked.
+    void next_transfer_question() {
+        asking_ = TransferQuestion();
+        while (!questions_.empty()) {
+            const TransferQuestion q = questions_.front();
+            questions_.erase(questions_.begin());
+            if (paired_lines_.count(q.line) != 0) continue;
+            if (paired_halves_.count(q.already_here) != 0) continue;
+            asking_ = q;
+            asking_.shown = true;
+            return;
+        }
+    }
     bool review_open_ = false;
     std::string review_account_;
     Listing listing_ = Listing::None;

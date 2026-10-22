@@ -14,7 +14,7 @@
 #include "ledger.h"
 #include "money.h"
 #include "payee_rules.h"
-#include "posting.h"
+#include "transaction.h"
 #include "transaction_id.h"
 
 // Turning a delimited file into transactions. See ImportCsv.spectable.
@@ -602,10 +602,17 @@ inline Imported decide(const chart::Chart& accounts, const std::vector<RowRead>&
 // has said more than the importer could work out, and a file naming a real
 // account has described a transfer. Where it says nothing, the other side is
 // Uncategorized chosen by the sign.
+// Whether what the file brings in arrives cleared is the book's to say: a CSV
+// from a bank is a statement in everything but name, and a CSV somebody wrote
+// in a spreadsheet is not a statement at all. Defaulted to clearing, because
+// that is what the book says unless it says otherwise.
 inline std::vector<ledger::Transaction> transactions_for(
         const Imported& decided, const std::string& account,
         std::size_t already_in_book, chart::Chart* accounts,
-        const std::vector<payees::Rule>& rules = {}) {
+        const std::vector<payees::Rule>& rules = {},
+        bool clear_what_is_imported = true,
+        const std::vector<payees::Conversion>& conversions = {},
+        const std::vector<payees::Categorisation>& categories = {}) {
     std::vector<ledger::Transaction> out;
     for (const Decided& one : decided.decided) {
         if (one.disposition != ofx::Disposition::New) continue;
@@ -614,7 +621,8 @@ inline std::vector<ledger::Transaction> transactions_for(
         // A category the file itself carried is used as it stands: the file has
         // said more than any rule could work out. Where it said nothing, a rule
         // may know, and failing that the sign decides.
-        const payees::Applied named = payees::apply(rules, one.row.payee);
+        const payees::Naming named =
+            payees::name_for(rules, conversions, categories, one.row.payee);
         std::string other = one.row.category;
         if ((other.empty() || other == "none") && !named.category.empty())
             other = named.category;
@@ -649,8 +657,10 @@ inline std::vector<ledger::Transaction> transactions_for(
         // nothing about what the bank has settled, and that is not a reason to
         // call it unsettled: the file came from the bank, so the rows in it
         // happened. Uncleared is what a transaction nobody but the typist has
-        // seen looks like. See the arrives cleared rule in ImportOfx.
-        t.cleared = types::ClearedStatus::Cleared;
+        // seen looks like. See the arrives cleared rule in ImportOfx -- and the
+        // book may say that its CSV files are not downloads at all.
+        t.cleared = clear_what_is_imported ? types::ClearedStatus::Cleared
+                                           : types::ClearedStatus::Uncleared;
         // Named for the kind of file that gave it and by the line it came from,
         // which is the only name a CSV row has. It is not an OFX identifier and
         // is never compared with one: see the identifier-scope rule in ImportOfx.

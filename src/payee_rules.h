@@ -9,7 +9,7 @@
 #include "account_type.h"
 #include "chart.h"
 #include "ledger.h"
-#include "posting.h"
+#include "transaction.h"
 #include "text_types.h"
 
 // Turning what the bank calls a payee into what the user calls it. Nothing here
@@ -486,6 +486,346 @@ inline int merge_payees(std::vector<ledger::Transaction>* transactions,
         }
     }
     return changed;
+}
+
+
+// ---------------------------------------------------------------------------
+// Two names, and the two tables between them
+// ---------------------------------------------------------------------------
+//
+// A transaction carries two payee fields: the name the file wrote, kept exactly
+// as it arrived, and the converted name, which is what the register shows and
+// what a report groups by. Neither can do the other's job -- a duplicate test
+// against the converted name fails the moment a conversion is added, and a
+// report grouped by the name the bank wrote has one line per branch and per
+// visit. See the two-names section of Payees.spectable.
+//
+// Two tables act on the two fields, and they are separate because they answer
+// different questions and are edited at different times: the converter table
+// says what a name reads as, the categorisation table says where the money
+// goes.
+
+// One row of the converter table.
+struct Conversion {
+    std::string match;      // with * standing for any number of characters
+    std::string converted;  // the name the second field is given
+};
+
+// One row of the categorisation table.
+struct Categorisation {
+    std::string payee;      // matched the way a conversion pattern is
+    std::string category;
+};
+
+// Simple wildcards and nothing else: the pattern is matched against the whole
+// name, with * standing for any number of characters including none, so a
+// pattern with no * in it is an exact comparison. Case is ignored, because a
+// bank writes in capitals and a person does not.
+//
+// No other syntax -- no anchors, no classes, no counts -- because this table is
+// edited by the person who keeps the book, and a pattern that is wrong in a way
+// they cannot see would rename payees quietly. A blank is a character like any
+// other, which is why HARRIS TEETER * does not match the bare name and
+// HARRIS TEETER* does. See the conversion-matching rule in Payees.spectable.
+inline bool conversion_matches(const std::string& pattern, const std::string& name) {
+    const std::string p = detail::upper(pattern);
+    const std::string n = detail::upper(name);
+    std::size_t pi = 0;
+    std::size_t ni = 0;
+    std::size_t star = std::string::npos;  // the last * in the pattern
+    std::size_t after_star = 0;            // and what it stood for so far
+    while (ni < n.size()) {
+        if (pi < p.size() && p[pi] == '*') {
+            star = pi++;
+            after_star = ni;
+            continue;
+        }
+        if (pi < p.size() && p[pi] == n[ni]) {
+            ++pi;
+            ++ni;
+            continue;
+        }
+        // Nothing matched here, so the last * has to stand for one more
+        // character. With no * behind us there is nothing left to try.
+        if (star == std::string::npos) return false;
+        pi = star + 1;
+        ni = ++after_star;
+    }
+    while (pi < p.size() && p[pi] == '*') ++pi;
+    return pi == p.size();
+}
+
+// The first row of the table that matches, in the order the table lists them.
+//
+// First wins because the table is in the order the person put it in and they
+// are looking at it. A hidden ranking -- longest pattern, fewest wildcards --
+// would mean the row that acted was not the row they read, and the fix for a
+// conversion that is too broad is then to move the specific row above it, which
+// is a thing they can see themselves doing. Deliberately not how the rules
+// above rank: those are a set with no order a user ever sees, and this is a
+// list.
+inline const Conversion* conversion_for(const std::vector<Conversion>& table,
+                                        const std::string& raw_name) {
+    for (const Conversion& one : table)
+        if (conversion_matches(one.match, raw_name)) return &one;
+    return nullptr;
+}
+
+// Which of the two names a categorisation was written against, so that a
+// specification can say so and a reader of a window can be told.
+struct Categorised {
+    bool found = false;
+    std::string category;
+    bool against_converted = false;
+};
+
+// Both fields are offered to the table, the converted name first. The name the
+// file wrote is tried only because the converted name matched nothing: a
+// categorisation written before any conversion existed names what the bank
+// sent, one written after names what the person reads, and both are worth
+// keeping. Where both match, the row written against the chosen name is the
+// later decision and the one meant.
+inline Categorised category_for(const std::vector<Categorisation>& table,
+                                const std::string& converted,
+                                const std::string& raw_name) {
+    Categorised out;
+    if (!converted.empty()) {
+        for (const Categorisation& one : table) {
+            if (!conversion_matches(one.payee, converted)) continue;
+            return {true, one.category, true};
+        }
+    }
+    if (!raw_name.empty()) {
+        for (const Categorisation& one : table) {
+            if (!conversion_matches(one.payee, raw_name)) continue;
+            return {true, one.category, false};
+        }
+    }
+    return out;
+}
+
+// What an import records for one name a file wrote: both fields and, where
+// either table or a rule says so, the category to post the other side to.
+//
+// The name the file wrote is kept whether or not anything converted it, because
+// that is the field the next reading of the same statement is tested against.
+struct Naming {
+    std::string payee;
+    std::string raw_name;
+    std::string category;  // empty where nothing chose one
+};
+
+inline Naming name_for(const std::vector<Rule>& rules,
+                       const std::vector<Conversion>& conversions,
+                       const std::vector<Categorisation>& categories,
+                       const std::string& from_file) {
+    Naming out;
+    const Applied by_rule = apply(rules, from_file);
+    out.payee = by_rule.payee;
+    out.category = by_rule.category;
+    out.raw_name = from_file;
+    // The converter table is the later and more explicit of the two, so where
+    // it has something to say about this name it is what the register shows.
+    if (const Conversion* c = conversion_for(conversions, from_file))
+        out.payee = c->converted;
+    if (out.category.empty()) {
+        const Categorised where = category_for(categories, out.payee, from_file);
+        if (where.found) out.category = where.category;
+    }
+    return out;
+}
+
+// The second use of the converter table: transactions already in the book,
+// converted in one pass. The name found is kept as the first field where the
+// conversion changes it, and a row nothing matched is left exactly as it was --
+// there is no previous name to keep.
+//
+// A reconciled transaction is left alone, name included: a bulk change beside a
+// balance that was agreed with a statement would disturb something nobody asked
+// it to touch.
+inline int convert_payees(const std::vector<Conversion>& table,
+                          std::vector<ledger::Transaction>* transactions) {
+    if (transactions == nullptr) return 0;
+    int changed = 0;
+    for (ledger::Transaction& t : *transactions) {
+        if (t.cleared == types::ClearedStatus::Reconciled) continue;
+        const std::string raw = t.raw_name.empty() ? t.payee.value() : t.raw_name;
+        const Conversion* c = conversion_for(table, raw);
+        if (c == nullptr || c->converted == t.payee.value()) continue;
+        t.raw_name = raw;
+        t.payee = types::PayeeName(c->converted);
+        ++changed;
+    }
+    return changed;
+}
+
+// The same for the categorisation table, with the two protections a bulk change
+// has to earn: only a posting still in Uncategorized is moved, because a
+// category chosen by hand is a decision, and a reconciled transaction is left
+// alone entirely. A split or a transfer has no one category posting to move
+// without guessing which, so it is skipped too.
+inline BookApplication assign_categories(const std::vector<Categorisation>& table,
+                                         const chart::Chart& accounts,
+                                         std::vector<ledger::Transaction>* transactions) {
+    BookApplication out;
+    if (transactions == nullptr) return out;
+    for (ledger::Transaction& t : *transactions) {
+        if (t.cleared == types::ClearedStatus::Reconciled) { ++out.skipped; continue; }
+        if (t.destination.is_none() || chart::is_split(t.destination) ||
+            !detail::is_a_category_account(accounts, t.destination)) {
+            ++out.skipped;
+            continue;
+        }
+        const Categorised where = category_for(table, t.payee.value(), t.raw_name);
+        if (!where.found) { ++out.skipped; continue; }
+        const chart::Ref wanted = accounts.ref_for_path(where.category);
+        if (t.destination == wanted) {
+            ++out.already_correct;
+        } else if (detail::is_uncategorized(accounts, t.destination)) {
+            t.destination = wanted;
+            ++out.matched;
+        } else {
+            ++out.skipped;
+        }
+    }
+    return out;
+}
+
+// ---------------------------------------------------------------------------
+// A split this payee always has
+// ---------------------------------------------------------------------------
+//
+// A mortgage payment is three lines every month and the lines are the same
+// three every month, so they are remembered against the payee and offered when
+// a download of it arrives. Offered rather than written: the amounts move, and
+// a split that no longer adds up is a thing to be shown rather than quietly
+// absorbed into whichever line is biggest. See the remembered-split scenarios
+// in Payees.spectable.
+
+// Whether the remembered lines are amounts or proportions.
+enum class SplitShape { Amounts, Percentages };
+
+inline std::string to_string(SplitShape shape) {
+    return shape == SplitShape::Percentages ? "Percentages" : "Amounts";
+}
+
+inline SplitShape split_shape_from_string(const std::string& text) {
+    return text == "Percentages" ? SplitShape::Percentages : SplitShape::Amounts;
+}
+
+// One remembered line. Amount is read when the shape is Amounts and Percent
+// when it is Percentages; the other is nothing and is not consulted, rather
+// than the two being kept in step with each other.
+struct RememberedSplitLine {
+    std::string category;
+    Money amount;
+    double percent = 0.0;
+    std::string memo;
+};
+
+// The rule that says a payee has one. Matched the way a payee rule is matched,
+// against the name the bank sent, so that the pattern a person writes here
+// reads like the patterns they write everywhere else in this program.
+struct SplitRule {
+    std::string pattern;
+    MatchType match_type = MatchType::Contains;
+    std::string payee;
+    SplitShape shape = SplitShape::Amounts;
+    std::vector<RememberedSplitLine> lines;
+};
+
+inline const SplitRule* split_rule_for(const std::vector<SplitRule>& rules,
+                                       const std::string& raw_name) {
+    for (const SplitRule& rule : rules)
+        if (matches(rule.match_type, rule.pattern, raw_name)) return &rule;
+    return nullptr;
+}
+
+// One line of what is offered.
+struct OfferedSplitLine {
+    std::string category;
+    Money amount;
+    std::string memo;
+};
+
+// What the split window is opened with, and what it has to say about it. The
+// shortfall is the total less the lines: short by twenty is 20.00, over by
+// twenty is -20.00, and balanced is the ordinary case that needs no words.
+struct SplitOffer {
+    bool offered = false;
+    std::string payee;
+    std::vector<OfferedSplitLine> lines;
+    Money total;
+    Money allocated;
+    Money shortfall;
+    bool balanced = false;
+};
+
+namespace detail {
+
+inline long long to_the_cent(double value) {
+    return static_cast<long long>(value < 0 ? value - 0.5 : value + 0.5);
+}
+
+}  // namespace detail
+
+// Dividing a total in remembered proportions. Each line is rounded to the cent
+// and whatever the rounding left over is added to the largest line, so that the
+// lines come to what the percentages do and the adjustment lands where it is
+// least visible.
+//
+// The percentages need not come to a hundred. Two lines of 33 each allocate
+// two thirds of the payment and the rest is a shortfall, which is the honest
+// answer: the person wrote 33 and 33, and inventing the missing 34 for them
+// would be this program deciding where a third of the money went. See
+// questions.md on the fourth row of the rounding rule.
+inline std::vector<Money> percentage_amounts(const Money& total,
+                                             const std::vector<double>& percents) {
+    std::vector<Money> out;
+    double whole = 0.0;
+    long long allocated = 0;
+    for (double percent : percents) {
+        const long long cents =
+            detail::to_the_cent(static_cast<double>(total.cents()) * percent / 100.0);
+        out.push_back(Money::from_cents(cents));
+        allocated += cents;
+        whole += percent;
+    }
+    if (out.empty()) return out;
+    const long long wanted =
+        detail::to_the_cent(static_cast<double>(total.cents()) * whole / 100.0);
+    const long long over = wanted - allocated;
+    if (over == 0) return out;
+    std::size_t biggest = 0;
+    for (std::size_t i = 1; i < out.size(); ++i)
+        if (out[i].cents() > out[biggest].cents()) biggest = i;
+    out[biggest] = Money::from_cents(out[biggest].cents() + over);
+    return out;
+}
+
+// The offer itself. The total is a magnitude: a payment of 1500.00 arrives as
+// -1500.00 and its split lines are positive.
+inline SplitOffer offer_split(const SplitRule& rule, const Money& amount) {
+    SplitOffer out;
+    out.offered = !rule.lines.empty();
+    out.payee = rule.payee;
+    out.total = amount.cents() < 0 ? -amount : amount;
+    if (rule.shape == SplitShape::Percentages) {
+        std::vector<double> percents;
+        for (const RememberedSplitLine& line : rule.lines)
+            percents.push_back(line.percent);
+        const std::vector<Money> amounts = percentage_amounts(out.total, percents);
+        for (std::size_t i = 0; i < rule.lines.size(); ++i)
+            out.lines.push_back({rule.lines[i].category, amounts[i], rule.lines[i].memo});
+    } else {
+        for (const RememberedSplitLine& line : rule.lines)
+            out.lines.push_back({line.category, line.amount, line.memo});
+    }
+    for (const OfferedSplitLine& line : out.lines)
+        out.allocated = out.allocated + line.amount;
+    out.shortfall = out.total - out.allocated;
+    out.balanced = out.shortfall.cents() == 0;
+    return out;
 }
 
 }  // namespace payees

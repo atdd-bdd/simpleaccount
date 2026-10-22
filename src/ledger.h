@@ -7,7 +7,7 @@
 #include "chart.h"
 #include "date.h"
 #include "money.h"
-#include "posting.h"
+#include "transaction.h"
 #include "text_types.h"
 
 // Every posting in a book, and the balances read off them. Nothing stores a

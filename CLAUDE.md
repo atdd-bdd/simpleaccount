@@ -32,8 +32,15 @@ export PATH="$PATH:/c/Qt/6.10.0/msvc2022_64/bin"
 Generation is the second check — a file that analyzes clean can still fail to
 generate. Pass every other spec file as `--context` so cross-file types resolve:
 
+**0.9.2 or later, never 0.9.1**: the older converter reads a `\` continuation
+line as an unrecognized keyword, which ends the block the comment belonged to,
+so its `Examples:` table is no longer part of it and the tests it would have
+made are never generated -- Payees alone comes out 24 tests instead of 29, with
+nothing but warnings to say so. It reads as empty attribute sets
+(`AttrSet 'X' has no fields -- skipped`), and it has cost an hour here already.
+
 ```bash
-CONV=/c/Users/user/source/repos/SpecStudio/dist/AlignThree-0.9.1-windows-x64/SpecTableConverter.exe
+CONV=/c/Users/user/source/repos/SpecStudio/dist/AlignThree-0.9.2-windows-x64/SpecTableConverter.exe
 SPEC=/c/Users/user/source/repos/simpleaccount/spec
 CTX=""; for f in "$SPEC"/*.spectable; do CTX="$CTX --context $f"; done
 for f in "$SPEC"/*.spectable; do "$CONV" -l Cpp --tag-filter "NOT TBD" $CTX "$f" ./generated; done
@@ -162,9 +169,14 @@ Three traps already paid for:
   inside a `try` declares a variable named `cell` rather than calling the
   constructor, so nothing throws and every "this value is invalid" row passes
   vacuously. Write `const T parsed{cell};`.
-- **A table cell cannot hold a leading or trailing blank**, so the convention is
-  to wrap such a value in double quotes in the spec and call
-  `spec_cell::unquote()` in the glue. It is safe on every cell.
+- **A table cell cannot hold a leading or trailing blank.** A space is written
+  `~` (see the tilde note further down), and a cell meant to be empty is
+  written `none` and read through the glue's own `blank()`, which turns the
+  literal word into an empty string. There is no `spec_cell` namespace and no
+  `unquote()`: each glue class carries its own small helpers -- `blank()`,
+  `dnc()`, `parse_bool_cell()` -- and a couple of files still keep a local
+  `unquoted()` for cells written in double quotes before the tilde was known
+  about. Prefer `~` and `none` in anything new.
 - **Writing C++ escapes through a script is where the time goes.** A backslash
   has to survive the shell, then Python, then the regex replacement, and it
   usually does not. `'\\n'` in a heredoc has arrived as a real newline inside a

@@ -17,8 +17,9 @@
 #include "date.h"
 #include "ledger.h"
 #include "money.h"
+#include "csv_import.h"
 #include "payee_rules.h"
-#include "posting.h"
+#include "transaction.h"
 #include "text_types.h"
 
 // A book on disk. One book is one SQLite database with a .sadb name, and they
@@ -31,10 +32,12 @@ namespace store {
 
 // The schema is read off the specification rather than designed beside it: every
 // Entity becomes a row and the Collection it belongs to becomes the table. Bump
-// this when that shape changes, and add the upgrade it needs to open_at below --
-// a book already on disk was made by kSchema as it read on an earlier version,
-// and has to be brought forward in place rather than recreated.
-inline constexpr int kSchemaVersion = 10;
+// this when that shape changes. There is no upgrade path: a book of any other
+// version is refused untouched, because every book this program wrote was
+// deleted while the shape was still being settled, so a file claiming another
+// version is a file this program did not write. Once there are books worth
+// keeping, a bump has to come with a way to read the version before it.
+inline constexpr int kSchemaVersion = 16;
 
 struct Failure {
     bool refused = false;
@@ -50,6 +53,17 @@ struct BookInfo {
     // before the bank reports them nothing is outstanding, so a number that
     // matches anything older is more likely a number reused.
     int check_window_days = 1;
+    // Whether what a CSV import brings in arrives cleared. True because a CSV
+    // from a bank is a statement in everything but name; off for a book whose
+    // CSV files are spreadsheets of its own making. See "A book may say not to
+    // clear what a CSV import brings in" in ImportCsv.spectable.
+    bool set_cleared_on_csv_import = true;
+    // A date before which the book shows nothing anywhere, or empty for a book
+    // that hides nothing. Beside the fiscal year start and the check window
+    // because it is a statement about the book -- the years before it were
+    // migrated for the record and are not being worked on -- rather than about
+    // one register. See the hide-before rule in TransactionRegister.spectable.
+    std::string hide_before;
 };
 
 namespace detail {
@@ -113,6 +127,31 @@ inline bool exec(sqlite3* db, const std::string& sql, std::string* why) {
     return false;
 }
 
+// Two pragmas, and the whole of why a write is quick. SQLite in its
+// default mode asks the disk to flush twice for every commit, and this
+// machine answers that in about a second -- so a book written twenty
+// times took twenty seconds, which is what made accepting an import feel
+// like the program had stopped. The write-ahead log takes those twenty
+// commits to two thousandths of a second, measured.
+//
+// synchronous=NORMAL is the part to be careful about: in this mode a
+// commit is durable against the program crashing but not against the
+// machine losing power mid-commit, in which case the last transaction can
+// be lost. It cannot corrupt the book -- the log is replayed or discarded
+// whole -- and losing the last entry of a session is a cost worth a
+// hundredfold on every save. synchronous=OFF, which was also measured, is
+// not: it was still 1.9 seconds for twenty commits, so it buys nothing
+// here and gives up the guarantee for it.
+//
+// A book in this mode has two sidecar files while it is open, and SQLite
+// folds them back in and deletes them on a clean close, so a closed book
+// is still one file to copy or carry. See questions.md.
+inline void make_it_quick(sqlite3* db) {
+    std::string ignored;
+    exec(db, "PRAGMA journal_mode = WAL", &ignored);
+    exec(db, "PRAGMA synchronous = NORMAL", &ignored);
+}
+
 // Amounts are whole cents in an integer column. A binary floating-point column
 // cannot hold 0.10, and a book that cannot add up is the one thing this program
 // may not be.
@@ -125,6 +164,12 @@ CREATE TABLE book (
   -- How long a check number is trusted to settle a match. See the
   -- check-number rule in ImportOfx.spectable.
   check_window_days INTEGER NOT NULL DEFAULT 1,
+  -- Whether a CSV import clears what it brings in. See the CSV cleared rule
+  -- in ImportCsv.spectable.
+  set_cleared_on_csv_import INTEGER NOT NULL DEFAULT 1,
+  -- The date before which the book shows nothing. Empty for a book that
+  -- hides nothing. See the hide-before rule in TransactionRegister.spectable.
+  hide_before       TEXT    NOT NULL DEFAULT '',
   -- The number the id counter last handed out, for accounts and categories
   -- together. Recorded rather than worked out from the chart, so a deleted
   -- account's number is never given to the next one created. See the counter
@@ -142,15 +187,16 @@ CREATE TABLE accounts (
   type          TEXT    NOT NULL,
   placeholder   INTEGER NOT NULL DEFAULT 0,
   hidden        INTEGER NOT NULL DEFAULT 0,
-  -- A short way to type the account when categorising, and what a payment to
-  -- it is called on the paying account's own statement. See the finding rule
-  -- in Accounts.spectable and the payment-payee rule in ImportOfx.
+  -- A short way to type the account when categorising. See the finding rule
+  -- in Accounts.spectable.
   alias         TEXT    NOT NULL DEFAULT '',
-  payment_payee TEXT    NOT NULL DEFAULT '',
   -- What is kept about the account from its own dialog: which institution,
   -- and the number on the statement, kept exactly as written.
   bank            TEXT  NOT NULL DEFAULT '',
-  account_number  TEXT  NOT NULL DEFAULT '');
+  account_number  TEXT  NOT NULL DEFAULT '',
+  -- The routing number the downloads carry, learned from the first one
+  -- confirmed for this account. See the teaching rule in ImportOfx.
+  bank_id         TEXT  NOT NULL DEFAULT '');
 
 CREATE TABLE categories (
   id            INTEGER NOT NULL DEFAULT 0 UNIQUE,
@@ -224,18 +270,28 @@ CREATE TABLE payee_rules (
   enabled    INTEGER NOT NULL DEFAULT 1,
   PRIMARY KEY (pattern, match_type));
 
+-- The converter table: what a bank wrote against what the register shows.
+-- Two tables and not one, because the two are edited at different moments and
+-- by different reasoning -- a conversion is about a name a file keeps sending,
+-- a categorisation is about where that payee's money goes -- and a single table
+-- would have a blank in one of its columns on nearly every row. Both are
+-- ordered lists and not sets: the first row that matches acts, so rowid is the
+-- order the person put them in and is what they are read back in. See
+-- decisions.md and the converter rules in Payees.spectable.
+CREATE TABLE payee_conversions (
+  pattern   TEXT NOT NULL,
+  converted TEXT NOT NULL);
+
+CREATE TABLE payee_categories (
+  payee    TEXT NOT NULL,
+  category TEXT NOT NULL);
+
 CREATE TABLE payee_split_rules (
   pattern    TEXT NOT NULL,
   match_type TEXT NOT NULL DEFAULT 'Contains',
   payee      TEXT NOT NULL,
   shape      TEXT NOT NULL DEFAULT 'Amounts',
   PRIMARY KEY (pattern, match_type));
-
-CREATE TABLE ofx_account_mappings (
-  bank_id        TEXT NOT NULL DEFAULT '',
-  ofx_account_id TEXT NOT NULL,
-  account_path   TEXT NOT NULL,
-  PRIMARY KEY (bank_id, ofx_account_id));
 
 CREATE TABLE transfer_match_rules (
   from_account TEXT    NOT NULL,
@@ -244,17 +300,43 @@ CREATE TABLE transfer_match_rules (
   to_pattern   TEXT    NOT NULL,
   enabled      INTEGER NOT NULL DEFAULT 1);
 
+-- One row per profile, and the whole of csv::Profile in it. The column names
+-- are the profile: a file is recognised by carrying the same set of headings.
 CREATE TABLE csv_profiles (
-  name           TEXT    NOT NULL PRIMARY KEY,
-  date_order     TEXT    NOT NULL DEFAULT 'MDY',
-  has_header     INTEGER NOT NULL DEFAULT 1,
-  decimal_comma  INTEGER NOT NULL DEFAULT 0);
+  name            TEXT    NOT NULL PRIMARY KEY,
+  has_header      INTEGER NOT NULL DEFAULT 1,
+  skip_rows       INTEGER NOT NULL DEFAULT 0,
+  delimiter       TEXT    NOT NULL DEFAULT 'Comma',
+  date_column     TEXT    NOT NULL DEFAULT '',
+  date_order      TEXT    NOT NULL DEFAULT 'MDY',
+  payee_column    TEXT    NOT NULL DEFAULT '',
+  memo_column     TEXT    NOT NULL DEFAULT '',
+  check_column    TEXT    NOT NULL DEFAULT '',
+  category_column TEXT    NOT NULL DEFAULT '',
+  balance_column  TEXT    NOT NULL DEFAULT '',
+  amount_style    TEXT    NOT NULL DEFAULT 'Signed',
+  amount_column   TEXT    NOT NULL DEFAULT '',
+  debit_column    TEXT    NOT NULL DEFAULT '',
+  credit_column   TEXT    NOT NULL DEFAULT '',
+  outward_sign    TEXT    NOT NULL DEFAULT 'Negative');
 
 CREATE TABLE csv_header_matches (
   profile TEXT NOT NULL REFERENCES csv_profiles(name) ON DELETE CASCADE,
   heading TEXT NOT NULL,
   field   TEXT NOT NULL,
   PRIMARY KEY (profile, heading));
+
+-- The names themselves, so that a list can be shown and a misspelling can be
+-- told from a new tag. A transaction keeps the tag as a name rather than as an
+-- id, which is the one place this book departs from the identity rule: a tag is
+-- a label and not a thing with a balance, and nothing refers to a tag except
+-- the transactions carrying it. The id here is for the table's own sake. The
+-- name is unique because two spellings of one word are one word, and a tag in
+-- use by no transaction stays: the table is the author's vocabulary. See the
+-- tag table rule in Books.spectable.
+CREATE TABLE tag (
+  id   INTEGER NOT NULL PRIMARY KEY,
+  name TEXT    NOT NULL UNIQUE);
 
 CREATE INDEX import_ids_by_id ON transaction_import_ids(source, id);
 CREATE INDEX transactions_by_date ON transactions(date);
@@ -342,183 +424,28 @@ private:
             return {true, path + " could not be opened: " + why};
         }
         detail::Handle db(raw);
+        detail::make_it_quick(db.get());
 
-        // The version is read before anything else, so that a file from a later
-        // program is refused untouched rather than written back in a shape that
-        // drops whatever that version added.
+        // The version is read before anything else, and any version but this
+        // one is refused untouched: a later book would be written back in a
+        // shape that drops whatever that version added, and there are no
+        // earlier books left to bring up to date -- every book this program
+        // wrote was deleted while the shape was still being settled. See
+        // "A book of any version but this one is refused" in Books.spectable.
         detail::Statement read(db.get(), "SELECT version FROM schema");
         if (!read.ok() || !read.step_row())
             return {true, label + " is not a SimpleAccount book"};
         const long long version = read.integer(0);
         if (version > kSchemaVersion)
             return {true, label + " was written by a later version of SimpleAccount"};
-        if (version < kSchemaVersion) {
-            std::string why;
-            if (!upgrade(db.get(), static_cast<int>(version), &why))
-                return {true, label + " could not be brought up to date: " + why};
-        }
+        if (version < kSchemaVersion)
+            return {true, label + " was written by an earlier version of SimpleAccount"};
 
         into->db_ = std::move(db);
         into->path_ = path;
         return {};
     }
 
-    // Brings a book written by an earlier version up to the current schema, in
-    // place. Each step adds to what is there; nothing already on disk is ever
-    // read differently by an older step, because new columns always default
-    // to the value an old book's absence of them already meant.
-    static bool upgrade(sqlite3* db, int from, std::string* why) {
-        if (from < 2) {
-            // alias and payment_payee existed in the program before this,
-            // but the column to hold them was never added -- so every book
-            // written before version 2 has neither, which is exactly the
-            // empty default a new column gets.
-            static const char* const columns[] = {
-                "ALTER TABLE accounts ADD COLUMN alias TEXT NOT NULL DEFAULT ''",
-                "ALTER TABLE accounts ADD COLUMN payment_payee TEXT NOT NULL DEFAULT ''",
-                "ALTER TABLE accounts ADD COLUMN bank TEXT NOT NULL DEFAULT ''",
-                "ALTER TABLE accounts ADD COLUMN account_number TEXT NOT NULL DEFAULT ''",
-            };
-            for (const char* sql : columns)
-                if (!detail::exec(db, sql, why)) return false;
-        }
-        if (from < 3) {
-            // Category did not exist as its own collection before this: a
-            // book written before version 3 has no categories table at all,
-            // which is exactly the empty collection a new book starts with.
-            static const char* const sql =
-                "CREATE TABLE categories ("
-                "  path          TEXT    NOT NULL PRIMARY KEY,"
-                "  type          TEXT    NOT NULL,"
-                "  placeholder   INTEGER NOT NULL DEFAULT 0,"
-                "  hidden        INTEGER NOT NULL DEFAULT 0,"
-                "  alias         TEXT    NOT NULL DEFAULT '')";
-            if (!detail::exec(db, sql, why)) return false;
-        }
-        if (from < 4) {
-            // SourceAccount, Destination and Amount did not exist on a
-            // transaction before this, and TransactionSplit did not exist as
-            // its own collection -- a book written before version 4 has
-            // neither, which is exactly what an empty default/table means.
-            static const char* const columns[] = {
-                "ALTER TABLE transactions ADD COLUMN source_ref INTEGER NOT NULL DEFAULT 0",
-                "ALTER TABLE transactions ADD COLUMN destination_ref INTEGER NOT NULL DEFAULT 0",
-                "ALTER TABLE transactions ADD COLUMN amount_cents INTEGER NOT NULL DEFAULT 0",
-            };
-            for (const char* sql : columns)
-                if (!detail::exec(db, sql, why)) return false;
-            static const char* const splits =
-                "CREATE TABLE transaction_splits ("
-                "  transaction_id  TEXT    NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,"
-                "  line            INTEGER NOT NULL,"
-                "  destination_ref INTEGER NOT NULL,"
-                "  amount_cents    INTEGER NOT NULL,"
-                "  memo            TEXT    NOT NULL DEFAULT '',"
-                "  PRIMARY KEY (transaction_id, line))";
-            if (!detail::exec(db, splits, why)) return false;
-        }
-        if (from < 5) {
-            // Cleared did not exist on a transaction before this -- it lived
-            // only on a posting -- so a book written before version 5 has
-            // every transaction reading as Uncleared under this shape, which
-            // is exactly the new column's default.
-            static const char* const sql =
-                "ALTER TABLE transactions ADD COLUMN cleared TEXT NOT NULL DEFAULT 'Uncleared'";
-            if (!detail::exec(db, sql, why)) return false;
-        }
-        if (from < 6) {
-            // A posting's account moves from path text to an id -- see
-            // chart::Ref -- which is not a column type ALTER can carry a
-            // value across. The author does not need the old rows kept: a
-            // book from before this version is re-imported from its QIF
-            // rather than opened, so the column is simply remade empty.
-            static const char* const sql[] = {
-                "DELETE FROM posting_import_ids",
-                "DROP TABLE postings",
-                "CREATE TABLE postings ("
-                "  transaction_id  TEXT    NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,"
-                "  line            INTEGER NOT NULL,"
-                "  account_ref     INTEGER NOT NULL,"
-                "  amount_cents    INTEGER NOT NULL,"
-                "  memo            TEXT    NOT NULL DEFAULT '',"
-                "  cleared         TEXT    NOT NULL DEFAULT 'Uncleared',"
-                "  PRIMARY KEY (transaction_id, line))",
-                "DROP TABLE IF EXISTS transaction_splits",
-                "CREATE TABLE transaction_splits ("
-                "  transaction_id  TEXT    NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,"
-                "  line            INTEGER NOT NULL,"
-                "  destination_ref INTEGER NOT NULL,"
-                "  amount_cents    INTEGER NOT NULL,"
-                "  memo            TEXT    NOT NULL DEFAULT '',"
-                "  PRIMARY KEY (transaction_id, line))",
-            };
-            for (const char* s : sql)
-                if (!detail::exec(db, s, why)) return false;
-        }
-        if (from < 7) {
-            // Postings go away entirely: a transaction is its own one side,
-            // with a split's lines in transaction_splits, so nothing keyed
-            // on postings(transaction_id, line) has anywhere left to point.
-            // Same as the version 6 upgrade, a book from before this is
-            // re-imported from its QIF rather than carried across.
-            static const char* const sql[] = {
-                "DROP TABLE IF EXISTS posting_import_ids",
-                "DROP TABLE IF EXISTS postings",
-                "CREATE TABLE transaction_import_ids ("
-                "  transaction_id  TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,"
-                "  source          TEXT NOT NULL,"
-                "  id              TEXT NOT NULL,"
-                "  PRIMARY KEY (transaction_id, source))",
-            };
-            for (const char* s : sql)
-                if (!detail::exec(db, s, why)) return false;
-        }
-        if (from < 8) {
-            // Account and Category were never given an id column, so every
-            // open reassigned fresh ones in path order and silently
-            // orphaned every source_ref/destination_ref already written.
-            // Caught before any real book had been through a save/reopen
-            // cycle under the new shape, so there is nothing to backfill --
-            // the accounts and categories below get their ids the normal
-            // way, from read()'s own put()/put_category() calls, the next
-            // time this book is opened after this ALTER runs.
-            static const char* const sql[] = {
-                "ALTER TABLE accounts ADD COLUMN id INTEGER NOT NULL DEFAULT 0",
-                "ALTER TABLE categories ADD COLUMN id INTEGER NOT NULL DEFAULT 0",
-            };
-            for (const char* s : sql)
-                if (!detail::exec(db, s, why)) return false;
-        }
-        if (from < 9) {
-            // The counter was worked out from the largest id in the chart,
-            // which drops back when the highest account is deleted. It is
-            // recorded now. An older book's ids are assigned at read() and
-            // written on the next save, so there is nothing to backfill: the
-            // column starts at zero and the first save raises it.
-            static const char* const sql[] = {
-                "ALTER TABLE book ADD COLUMN last_id_used INTEGER NOT NULL DEFAULT 0",
-                "CREATE UNIQUE INDEX accounts_id ON accounts (id)",
-                "CREATE UNIQUE INDEX categories_id ON categories (id)",
-            };
-            for (const char* s : sql)
-                if (!detail::exec(db, s, why)) return false;
-        }
-        if (from < 10) {
-            // Column widths were not kept at all before this, so there is
-            // nothing to carry over: the table starts empty, which is exactly
-            // what "nobody has resized anything" already meant.
-            static const char* const sql =
-                "CREATE TABLE register_column_width ("
-                "  name  TEXT    NOT NULL PRIMARY KEY,"
-                "  width INTEGER NOT NULL)";
-            if (!detail::exec(db, sql, why)) return false;
-        }
-        detail::Statement set(db, "UPDATE schema SET version = ?");
-        if (!set.ok()) { if (why) *why = set.why(); return false; }
-        set.bind(1, kSchemaVersion);
-        if (!set.run()) { if (why) *why = set.why(); return false; }
-        return true;
-    }
 
 public:
     // Creates and initialises one. An existing file is refused: overwriting
@@ -539,6 +466,7 @@ public:
             return {true, path + " could not be made: " + why};
         }
         detail::Handle db(raw);
+        detail::make_it_quick(db.get());
 
         std::string why;
         if (!detail::exec(db.get(), detail::kSchema, &why))
@@ -551,7 +479,8 @@ public:
 
         detail::Statement info(db.get(),
                                "INSERT INTO book (name, fiscal_year_start, check_window_days, "
-                               "last_id_used) VALUES (?, 1, 1, 0)");
+                               "set_cleared_on_csv_import, hide_before, last_id_used) "
+                               "VALUES (?, 1, 1, 1, '', 0)");
         if (!info.ok()) return {true, info.why()};
         info.bind(1, name);
         if (!info.run()) return {true, info.why()};
@@ -564,12 +493,113 @@ public:
     const std::string& path() const { return path_; }
     bool is_open() const { return db_ != nullptr; }
 
+    // The book's own settings, written back. Separate from write() because
+    // nothing about the chart or the transactions changes when the check window
+    // does, and a settings dialog has no business rewriting the book to record
+    // one number. The name is left alone: a book is named by its file.
+    Failure set_info(const BookInfo& info) {
+        detail::Statement put(db_.get(),
+                              "UPDATE book SET fiscal_year_start = ?, "
+                              "check_window_days = ?, set_cleared_on_csv_import = ?, "
+                              "hide_before = ?");
+        if (!put.ok()) return {true, put.why()};
+        put.bind(1, static_cast<long long>(info.fiscal_year_start));
+        put.bind(2, static_cast<long long>(info.check_window_days));
+        put.bind(3, info.set_cleared_on_csv_import ? 1 : 0);
+        put.bind(4, info.hide_before);
+        if (!put.run()) return {true, put.why()};
+        return {};
+    }
+
+    // The converter tables and the tag vocabulary. Each is a list of a few
+    // hundred rows at most, edited in a window of its own, so each is rewritten
+    // outright by its own call rather than ridden along on a save of the book.
+    Failure write_conversions(const std::vector<payees::Conversion>& table) {
+        std::string why;
+        if (!detail::exec(db_.get(), "DELETE FROM payee_conversions;", &why))
+            return {true, why};
+        detail::Statement put(db_.get(),
+            "INSERT INTO payee_conversions (pattern, converted) VALUES (?, ?)");
+        if (!put.ok()) return {true, put.why()};
+        for (const payees::Conversion& one : table) {
+            put.reset();
+            put.bind(1, one.match);
+            put.bind(2, one.converted);
+            if (!put.run()) return {true, put.why()};
+        }
+        return {};
+    }
+
+    std::vector<payees::Conversion> conversions() const {
+        std::vector<payees::Conversion> out;
+        detail::Statement read(db_.get(),
+            "SELECT pattern, converted FROM payee_conversions ORDER BY rowid");
+        if (!read.ok()) return out;
+        while (read.step_row()) out.push_back({read.text(0), read.text(1)});
+        return out;
+    }
+
+    Failure write_categorisations(const std::vector<payees::Categorisation>& table) {
+        std::string why;
+        if (!detail::exec(db_.get(), "DELETE FROM payee_categories;", &why))
+            return {true, why};
+        detail::Statement put(db_.get(),
+            "INSERT INTO payee_categories (payee, category) VALUES (?, ?)");
+        if (!put.ok()) return {true, put.why()};
+        for (const payees::Categorisation& one : table) {
+            put.reset();
+            put.bind(1, one.payee);
+            put.bind(2, one.category);
+            if (!put.run()) return {true, put.why()};
+        }
+        return {};
+    }
+
+    std::vector<payees::Categorisation> categorisations() const {
+        std::vector<payees::Categorisation> out;
+        detail::Statement read(db_.get(),
+            "SELECT payee, category FROM payee_categories ORDER BY rowid");
+        if (!read.ok()) return out;
+        while (read.step_row()) out.push_back({read.text(0), read.text(1)});
+        return out;
+    }
+
+    // The vocabulary, in the order it reads: a listing is shown alphabetically
+    // and the table is the listing.
+    Failure write_tags(const std::vector<std::string>& vocabulary) {
+        std::string why;
+        if (!detail::exec(db_.get(), "DELETE FROM tag;", &why)) return {true, why};
+        detail::Statement put(db_.get(), "INSERT INTO tag (name) VALUES (?) "
+                                         "ON CONFLICT (name) DO NOTHING");
+        if (!put.ok()) return {true, put.why()};
+        for (const std::string& one : vocabulary) {
+            if (one.empty()) continue;
+            put.reset();
+            put.bind(1, one);
+            if (!put.run()) return {true, put.why()};
+        }
+        return {};
+    }
+
+    std::vector<std::string> tags() const {
+        std::vector<std::string> out;
+        detail::Statement read(db_.get(), "SELECT name FROM tag ORDER BY name");
+        if (!read.ok()) return out;
+        while (read.step_row()) out.push_back(read.text(0));
+        return out;
+    }
+
     BookInfo info() const {
         BookInfo out;
-        detail::Statement read(db_.get(), "SELECT name, fiscal_year_start FROM book");
+        detail::Statement read(db_.get(),
+                               "SELECT name, fiscal_year_start, check_window_days, "
+                               "set_cleared_on_csv_import, hide_before FROM book");
         if (read.ok() && read.step_row()) {
             out.name = read.text(0);
             out.fiscal_year_start = static_cast<int>(read.integer(1));
+            out.check_window_days = static_cast<int>(read.integer(2));
+            out.set_cleared_on_csv_import = read.integer(3) != 0;
+            out.hide_before = read.text(4);
         }
         return out;
     }
@@ -590,7 +620,8 @@ public:
                   const std::vector<ledger::Transaction>& transactions,
                   const std::vector<payees::Rule>& rules = {},
                   const std::vector<ledger::TransactionSplit>& splits = {},
-                  const std::map<std::string, int>& column_widths = {}) {
+                  const std::map<std::string, int>& column_widths = {},
+                  const std::vector<csv::Profile>& profiles = {}) {
         // The lines of one transaction, found once for all of them. This was a
         // scan of every split line for every transaction, which on a book with
         // a few thousand splits was tens of millions of comparisons per save.
@@ -640,13 +671,44 @@ public:
         // worth the trouble while that is true. The transactions are dealt
         // with below, row by row.
         if (!detail::exec(db_.get(), "DELETE FROM accounts; DELETE FROM categories; "
-                                     "DELETE FROM payee_rules;",
+                                     "DELETE FROM payee_rules; DELETE FROM csv_profiles;",
                           &why))
             return fail(why);
 
+        // The profiles, which are the book's own: the same bank's layout set up
+        // in two books is set up twice, and that repetition is the decision in
+        // Books.spectable rather than an oversight.
+        detail::Statement profile(db_.get(),
+            "INSERT INTO csv_profiles (name, has_header, skip_rows, delimiter, "
+            "date_column, date_order, payee_column, memo_column, check_column, "
+            "category_column, balance_column, amount_style, amount_column, "
+            "debit_column, credit_column, outward_sign) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        if (!profile.ok()) return fail(profile.why());
+        for (const csv::Profile& p : profiles) {
+            profile.reset();
+            profile.bind(1, p.name);
+            profile.bind(2, p.has_header ? 1LL : 0LL);
+            profile.bind(3, static_cast<long long>(p.skip_rows));
+            profile.bind(4, p.delimiter);
+            profile.bind(5, p.date_column);
+            profile.bind(6, types::to_string(p.date_order));
+            profile.bind(7, p.payee_column);
+            profile.bind(8, p.memo_column);
+            profile.bind(9, p.check_column);
+            profile.bind(10, p.category_column);
+            profile.bind(11, p.balance_column);
+            profile.bind(12, csv::to_string(p.amount_style));
+            profile.bind(13, p.amount_column);
+            profile.bind(14, p.debit_column);
+            profile.bind(15, p.credit_column);
+            profile.bind(16, csv::to_string(p.outward_sign));
+            if (!profile.run()) return fail(profile.why());
+        }
+
         detail::Statement account(db_.get(),
             "INSERT INTO accounts (id, path, type, placeholder, hidden, alias, "
-            "payment_payee, bank, account_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            "bank, account_number, bank_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
         if (!account.ok()) return fail(account.why());
         for (const chart::Account& a : accounts.all()) {
             account.reset();
@@ -656,9 +718,9 @@ public:
             account.bind(4, a.placeholder ? 1 : 0);
             account.bind(5, a.hidden ? 1 : 0);
             account.bind(6, a.alias);
-            account.bind(7, a.payment_payee);
-            account.bind(8, a.bank);
-            account.bind(9, a.account_number);
+            account.bind(7, a.bank);
+            account.bind(8, a.account_number);
+            account.bind(9, a.bank_id);
             if (!account.run()) return fail(account.why());
         }
 
@@ -836,14 +898,46 @@ public:
                  std::vector<ledger::Transaction>* transactions,
                  std::vector<payees::Rule>* rules = nullptr,
                  std::vector<ledger::TransactionSplit>* splits = nullptr,
-                 std::map<std::string, int>* column_widths = nullptr) const {
+                 std::map<std::string, int>* column_widths = nullptr,
+                 std::vector<csv::Profile>* profiles = nullptr) const {
         *accounts = chart::Chart();
         *book = ledger::Ledger();
         transactions->clear();
 
+        if (profiles != nullptr) {
+            profiles->clear();
+            detail::Statement saved(db_.get(),
+                "SELECT name, has_header, skip_rows, delimiter, date_column, "
+                "date_order, payee_column, memo_column, check_column, "
+                "category_column, balance_column, amount_style, amount_column, "
+                "debit_column, credit_column, outward_sign "
+                "FROM csv_profiles ORDER BY name");
+            if (!saved.ok()) return {true, saved.why()};
+            while (saved.step_row()) {
+                csv::Profile p;
+                p.name = saved.text(0);
+                p.has_header = saved.integer(1) != 0;
+                p.skip_rows = static_cast<int>(saved.integer(2));
+                p.delimiter = saved.text(3);
+                p.date_column = saved.text(4);
+                p.date_order = types::date_order_from_string(saved.text(5));
+                p.payee_column = saved.text(6);
+                p.memo_column = saved.text(7);
+                p.check_column = saved.text(8);
+                p.category_column = saved.text(9);
+                p.balance_column = saved.text(10);
+                p.amount_style = csv::amount_style_from_string(saved.text(11));
+                p.amount_column = saved.text(12);
+                p.debit_column = saved.text(13);
+                p.credit_column = saved.text(14);
+                p.outward_sign = csv::outward_sign_from_string(saved.text(15));
+                profiles->push_back(p);
+            }
+        }
+
         detail::Statement account(db_.get(),
-            "SELECT id, path, type, placeholder, hidden, alias, payment_payee, "
-            "bank, account_number FROM accounts ORDER BY path");
+            "SELECT id, path, type, placeholder, hidden, alias, "
+            "bank, account_number, bank_id FROM accounts ORDER BY path");
         if (!account.ok()) return {true, account.why()};
         while (account.step_row()) {
             chart::Account a;
@@ -853,9 +947,9 @@ public:
             a.placeholder = account.integer(3) != 0;
             a.hidden = account.integer(4) != 0;
             a.alias = account.text(5);
-            a.payment_payee = account.text(6);
-            a.bank = account.text(7);
-            a.account_number = account.text(8);
+            a.bank = account.text(6);
+            a.account_number = account.text(7);
+            a.bank_id = account.text(8);
             accounts->put(a);
         }
 

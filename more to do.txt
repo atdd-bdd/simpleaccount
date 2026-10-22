@@ -1,0 +1,109 @@
+Here are some more to-do.  Do these before the tasks.md 
+
+
+ The find itself doesn't seem to be working. It seemed to find too much.  Find - have only a single find field for amount - it should match positive and negative values in either column (e.g. payment/deposit) of a register.  It should also match amounts in the split.  If amount is in a split, just show the transaction.    Find should have a context sensitive menu that includes - "Show split" if the transaction is split.  Maybe something else later, like Recategorize.    
+
+Scroll bar - clicking above or below the current indicator should page up or page down the register/report. 
+
+Move the import history menu item to a dialog that appears after new book is chosen.  It is only applicable then.  The user can supply the book or note that this is an entirely new book. 
+
+A new book should start with some accounts - checking, savings, cc, and some expense categories.  Find a list of common categories (e.g. the ones Quicken starts with) and create those for a new book (if there is no import)>  
+
+Switch the import QIF file to under the Import Csv/QFX.  Change that to Import transactions.  And the dialog underneath should look for CSV, QFX, and QIF files.  The files should be shown with newest first. 
+
+Now any transaction that is imported should be marked cleared.   Only manually entered transactions will start uncleared.   
+
+
+Let's review the matching rules for import.  IF FID (or ID in CSV, if there is one) matches what's in the book, call it a duplicate.  However if the date and/or amount and/or payee do not match, add a note to the Duplicate status.   
+
+If there is only one transaction in the import with the same date/amount/payee, then look for a match in the book that matches all those values.  If found, it is a duplicate.  If date and amount match, but not payees, add a note to the Duplicate status.    
+
+If there are multiple transactions in the import with the same date/amount/payee, but not FID/ID, then look in the book for multiple transactions that match all those values.  If the number of transactions matches, then all the transactions are duplicates.  If not, then marked as "Possible"      
+
+Are these rules clear?  
+
+Here are responses to your notes:
+
+  1. Is "Duplicate" here what the program now calls Matched, or what it calls
+     Duplicate? They do different things: Matched stamps the transaction already in     the book with the FITID, marks it cleared and creates nothing; Duplicate does
+     nothing at all, which is what a second read of the same file wants. Your rule
+     2 says a date/amount/payee match in the book "is a duplicate" — if that
+     transaction came from a Quicken history it has no FITID, so unless it is
+     stamped, the same file asks the same question next month. I read you as
+     wanting the stamping behaviour under the name Duplicate, and Matched
+     disappearing as a disposition. Confirm?
+
+Duplicate is that - a second read of the same file should do nothing.  
+
+If a transaction does not have an FITID, but amount/date/payee match, then mark it Duplicate - FITID added and mark it cleared.  
+
+  2. Compared payee: raw or renamed? A history says Harris Teeter and the download
+     says HARRIS TEETER #231. Compared raw, "date and amount match but not payee"
+     is true of nearly every row of a first reconciliation against the Quicken
+     history, so the note lands on hundreds of transactions and stops meaning
+     anything. Compare after the payee rules have been applied, or case-folded and
+     trimmed of the store number? Or is a payee note on all of them actually what
+     you want to see once?
+
+Compare after payee rules have been applied.  If no rule applies, then case-fold and trim of store number or any numberic stuff.   If payee still does not match (but amount/date do), then mark as "Duplicate - payee unmatched" 
+
+On an import, a context menu should show a "show duplicate transaction" which would bring up a dialog showing the duplicate transaction. 
+
+
+  3. Does cleared status still decide anything? What I committed today used it to
+     tell a transaction somebody typed from one that was imported — typed got asked     about, imported got matched. Your rules don't mention it, which makes a typed
+     uncleared transaction with the same date, amount and payee a Duplicate rather
+     than a question. Is that intended, with rule 3's counting as the protection
+     against two genuine visits to one shop?
+
+Cleared status shows that the transaction has been imported.  (Or that a user manually cleared it, which would not occur often).   If an imported transaction matches an uncleared transaction, date/amount/payee, then mark it "Duplicate - uncleared") 
+
+  4. Do check numbers survive? The check-number test is the only one that reaches
+     past the day — it is what matches a check you typed on the 2nd against the
+     bank posting it on the 16th, and it has a per-book window for exactly that.
+     Your rules don't mention it. Keep it as test 2, or drop it?
+
+Check numbers survive (of course, only for checking accounts).  If a check number exists in the register and the import has the same check number, (payee/amount the same), then mark it "Duplicate - check number the same" 
+
+
+  5. Two counting cases rule 3 doesn't cover. One import row, two identical
+     transactions in the book: Possible? And three identical import rows against
+     two in the book — two duplicates and one new, or all three Possible?
+
+If the number of transactions do not match, mark the imported transactions all Possible. 
+
+  6. Where does the note live? In the import's own notes list for that run, the way     the stale-check-number note works now, or on the transaction so it is still
+     there next week?
+Put the note in the transaciton. 
+
+  7. Dates exact — same day, no tolerance at all. That is how I read it and it
+     matches what I built today. Yes?
+No tolerance (except in the case of matching check numbers for a checking account - see above). 
+
+  
+  8. "The user can supply the book or note that this is an entirely new book" —
+     supply a history file to import (QIF/QFX/CSV), or point at an existing .sadb?
+
+This is a new book, so there is no existing .sadb. The history import file will just be QIF.    
+
+ 
+  9. The starting chart for a new book. Checking, Savings, Credit Card as plain         top-level names? And for categories: shall I take Quicken's standard list, or      the categories actually used in pughkilleen.QIF trimmed of the business-only       ones? The second gives you a chart that fits your own books; the first is what     a stranger would expect.                                                       
+
+If there is a QIF history file, use the categories in that.   If not, then use Quicken's standard list.     
+
+ 10. Find finding too much — what did you type, and in which register? I'll             reproduce it against the real book read-only. Also: the single amount field        matching either column and the splits is clear, and "if the amount is only in      a split, show the transaction" is clear.
+
+I looked for Amount from 69.38 in pughkilleen Joint-Crown and it came up with many transactions, none of amounts matched.  
+
+  11. Newest-first in the file dialog needs Qt's own dialog, not the Windows one —
+      the native dialog's sort order isn't ours to set. Trade the native look for
+      the sort?
+
+Use the Qt dialog.   
+
+  
+
+  
+
+
+

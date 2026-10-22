@@ -24,8 +24,9 @@ the spending report.
 
 **Two books.** The business and personal QIF files become two separate files,
 with no query that can reach across them. `Books.spectable` sets out what is per
-book, which is very nearly everything: accounts, categories, payees, rules, OFX
-account mappings, fiscal year, and the bank CSV profiles and header aliases too.
+book, which is very nearly everything: accounts, categories, payees, rules, the
+bank id and account number each account carries, fiscal year, and the bank CSV
+profiles and header aliases too.
 A profile describes the bank rather than either book, so sharing it would save
 setting the same layout up twice; that repetition is accepted, because a book
 that cannot be opened, copied or carried to another machine on its own is the
@@ -77,7 +78,7 @@ Implemented so far, in `src/`:
 | `account_type.h` | The three enumerations, the class and display-sign rules |
 | `date.h` | A date to the day, civil-calendar arithmetic, the two-digit year window |
 | `date_parse.h` | QIF and CSV date reading, and what a file's own dates prove |
-| `posting.h` | Posting, Transaction, the balance rule, register entry, Uncategorized |
+| `transaction.h` | The transaction, the balance rule, the split and transfer shape, register entry, Uncategorized |
 | `qif_lexer.h` | Sections, cleared markers, amounts, split signs, account mapping, split ratio |
 | `csv_headers.h` | Heading normalisation, the alias table, amount styles |
 | `payee_rules.h` | Pattern matching and which rule wins |
@@ -85,6 +86,7 @@ Implemented so far, in `src/`:
 | `holding.h` | Holding value, averaged price, staleness |
 | `report_ranges.h` | Named date ranges and fiscal years |
 | `chart.h` | The account tree: adding, renaming, moving, deleting, hiding, retyping |
+| `transfer_match.h` | The half of a payment already in the book that a reviewed row could pair with |
 | `ledger.h` | Postings, raw and display balances, roll-ups, balance as at a date, net worth, opening balances |
 
 Chosen in that order because the reconciliation against Quicken had already

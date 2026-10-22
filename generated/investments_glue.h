@@ -54,7 +54,6 @@ public:
             a.placeholder = parse_bool_cell(value.placeholder);
             a.hidden = parse_bool_cell(value.hidden);
             a.alias = blank(value.alias);
-            a.payment_payee = blank(value.paymentpayee);
             a.bank = blank(value.bank);
             a.account_number = blank(value.accountnumber);
             chart_.put(a);

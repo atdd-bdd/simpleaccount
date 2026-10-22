@@ -42,7 +42,6 @@ public:
             a.placeholder = parse_bool_cell(value.placeholder);
             a.hidden = parse_bool_cell(value.hidden);
             a.alias = blank(value.alias);
-            a.payment_payee = blank(value.paymentpayee);
             chart_.put(a);
         }
         apply_counts();
@@ -269,13 +268,8 @@ private:
         s.placeholder = a.placeholder ? "true" : "false";
         s.hidden = a.hidden ? "true" : "false";
         s.alias = a.alias.empty() ? "none" : a.alias;
-        s.paymentpayee = a.payment_payee.empty() ? "none" : a.payment_payee;
         s.bank = a.bank.empty() ? "none" : a.bank;
-        // Nothing to read back: the program keeps no routing number on an
-        // account yet, so the only honest answer here is that none is known.
-        // The scenarios that state one are $TBD until the field exists, and
-        // this line is what has to change when it does.
-        s.bankid = "none";
+        s.bankid = a.bank_id.empty() ? "none" : a.bank_id;
         s.accountnumber = a.account_number.empty() ? "none" : a.account_number;
         return s;
     }
@@ -288,10 +282,6 @@ private:
         }
     }
 
-    void set_count(const std::string& path, const std::vector<PostingCountString>& v) {
-        for (const auto& value : v) counts_[path] = std::stoi(value.count);
-        apply_counts();
-    }
 
     void apply_counts() { chart_.set_posting_counts(counts_); }
 public:
@@ -447,8 +437,23 @@ public:
             const chart::Account* a = chart_.find(value.path);
             ASSERT_NE(nullptr, a) << "no account " << value.path;
             EXPECT_EQ(blank(value.bank), a->bank) << value.path << " bank";
+            EXPECT_EQ(blank(value.bankid), a->bank_id)
+                << value.path << " bank id";
             EXPECT_EQ(blank(value.accountnumber), a->account_number)
                 << value.path << " account number";
+
+            // Read off the transaction rather than out of a field, because the
+            // transaction is where it is. An account with none shows zero, and
+            // the date beside a zero says nothing -- which is why the scenario
+            // that has no balance writes ?DNC? for the date.
+            const edit::Starting starting =
+                edit::starting_balance_of(chart_, transactions_, value.path);
+            if (value.startingbalance.value != DNCString)
+                EXPECT_EQ(Money(value.startingbalance).cents(), starting.stated.cents())
+                    << value.path << " starting balance";
+            if (value.startingdate != DNCString)
+                EXPECT_EQ(value.startingdate, starting.on.iso())
+                    << value.path << " starting date";
         }
     }
 
@@ -460,10 +465,45 @@ public:
             ASSERT_NE(nullptr, existing) << "no account " << value.path;
             chart::Account a = *existing;
             a.bank = blank(value.bank);
+            a.bank_id = trimmed(blank(value.bankid));
             a.account_number = trimmed(blank(value.accountnumber));
             chart_.put(a);
+
+            // The starting balance is the transaction against opening equity,
+            // so changing it in the dialog writes, changes or removes that
+            // transaction. The ledger is rebuilt from the transactions
+            // afterwards, because the balances a Then reads come off it.
+            if (value.startingbalance.value == DNCString) continue;
+            types::Date on(2005, 1, 1);
+            if (value.startingdate != DNCString) {
+                const auto parsed = types::Date::from_iso(value.startingdate);
+                if (parsed) on = *parsed;
+            }
+            edit::set_starting_balance(&chart_, &transactions_, value.path,
+                                       Money(value.startingbalance), on);
+            rebuild_ledger();
         }
     }
+
+    // Every transaction as the pair of amounts it is, which is what the ledger
+    // here holds. Thrown away and built again rather than adjusted: a
+    // half-updated balance is how a figure comes to disagree with the register
+    // beside it.
+    void rebuild_ledger() {
+        ledger_ = ledger::Ledger();
+        for (const ledger::Transaction& t : transactions_) {
+            const std::string source = chart_.path_for_ref(t.source_account);
+            const std::string destination = chart_.path_for_ref(t.destination);
+            if (!source.empty())
+                ledger_.add({t.date, types::AccountPath(source), t.amount});
+            if (!destination.empty())
+                ledger_.add({t.date, types::AccountPath(destination), -t.amount});
+        }
+    }
+
+    // The transactions of the book, kept beside the ledger of amounts because
+    // the starting balance is one of them.
+    std::vector<ledger::Transaction> transactions_;
 
     // Writes the chart to a book of its own and reads it straight back,
     // replacing chart_ -- the same round trip the window makes when it saves
@@ -671,6 +711,7 @@ public:
     // so both sides of the one transaction are added to it.
     void given_transactions_are(const std::vector<TransactionString>& values) {
         ledger_ = ledger::Ledger();
+        transactions_.clear();
         for (const auto& value : values) {
             types::Date on(2024, 1, 1);
             const auto parsed = types::Date::from_iso(value.date);
@@ -682,6 +723,20 @@ public:
                 ledger_.add({on, types::AccountPath(source), amount});
             if (!destination.empty())
                 ledger_.add({on, types::AccountPath(destination), -amount});
+
+            // The same rows again as transactions, because the starting balance
+            // of an account is one of them rather than a field of its own, and
+            // the dialog edits the transaction.
+            ledger::Transaction t;
+            t.id = ledger::new_id();
+            t.ref = types::TransactionRef(value.ref);
+            t.date = on;
+            t.payee = types::PayeeName(blank(value.payee));
+            t.memo = blank(value.memo);
+            t.source_account = chart_.ref_for_path(source);
+            t.destination = chart_.ref_for_path(destination);
+            t.amount = amount;
+            transactions_.push_back(t);
         }
     }
 

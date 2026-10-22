@@ -10,7 +10,7 @@
 #include "date.h"
 #include "ledger.h"
 #include "money.h"
-#include "posting.h"
+#include "transaction.h"
 #include "balance_sheet.h"
 #include "report.h"
 #include "report_ranges.h"

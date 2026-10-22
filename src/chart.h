@@ -137,11 +137,6 @@ struct Account {
     // A short way to type this account when categorising; see the finding rule
     // in Accounts.spectable. Empty for most accounts.
     std::string alias;
-    // What a payment to this account is called on the statement of whatever
-    // account pays it -- CHASEBANK on the bank statement, for a Chase card.
-    // It is how a payment on one side finds the account on the other without
-    // searching every account in the book. Several accounts may share one.
-    std::string payment_payee;
     // What is kept about the account itself, from its own dialog: which
     // institution it is at, and the number on the statement. The number is
     // kept exactly as written -- dashes, spaces, a leading zero -- because it
@@ -149,6 +144,11 @@ struct Account {
     // Accounts.spectable.
     std::string bank;
     std::string account_number;
+    // What the institution calls itself in a download -- its routing number.
+    // Not typed by anybody as a rule: the first download confirmed for the
+    // account writes it down, so that the one after that is placed without
+    // asking. See the teaching rule in ImportOfx.spectable.
+    std::string bank_id;
 };
 
 // Why an operation was refused. The text is what the register shows, so it names

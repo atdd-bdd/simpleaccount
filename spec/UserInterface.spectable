@@ -664,12 +664,12 @@ Then bottom panel tabs are : BottomPanelTabRow
 # and the review opens below the register it is about to change. No tab is
 # opened and none is switched to: the answer was already on the screen.
 
-Scenario An import with nothing to go on and no register in front is refused
-Description There is no register to compare against, so there is nothing to
-\ judge a proposed row by, and the file offered nothing of its own.
-\ Said rather than guessed at: importing into whichever register
-\ happened to be open last is how a statement ends up in the wrong
-\ account.
+Scenario An import with nothing to go on asks which account it is for
+Description There is no register to fall back on and the file named nothing, so
+\ nothing is proposed -- and the dialog is shown all the same, with an
+\ empty account line waiting to be filled in. Importing into whichever
+\ register happened to be open last is how a statement ends up in the
+\ wrong account; asking is not.
 Given the chart of accounts is as previous
 Given transactions are as previous
 When report run : ReportSpec Vertical
@@ -680,13 +680,42 @@ When report run : ReportSpec Vertical
 When import file chosen : ImportFileChosen Vertical
 | FileName | download.csv |
 | Format   | Csv          |
-Then the import is refused saying
-"""
-Open the register this statement is for, then import into it.
-"""
-# Refused once the file has been chosen rather than when the import was asked
-# for, because until the file has been looked at it is not known that there is
-# nothing to go on -- the same keystroke on a QFX has an answer.
+Then import confirmation is : ImportConfirmation Vertical
+| Shown    | true         |
+| FileName | download.csv |
+| Account  | none         |
+| Source   | NoneOffered  |
+# Shown with Account empty, which is the one state the dialog could not be in
+# before: NoneOffered used to mean the dialog never opened at all.
+
+Scenario An account named in the empty dialog is where the statement goes
+Description The answer the program could not work out, given by the person who
+\ has the statement in front of them. Nothing else about the import
+\ is different for having been asked rather than proposed.
+Given the chart of accounts is as previous
+Given transactions are as previous
+Given the file holds : ImportReviewRow
+| Line | Date       | Payee  | Category           | Amount |
+| 1    | 2026-02-02 | Amazon | Expenses:Groceries | -31.00 |
+When report run : ReportSpec Vertical
+| GroupBy  | Category   |
+| From     | 2026-01-01 |
+| To       | 2026-12-31 |
+| Interval | Whole      |
+When import file chosen : ImportFileChosen Vertical
+| FileName | download.csv |
+| Format   | Csv          |
+When import confirmed into : AccountSelect
+| Path             |
+| Liabilities:Visa |
+Then import review rows are : ImportReviewRow
+| Line | Payee  | Account          | Category           | Amount |
+| 1    | Amazon | Liabilities:Visa | Expenses:Groceries | -31.00 |
+Then panes are : PaneState
+| Pane | Showing  | Account          | Active |
+| 1    | Register | Liabilities:Visa | true   |
+# The register opens because the import is about to change it, exactly as it
+# does when the account was proposed and confirmed.
 
 # ---------------------------------------------------------------------------
 # Where an import is going is said before it goes there
@@ -771,7 +800,7 @@ Examples: EnumerationValues
 | File        | The file named it and the book has it                         |
 | FileName    | The name of the file fitted one account and only one          |
 | ActiveTab   | Neither did, so the register in front                         |
-| NoneOffered | Nothing to propose. The import is refused rather than guessed |
+| NoneOffered | Nothing to propose. The dialog asks with no account in it      |
 
 Attributes ImportConfirmation
 Description The dialog, as it stands. Shown is false before a file is chosen and
@@ -805,8 +834,12 @@ Details A candidate is an account a register can be opened on: not a
 \
 \ The last row is the one case with no answer at all: a file that says
 \ nothing, read while a report is in front, so there is no register to
-\ fall back on. That is refused with the message below rather than
-\ proposed, because there is nothing a person could usefully confirm.
+\ fall back on. The dialog is shown anyway, with nothing in the account
+\ line, and the account is named there. A person holding a statement
+\ knows which account it is for; this program being unable to work it
+\ out is no reason to refuse to read the file. Refusing it was the
+\ earlier rule here, and what it amounted to was making a statement
+\ unreadable because no register happened to be open.
 Examples: ImportTargetProposal
 | Format | AccountInFile    | FromName        | ActiveTab        | Proposed         | Source      |
 | Qfx    | Liabilities:Visa | none            | Assets:Checking  | Liabilities:Visa | File        |
@@ -894,7 +927,6 @@ Then bottom panel is : BottomPanel Vertical
 # Nothing has happened yet but the asking. The tab in front is still the tab in
 # front and the file has not been read.
 
-$TBD
 Scenario The dialog shows the bank id and the account number the download names
 Description The two lines that come from the bank rather than from this
 \ program. The account offered is right, and the numbers are what
@@ -924,7 +956,6 @@ Then import confirmation is : ImportConfirmation Vertical
 # the file naming a number no account carries -- the dialog still shows the
 # file's, since the file is what is being read.
 
-$TBD
 Scenario A CSV states no numbers, so the dialog shows none
 Description A CSV says nothing about the bank or the account, so there is
 \ nothing to show and the dialog does not pretend otherwise. The
@@ -1925,6 +1956,200 @@ Then bottom panel is : BottomPanel Vertical
 | ActiveTab | 1    |
 
 # ---------------------------------------------------------------------------
+# Asking whether two rows are one transfer
+# ---------------------------------------------------------------------------
+
+Description A row being reviewed can be the other half of a transaction the book
+\ already has. The amount and the date are all there is to say so, and
+\ that is not enough to act on, so the question is put while the review
+\ is still open.
+Details Which rows pair with which is in ImportOfx, under the rule about a half
+\ already in the book. This section is only what the window does with
+\ one: a question per candidate, naming both halves -- each one's
+\ account, date and payee, as its own file wrote it -- and the gap in
+\ days, which is the thing a person most needs in order to disagree.
+\
+\ Nothing is written while a question is open, and an unanswered question
+\ is not a refusal. Leaving one alone says the two are separate, which is
+\ the safe reading, and the review can be accepted with questions still
+\ unanswered. What cannot happen is a pairing being made without having
+\ been answered.
+\
+\ Not asking at all was the earlier rule, and the cost of it was every
+\ card payment that stayed two transactions and counted twice in the
+\ spending. Asking a question a person can answer in a second is a much
+\ smaller cost than that.
+
+# The dialog's own wording is in the app, where a spec test cannot read it,
+# and the third answer does not remember anything yet.
+BusinessRule What the transfer question says
+Description Enough of both halves to tell two separate payments of the same
+\ amount from one transfer, and no more than that.
+Details The heading is a question rather than a statement because the program
+\ does not know the answer. Everything under it is quoted from a file or
+\ from the book, so that none of it is this program's own reasoning
+\ repeated back.
+Examples: TransferQuestionLine
+| Line      | Reads                                                          |
+| Heading   | Are these the same payment                                     |
+| FirstHalf | The account, date and payee of the half already in the book     |
+| OtherHalf | The account, date and payee of the row being reviewed           |
+| Gap       | How many days apart the two dates are                           |
+| Answers   | Yes; No; Yes, and do not ask again for these two                |
+
+Attributes TransferQuestionLine
+| Attribute | Type | Default |
+| Line      | Text |         |
+| Reads     | Text |         |
+
+Attributes TransferQuestion
+Description The question as it stands. Shown is false when there is nothing to
+\ ask, and after the last question has been answered.
+| Attribute   | Type        | Default    |
+| Shown       | Boolean     | true       |
+| FromAccount | AccountPath | none       |
+| FromDate    | Date        | 2026-01-01 |
+| FromPayee   | Text        | none       |
+| ToAccount   | AccountPath | none       |
+| ToDate      | Date        | 2026-01-01 |
+| ToPayee     | Text        | none       |
+| Amount      | Money       | 0.00       |
+| DaysApart   | Integer     | 0          |
+
+# YesAndRemember is not told from Yes yet.
+DataType TransferAnswer
+Description What the person said to one question.
+Examples: EnumerationValues
+| Value          | Notes                                                      |
+| Yes            | One transfer; this once                                    |
+| No             | Two separate payments, and do not ask again about this row |
+| YesAndRemember | One transfer, and pair these two payees without asking     |
+
+Attributes TransferAnswerGiven
+| Attribute | Type           | Default |
+| Answer    | TransferAnswer | Yes     |
+
+Scenario A reviewed row that pairs with a transaction already here is asked about
+Description The card file is read a month after the checking file. The payment
+\ is already in the book as a row of the checking account with a
+\ category on it, and the card's own row of it is being reviewed now.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Checking   | false       |
+| Liabilities:Visa       | CreditCard | false       |
+| Expenses:Groceries     | Expense    | false       |
+| Expenses:Uncategorized | Expense    | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination            | Amount   |
+| T1  | Assets:Checking | 2026-03-02 | VISA PAYMENT | Expenses:Uncategorized | -3348.07 |
+Given the file holds : ImportReviewRow
+| Line | Date       | Payee            | Category               | Amount  |
+| 1    | 2026-03-03 | PAYMENT RECEIVED | Expenses:Uncategorized | 3348.07 |
+When import confirmed into : AccountSelect
+| Path             |
+| Liabilities:Visa |
+Then transfer question is : TransferQuestion Vertical
+| Shown       | true             |
+| FromAccount | Assets:Checking  |
+| FromDate    | 2026-03-02       |
+| FromPayee   | VISA PAYMENT     |
+| ToAccount   | Liabilities:Visa |
+| ToDate      | 2026-03-03       |
+| ToPayee     | PAYMENT RECEIVED |
+| Amount      | 3348.07          |
+| DaysApart   | 1                |
+# The amount and the one day are the whole of the case for these being one
+# payment, which is why it is a question and not a decision.
+
+Scenario Answering yes makes the two halves one transfer
+Description The card's row keeps its own payee and gets the checking account as
+\ its other side, and the row already in the book stops being an
+\ expense -- which is what keeps 3,348.07 out of the spending.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Checking   | false       |
+| Liabilities:Visa       | CreditCard | false       |
+| Expenses:Groceries     | Expense    | false       |
+| Expenses:Uncategorized | Expense    | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination            | Amount   |
+| T1  | Assets:Checking | 2026-03-02 | VISA PAYMENT | Expenses:Uncategorized | -3348.07 |
+Given the file holds : ImportReviewRow
+| Line | Date       | Payee            | Category               | Amount  |
+| 1    | 2026-03-03 | PAYMENT RECEIVED | Expenses:Uncategorized | 3348.07 |
+When import confirmed into : AccountSelect
+| Path             |
+| Liabilities:Visa |
+When transfer question answered : TransferAnswerGiven Vertical
+| Answer | Yes |
+Then import review rows are : ImportReviewRow
+| Line | Payee            | Account          | Category        | Amount  |
+| 1    | PAYMENT RECEIVED | Liabilities:Visa | Assets:Checking | 3348.07 |
+When import accepted
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Payee        | Category | Payment |
+| T1  | 2026-03-02 | VISA PAYMENT | [Visa]   | 3348.07 |
+# Both sides, because answering yes about one row and leaving the other as an
+# expense is the half-done state this whole question exists to avoid.
+
+Scenario Answering no leaves two transactions
+Description Two payments of the same amount in the same week, which is exactly
+\ what the amount and the date cannot tell apart. The person can, and
+\ saying so leaves both rows as they were.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Checking   | false       |
+| Liabilities:Visa       | CreditCard | false       |
+| Expenses:Groceries     | Expense    | false       |
+| Expenses:Uncategorized | Expense    | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination        | Amount  |
+| T1  | Assets:Checking | 2026-03-02 | HARRIS TEETER | Expenses:Groceries | -45.00 |
+Given the file holds : ImportReviewRow
+| Line | Date       | Payee  | Category           | Amount |
+| 1    | 2026-03-03 | REFUND | Expenses:Groceries | 45.00  |
+When import confirmed into : AccountSelect
+| Path             |
+| Liabilities:Visa |
+When transfer question answered : TransferAnswerGiven Vertical
+| Answer | No |
+Then transfer question is : TransferQuestion Vertical CompareOnly
+| Shown | false |
+Then import review rows are : ImportReviewRow
+| Line | Payee  | Account          | Category           | Amount |
+| 1    | REFUND | Liabilities:Visa | Expenses:Groceries | 45.00  |
+When import accepted
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Payee         | Category           | Payment |
+| T1  | 2026-03-02 | HARRIS TEETER | Expenses:Groceries | 45.00   |
+# Unchanged, and the row keeps the category the review gave it. Asking was
+# still right: the question cost a second and the wrong answer would have
+# lost one of two payments.
+
+Scenario A review with nothing to pair asks nothing
+Description The ordinary import, which is most of them. No question is shown
+\ and the review is the only thing on screen.
+Given the chart of accounts is as previous
+Given transactions are as previous
+Given the file holds : ImportReviewRow
+| Line | Date       | Payee  | Category           | Amount |
+| 1    | 2026-02-02 | Amazon | Expenses:Groceries | -31.00 |
+When import confirmed into : AccountSelect
+| Path             |
+| Liabilities:Visa |
+Then transfer question is : TransferQuestion Vertical CompareOnly
+| Shown | false |
+Then import review rows are : ImportReviewRow
+| Line | Payee  | Account          | Category           | Amount |
+| 1    | Amazon | Liabilities:Visa | Expenses:Groceries | -31.00 |
+
+# ---------------------------------------------------------------------------
 # More than one tab in the bottom panel
 # ---------------------------------------------------------------------------
 
@@ -2239,7 +2464,6 @@ Then find results are : FindResultRow
 | Ref | Date       | Payee         | Account         | Category           | Amount |
 | T2  | 2026-01-15 | Harris Teeter | Assets:Checking | Expenses:Groceries | -45.00 |
 
-$TBD
 BusinessRule The second amount field is only there for a range
 Description The dropdown is beside the amount, and it says Exact or Range.
 \ On Exact there is one field, labelled Amount. On Range there are
@@ -4016,3 +4240,565 @@ Examples: DispositionReading
 | Duplicate   | FitIdAdded      | Duplicate~-~identifier~added      |
 | Duplicate   | PayeeUnmatched  | Duplicate~-~payee~unmatched       |
 | Duplicate   | Uncleared       | Duplicate~-~uncleared             |
+
+# ---------------------------------------------------------------------------
+# Saying that something long is going on
+# ---------------------------------------------------------------------------
+
+Attributes ProgressReport
+Description What the window is saying about work in hand. Finished is true once
+\ the work is done, and the report goes away.
+| Attribute | Type    | Default |
+| What      | Text    | none    |
+| Done      | Integer | 0       |
+| Total     | Integer | 0       |
+| Reads     | Text    | none    |
+| Finished  | Boolean | false   |
+
+Attributes ProgressAdvance
+Description How far the work has got, so that a scenario can say so without a
+\ real file and a real clock.
+| Attribute | Type    | Default |
+| Done      | Integer | 0       |
+
+BusinessRule Work that takes a noticeable time says so, and does not take the window away
+Description An import of a twenty-year file and a recalculation of every
+\ balance both take long enough that a still window reads as a hung
+\ one. Each says what it is doing and how far it has got.
+Details Modeless, for two reasons. The first is that a modal dialog over a
+\ long import is a window that cannot be moved aside to look at what
+\ is underneath, and the thing underneath is usually the register the
+\ import is about to change. The second is that modal here would be a
+\ lie: the work is not a question, nothing is being asked, and the
+\ only thing the person can usefully do is stop it.
+\
+\ So it is a strip the window shows, not a dialog in front of it: what
+\ is going on, how far it has got, and a way to stop. Everything that
+\ was readable before stays readable. Nothing that would change the
+\ book is offered while the work runs, because a book changing under
+\ a recalculation is the one thing worse than a slow one.
+\
+\ Where there is a total it counts towards it, because a count with a
+\ total is a time estimate and a count alone is not. A file import
+\ knows its total: the rows were read before the first one was
+\ reviewed. A recalculation knows the number of transactions, so it
+\ has a total too. Something with no total counts what it has done
+\ and says so in those words rather than showing a bar filling up to
+\ a number nobody knows.
+\
+\ The threshold is a second. Work that finishes sooner never shows
+\ anything, because a strip that appears and goes in the same blink
+\ is worse than no strip -- the person sees a flicker and looks for
+\ what it said. So the report is asked for at the start and shown
+\ only if the work is still going a second later.
+Examples: ProgressShown
+| TheWork                      | HasATotal | WhatItSays                        |
+| Reading a file of 40 rows    | Yes       | Nothing; it is over within a second |
+| Importing 24,000 rows        | Yes       | Importing~--~8,000~of~24,000      |
+| Recalculating every balance  | Yes       | Recalculating~--~8,000~of~24,000  |
+| Opening a book               | No        | Opening~the~book                  |
+| A report over twenty years   | Yes       | Building~the~report~--~3~of~20~years |
+
+Attributes ProgressShown
+| Attribute  | Type   | Default |
+| TheWork    | String |         |
+| HasATotal  | String |         |
+| WhatItSays | String |         |
+
+Scenario An import of a long file says what it is doing and how far it has got
+Description The count is of rows, which is the unit the person chose the file
+\ in, rather than of transactions or of postings or of bytes.
+Given work in progress is : ProgressReport Vertical
+| What  | Importing |
+| Total | 24000     |
+When work has advanced to : ProgressAdvance Vertical
+| Done | 8000 |
+Then work in progress is : ProgressReport Vertical
+| What     | Importing              |
+| Done     | 8000                   |
+| Total    | 24000                  |
+| Reads    | Importing~-~8,000~of~24,000 |
+| Finished | false                  |
+
+Scenario Work with no total counts what it has done
+Description Opening a book does not know how much there is until it has read
+\ it, so there is nothing to count towards and the strip says what it
+\ is doing without pretending to know how long it will take.
+Given work in progress is : ProgressReport Vertical
+| What  | Opening~the~book |
+| Total | 0                |
+When work has advanced to : ProgressAdvance Vertical
+| Done | 1200 |
+Then work in progress is : ProgressReport Vertical
+| What     | Opening~the~book |
+| Done     | 1200             |
+| Total    | 0                |
+| Reads    | Opening~the~book |
+| Finished | false            |
+# No count in the words: a number with nothing to be a fraction of tells the
+# reader nothing they can use.
+
+Scenario Work that finishes takes its report away
+Description The strip is not a log. When the work is done the window goes back
+\ to what it was, and what the import did is said in the import's own
+\ notes; see the notes shown when the import finishes in ImportOfx.
+Given work in progress is : ProgressReport Vertical
+| What  | Importing |
+| Total | 24000     |
+When work has advanced to : ProgressAdvance Vertical
+| Done | 24000 |
+Then work in progress is : ProgressReport
+| What | Done | Total | Reads | Finished |
+# No rows: nothing is in progress, so there is no report at all.
+
+Scenario Stopping a recalculation leaves the book as it was
+Description The only thing the strip offers is a way to stop, so what stopping
+\ means has to be stated. A recalculation computes; it is the writing
+\ at the end that changes anything, and a stopped one never gets
+\ there.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Groceries | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
+| T1  | Assets:Checking | 2024-01-10 | Shop A | Expenses:Groceries | -10.00  |
+| T2  | Assets:Checking | 2024-01-11 | Shop B | Expenses:Groceries | -20.00  |
+When work in progress is stopped
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
+| T1  | Assets:Checking | 2024-01-10 | Shop A | Expenses:Groceries | -10.00  |
+| T2  | Assets:Checking | 2024-01-11 | Shop B | Expenses:Groceries | -20.00  |
+Then work in progress is : ProgressReport
+| What | Done | Total | Reads | Finished |
+# No rows. A stopped job is over, the same as a finished one, and the strip
+# goes away either way.
+
+# ---------------------------------------------------------------------------
+# Tags
+# ---------------------------------------------------------------------------
+
+Attributes TagListingRow
+Description One line of the tag listing: the tag, and how many transactions
+\ carry it.
+| Attribute | Type    | Default |
+| Name      | Text    |         |
+| Used      | Integer | 0       |
+
+Attributes TagEdit
+Description A tag being renamed from the listing.
+| Attribute | Type | Default |
+| WasName   | Text | none    |
+| Name      | Text | none    |
+
+Attributes TagTyped
+Description What has been typed into the tag column, what the program is
+\ offering against it, and what the field holds when the typing is
+\ accepted.
+| Attribute | Type | Default |
+| Typed     | Text | none    |
+| Offered   | Text | none    |
+| Accepted  | Text | none    |
+
+BusinessRule A tag is the third thing a transaction says about itself
+Description A category says what the money was for and an account says where it
+\ went. A tag says which part of the author's life it belongs to --
+\ which property, which company -- and it cuts across both of the
+\ others.
+Details This is why it is not a category. Repairs on the rental and repairs
+\ on the house are the same expense and want to be one line of a
+\ spending report; which of the two it was is the tag. A category
+\ tree that carried the distinction would have to carry it under
+\ every category that could be either, and that is the Quicken class
+\ mistake in reverse.
+\
+\ The field holds words, and every word in it is a tag. So a
+\ transaction can carry several -- "Rental Oak~Street" is two tags and
+\ not one tag with a space in it -- and a tag is therefore a single
+\ word. This is the author's own statement of it, and it is why the
+\ field stays one Text column on the transaction rather than becoming
+\ a table between transactions and tags: the words are the list, and
+\ splitting them is reading, not storage.
+\
+\ A tag with a space in it is therefore not available. Where one is
+\ wanted the words are joined -- OakStreet, Oak_Street -- which is the
+\ price of the field being a sentence rather than a reference. See the
+\ tag table rule in Books.
+\
+\ A split's parts carry the transaction's tags. A split exists because
+\ one payment covered several categories, not because it covered
+\ several properties, and a per-part tag would be a second way of
+\ saying what the category column already says.
+\
+\ No report groups by tag in this release; see the QIF migration note.
+\ The tags are kept, listed and typed, and what a report does with
+\ them comes after.
+Examples: WhatATagIsFor
+| Example                      | Category                  | TheField           | TagsItCarries |
+| Paint for the rental         | Expenses:Home:Maintenance | Rental             | 1             |
+| Paint for the house          | Expenses:Home:Maintenance | none               | 0             |
+| Paint for the rental kitchen | Expenses:Home:Maintenance | Rental~Kitchen     | 2             |
+| A client invoice paid        | Income:Consulting         | WarpAndByte        | 1             |
+| Groceries                    | Expenses:Groceries        | none               | 0             |
+
+Attributes WhatATagIsFor
+| Attribute      | Type    | Default |
+| Example        | String  |         |
+| Category       | String  |         |
+| TheField       | String  | none    |
+| TagsItCarries  | Integer | 0       |
+
+Scenario The tag listing is every tag with the number of transactions carrying it
+Description The same window as the account listing and the category listing,
+\ reached the same way, from the menu. A transaction whose field has
+\ two words counts towards both of them.
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type     | Placeholder |
+| Assets:Checking           | Checking | false       |
+| Expenses:Home:Maintenance | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination               | Amount  | Tag            |
+| T1  | Assets:Checking | 2024-01-10 | Home Depot | Expenses:Home:Maintenance | -100.00 | Rental         |
+| T2  | Assets:Checking | 2024-01-11 | Home Depot | Expenses:Home:Maintenance | -50.00  | Rental~Kitchen |
+| T3  | Assets:Checking | 2024-01-12 | Home Depot | Expenses:Home:Maintenance | -25.00  | none           |
+When tag listing opened
+Then tag listing rows are : TagListingRow
+| Name    | Used |
+| Kitchen | 1    |
+| Rental  | 2    |
+# In name order. T3 carries no tag and so is no row: an untagged transaction is
+# not a tag called nothing; see the two kinds of unknown in Transactions.
+
+Scenario A tag nothing carries is still in the listing
+Description The list is a vocabulary, so a tag is in it because it was used
+\ once and not because something is using it at the moment. A year
+\ with no rental transactions in it is not a reason to forget the
+\ word.
+Given tags are : TagListingRow
+| Name        | Used |
+| Rental      | 0    |
+| WarpAndByte | 0    |
+When tag listing opened
+Then tag listing rows are : TagListingRow
+| Name        | Used |
+| Rental      | 0    |
+| WarpAndByte | 0    |
+
+Scenario Renaming a tag renames that word on every transaction carrying it
+Description The tag is a word in a field, so a rename replaces the word and
+\ leaves the other words in the field alone.
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type     | Placeholder |
+| Assets:Checking           | Checking | false       |
+| Expenses:Home:Maintenance | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination               | Amount  | Tag            |
+| T1  | Assets:Checking | 2024-01-10 | Home Depot | Expenses:Home:Maintenance | -100.00 | Rental         |
+| T2  | Assets:Checking | 2024-01-11 | Home Depot | Expenses:Home:Maintenance | -50.00  | Rental~Kitchen |
+When tag renamed : TagEdit Vertical
+| WasName | Rental    |
+| Name    | OakStreet |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination               | Amount  | Tag               |
+| T1  | Assets:Checking | 2024-01-10 | Home Depot | Expenses:Home:Maintenance | -100.00 | OakStreet         |
+| T2  | Assets:Checking | 2024-01-11 | Home Depot | Expenses:Home:Maintenance | -50.00  | OakStreet~Kitchen |
+Then tag listing rows are : TagListingRow
+| Name      | Used |
+| Kitchen   | 1    |
+| OakStreet | 2    |
+
+BusinessRule Typing a tag works the way typing a category works
+Description The same completion, because a person typing into a register should
+\ not have to remember which columns help and which do not.
+Details The first character typed brings up the tags that match it, and one
+\ is taken by clicking it or by the selection button, exactly as the
+\ category column offers accounts and categories. The author asked
+\ for it in those words: this is the same way entering the letters of
+\ a category works.
+\
+\ Matching is on the word being typed and not on the whole field, so a
+\ second tag can be completed after a first one has been accepted. The
+\ word being typed is the one after the last space.
+\
+\ Matching ignores case, as the category column's does, and a tag that
+\ is a prefix of another can still be typed in full: the offer is an
+\ offer, and typing on past it replaces it.
+\
+\ A word that matches no tag is accepted and added to the table. This
+\ is the one place a tag is created, which is why the listing needs no
+\ New button for the common case: tagging a transaction with a word
+\ nobody has used before is how a tag comes to exist.
+\
+\ Nothing is offered for an empty column, and nothing offers to
+\ complete a tag to the empty string. Clearing the column takes every
+\ tag off the transaction; it does not create a tag with no name.
+Examples: TagCompletion
+| Typed          | Offered     | Notes                                           |
+| none           | none        | Nothing typed, nothing offered                  |
+| R              | Rental      | The first character is enough to bring the list |
+| r              | Rental      | Case is ignored, as in the category column      |
+| Ren            | Rental      |                                                 |
+| W              | WarpAndByte |                                                 |
+| Z              | none        | No tag starts with Z; what is typed stands      |
+| Rental~K       | Kitchen     | The word being typed is the one after the space |
+| Rental~Kitchen | Kitchen     | Typing a word out in full is still a match      |
+
+Attributes TagCompletion
+| Attribute | Type   | Default |
+| Typed     | String | none    |
+| Offered   | String | none    |
+| Notes     | String | none    |
+
+Scenario A word nobody has used before is a new tag
+Description The common way a tag comes to exist. It is on the transaction and
+\ in the listing afterwards, and the next transaction can complete
+\ it.
+Given tags are : TagListingRow
+| Name   | Used |
+| Rental | 0    |
+When tag typed is : TagTyped Vertical
+| Typed    | OakStreet |
+| Accepted | OakStreet |
+Then tag listing rows are : TagListingRow
+| Name      | Used |
+| OakStreet | 0    |
+| Rental    | 0    |
+# Listed in name order, which is the order the listing is in. Used is 0 because
+# this scenario is about the table and not about a transaction.
+
+Scenario Clearing the tag column takes the tags off and creates nothing
+Description A tag with no name is not a tag. The transaction goes back to
+\ carrying none, and the listing is as it was.
+Given tags are : TagListingRow
+| Name   | Used |
+| Rental | 0    |
+When tag typed is : TagTyped Vertical
+| Typed    | none |
+| Accepted | none |
+Then tag listing rows are : TagListingRow
+| Name   | Used |
+| Rental | 0    |
+
+# ---------------------------------------------------------------------------
+# Naming a real account in the destination column
+# ---------------------------------------------------------------------------
+
+Attributes DestinationTyped
+Description The line being edited and the destination just put into it.
+| Attribute   | Type           | Default |
+| Ref         | TransactionRef |         |
+| Destination | AccountPath    |         |
+
+Attributes TransferCandidateRow
+Description One transaction in the named account that could be the other half
+\ of this one, read off the book. Closest in days first.
+| Attribute | Type           | Default    |
+| Ref       | TransactionRef |            |
+| Account   | AccountPath    | none       |
+| Date      | Date           | 2026-01-01 |
+| Payee     | Text           | none       |
+| Amount    | Money          | 0.00       |
+| Cleared   | ClearedStatus  | Uncleared  |
+| DaysApart | Integer        | 0          |
+
+Attributes TransferCandidateChoice
+Description Which candidate was chosen, or none. None is a real answer and not
+\ an unanswered question; see the rule.
+| Attribute | Type | Default |
+| Ref       | Text | none    |
+
+BusinessRule Naming an account in the destination column looks for the other half
+Description A category typed into the destination column is the end of the
+\ matter. A real account is not: the account on the other side may
+\ already have its own transaction for this payment, and now there are
+\ two records of one thing.
+Details This is the same question the import asks, asked from the register
+\ instead, and it is asked for the same reason. Somebody who records
+\ a card payment in the checking register and then downloads the card
+\ has the payment twice; somebody who downloads both has it twice; and
+\ somebody who types both has it twice. The moment to ask is the
+\ moment the second account is named, because that is the first moment
+\ there is anything to ask about.
+\
+\ What makes a candidate is what makes one for an import: equal and
+\ opposite to the cent, in the account just named, within the transfer
+\ window of two days, and not already paired with anything. The payee
+\ is not consulted -- most payments have none recorded against the
+\ other account -- and the candidates are offered closest in days
+\ first. See the rule about a half already in the book in ImportOfx:
+\ this is that rule, reached from the register.
+\
+\ Choosing a candidate leaves one transaction where there were two. A
+\ transfer is one transaction naming both accounts, so the pairing is
+\ a merge and not a link: the transaction being edited keeps its own
+\ date, payee and memo, names the other account as its destination,
+\ and the transaction that was in the other register is gone. Its
+\ cleared status is not lost -- a half the bank has reported stays
+\ reported -- so the merged transaction is cleared if either half was.
+\
+\ Answering none says the other account has no record of this yet.
+\ That is the ordinary case and it creates nothing: the transaction
+\ already names both accounts, so it is already a line in the other
+\ register, and that line is uncleared because no bank has reported
+\ it. What none rules out is the merge, not the transfer.
+\
+\ A destination that is a category, a destination that is Unassigned,
+\ and a destination that is a real account with no candidate in it are
+\ all silent. The question is only asked when there is something to
+\ choose between, because a dialog that says "there is nothing to ask
+\ you" is worse than no dialog.
+Examples: DestinationNamed
+| WhatIsTyped                              | WhatHappens                                   |
+| A category                               | Nothing; the category is the whole answer     |
+| Unassigned                               | Nothing; the account is not known yet         |
+| An account with no equal and opposite transaction | Nothing; it is a transfer and that is all |
+| An account with one                      | The candidate is offered                      |
+| An account with three                    | All three are offered, closest in days first  |
+
+Attributes DestinationNamed
+| Attribute   | Type   | Default |
+| WhatIsTyped | String |         |
+| WhatHappens | String |         |
+
+Scenario A destination changed to an account offers the matching transaction
+Description The card payment entered in the checking register, and the card
+\ register already holding the other side of it. Naming the card is
+\ what finds it.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Liabilities:Visa       | CreditCard | false     |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee        | Destination            | Amount   | Cleared   |
+| T1  | Assets:Checking  | 2026-02-10 | Visa~Payment | Expenses:Uncategorized | -3348.07 | Uncleared |
+| T2  | Liabilities:Visa | 2026-02-12 | Payment      | Expenses:Uncategorized | 3348.07  | Cleared   |
+When destination typed is : DestinationTyped Vertical
+| Ref         | T1               |
+| Destination | Liabilities:Visa |
+Then transfer candidates are : TransferCandidateRow
+| Ref | Account          | Date       | Payee   | Amount  | Cleared | DaysApart |
+| T2  | Liabilities:Visa | 2026-02-12 | Payment | 3348.07 | Cleared | 2         |
+
+Scenario Choosing the match leaves one transfer where there were two transactions
+Description The merge. One transaction afterwards, naming both accounts, and it
+\ is cleared because the card half was.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Liabilities:Visa       | CreditCard | false     |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee        | Destination            | Amount   | Cleared   |
+| T1  | Assets:Checking  | 2026-02-10 | Visa~Payment | Expenses:Uncategorized | -3348.07 | Uncleared |
+| T2  | Liabilities:Visa | 2026-02-12 | Payment      | Expenses:Uncategorized | 3348.07  | Cleared   |
+When destination typed is : DestinationTyped Vertical
+| Ref         | T1               |
+| Destination | Liabilities:Visa |
+When transfer candidate chosen : TransferCandidateChoice Vertical
+| Ref | T2 |
+Then transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee        | Destination      | Amount   | Cleared |
+| T1  | Assets:Checking  | 2026-02-10 | Visa~Payment | Liabilities:Visa | -3348.07 | Cleared |
+# T2 is gone: it was the other half, and a transfer is one transaction. T1 keeps
+# its own date and payee, and keeps the cleared status the card half brought.
+
+Scenario Choosing none leaves an uncleared line in the other register
+Description The ordinary case. The card has not reported the payment yet, so
+\ nothing in that register is the other half, and the transfer itself
+\ is what puts a line there.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Liabilities:Visa       | CreditCard | false     |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee        | Destination            | Amount   | Cleared   |
+| T1  | Assets:Checking  | 2026-02-10 | Visa~Payment | Expenses:Uncategorized | -3348.07 | Uncleared |
+| T2  | Liabilities:Visa | 2026-02-12 | Payment      | Expenses:Uncategorized | 3348.07  | Cleared   |
+When destination typed is : DestinationTyped Vertical
+| Ref         | T1               |
+| Destination | Liabilities:Visa |
+When transfer candidate chosen : TransferCandidateChoice Vertical
+| Ref | none |
+Then transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee        | Destination            | Amount   | Cleared   |
+| T1  | Assets:Checking  | 2026-02-10 | Visa~Payment | Liabilities:Visa       | -3348.07 | Uncleared |
+| T2  | Liabilities:Visa | 2026-02-12 | Payment      | Expenses:Uncategorized | 3348.07  | Cleared   |
+When register opened on : AccountSelect
+| Path             |
+| Liabilities:Visa |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Payee        | Category    | Cleared   |
+| T1  | 2026-02-10 | Visa~Payment | [Checking]  | Uncleared |
+| T2  | 2026-02-12 | Payment      | Expenses:Uncategorized | Cleared |
+# The transfer is a line in the card register without anything having been
+# created, because the one transaction names both accounts. T2 is left alone:
+# saying none says these two are not the same payment.
+
+Scenario A category in the destination column asks nothing
+Description Stated so that the question cannot start appearing on ordinary
+\ typing. Most of what goes in that column is a category and none of
+\ it is a transfer.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Liabilities:Visa       | CreditCard | false     |
+| Expenses:Groceries     | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee        | Destination            | Amount   | Cleared   |
+| T1  | Assets:Checking  | 2026-02-10 | Harris~Teeter | Expenses:Uncategorized | -3348.07 | Uncleared |
+| T2  | Liabilities:Visa | 2026-02-12 | Payment      | Expenses:Uncategorized | 3348.07  | Cleared   |
+When destination typed is : DestinationTyped Vertical
+| Ref         | T1                 |
+| Destination | Expenses:Groceries |
+Then transfer candidates are : TransferCandidateRow
+| Ref | Account | Date | Payee | Amount | Cleared | DaysApart |
+# No rows: a category is the whole answer, even though an equal and opposite
+# transaction happens to exist in another account.
+
+Scenario An account with nothing equal and opposite in it asks nothing
+Description A transfer to an account that has no record of it is the common
+\ case, and it is silent. Nothing is offered and nothing is asked.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Assets:Savings         | Savings  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee    | Destination            | Amount  | Cleared   |
+| T1  | Assets:Checking | 2026-02-10 | Transfer | Expenses:Uncategorized | -500.00 | Uncleared |
+When destination typed is : DestinationTyped Vertical
+| Ref         | T1             |
+| Destination | Assets:Savings |
+Then transfer candidates are : TransferCandidateRow
+| Ref | Account | Date | Payee | Amount | Cleared | DaysApart |
+# No rows.
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee    | Destination    | Amount  | Cleared   |
+| T1  | Assets:Checking | 2026-02-10 | Transfer | Assets:Savings | -500.00 | Uncleared |
+
+Scenario Three candidates are offered closest in days first
+Description Three equal and opposite transactions in the named account inside
+\ the window. The order is the order the question asks them in, and
+\ the nearest date is the likeliest pairing.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Liabilities:Visa       | CreditCard | false     |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee        | Destination            | Amount  | Cleared   |
+| T1  | Assets:Checking  | 2026-02-10 | Visa~Payment | Expenses:Uncategorized | -100.00 | Uncleared |
+| T2  | Liabilities:Visa | 2026-02-12 | Payment~A    | Expenses:Uncategorized | 100.00  | Cleared   |
+| T3  | Liabilities:Visa | 2026-02-11 | Payment~B    | Expenses:Uncategorized | 100.00  | Cleared   |
+| T4  | Liabilities:Visa | 2026-02-10 | Payment~C    | Expenses:Uncategorized | 100.00  | Uncleared |
+When destination typed is : DestinationTyped Vertical
+| Ref         | T1               |
+| Destination | Liabilities:Visa |
+Then transfer candidates are : TransferCandidateRow
+| Ref | Account          | Date       | Payee     | Amount | Cleared   | DaysApart |
+| T4  | Liabilities:Visa | 2026-02-10 | Payment~C | 100.00 | Uncleared | 0         |
+| T3  | Liabilities:Visa | 2026-02-11 | Payment~B | 100.00 | Cleared   | 1         |
+| T2  | Liabilities:Visa | 2026-02-12 | Payment~A | 100.00 | Cleared   | 2         |

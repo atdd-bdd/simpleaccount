@@ -12,7 +12,7 @@
 #include "date.h"
 #include "ledger.h"
 #include "money.h"
-#include "posting.h"
+#include "transaction.h"
 #include "register_entry.h"
 #include "register_lines.h"
 #include "report.h"
@@ -21,6 +21,10 @@
 #include "transaction_edit.h"
 #include "store_sqlite.h"
 #include "ui_model.h"
+#include "progress.h"
+#include "tags.h"
+#include "find.h"
+#include "transfer_match.h"
 
 // Glue for UserInterface.spectable.
 //
@@ -206,6 +210,18 @@ public:
         workspace().accept_import();
         redraw_reports();
     }
+
+    void when_transfer_question_answered(const std::vector<TransferAnswerGivenString>& values) {
+        for (const auto& value : values) {
+            // Plain assignment rather than .value: a cell whose DataType is
+            // tagged out of the run arrives as a bare string, and the wrapper
+            // converts to one implicitly, so this reads either shape.
+            const std::string answer = value.answer;
+            ASSERT_TRUE(answer == "Yes" || answer == "No" || answer == "YesAndRemember")
+                << "not an answer to the transfer question: " << answer;
+            workspace().answer_transfer_question(answer != "No");
+        }
+    }
     void when_import_cancelled() { workspace().cancel_import(); }
 
     // ----------------------------------------------------------------- thens
@@ -272,6 +288,27 @@ public:
         }
     }
 
+    // A question that is not being asked says nothing else, so a table that
+    // states Shown false is asking about that and no more. The full table is
+    // compared field by field, because every one of them is something a person
+    // reads before answering.
+    void then_transfer_question_is(const std::vector<TransferQuestionString>& values) {
+        ASSERT_FALSE(values.empty());
+        const TransferQuestionString& want = values.front();
+        const ui::Workspace::TransferQuestion& got = workspace().transfer_question();
+        const bool shown = parse_bool_cell(want.shown);
+        ASSERT_EQ(shown, got.shown) << "whether a transfer question is being asked";
+        if (!shown) return;
+        EXPECT_EQ(want.fromaccount.value, got.from_account) << "from account";
+        EXPECT_EQ(want.fromdate, got.from_date.iso()) << "from date";
+        EXPECT_EQ(blank(want.frompayee), got.from_payee) << "from payee";
+        EXPECT_EQ(want.toaccount.value, got.to_account) << "to account";
+        EXPECT_EQ(want.todate, got.to_date.iso()) << "to date";
+        EXPECT_EQ(blank(want.topayee), got.to_payee) << "to payee";
+        EXPECT_EQ(Money(want.amount.value).cents(), got.amount.cents()) << "amount";
+        EXPECT_EQ(std::stoll(want.daysapart), got.days_apart) << "days apart";
+    }
+
     void then_import_review_rows_are(const std::vector<ImportReviewRowString>& values) {
         const std::vector<ui::ReviewRow>& got = workspace().review();
         ASSERT_EQ(values.size(), got.size()) << "number of review rows";
@@ -287,6 +324,11 @@ public:
                 EXPECT_EQ(values[i].account.value, got[i].account) << "row " << i << " account";
             if (!dnc(values[i].disposition.value))
                 EXPECT_EQ(values[i].disposition.value, got[i].disposition) << "row " << i;
+            // Where the other side of the row goes. A blank states nothing:
+            // the column is left out of most of these tables, and a row
+            // waiting to be reviewed may have nothing there yet.
+            if (!dnc(values[i].category.value) && !blank(values[i].category.value).empty())
+                EXPECT_EQ(values[i].category.value, got[i].category) << "row " << i << " category";
             if (!dnc(values[i].accepted))
                 EXPECT_EQ(parse_bool_cell(values[i].accepted), got[i].accepted)
                     << "row " << i << " accepted";
@@ -1101,6 +1143,7 @@ public:
             t.payee = types::PayeeName(blank(value.payee.value));
             t.check_no = types::CheckNumber(blank(value.checkno.value));
             t.memo = blank(value.memo);
+            t.tag = blank(value.tag);
             t.source_account = chart_.ref_for_path(blank(value.sourceaccount.value));
             t.destination = chart_.ref_for_path(blank(value.destination.value));
             t.amount = Money(value.amount.value);
@@ -1241,8 +1284,9 @@ public:
     // import works out and this specification takes as given.
     void when_import_file_chosen(const std::vector<ImportFileChosenString>& values) {
         for (const auto& value : values)
-            import_refusal_ =
-                workspace().choose_import_file(value.filename, blank(value.accountinfile.value));
+            import_refusal_ = workspace().choose_import_file(
+                value.filename, blank(value.accountinfile.value), blank(value.bankid),
+                blank(value.accountnumber));
     }
 
     void then_import_confirmation_is(const std::vector<ImportConfirmationString>& values) {
@@ -1254,6 +1298,11 @@ public:
             if (!dnc(value.account.value)) EXPECT_EQ(blank(value.account.value), got.account) << "account";
             if (!dnc(value.source.value))
                 EXPECT_EQ(value.source.value, importing::to_string(got.source)) << "source";
+            if (!dnc(value.bankid))
+                EXPECT_EQ(blank(value.bankid), got.bank_id) << "bank id";
+            if (!dnc(value.accountnumber))
+                EXPECT_EQ(blank(value.accountnumber), got.account_number)
+                    << "account number";
         }
     }
 
@@ -1573,9 +1622,22 @@ public:
         EXPECT_FALSE(values.empty()) << "the rule states no reasons";
     }
 
-    void examples_businessrule_the_second_amount_field_is_only_there_for_a_range(const std::vector<AmountFieldsShownString>& values) {
-        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
-        ADD_FAILURE() << "Not implemented: examples_businessrule_the_second_amount_field_is_only_there_for_a_range";
+    // The dropdown decides the fields and nothing else about the find, so
+    // this is read straight off ui::amount_fields and the labels are
+    // compared word for word.
+    void examples_businessrule_the_second_amount_field_is_only_there_for_a_range(
+            const std::vector<AmountFieldsShownString>& values) {
+        for (const auto& value : values) {
+            const auto match = ui::amount_match_from(value.match);
+            ASSERT_TRUE(match.has_value()) << "not a match kind: " << value.match;
+            const ui::AmountFields fields = ui::amount_fields(*match);
+            EXPECT_EQ(std::stoi(value.fieldsshown), fields.shown)
+                << "fields shown on " << value.match;
+            EXPECT_EQ(blank(value.firstlabel), fields.first_label)
+                << "first label on " << value.match;
+            EXPECT_EQ(blank(value.secondlabel), fields.second_label)
+                << "second label on " << value.match;
+        }
     }
 
     // Which of the four places was clicked, read off the rule's own wording.
@@ -1620,6 +1682,453 @@ public:
                       ui::disposition_reading(value.disposition.value, notes))
                 << value.disposition.value << " with " << value.note.value;
         }
+    }
+
+public:
+
+    // One made-up question, and every line of it read back. The words are
+    // the point of this rule: a dialog that says "match?" and nothing else
+    // is a dialog nobody can answer, so each half is named by its account,
+    // its date and the payee its own file gave it.
+    void examples_businessrule_what_the_transfer_question_says(
+            const std::vector<TransferQuestionLineString>& values) {
+        transfers::Question question;
+        question.from_account = "Assets:Checking";
+        question.from_date = types::Date(2026, 2, 3);
+        question.from_payee = "Shell";
+        question.to_account = "Liabilities:Visa";
+        question.to_date = types::Date(2026, 2, 5);
+        question.to_payee = "SHELL OIL 4471";
+        question.amount = Money("91.40");
+        question.days_apart = 2;
+
+        std::vector<std::string> in_order;
+        for (const auto& value : values) {
+            in_order.push_back(value.line);
+            const std::string reads = transfers::line_reads(question, value.line);
+            ASSERT_FALSE(reads.empty()) << "nothing is said on " << value.line;
+            if (value.line == "Heading" || value.line == "Answers") {
+                EXPECT_EQ(blank(value.reads), reads) << value.line;
+                continue;
+            }
+            // The other three name things, so what is checked is that the
+            // things are in them rather than the order somebody wrote them.
+            if (value.line == "Gap") {
+                EXPECT_NE(std::string::npos, reads.find("2")) << reads;
+                continue;
+            }
+            const bool first = value.line == "FirstHalf";
+            const std::string account =
+                first ? question.from_account : question.to_account;
+            const std::string when =
+                (first ? question.from_date : question.to_date).iso();
+            const std::string payee =
+                first ? question.from_payee : question.to_payee;
+            EXPECT_NE(std::string::npos, reads.find(account)) << reads;
+            EXPECT_NE(std::string::npos, reads.find(when)) << reads;
+            EXPECT_NE(std::string::npos, reads.find(payee)) << reads;
+        }
+        EXPECT_EQ(transfers::question_lines(), in_order)
+            << "the lines of the question, in the order it reads";
+    }
+
+    void examples_datatype_transferanswer(
+            const std::vector<EnumerationValuesString>& values) {
+        for (const auto& value : values)
+            EXPECT_EQ(value.value,
+                      transfers::to_string(
+                          transfers::answer_from_string(value.value)))
+                << "the answer " << value.value;
+    }
+
+public:
+
+    // Work in hand. A scenario states the strip rather than starting a real
+    // job, which is what lets the words be checked without a file and a clock.
+    void given_work_in_progress_is(const std::vector<ProgressReportString>& values) {
+        ASSERT_FALSE(values.empty());
+        report_ = progress::Report();
+        report_.what = blank(values.front().what);
+        report_.done = count_cell(values.front().done);
+        report_.total = count_cell(values.front().total);
+        running_ = true;
+    }
+
+    void when_work_has_advanced_to(const std::vector<ProgressAdvanceString>& values) {
+        ASSERT_FALSE(values.empty());
+        report_ = progress::advanced(report_, count_cell(values.front().done));
+        // Reaching the total ends the work, and the strip goes with it.
+        if (report_.finished) running_ = false;
+    }
+
+    void then_work_in_progress_is(const std::vector<ProgressReportString>& values) {
+        if (values.empty()) {
+            // A table with no rows: nothing is in progress, so there is no
+            // report at all rather than one reading finished.
+            EXPECT_FALSE(running_) << "a report still reading "
+                                   << progress::reads(report_);
+            return;
+        }
+        ASSERT_TRUE(running_) << "no report at all";
+        ProgressReportString got;
+        got.what = report_.what.empty() ? "none" : report_.what;
+        got.done = std::to_string(report_.done);
+        got.total = std::to_string(report_.total);
+        got.reads = progress::reads(report_);
+        got.finished = report_.finished ? "true" : "false";
+        EXPECT_EQ(values.front(), got) << "wanted " << values.front().to_string()
+                                       << " got " << got.to_string();
+    }
+
+    // Stopping. The work computes and it is the writing at the end that would
+    // have changed anything, so a stopped job leaves the book alone; the strip
+    // goes away the same as a finished one's.
+    void when_work_in_progress_is_stopped() {
+        report_ = progress::stopped(report_);
+        running_ = false;
+    }
+
+    void then_transactions_are(const std::vector<TransactionString>& values) {
+        ASSERT_EQ(values.size(), transactions_.size()) << "transactions";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const ledger::Transaction& made = transactions_[i];
+            const TransactionString& want = values[i];
+            const std::string where = "transaction " + std::to_string(i + 1);
+            EXPECT_EQ(want.ref.value, made.ref.value()) << where << " ref";
+            EXPECT_EQ(want.date, made.date.iso()) << where << " date";
+            EXPECT_EQ(blank(want.payee.value), made.payee.value()) << where << " payee";
+            EXPECT_EQ(blank(want.sourceaccount.value),
+                      chart_.path_for_ref(made.source_account))
+                << where << " source account";
+            EXPECT_EQ(blank(want.destination.value),
+                      chart_.path_for_ref(made.destination))
+                << where << " destination";
+            EXPECT_EQ(Money(want.amount.value).cents(), made.amount.cents())
+                << where << " amount";
+            EXPECT_EQ(blank(want.tag), made.tag) << where << " tag";
+        }
+    }
+
+    // A count written the way a spec cell writes one, with the separators a
+    // reader puts in allowed: 24,000 and 24000 are the same number.
+    static long long count_cell(const std::string& cell) {
+        std::string digits;
+        for (char c : cell)
+            if (c != ',' && c != ' ') digits += c;
+        if (digits.empty() || digits == "none" || digits == DNCString) return 0;
+        return std::stoll(digits);
+    }
+
+    progress::Report report_;
+    bool running_ = false;
+
+    // The listing is read rather than held: the words on the transactions are
+    // the use of the vocabulary, and asking twice cannot disagree with itself.
+    // Opening the window is therefore nothing but asking.
+    void when_tag_listing_opened() { tag_listing_opened_ = true; }
+
+    void then_tag_listing_rows_are(const std::vector<TagListingRowString>& values) {
+        const std::vector<tags::Row> got = tags::listing(vocabulary_, tag_fields());
+        ASSERT_EQ(values.size(), got.size()) << "tag listing rows -- got "
+                                            << tag_listing_text(got);
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            EXPECT_EQ(values[i].name, got[i].name) << "tag listing row "
+                                                   << (i + 1) << " name";
+            EXPECT_EQ(std::stoll(values[i].used), got[i].used)
+                << "tag " << got[i].name << " used";
+        }
+    }
+
+    // The words the book knows, whether or not anything carries them.
+    void given_tags_are(const std::vector<TagListingRowString>& values) {
+        vocabulary_.clear();
+        for (const auto& value : values) vocabulary_.push_back(value.name);
+    }
+
+    void when_tag_renamed(const std::vector<TagEditString>& values) {
+        ASSERT_FALSE(values.empty());
+        const std::string was = blank(values.front().wasname);
+        const std::string now = blank(values.front().name);
+        for (ledger::Transaction& t : transactions_)
+            t.tag = tags::renamed_field(t.tag, was, now);
+        vocabulary_ = tags::renamed(vocabulary_, was, now);
+        rebuild_book();
+        workspace_.reset();
+    }
+
+    // Typing into the column: what is offered against it, what the field holds
+    // when the typing is accepted, and the word being added to the vocabulary
+    // where it is one nobody has used before.
+    void when_tag_typed_is(const std::vector<TagTypedString>& values) {
+        ASSERT_FALSE(values.empty());
+        const std::string typed = blank(values.front().typed);
+        EXPECT_EQ(blank(values.front().offered), tags::offer(vocabulary_, typed))
+            << "offered against " << values.front().typed;
+        EXPECT_EQ(blank(values.front().accepted), tags::joined(tags::words_of(typed)))
+            << "accepted from " << values.front().typed;
+        vocabulary_ = tags::accepted(vocabulary_, typed);
+    }
+
+    std::vector<std::string> tag_fields() const {
+        std::vector<std::string> out;
+        for (const ledger::Transaction& t : transactions_) out.push_back(t.tag);
+        return out;
+    }
+
+    static std::string tag_listing_text(const std::vector<tags::Row>& rows) {
+        std::string out;
+        for (const tags::Row& row : rows) {
+            if (!out.empty()) out += ", ";
+            out += row.name + " " + std::to_string(row.used);
+        }
+        return out.empty() ? "nothing" : out;
+    }
+
+    std::vector<std::string> vocabulary_;
+    bool tag_listing_opened_ = false;
+
+    // Naming the second account is the first moment there is anything to ask
+    // about, so the destination is written and the look is done in the same
+    // breath.
+    void when_destination_typed_is(const std::vector<DestinationTypedString>& values) {
+        ASSERT_FALSE(values.empty());
+        const std::string named = blank(values.front().destination.value);
+        ledger::Transaction* editing = transaction_by_ref(values.front().ref.value);
+        ASSERT_NE(nullptr, editing) << "no transaction " << values.front().ref.value;
+        editing->destination = chart_.ref_for_path(named);
+        editing_ = editing->id.value();
+        candidates_ = transfers::halves_in(
+            named, chart_.path_for_ref(editing->source_account), editing->date,
+            editing->amount, transactions_, chart_);
+        rebuild_book();
+        workspace_.reset();
+    }
+
+    // The question names each candidate back to the person who entered it, so
+    // the amount and the cleared status are read off the transaction rather
+    // than carried around separately.
+    void then_transfer_candidates_are(const std::vector<TransferCandidateRowString>& values) {
+        ASSERT_EQ(values.size(), candidates_.size())
+            << "transfer candidates -- got " << candidate_text();
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const transfers::Half& got = candidates_[i];
+            const TransferCandidateRowString& want = values[i];
+            const ledger::Transaction* t = transaction_by_id(got.transaction_id);
+            ASSERT_NE(nullptr, t) << "candidate " << (i + 1) << " is in no book";
+            const std::string where = "candidate " + std::to_string(i + 1);
+            EXPECT_EQ(want.ref.value, t->ref.value()) << where << " ref";
+            EXPECT_EQ(blank(want.account.value), got.account) << where << " account";
+            EXPECT_EQ(want.date, got.date.iso()) << where << " date";
+            EXPECT_EQ(blank(want.payee), got.payee) << where << " payee";
+            EXPECT_EQ(Money(want.amount.value).cents(), t->amount.cents())
+                << where << " amount";
+            EXPECT_EQ(want.cleared.value, types::to_string(t->cleared))
+                << where << " cleared";
+            EXPECT_EQ(std::stoll(want.daysapart), got.days_apart) << where << " days apart";
+        }
+    }
+
+    void when_transfer_candidate_chosen(const std::vector<TransferCandidateChoiceString>& values) {
+        ASSERT_FALSE(values.empty());
+        const std::string ref = blank(values.front().ref);
+        if (ref.empty()) {
+            // None is a real answer and not an unanswered question. It creates
+            // nothing: the transaction already names both accounts, so it is
+            // already a line in the other register, and what none rules out is
+            // the merge rather than the transfer.
+            candidates_.clear();
+            return;
+        }
+        const ledger::Transaction* half = transaction_by_ref(ref);
+        ASSERT_NE(nullptr, half) << "no transaction " << ref;
+        const std::string half_id = half->id.value();
+        EXPECT_TRUE(transfers::merge(editing_, half_id, &transactions_))
+            << "nothing was merged";
+        candidates_.clear();
+        rebuild_book();
+        workspace_.reset();
+    }
+
+    ledger::Transaction* transaction_by_ref(const std::string& ref) {
+        for (ledger::Transaction& t : transactions_)
+            if (t.ref.value() == ref) return &t;
+        return nullptr;
+    }
+
+    const ledger::Transaction* transaction_by_id(const std::string& id) const {
+        for (const ledger::Transaction& t : transactions_)
+            if (t.id.value() == id) return &t;
+        return nullptr;
+    }
+
+    std::string candidate_text() const {
+        std::string out;
+        for (const transfers::Half& half : candidates_) {
+            if (!out.empty()) out += ", ";
+            const ledger::Transaction* t = transaction_by_id(half.transaction_id);
+            out += (t == nullptr ? half.transaction_id : t->ref.value());
+            out += " in " + half.account;
+        }
+        return out.empty() ? "nothing" : out;
+    }
+
+    std::vector<transfers::Half> candidates_;
+    std::string editing_;
+
+    // Reading a register is selecting its account: the tab opens, or the one
+    // already open comes forward, and it becomes the register a following
+    // Then is about.
+    void when_register_opened_on(const std::vector<AccountSelectString>& values) {
+        for (const auto& value : values) workspace().select(value.path.value);
+    }
+
+    // Each row is a job: what it would say, and for the short one that it
+    // says nothing at all. The rows are written with an em dash spelled --
+    // where the scenarios write a single hyphen, so runs of hyphens are read
+    // as one before comparing; the words either side are what is being checked.
+    void examples_businessrule_work_that_takes_a_noticeable_time_says_so_and_does_not_take_the_window_away(
+            const std::vector<ProgressShownString>& values) {
+        for (const ProgressShownString& value : values) {
+            progress::Report report;
+            if (value.thework == "Reading a file of 40 rows") {
+                report.what = "Reading the file";
+                report.total = 40;
+                report.done = 12;
+                // Over within a second, so nothing is shown and nothing the
+                // report would have read matters.
+                EXPECT_FALSE(progress::shows(report, 0.4)) << value.thework;
+                EXPECT_TRUE(progress::shows(report, 1.5)) << value.thework;
+                continue;
+            }
+            if (value.thework == "Importing 24,000 rows") {
+                report.what = "Importing";
+                report.done = 8000;
+                report.total = 24000;
+            } else if (value.thework == "Recalculating every balance") {
+                report.what = "Recalculating";
+                report.done = 8000;
+                report.total = 24000;
+            } else if (value.thework == "Opening a book") {
+                report.what = "Opening the book";
+                report.done = 1200;
+            } else {
+                report.what = "Building the report";
+                report.done = 3;
+                report.total = 20;
+                report.unit = "years";
+            }
+            EXPECT_EQ(report.total > 0, parse_bool_cell(value.hasatotal))
+                << value.thework << " has a total";
+            EXPECT_EQ(one_dash(value.whatitsays), one_dash(progress::reads(report)))
+                << value.thework;
+            EXPECT_TRUE(progress::shows(report, 1.5)) << value.thework;
+        }
+    }
+
+    static std::string one_dash(const std::string& s) {
+        std::string out;
+        for (char c : s)
+            if (c != '-' || out.empty() || out.back() != '-') out += c;
+        return out;
+    }
+
+    // Every word in the field is a tag, which is the whole of what the rule
+    // says about storage: the count is the reading of the field, and the two
+    // paint rows carry the same category while differing in the field, which
+    // is why the distinction is not a category.
+    void examples_businessrule_a_tag_is_the_third_thing_a_transaction_says_about_itself(
+            const std::vector<WhatATagIsForString>& values) {
+        std::string paint_categories;
+        for (const WhatATagIsForString& value : values) {
+            const std::string field = blank(value.thefield);
+            EXPECT_EQ(std::stoll(value.tagsitcarries),
+                      static_cast<long long>(tags::words_of(field).size()))
+                << value.example;
+            if (value.example.rfind("Paint", 0) == 0) {
+                if (!paint_categories.empty())
+                    EXPECT_EQ(paint_categories, value.category)
+                        << value.example << " is the same expense as the row above it";
+                paint_categories = value.category;
+            }
+        }
+    }
+
+    // Against the author's own three words, which are the vocabulary the rows
+    // were written over.
+    void examples_businessrule_typing_a_tag_works_the_way_typing_a_category_works(
+            const std::vector<TagCompletionString>& values) {
+        const std::vector<std::string> vocabulary = {"Kitchen", "Rental", "WarpAndByte"};
+        for (const TagCompletionString& value : values)
+            EXPECT_EQ(blank(value.offered), tags::offer(vocabulary, blank(value.typed)))
+                << value.typed << " -- " << value.notes;
+    }
+
+    // Each row is the same payment in the checking register with the card
+    // holding however many halves the row says, and what is asked about it.
+    void examples_businessrule_naming_an_account_in_the_destination_column_looks_for_the_other_half(
+            const std::vector<DestinationNamedString>& values) {
+        for (const DestinationNamedString& value : values) {
+            std::string typed = "Liabilities:Visa";
+            int halves = 1;
+            if (value.whatistyped == "A category") {
+                typed = "Expenses:Groceries";
+            } else if (value.whatistyped == "Unassigned") {
+                typed = ledger::kUnassigned;
+            } else if (value.whatistyped ==
+                       "An account with no equal and opposite transaction") {
+                halves = 0;
+            } else if (value.whatistyped == "An account with three") {
+                halves = 3;
+            }
+            const std::vector<transfers::Half> got = offered_for(typed, halves);
+            if (value.whathappens.rfind("Nothing", 0) == 0) {
+                EXPECT_TRUE(got.empty())
+                    << value.whatistyped << " -- " << value.whathappens;
+                continue;
+            }
+            ASSERT_EQ(static_cast<std::size_t>(halves), got.size())
+                << value.whatistyped << " -- " << value.whathappens;
+            // Closest in days first, which is the order the question asks in.
+            for (std::size_t i = 1; i < got.size(); ++i)
+                EXPECT_LE(got[i - 1].days_apart, got[i].days_apart)
+                    << value.whatistyped << " -- " << value.whathappens;
+        }
+    }
+
+    // The payment in the checking register, and that many equal and opposite
+    // transactions in the card, each a day further away.
+    static std::vector<transfers::Half> offered_for(const std::string& typed, int halves) {
+        chart::Chart accounts;
+        accounts.add(types::AccountPath("Assets:Checking"), types::AccountType::Checking);
+        accounts.add(types::AccountPath("Liabilities:Visa"), types::AccountType::CreditCard);
+        accounts.add(types::AccountPath("Expenses:Groceries"), types::AccountType::Expense);
+        accounts.add(types::AccountPath("Expenses:Uncategorized"), types::AccountType::Expense);
+        accounts.add(types::AccountPath(ledger::kUnassigned), types::AccountType::OtherAsset);
+
+        std::vector<ledger::Transaction> transactions;
+        ledger::Transaction mine;
+        mine.id = ledger::new_id();
+        mine.ref = types::TransactionRef("T1");
+        mine.date = types::Date(2026, 2, 10);
+        mine.payee = types::PayeeName("Visa Payment");
+        mine.source_account = accounts.ref_for_path("Assets:Checking");
+        mine.destination = accounts.ref_for_path("Expenses:Uncategorized");
+        mine.amount = Money("-100.00");
+        transactions.push_back(mine);
+
+        for (int i = 0; i < halves; ++i) {
+            ledger::Transaction other;
+            other.id = ledger::new_id();
+            other.ref = types::TransactionRef("C" + std::to_string(i + 1));
+            other.date = types::Date(2026, 2, 10 + i);
+            other.payee = types::PayeeName("Payment");
+            other.source_account = accounts.ref_for_path("Liabilities:Visa");
+            other.destination = accounts.ref_for_path("Expenses:Uncategorized");
+            other.amount = Money("100.00");
+            transactions.push_back(other);
+        }
+        return transfers::halves_in(typed, "Assets:Checking", mine.date, mine.amount,
+                                    transactions, accounts);
     }
 
 };
