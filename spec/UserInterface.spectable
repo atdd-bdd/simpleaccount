@@ -4329,6 +4329,13 @@ Details A drag is not one event. Every pixel of it is reported, so a divider
 \ register redraws, and it is written when the drag has stopped.
 \ Nothing is lost by waiting, because a width nobody has finished
 \ choosing is not yet an answer.
+\
+\ What is written is the widths and nothing else. A width is not part of
+\ the book in the way a transaction is -- it is where somebody left a
+\ divider -- and the whole-book write rewrites every account,
+\ transaction, split and rule to record one integer. That is both too
+\ much work for a drag and a reason for a drag to fail over something
+\ else in the book, which is how it was first seen.
 
 Scenario Dragging a divider writes the width once, when the drag stops
 Given the chart of accounts is : ChartOfAccounts

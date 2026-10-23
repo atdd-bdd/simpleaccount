@@ -554,3 +554,68 @@ of zero is a real balance, so `numbers_in_file` looks for `<LEDGERBAL` in the
 text and reports nothing when it is absent. The alternative -- a `bool stated`
 on `ofx::Statement` -- is the better answer and is a change to the reader and
 its own scenarios; this one is in the place that asks the question.
+
+## 26. Two rules looking for the same thing
+
+Reported from the running program: applying payee rules raised `UNIQUE
+constraint failed: payee_rules.pattern, payee_rules.match_type`, and so did
+dragging a column divider afterwards.
+
+**What it was.** `payee_rules` is keyed on `(pattern, match_type)`, and
+`payees::add` checked only that a rule had something to look for and a payee
+name. A second rule with the same pattern and match type went into the
+in-memory list, and every write of the book from that moment on failed -- the
+save the add itself made, then the save behind anything else, which is why it
+read as a fault in applying the rules and then in moving a column. Nothing
+reached the file, so the book on disk was never wrong and a restart cleared it.
+
+**The decision: refused where it is typed.** `payees::add` and `payees::change`
+now refuse a rule whose pattern and match type are already taken, with "a rule
+already looks for X". The pair is what the list changes and deletes a rule by
+and what the book stores it under, so it names a rule; a second one with the
+same pair could not act anyway, because the first rule that matches wins.
+`change` leaves the rule being changed out of the comparison -- it is the one
+it would otherwise collide with.
+
+**The comparison ignores case and surrounding blanks.** Matching ignores case,
+so `SHELL` and `shell` look for the same thing and the second would never be
+reached. This is stricter than the key the book uses, which is case-sensitive:
+two such rules are storable and are still refused, because they are the same
+rule. An older book holding both is left alone -- nothing is rewritten, only
+further adds are refused.
+
+**Not made defensive in storage.** `store::write` could drop duplicates
+instead of failing, and deliberately does not: a write that quietly discards a
+row would hide the next bug of this shape rather than report it. The gate is
+where the rule is written.
+
+## 27. A drag writes the widths and nothing else
+
+Asked while the duplicate rule above was being fixed: is the book written when
+a column width changes? It was -- `MainWindow::save()`, which is
+`store::Book::write` over the chart, every transaction, every split and every
+rule, to record one integer.
+
+Decision 16 fixed how often that happened: a drag reports a width per pixel and
+now writes once, after it settles. It did not change what that write is. On a
+book of thirty thousand transactions the one write is still most of a second,
+and -- as the duplicate payee rule showed -- a width change carrying the rest
+of the book with it fails over anything else in the book that cannot be
+stored. Widening a column has nothing to do with the payee rules and should
+not be able to be broken by them.
+
+**The decision.** `store::Book::write_column_widths` writes
+`register_column_width` alone, by the upsert the whole-book write already used,
+following `write_conversions` and `write_tags` -- each a table edited in one
+place and written by its own call rather than ridden along on a save of the
+book. `MainWindow::saveColumnWidths` calls it, and the settle timer calls that
+instead of `save()`.
+
+**Not in a scenario.** The specification says when the width is written and
+which widths are recorded, both of which are observable. That the write is
+narrow is said in the `Details` of that section and is otherwise a fact about
+`store` rather than about what the program does -- the same judgement as the
+400 ms in decision 25. `BookWrites` counts writes in the workspace, which is
+not the layer where this distinction exists, so a scenario asserting it would
+be asserting against the glue.
+

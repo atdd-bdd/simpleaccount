@@ -188,6 +188,7 @@ private:
     // because a book is a file rather than a session: closing the window must
     // not be a way to lose a morning's entry.
     bool save();
+    bool saveColumnWidths();
     void refresh();
     void refreshAccounts();
     QMenu* recent_ = nullptr;

@@ -388,9 +388,28 @@ inline Refusal check(const Rule& one) {
     return {};
 }
 
+// Two rules are the same rule when they look for the same thing in the same
+// way. The pattern is compared without case and without surrounding blanks,
+// because matching ignores case as well, so the second of two rules differing
+// only in that would never be reached. See what makes two rules the same rule
+// in Payees.spectable.
+inline bool same_rule(const std::string& pattern_a, MatchType type_a,
+                      const std::string& pattern_b, MatchType type_b) {
+    return type_a == type_b && detail::upper(detail::trimmed(pattern_a)) ==
+                                   detail::upper(detail::trimmed(pattern_b));
+}
+
 inline Refusal add(std::vector<Rule>* rules, const Rule& one) {
     const Refusal no = check(one);
     if (no.refused) return no;
+    // The book keeps the rules under the pattern and the match type together,
+    // so a duplicate cannot be stored. Accepted here it broke the next write
+    // of the whole book instead -- and every write after it, including one
+    // that was no more than a column being widened.
+    for (const Rule& already : *rules)
+        if (same_rule(already.pattern, already.match_type, one.pattern,
+                      one.match_type))
+            return {true, "a rule already looks for " + already.pattern};
     rules->push_back(one);
     return {};
 }
@@ -411,6 +430,14 @@ inline Refusal change(std::vector<Rule>* rules, const std::string& was_pattern,
     if (no.refused) return no;
     Rule* at = find(rules, was_pattern, was_type);
     if (at == nullptr) return {true, "there is no rule looking for " + was_pattern};
+    // The same collision by the other road, with the rule being changed left
+    // out of the comparison: it is the one it would otherwise collide with.
+    for (Rule& already : *rules) {
+        if (&already == at) continue;
+        if (same_rule(already.pattern, already.match_type, to.pattern,
+                      to.match_type))
+            return {true, "a rule already looks for " + already.pattern};
+    }
     *at = to;
     return {};
 }

@@ -518,6 +518,25 @@ public:
         return {};
     }
 
+    // The widths on their own. A width is not part of the book in the way a
+    // transaction is -- it is where somebody left a divider -- and a settled
+    // drag used to go through the whole-book write to record one integer,
+    // which was slow on a large book and breakable by anything else in it: a
+    // rule the book could not store failed the drag. See decision 27.
+    Failure write_column_widths(const std::map<std::string, int>& widths) {
+        detail::Statement width(db_.get(),
+            "INSERT INTO register_column_width (name, width) VALUES (?, ?) "
+            "ON CONFLICT (name) DO UPDATE SET width = excluded.width");
+        if (!width.ok()) return {true, width.why()};
+        for (const auto& one : widths) {
+            width.reset();
+            width.bind(1, one.first);
+            width.bind(2, static_cast<long long>(one.second));
+            if (!width.run()) return {true, width.why()};
+        }
+        return {};
+    }
+
     // The converter tables and the tag vocabulary. Each is a list of a few
     // hundred rows at most, edited in a window of its own, so each is rewritten
     // outright by its own call rather than ridden along on a save of the book.

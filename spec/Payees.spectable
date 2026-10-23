@@ -37,7 +37,7 @@ Examples: EnumerationValues
 
 Collection PayeeRules
 | DataType  | Minimum | Maximum | Notes                     |
-| PayeeRule | 0       | 10000   | Pattern need not be unique |
+| PayeeRule | 0       | 10000   | Pattern and type name one  |
 
 BusinessRule How a pattern is matched
 Description Each match type against the same raw name, so the difference is
@@ -928,6 +928,127 @@ When rule added : RuleEdit Vertical
 Then rule refused because : RuleRefusal Vertical
 | Refused | true                      |
 | Because | a rule needs a payee name |
+
+# ---------------------------------------------------------------------------
+# A second rule looking for the same thing
+# ---------------------------------------------------------------------------
+
+BusinessRule What makes two rules the same rule
+Description The pattern and the match type together name a rule. They are what
+\ the list changes and deletes a rule by, and what the book stores it
+\ under, so a second rule with the same pair cannot be held -- and
+\ could not act if it could, because the first rule that matches wins.
+Details The comparison ignores case and surrounding blanks, because matching
+\ ignores case as well: SHELL and shell look for the same thing and the
+\ second of them would never be reached. A different match type is a
+\ different rule, because it looks for the same text in a different
+\ place.
+Examples: SameRuleCase
+| Pattern   | MatchType | AgainstPattern | AgainstMatchType | SameRule | Notes                       |
+| SHELL     | Contains  | SHELL          | Contains         | true     | The same pair               |
+| shell     | Contains  | SHELL          | Contains         | true     | Case is not a difference    |
+| ~SHELL~   | Contains  | SHELL          | Contains         | true     | Nor are surrounding blanks  |
+| SHELL     | Exact     | SHELL          | Contains         | false    | A different match type      |
+| SHELL OIL | Contains  | SHELL          | Contains         | false    | A pattern of its own        |
+
+Attributes SameRuleCase
+| Attribute        | Type      | Default  |
+| Pattern          | String    |          |
+| MatchType        | MatchType | Contains |
+| AgainstPattern   | String    |          |
+| AgainstMatchType | MatchType | Contains |
+| SameRule         | Boolean   | false    |
+| Notes            | String    | none     |
+
+Scenario A second rule looking for the same thing is refused
+Description Found by the book refusing to store it. The rules are kept under
+\ the pattern and the match type together, so a duplicate was accepted
+\ where it was typed and then broke the next write of the book -- and
+\ every write after that, one of which was only a column being
+\ widened. It is refused where it is typed instead.
+Given payee rules are : PayeeRules
+| Pattern | MatchType | Payee | Category           | Enabled |
+| SHELL   | Contains  | Shell | Expenses:Auto:Fuel | true    |
+When rule added : RuleEdit Vertical
+| Pattern   | SHELL              |
+| MatchType | Contains           |
+| Payee     | Shell~Oil          |
+| Category  | Expenses:Auto:Fuel |
+| Enabled   | true               |
+Then rule refused because : RuleRefusal Vertical
+| Refused | true                          |
+| Because | a rule already looks for SHELL |
+
+Scenario A rule looking for the same thing in different letters is refused
+Given payee rules are : PayeeRules
+| Pattern | MatchType | Payee | Category           | Enabled |
+| SHELL   | Contains  | Shell | Expenses:Auto:Fuel | true    |
+When rule added : RuleEdit Vertical
+| Pattern   | shell              |
+| MatchType | Contains           |
+| Payee     | Shell              |
+| Category  | Expenses:Auto:Fuel |
+| Enabled   | true               |
+Then rule refused because : RuleRefusal Vertical
+| Refused | true                          |
+| Because | a rule already looks for SHELL |
+
+Scenario The same pattern with a different match type is a rule of its own
+Description Exact SHELL and Contains SHELL look for the same text in different
+\ places, and the book holds the two of them. The more specific wins
+\ where both match, which is the precedence rule above.
+Given payee rules are : PayeeRules
+| Pattern | MatchType | Payee | Category           | Enabled |
+| SHELL   | Contains  | Shell | Expenses:Auto:Fuel | true    |
+When rule added : RuleEdit Vertical
+| Pattern   | SHELL              |
+| MatchType | Exact              |
+| Payee     | Shell~Station      |
+| Category  | Expenses:Auto:Fuel |
+| Enabled   | true               |
+Then rule list rows are : RuleListRow
+| Position | Pattern | MatchType | Payee         | Category           | Enabled |
+| 1        | SHELL   | Exact     | Shell~Station | Expenses:Auto:Fuel | true    |
+| 2        | SHELL   | Contains  | Shell         | Expenses:Auto:Fuel | true    |
+
+Scenario A rule changed onto a pattern another rule has is refused
+Description The same collision by the other road. Shortening a pattern is the
+\ repair the rule window exists for, and shortening it onto a rule
+\ already there has to be refused rather than written.
+Given payee rules are : PayeeRules
+| Pattern       | MatchType | Payee         | Category           | Enabled |
+| SHELL         | Contains  | Shell         | Expenses:Auto:Fuel | true    |
+| HARRIS TEETER | Contains  | Harris~Teeter | Expenses:Groceries | true    |
+When rule changed : RuleEdit Vertical
+| WasPattern   | HARRIS TEETER      |
+| WasMatchType | Contains           |
+| Pattern      | SHELL              |
+| MatchType    | Contains           |
+| Payee        | Shell              |
+| Category     | Expenses:Auto:Fuel |
+| Enabled      | true               |
+Then rule refused because : RuleRefusal Vertical
+| Refused | true                          |
+| Because | a rule already looks for SHELL |
+
+Scenario A rule changed without its pattern being touched is not a duplicate of itself
+Description The payee is corrected and the pattern is left alone. The rule
+\ being changed is the one it would collide with, so the check has to
+\ leave that one out.
+Given payee rules are : PayeeRules
+| Pattern | MatchType | Payee | Category           | Enabled |
+| SHELL   | Contains  | Shel  | Expenses:Auto:Fuel | true    |
+When rule changed : RuleEdit Vertical
+| WasPattern   | SHELL              |
+| WasMatchType | Contains           |
+| Pattern      | SHELL              |
+| MatchType    | Contains           |
+| Payee        | Shell              |
+| Category     | Expenses:Auto:Fuel |
+| Enabled      | true               |
+Then rule list rows are : RuleListRow
+| Position | Pattern | MatchType | Payee | Category           | Enabled |
+| 1        | SHELL   | Contains  | Shell | Expenses:Auto:Fuel | true    |
 
 Scenario A rule may be disabled from the list without being deleted
 Given payee rules are : PayeeRules

@@ -1359,6 +1359,20 @@ bool MainWindow::save() {
     return true;
 }
 
+// A drag writes the widths and nothing else. The whole-book write rewrites
+// every account, transaction, split and rule, which is too much work to record
+// where a divider was left -- and it made the drag fail over anything else in
+// the book that could not be stored. See decision 27 in questions.md.
+bool MainWindow::saveColumnWidths() {
+    if (!store_.is_open()) return false;
+    const store::Failure no = store_.write_column_widths(columnWidths_);
+    if (no.refused) {
+        QMessageBox::warning(this, "SimpleAccount", QString::fromStdString(no.reason));
+        return false;
+    }
+    return true;
+}
+
 // The list is of names rather than paths: a book lives in the books folder and
 // is opened by name, so a path would be the same information written in a way
 // that breaks if the folder moves.
@@ -3241,7 +3255,7 @@ MainWindow::TabWidgets MainWindow::makeRegisterTab(int tabPosition) {
                         if (!workspace_ || !workspace_->finish_resize()) return;
                         columnWidths_ = workspace_->column_widths();
                         applyColumnWidths();
-                        save();
+                        saveColumnWidths();
                     });
                 }
                 resizeSettle_->start();

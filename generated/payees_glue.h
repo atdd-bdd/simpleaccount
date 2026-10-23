@@ -415,7 +415,6 @@ public:
         refusal_ = payees::change(
             &rules_, blank(edit.waspattern),
             payees::match_type_from_string(edit.wasmatchtype), rule_from(edit));
-        EXPECT_FALSE(refusal_.refused) << refusal_.reason;
     }
 
     void when_rule_deleted(const std::vector<RuleSelectString>& values) {
@@ -638,4 +637,19 @@ public:
                     << value.ref << " amount";
         }
     }
+public:
+
+    void examples_businessrule_what_makes_two_rules_the_same_rule(const std::vector<SameRuleCaseString>& values) {
+        for (const auto& value : values) {
+            const bool got = payees::same_rule(
+                value.pattern, payees::match_type_from_string(value.matchtype),
+                value.againstpattern,
+                payees::match_type_from_string(value.againstmatchtype));
+            EXPECT_EQ(parse_bool_cell(value.samerule), got)
+                << value.pattern << " " << value.matchtype << " against "
+                << value.againstpattern << " " << value.againstmatchtype
+                << " -- " << value.notes;
+        }
+    }
+
 };
