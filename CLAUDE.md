@@ -197,4 +197,6 @@ has already been made once here.
 
 A table cell cannot hold a leading or trailing blank, so **a tilde in a cell is a
 space** — every generator replaces `~` with one. Write `~Checking` and
-`!Type:Bank~`. (This is not in the syntax document; it is in the generators.)
+`!Type:Bank~`. (It is in the syntax document shipped inside 0.9.2, in the section on
+tables; 0.9.1's copy does not have it, which is the copy this project first
+searched.)

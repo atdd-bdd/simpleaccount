@@ -1,0 +1,435 @@
+Completed to-do items
+=====================
+
+Moved out of `TODO.md` and `more to do.txt` on 2026-10-23, with a line on each
+saying what closed it. The author's own words are kept verbatim; only the
+closing notes are added. Those two files now hold only what is still owed.
+
+Where an item names a task number, it is the number in
+`archive/completed-tasks.md`.
+
+
+From TODO.md
+------------
+
+The list of things to be sure are done
+--------------------------------------
+
+Closed by tasks 5, 6, 10, 11, 12, 13, 14, 15, 18, 19, 20 and 21. The one line
+of this list that is not done -- the modeless "in progress" dialog -- stays in
+`TODO.md` as task 17.
+
+- Every account / category has an id which is unique - simply record last id used in the book and increment it by one.   
+
+- There is an account listing (from the menu) and a category listing (from the menu) which shows accounts and categories.   Clicking on one allows editing of the account/category. 
+  
+  The context menu for the account listing on the left side allows for editing the accounts 
+  
+  Accounts settings should have the starting balance, the date of that starting balance
+  
+  A "in progress " modeless dialog box should appear when things are being imported or recalculated. 
+
+- The import window should be below the other window, not to the side of it.    
+  
+  If an import says "Possible", then a context menu on the item should show the possible current matches.  
+  
+  Possible bug:  I imported the same file twice.  It showed Matched on a couple of items the second time.  There shouldn't be any matches, they should be duplicates, as the transaction was already matched.  Isn't that correct?
+  
+  Every thing that has columns (e.g. registers and reports) should allow shrinking/expanding of the columns by moving the border of the column header.  If the total width is less than the width of the window, that is okay. These column widths should be the same for all registers and should be stored with the book.  
+  
+  Every transaction has a memo, which could be read from a CSV or a QFX file.   
+  
+  There should be a tag field on transactions.    Any words in this field are considered tags.   Tags should be kept in a table.  A list of all tags should be available from a menu.  When entering a tag in the field, after the first character, a list of matching tags, with a selection button (or using a click) should select that tag.   This is the same way entering the letters of a category / account work in finding the destination for a transaction.  
+  
+  There should be a find in the menu.  Two options - find a value (or range of values) looks for that value in all registers and in the split table.  Matching finds are shown in the bottom window.     The other option is a more detailed find - it shows all fields in a register and the user can enter values to be matched for that field.  There should be a field that says, "All registers or just current register"
+  
+  Registers should allow sorting by any column.   
+  
+  Registers should have a option that allows "Only show this years,  only show past two years" of transactions.  
+  
+  Books should have option - "Hide transactions before this date".  All registers will only show transactions after that date.   
+  
+  
+  
+     
+  
+  
+
+1. A CSV import leaves postings uncleared; an OFX import clears them
+--------------------------------------------------------------------
+
+Closed by task 7, and then superseded by `more to do.txt`: every import now
+sets cleared, with `SetClearedOnCsvImport` as the way out.
+
+
+`csv::transactions_for` leaves the posting in the statement's account
+`Uncleared`. `ofx::transactions_for` marks the equivalent posting `Cleared`.
+
+The specification is what settled it: the posting tables in the category
+scenarios of `ImportCsv.spectable` leave the `Cleared` column out and are not
+`CompareOnly`, so the default `Uncleared` is asserted. The reasoning written into
+the code is that a CSV carries no statement and says nothing about what the bank
+has settled, unlike an OFX file whose rows *are* a statement.
+
+That may be exactly right, or the column may have been left out because those
+scenarios are about categories. It matters for reconciliation: only cleared
+postings count towards a stated balance, so a book filled from CSV files would
+reconcile against nothing until someone cleared the rows by hand.
+
+**If it should clear:** add `Cleared` to those tables in `ImportCsv.spectable`
+and set it in `csv::transactions_for`.
+
+My note:  CSV import should be treated as an OFX import - it sets the cleared flag.  There can be a configuration option that says "do not set cleared flag on CSV import". 
+
+
+
+
+2. CsvProfile cannot name a balance column
+-------------------------------------------
+
+Closed by task 8. The column is on the profile, it is stored with the book
+(schema 16), and it is a check rather than an import -- ignored when absent or
+empty, which is what the note asked for.
+
+## 2. `Entity CsvProfile` cannot name a balance column
+
+`CsvProfile` in `ImportCsv.spectable` names `DateColumn`, `PayeeColumn`,
+`MemoColumn`, `CheckColumn`, `CategoryColumn`, `AmountColumn`, `DebitColumn` and
+`CreditColumn` — but no `BalanceColumn`.
+
+So a profile recognised by its signature can place the balance column, because
+the alias table does it; a profile written out by hand in a table cannot. A bank
+whose balance column has an unusual heading therefore cannot have its balance
+checked, which is the strongest check a CSV file offers.
+
+`csv::Profile` in `src/csv_import.h` already has a `balance_column` field, and
+the signature and `columns_of` both use it. Only the specification's entity and
+the storage rule in `Books.spectable` need the column added.
+
+
+
+My note: add the column.   But if the column is not present or does not contain any data, then don't use it for checking.  
+
+
+3. Two specification files were edited to make scenarios pass
+--------------------------------------------------------------
+
+Closed by task 9 and by the removal of `Posting`. The author's answer to the
+first half -- "Postings should be gone by now. Is it not?" -- is yes: task 4
+converted the specification to transactions and `struct Posting` is gone from
+the code. The `CompareOnly` in `TransactionRegister.spectable` stays, as the
+note allows, and the default destination is `Uncategorized`.
+
+## 3. Two specification files were edited to make scenarios pass
+
+Both are recorded because changing a specification to turn a test green is the
+one move that can hide a defect rather than find one. Neither changed what the
+program does.
+
+### Payees.spectable: five tables gained a Cleared column
+
+Five `PostingRow` tables said what an import produced but left out whether the
+bank had settled it, so the default `Uncleared` was asserted while an OFX import
+legitimately clears the side the statement is for. The scenario above them in the
+same file already stated it, so the behaviour was never in doubt -- the tables
+were simply incomplete.
+
+Each now reads `Cleared` for the account the statement is for and `Uncleared` for
+the category, with the reason in the file: the bank has reported one side and
+nobody has reported the other. This adds assertions rather than removing them,
+which is the safer direction.
+
+It also bears on question 1 above: these tables settle what an OFX import does,
+which strengthens the case that the CSV tables leaving the column out was an
+oversight. The CSV behaviour has deliberately not been changed on that inference.
+
+My note: there is no need for a cleared on a category.   Postings should be gone by now.  Is it not?  
+
+
+
+### TransactionRegister.spectable: one table marked CompareOnly
+
+In `TransactionRegister.spectable`, `Scenario Two transactions on one date keep
+the order they were entered in` now reads `Then register lines are : RegisterLine
+CompareOnly`.
+
+Without `CompareOnly` the columns the table does not name are asserted to be
+their defaults, so `Category` would have to be empty — and a register's category
+column holds the other account of the transaction, which the first scenario in
+the same file asserts. The scenario is about the order of the lines, so comparing
+only what it names is the smaller change.
+
+The alternative is to list `Category` in that table instead. This is the only
+`.spectable` edit made to turn a test green, which is why it is written down.
+
+My note: I think the default for a transaction destination should be "uncategorized" (I think that's the correct one).   But I think CompareOnly is fine here.
+
+
+4. A matched or completing row does nothing when accepted in the window
+------------------------------------------------------------------------
+
+Closed by task 22 for the note, and by the import work of 2026-10-22 for the
+original observation. Naming an account in the destination column now offers
+the other half, closest in days first, and choosing one is a merge.
+
+## 4. A matched or completing row does nothing when accepted in the window
+
+`sa_book import --accept` calls `ofx::apply_matches`, which clears the
+transaction a downloaded row matched rather than adding a second copy of it. The
+window does not: `review::from_ofx` shows the row with disposition `Matched` and
+leaves it unticked, and accepting the review adds the ticked rows only.
+
+So nothing is duplicated and nothing is lost -- but a check entered by hand and
+then seen on a statement stays `Uncleared` when the statement is imported through
+the window, where the command line would have cleared it. That matters for
+reconciliation, which is the acceptance test for this program.
+
+The same is true of a payment's other half. `ofx::decide` calls such a row
+`Completes`, and `ofx::apply_completions` fills in the account the payment went
+to on the transaction that was waiting for it. The window does neither, so a card
+payment imported from both sides through the window leaves the bank side sitting
+in `Unassigned` -- which is exactly the case the two-unknowns rule was written
+for. The register can still be used to assign it by hand.
+
+Doing it properly means the review knowing which transaction each row claimed,
+so that accepting can clear that one: `ui::ReviewRow` would carry the claimed
+id, `UserInterface.spectable` would gain a scenario for a matched row clearing
+rather than adding, and `MainWindow::acceptImport` would ask `ofx::apply_matches`.
+It was left out rather than half-done, because a window that silently cleared
+rows nobody ticked would be worse than one that clears nothing.
+
+
+
+My note:  I think this is fine.  Now when a transaction destination is changed to an account, then potential matching transactions in the other register that currently do no have a destination should be shown.   The user should be allowed to select one to match (or select none), in which case a new transaction - uncleared - will appear in the destination register. 
+
+
+6. CLAUDE.md names a helper this project does not have
+-------------------------------------------------------
+
+Closed by task 3. The local `unquoted()` is out of `generated/payees_glue.h`,
+the two cells carry `~`, and CLAUDE.md says so.
+
+## 6. CLAUDE.md names a helper this project does not have
+
+CLAUDE.md says a cell holding a leading or trailing blank is wrapped in double
+quotes in the spec and unwrapped by calling `spec_cell::unquote()` in the glue.
+There is no `spec_cell` namespace anywhere in this checkout -- it is presumably
+in the AlignThree example tests.
+
+`generated/payees_glue.h` now defines a local `unquoted()` for the two refusal
+scenarios that need an empty pattern and an empty payee. If AlignThree does
+provide one, the glue should use that instead and the local copy should go.
+
+My note: already have said to use ~ as a space.  There is no need for quotes in spectable cells.  (There is an exception, but that does not apply here)
+
+
+7. A future, optional split window at the bottom of the register
+-----------------------------------------------------------------
+
+Closed by tasks 11 and 12. The panel is below the register, the import review
+is one tab of it and the find results are another.
+
+## 7. A future, optional split window at the bottom of the register, shared by imports and a not-yet-specified Find
+
+Raised by the author for later, not yet specified or started.
+
+An optional panel at the bottom of the register, shown for two different
+purposes depending on what is open above it:
+
+- **For an import**, it shows the imported transactions -- the same thing the
+  import review already shows today.
+- **For a Find** (a feature that does not exist yet), it shows the
+  transactions the find matched.
+
+**Find** would be a modeless dialog, so it can stay open while the register is
+used, with:
+
+- A text string, matched against the payee or the memo.
+- A range of dates.
+- A range of amounts.
+- A source or destination account/category.
+- A choice of "search current register" or "search all registers".
+
+Nothing here has a spec table yet -- per CLAUDE.md, that comes first, and
+specifically the Find feature itself has not been designed, only sketched.
+
+My note: Find has been specified at the beginning.
+
+
+8. Reports, and every other window, should have a scroll bar on the right
+--------------------------------------------------------------------------
+
+Closed by task 16, including the paging scroll bar that `more to do.txt` asked
+for separately.
+
+## 8. Reports, and every other window, should have a scroll bar on the right
+
+Raised by the author for later, not yet specified or started.
+
+A report with more rows than fit on screen, and any other window in the same
+position, should show a scroll bar on its right-hand side rather than clip or
+require resizing the window.
+
+My note:  this should be added.
+
+
+From more to do.txt
+-------------------
+
+The find, and its context menu
+------------------------------
+
+Done. The find asks for one amount, matches it in either column and in the
+splits, shows the transaction when the match is in a split, and its result rows
+carry a Show split item. The "finds too much" report -- 69.38 in Joint-Crown --
+was the amount being matched loosely; commits `0aeec25` and `8bff217`.
+
+ The find itself doesn't seem to be working. It seemed to find too much.  Find - have only a single find field for amount - it should match positive and negative values in either column (e.g. payment/deposit) of a register.  It should also match amounts in the split.  If amount is in a split, just show the transaction.    Find should have a context sensitive menu that includes - "Show split" if the transaction is split.  Maybe something else later, like Recategorize.    
+
+The scroll bar pages
+--------------------
+
+Done with task 16: clicking above or below the indicator pages the register or
+the report.
+
+Scroll bar - clicking above or below the current indicator should page up or page down the register/report. 
+
+The history import moves to the new-book dialog
+------------------------------------------------
+
+Done. `app/MainWindow.cpp:1212` -- the new-book question asks whether to bring
+in a Quicken history file, and the menu item is gone.
+
+Move the import history menu item to a dialog that appears after new book is chosen.  It is only applicable then.  The user can supply the book or note that this is an entirely new book. 
+
+Import transactions, one menu item for CSV, QFX and QIF, newest first
+----------------------------------------------------------------------
+
+Done. File > Import transactions... (`app/MainWindow.cpp:1082`), a filter
+covering all three, and Qt's own dialog rather than the native one
+(`DontUseNativeDialog`, :1723) so that the newest-first sort is ours to set.
+
+Switch the import QIF file to under the Import Csv/QFX.  Change that to Import transactions.  And the dialog underneath should look for CSV, QFX, and QIF files.  The files should be shown with newest first. 
+
+Everything imported arrives cleared
+------------------------------------
+
+Done -- commit `bdfd801`. Only a transaction somebody typed starts uncleared.
+
+Now any transaction that is imported should be marked cleared.   Only manually entered transactions will start uncleared.   
+
+The matching rules, and the author's answers to the eleven questions
+---------------------------------------------------------------------
+
+Done -- commits `f54766e` (the bank's own day, no tolerance), `87a2c95` (the
+multiset count, so an unequal number is Possible), `5aef446` (the rules carried
+out, with a note saying what was decided against) and `bdfd801` (the
+disposition column that says why a row is a duplicate). The notes live on the
+transaction, the payee is compared after the rules have been applied, check
+numbers still reach past the day for a checking account, and Matched is gone as
+a disposition.
+
+Let's review the matching rules for import.  IF FID (or ID in CSV, if there is one) matches what's in the book, call it a duplicate.  However if the date and/or amount and/or payee do not match, add a note to the Duplicate status.   
+
+If there is only one transaction in the import with the same date/amount/payee, then look for a match in the book that matches all those values.  If found, it is a duplicate.  If date and amount match, but not payees, add a note to the Duplicate status.    
+
+If there are multiple transactions in the import with the same date/amount/payee, but not FID/ID, then look in the book for multiple transactions that match all those values.  If the number of transactions matches, then all the transactions are duplicates.  If not, then marked as "Possible"      
+
+Are these rules clear?  
+
+Here are responses to your notes:
+
+  1. Is "Duplicate" here what the program now calls Matched, or what it calls
+     Duplicate? They do different things: Matched stamps the transaction already in     the book with the FITID, marks it cleared and creates nothing; Duplicate does
+     nothing at all, which is what a second read of the same file wants. Your rule
+     2 says a date/amount/payee match in the book "is a duplicate" — if that
+     transaction came from a Quicken history it has no FITID, so unless it is
+     stamped, the same file asks the same question next month. I read you as
+     wanting the stamping behaviour under the name Duplicate, and Matched
+     disappearing as a disposition. Confirm?
+
+Duplicate is that - a second read of the same file should do nothing.  
+
+If a transaction does not have an FITID, but amount/date/payee match, then mark it Duplicate - FITID added and mark it cleared.  
+
+  2. Compared payee: raw or renamed? A history says Harris Teeter and the download
+     says HARRIS TEETER #231. Compared raw, "date and amount match but not payee"
+     is true of nearly every row of a first reconciliation against the Quicken
+     history, so the note lands on hundreds of transactions and stops meaning
+     anything. Compare after the payee rules have been applied, or case-folded and
+     trimmed of the store number? Or is a payee note on all of them actually what
+     you want to see once?
+
+Compare after payee rules have been applied.  If no rule applies, then case-fold and trim of store number or any numberic stuff.   If payee still does not match (but amount/date do), then mark as "Duplicate - payee unmatched" 
+
+On an import, a context menu should show a "show duplicate transaction" which would bring up a dialog showing the duplicate transaction. 
+
+
+  3. Does cleared status still decide anything? What I committed today used it to
+     tell a transaction somebody typed from one that was imported — typed got asked     about, imported got matched. Your rules don't mention it, which makes a typed
+     uncleared transaction with the same date, amount and payee a Duplicate rather
+     than a question. Is that intended, with rule 3's counting as the protection
+     against two genuine visits to one shop?
+
+Cleared status shows that the transaction has been imported.  (Or that a user manually cleared it, which would not occur often).   If an imported transaction matches an uncleared transaction, date/amount/payee, then mark it "Duplicate - uncleared") 
+
+  4. Do check numbers survive? The check-number test is the only one that reaches
+     past the day — it is what matches a check you typed on the 2nd against the
+     bank posting it on the 16th, and it has a per-book window for exactly that.
+     Your rules don't mention it. Keep it as test 2, or drop it?
+
+Check numbers survive (of course, only for checking accounts).  If a check number exists in the register and the import has the same check number, (payee/amount the same), then mark it "Duplicate - check number the same" 
+
+
+  5. Two counting cases rule 3 doesn't cover. One import row, two identical
+     transactions in the book: Possible? And three identical import rows against
+     two in the book — two duplicates and one new, or all three Possible?
+
+If the number of transactions do not match, mark the imported transactions all Possible. 
+
+  6. Where does the note live? In the import's own notes list for that run, the way     the stale-check-number note works now, or on the transaction so it is still
+     there next week?
+Put the note in the transaciton. 
+
+  7. Dates exact — same day, no tolerance at all. That is how I read it and it
+     matches what I built today. Yes?
+No tolerance (except in the case of matching check numbers for a checking account - see above). 
+
+  
+  8. "The user can supply the book or note that this is an entirely new book" —
+     supply a history file to import (QIF/QFX/CSV), or point at an existing .sadb?
+
+This is a new book, so there is no existing .sadb. The history import file will just be QIF.    
+
+ 
+  9. The starting chart for a new book. Checking, Savings, Credit Card as plain         top-level names? And for categories: shall I take Quicken's standard list, or      the categories actually used in pughkilleen.QIF trimmed of the business-only       ones? The second gives you a chart that fits your own books; the first is what     a stranger would expect.                                                       
+
+If there is a QIF history file, use the categories in that.   If not, then use Quicken's standard list.     
+
+ 10. Find finding too much — what did you type, and in which register? I'll             reproduce it against the real book read-only. Also: the single amount field        matching either column and the splits is clear, and "if the amount is only in      a split, show the transaction" is clear.
+
+I looked for Amount from 69.38 in pughkilleen Joint-Crown and it came up with many transactions, none of amounts matched.  
+
+  11. Newest-first in the file dialog needs Qt's own dialog, not the Windows one —
+      the native dialog's sort order isn't ours to set. Trade the native look for
+      the sort?
+
+Use the Qt dialog.
+
+
+A new book starts with a chart
+------------------------------
+
+Done, and found to be done while writing the user's guide on 2026-10-23 --
+`chart::standard_chart()` (`src/standard_chart.h`), called from
+`answer_new_book_question` (`src/ui_model.h:1603`) when no history file is
+given. Three accounts somebody can type into on the first day -- Checking,
+Savings, Credit Card -- and a category list taken from Quicken's own, with
+Uncategorized added because an import puts rows in it from the first file
+onwards. Where a QIF history *is* given, the chart is that file's, which is the
+author's answer to the question this raised. Specified by
+`Scenario A book that starts from nothing starts with the standard chart`
+(`spec/UserInterface.spectable:4907`), which is what keeps the code's list and
+the specification's the same.
+
+A new book should start with some accounts - checking, savings, cc, and some expense categories.  Find a list of common categories (e.g. the ones Quicken starts with) and create those for a new book (if there is no import)>

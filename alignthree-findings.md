@@ -652,3 +652,40 @@ Quicken's own PDF reports. Two of those acceptance comparisons now agree with
 Quicken to the cent, computed from the spec's rules before any production code
 existed — which is the thing AlignThree made possible, and worth saying alongside
 the defect list.
+
+---
+
+## The reply, 2026-10-23
+
+`alignthree-findings-response.md` answers all twelve, checked against the
+current AlignThree tree. Fixed there: 1 (`EveryCell` on a bare `DataType` now
+writes its own `String`/`Typed` pair), 3 (a generated copy is skipped, and the
+converter no longer copies the `.spectable` at all unless asked --
+`--no-copy-spectable` is accepted and does nothing, so `tools/rebuild.sh` keeps
+working), 6 (a heading with no rows generates an empty table), 7 and 9
+(documented, plus a diagnostic for a tag that marks nothing). Still open: 8,
+10's second request, 11 (the cell wrapper gains `operator==` against its own
+type, `std::string` and `const char*`, both orders, plus `empty()`; the
+`.value`/`.text` split stays) and 12.
+
+Three of the answers change what this project should do.
+
+- **#4 was wrong on our side.** The tilde rule is in the syntax document
+  shipped inside 0.9.2; it is 0.9.1's copy that lacks it, and that is the copy
+  that was searched. `CLAUDE.md` said otherwise and has been corrected.
+- **#5: `as previous` is not a construct at all** -- it appears in no
+  generator, no document and no example; it was invented here. So it does not
+  resolve to the `Background`'s table either. A table-less step generates a
+  no-argument call that establishes nothing, and what looked like the
+  Background's data being used was the Background's own givens, inlined into
+  every test in the file. The six Background-less files were right to spell
+  out; the five that still use it are relying on the Background and the step
+  itself is dead. They should come out too, or become a table-form `Define`.
+- **#12: two rulings on `And`.** A leading `And`, with no `Given`, `When` or
+  `Then` above it, will warn in a later release -- today it silently becomes a
+  `Given`. And `But` is not supported, whatever the parser's comment says. The
+  rewrite in TASKS item 24 keeps the first keyword of every run, so it is safe
+  under both.
+
+Everything listed as fixed is fixed in the tree, not in 0.9.2, so the
+0.9.2-only rule in `CLAUDE.md` stands until a release carries them.
