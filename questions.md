@@ -619,3 +619,37 @@ narrow is said in the `Details` of that section and is otherwise a fact about
 not the layer where this distinction exists, so a scenario asserting it would
 be asserting against the glue.
 
+## 28. Splitting a transaction that is already in the register
+
+Asked while running it: a split that came from a file is shown in a floating
+list, but there is no way to make one. Recategorize puts the whole transaction
+in one category, which is the wrong answer for a payment covering three
+things, and the only way to split anything was to type it in as a new entry --
+which a downloaded row cannot be.
+
+**The decision.** `Split...` on the register's context menu, opening the split
+window the entry side already has, on the transaction that is selected.
+`edit::split_transaction` writes the lines onto a transaction already in the
+book: the destination becomes the split ref, the lines are checked against the
+amount the transaction already has, and a category that is not in the chart yet
+is created by sign, exactly as `reg::commit_split` does for a blank line. The
+refusal is word for word the one the entry side gives -- *The split is 30.00
+short of 184.50* -- because it is the same arithmetic and a second wording for
+it would be a second thing to learn.
+
+Nothing about the transaction's own side moves: not its amount, its date, its
+payee or its cleared status. A split says where the money went, and the
+register's side of it is settled before the window opens.
+
+**One at a time, and not a split already.** The window checks its lines against
+one amount, and two transactions have no one amount between them, so the item
+is enabled only on a single selected line. A transaction that is already a
+split is shown and not reopened -- the lines of an imported split are what the
+file said, which the author asked for -- and the item is greyed rather than
+left off, so that the answer to "can this be split" is in the same place either
+way.
+
+**Not asked for and not done.** Editing the lines of a split that already
+exists. That is a separate question from being able to make one, and the
+request was explicit that an imported split need not be changeable.
+

@@ -669,6 +669,7 @@ private:
     // right-clicked, lines being one-based.
     int find_result_line_ = 0;
     std::vector<reg::SplitLine> split_shown_;
+    ui::Workspace::SplitOutcome split_saved_;
 
     // The splits go in too. They are the fourth argument and it has a default,
     // so leaving them out compiled and read as a workspace over the same book
@@ -2288,5 +2289,45 @@ public:
     }
 
     void when_the_drag_stops() { workspace().finish_resize(); }
+
+public:
+
+    void when_the_selection_is_split_into(const std::vector<SplitLineString>& values) {
+        std::vector<reg::SplitLine> lines;
+        for (const auto& value : values) {
+            reg::SplitLine line;
+            line.category = value.category.value;
+            line.amount = Money(value.amount.value);
+            line.memo = blank(value.memo);
+            lines.push_back(line);
+        }
+        split_saved_ = workspace().split_selected(lines);
+    }
+
+    void then_splitting_reported_is(const std::vector<SplitSavedString>& values) {
+        ASSERT_FALSE(values.empty());
+        const SplitSavedString& want = values.front();
+        EXPECT_EQ(parse_bool_cell(want.saved), split_saved_.saved) << split_saved_.reason;
+        if (!dnc(want.reason)) EXPECT_EQ(blank(want.reason), split_saved_.reason);
+    }
+
+    // The split as the window would show it, read off the selected line rather
+    // than out of the vector the glue was handed: what is asked about is what
+    // the book now holds.
+    void then_split_lines_are(const std::vector<TransactionSplitString>& values) {
+        const std::vector<reg::SplitLine> got = workspace().selected_split();
+        ASSERT_EQ(values.size(), got.size()) << "number of split lines";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const TransactionSplitString& want = values[i];
+            if (!dnc(want.destination.value))
+                EXPECT_EQ(want.destination.value, got[i].category) << "split line " << i;
+            if (!dnc(want.amount.value))
+                EXPECT_EQ(Money(want.amount.value).cents(), got[i].amount.cents())
+                    << "split line " << i << " amount";
+            if (!dnc(want.memo)) EXPECT_EQ(blank(want.memo), got[i].memo) << "split line " << i;
+        }
+    }
+
+public:
 
 };

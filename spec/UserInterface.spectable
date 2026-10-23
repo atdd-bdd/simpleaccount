@@ -3193,6 +3193,7 @@ When register lines selected : RegisterSelect
 Then menu items are : MenuItem
 | Item                 | Enabled |
 | Recategorize...      | true    |
+| Split...            | true    |
 | Add payee rule...    | true    |
 | Apply payee rules... | true    |
 | Delete...            | true    |
@@ -3525,6 +3526,161 @@ Then transactions are : Transaction CompareOnly
 # the same as untouched. T3 matches no rule and keeps the category somebody
 # chose. The three counts, and what each of them means, are the whole-book
 # pass's; see Payees. What is new here is only the set of transactions.
+
+# ---------------------------------------------------------------------------
+# Splitting a transaction that is already in the register
+# ---------------------------------------------------------------------------
+
+Description A transaction already in the register is split from the same menu,
+\ in the split window Transactions specifies.
+Details A downloaded transaction arrives with one category, and the category it
+\ arrives with is usually Uncategorized. One payment covering three
+\ things is ordinary -- a trip to the hardware store, a cheque that was
+\ two invoices -- and the only way to split one was to type it in as a
+\ new entry, which a row that came from a file cannot be.
+\
+\ So it is the same window, opened on a transaction that is already
+\ there rather than on a blank line, and what it saves is checked the
+\ same way: the lines must come to the amount the transaction already
+\ has. Nothing else about the transaction changes -- not its amount,
+\ its date, its payee or its cleared status. A split says where the
+\ money went, and the register's own side of it is already settled.
+\
+\ One transaction at a time, because the total the window checks
+\ against is that transaction's amount. A split already made is shown
+\ and not reopened: the lines of an imported split are what the file
+\ said, and changing them is a separate question from being able to
+\ make one at all.
+
+Attributes SplitSaved
+Description What came of saving the split window over a transaction that was
+\ already in the register.
+| Attribute | Type    | Default |
+| Saved     | Boolean | false   |
+| Reason    | String  | none    |
+
+Scenario Splitting an uncategorised transaction writes its lines
+Description The payment is 184.50 against Uncategorized, which is what a
+\ download leaves. Two lines are typed and they come to it, so the
+\ transaction becomes a split and its category column says so.
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type     | Placeholder |
+| Assets:Checking           | Checking | false       |
+| Expenses:Home:Maintenance | Expense  | false       |
+| Expenses:Home:Garden      | Expense  | false       |
+| Expenses:Uncategorized    | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination            | Amount  |
+| T1  | Assets:Checking | 2026-02-02 | HOME~DEPOT | Expenses:Uncategorized | -184.50 |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register lines selected : RegisterSelect
+| Line |
+| 1    |
+When the selection is split into : SplitLine
+| Category                  | Amount | Memo    |
+| Expenses:Home:Maintenance | 100.00 | Paint   |
+| Expenses:Home:Garden      | 84.50  | Compost |
+Then splitting reported is : SplitSaved Vertical
+| Saved | true |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Category  | Payment |
+| T1  | 2026-02-02 | --Split-- | 184.50  |
+Then split lines are : TransactionSplit
+| Destination               | Amount | Memo    |
+| Expenses:Home:Maintenance | 100.00 | Paint   |
+| Expenses:Home:Garden      | 84.50  | Compost |
+# The amount in the register did not move. The split says how the 184.50 was
+# spent and not that it was a different 184.50.
+
+Scenario A split whose lines do not come to the amount leaves the transaction alone
+Description The same check the split window makes on a new entry, with the
+\ same words. The transaction is left as it was rather than written
+\ half split.
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type     | Placeholder |
+| Assets:Checking           | Checking | false       |
+| Expenses:Home:Maintenance | Expense  | false       |
+| Expenses:Home:Garden      | Expense  | false       |
+| Expenses:Uncategorized    | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination            | Amount  |
+| T1  | Assets:Checking | 2026-02-02 | HOME~DEPOT | Expenses:Uncategorized | -184.50 |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register lines selected : RegisterSelect
+| Line |
+| 1    |
+When the selection is split into : SplitLine
+| Category                  | Amount | Memo    |
+| Expenses:Home:Maintenance | 100.00 | Paint   |
+| Expenses:Home:Garden      | 54.50  | Compost |
+Then splitting reported is : SplitSaved Vertical
+| Saved  | false                              |
+| Reason | The split is 30.00 short of 184.50 |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Category               | Payment |
+| T1  | 2026-02-02 | Expenses:Uncategorized | 184.50  |
+
+Scenario Splitting is offered on one transaction and not on several
+Description The window checks its lines against one amount, and two
+\ transactions have no one amount between them. The rest of the menu
+\ is about a selection and stays as it is.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee          | Destination            | Amount |
+| T1  | Assets:Checking | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | -40.00 |
+| T2  | Assets:Checking | 2026-02-08 | HOME~DEPOT     | Expenses:Uncategorized | -90.00 |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register lines selected : RegisterSelect
+| Line |
+| 1    |
+| 2    |
+Then menu items are : MenuItem
+| Item                 | Enabled |
+| Recategorize...      | true    |
+| Split...             | false   |
+| Add payee rule...    | true    |
+| Apply payee rules... | true    |
+| Delete...            | true    |
+
+Scenario A transaction that is already a split is not split again
+Description Its lines are shown rather than reopened. An imported split holds
+\ what the file said, and the item is left on the menu and greyed so
+\ that the answer to "can this be split" is in the same place either
+\ way.
+Given the chart of accounts is : ChartOfAccounts
+| Path                      | Type     | Placeholder |
+| Assets:Checking           | Checking | false       |
+| Expenses:Home:Maintenance | Expense  | false       |
+| Expenses:Home:Garden      | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
+| T1  | Assets:Checking | 2026-02-02 | HOME~DEPOT | Split       | -184.50 |
+Given split lines are : TransactionSplit
+| Destination               | Amount | Memo    |
+| Expenses:Home:Maintenance | 100.00 | Paint   |
+| Expenses:Home:Garden      | 84.50  | Compost |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register lines selected : RegisterSelect
+| Line |
+| 1    |
+Then menu items are : MenuItem
+| Item                 | Enabled |
+| Recategorize...      | true    |
+| Split...             | false   |
+| Add payee rule...    | true    |
+| Apply payee rules... | true    |
+| Delete...            | true    |
 
 # ---------------------------------------------------------------------------
 # From a figure in a report to the transaction behind it

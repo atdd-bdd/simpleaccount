@@ -240,6 +240,9 @@ private:
     void applyColumnWidths();
     void recategorise(int tabPosition);
     void deleteSelection(int tabPosition);
+    // Splitting a transaction already in the register. See the splitting
+    // section of UserInterface.spectable.
+    void splitSelection(int tabPosition);
     void addPayeeRuleFrom(int tabPosition);
     // Runs the rules already written over the lines selected, which is the
     // same pass the import makes. See applying the payee rules to a selection

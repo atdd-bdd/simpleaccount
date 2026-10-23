@@ -1,7 +1,11 @@
 #pragma once
 #include <string>
 #include <vector>
+#include "account_type.h"
+#include "chart.h"
 #include "money.h"
+#include "transaction.h"
+#include "transaction_id.h"
 #include "register_lines.h"
 
 namespace edit {
@@ -123,6 +127,75 @@ inline SplitAnswer answered(SplitMismatchChoice choice,
             out.lines = with_remainder(typed, remainder);
             return out;
     }
+    return out;
+}
+
+// Splitting a transaction that is already in the book. The window was opened on
+// a transaction whose amount, date, payee and cleared status are already
+// settled, so none of them is touched here: a split says where the money went
+// and nothing about the register's own side of it. The lines are checked
+// against the amount the transaction already has, in the same words the split
+// window uses on a new entry, and a split that does not come to it is not
+// written at all rather than written half done.
+//
+// A category typed into a line that is not in the chart yet is created, as it
+// is when a split is typed into a blank line -- income or expense according to
+// the sign of the line. See "Splitting a transaction that is already in the
+// register" in UserInterface.spectable.
+struct SplitWritten {
+    bool saved = false;
+    std::string reason;
+    std::vector<ledger::TransactionSplit> splits;
+};
+
+inline SplitWritten split_transaction(chart::Chart* accounts, ledger::Transaction* t,
+                                      const std::vector<reg::SplitLine>& lines) {
+    SplitWritten out;
+    if (accounts == nullptr || t == nullptr) {
+        out.reason = "no transaction";
+        return out;
+    }
+    if (chart::is_split(t->destination)) {
+        out.reason = "it is already a split";
+        return out;
+    }
+    if (lines.empty()) {
+        out.reason = "nothing was entered";
+        return out;
+    }
+
+    const Money needed = -t->amount;
+    Money allocated;
+    for (const reg::SplitLine& line : lines) {
+        if (line.category.empty()) {
+            out.reason = "a category is required";
+            return out;
+        }
+        allocated += line.amount;
+    }
+    if (allocated.cents() != needed.cents()) {
+        const Money gap = needed - allocated;
+        const Money shortfall = gap.cents() < 0 ? -gap : gap;
+        const Money whole = needed.cents() < 0 ? -needed : needed;
+        out.reason = "The split is " + shortfall.in_register() + " short of " +
+                     whole.in_register();
+        return out;
+    }
+
+    for (const reg::SplitLine& line : lines) {
+        if (accounts->find(line.category) == nullptr)
+            accounts->add(types::AccountPath(line.category),
+                          line.amount.cents() < 0 ? types::AccountType::Expense
+                                                  : types::AccountType::Income);
+        ledger::TransactionSplit s;
+        s.transaction_id = t->id;
+        s.destination = accounts->ref_for_path(line.category);
+        s.amount = line.amount;
+        s.memo = line.memo;
+        out.splits.push_back(s);
+    }
+    t->destination = chart::split_ref();
+    out.saved = true;
     return out;
 }
 

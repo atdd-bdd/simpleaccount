@@ -21,6 +21,7 @@
 #include "qif_import.h"
 #include "register_lines.h"
 #include "scrolling.h"
+#include "split_edit.h"
 #include "standard_chart.h"
 #include "text_types.h"
 #include "transaction_edit.h"
@@ -1144,6 +1145,13 @@ public:
         const bool anything = !selected_.empty() && !tabs_.empty() &&
                               tabs_[active_tab_].kind == TabKind::Register;
         return {MenuEntry{"Recategorize...", anything},
+                // One transaction at a time, because the window checks its
+                // lines against that transaction's amount and two of them have
+                // no one amount between them. A transaction that is already a
+                // split is shown rather than reopened, so the item is greyed
+                // instead of left off: the answer to "can this be split" is
+                // then in the same place either way.
+                MenuEntry{"Split...", anything && selection_can_be_split()},
                 MenuEntry{"Add payee rule...", anything},
                 // The rules a person has already written, run over the lines in
                 // front of them. The same rules the import applies, so a month
@@ -1170,6 +1178,47 @@ public:
         if (removed > 0) rebuild_book();
         selected_.clear();
         return removed;
+    }
+
+    bool selection_can_be_split() const {
+        if (selected_.size() != 1) return false;
+        const std::vector<reg::Line> lines = register_lines(active_pane());
+        const ledger::Transaction* found = transaction_on(lines, selected_.front());
+        return found != nullptr && !chart::is_split(found->destination);
+    }
+
+    // The lines of the split on the selected register line, which is what the
+    // split window shows when it is opened on a transaction already in the
+    // book. Empty where that transaction is not a split.
+    std::vector<reg::SplitLine> selected_split() const {
+        if (selected_.empty()) return {};
+        const std::vector<reg::Line> lines = register_lines(active_pane());
+        const ledger::Transaction* found = transaction_on(lines, selected_.front());
+        if (found == nullptr) return {};
+        return reg::split_lines_of(accounts_, transactions_, splits_, found->ref.value());
+    }
+
+    struct SplitOutcome {
+        bool saved = false;
+        std::string reason;
+    };
+
+    // The split window saved over a transaction that is already in the
+    // register. Nothing about the transaction's own side moves -- the amount
+    // it was opened on is the total its lines are checked against. See
+    // edit::split_transaction.
+    SplitOutcome split_selected(const std::vector<reg::SplitLine>& lines) {
+        if (selected_.size() != 1) return {false, "one transaction at a time"};
+        const std::vector<reg::Line> shown = register_lines(active_pane());
+        const ledger::Transaction* found = transaction_on(shown, selected_.front());
+        if (found == nullptr) return {false, "no transaction is selected"};
+        ledger::Transaction* writable = by_ref(found->ref.value());
+        const edit::SplitWritten done =
+            edit::split_transaction(&accounts_, writable, lines);
+        if (!done.saved) return {false, done.reason};
+        splits_.insert(splits_.end(), done.splits.begin(), done.splits.end());
+        rebuild_book();
+        return {true, std::string()};
     }
 
     // Every line in the selection, given the same category. The amounts do not

@@ -2882,6 +2882,9 @@ void MainWindow::registerMenu(int tabPosition, const QPoint& at) {
         else if (entry.item.rfind("Add payee rule", 0) == 0)
             connect(action, &QAction::triggered, this,
                     [this]() { addPayeeRuleFrom(1); });
+        else if (entry.item.rfind("Split", 0) == 0)
+            connect(action, &QAction::triggered, this,
+                    [this]() { splitSelection(1); });
         // Nothing else is connected. The menu used to send everything it did
         // not recognise to the rule dialog, which was right while there were
         // three items and wrong the moment there was a fourth: an item nobody
@@ -2971,6 +2974,125 @@ void MainWindow::showFindResultSplit(int line) {
     dialog.resize(520, 260);
     fitToScreen(&dialog);
     dialog.exec();
+}
+
+// Splitting a transaction that is already in the register. The window is the
+// one the entry side has in words -- category, amount, memo, and what is left
+// to allocate -- on a transaction whose amount is already settled, so the
+// figure to reach is the one it already has. See "Splitting a transaction that
+// is already in the register" in UserInterface.spectable.
+void MainWindow::splitSelection(int tabPosition) {
+    (void)tabPosition;
+    if (!workspace_) return;
+    const std::vector<int> chosen = workspace_->selected_lines();
+    if (chosen.size() != 1) return;
+    const std::vector<reg::Line> lines = workspace_->register_lines(1);
+    if (chosen.front() < 1 || chosen.front() > static_cast<int>(lines.size())) return;
+    const reg::Line& line = lines[static_cast<std::size_t>(chosen.front() - 1)];
+    // What the lines have to come to: the other side of the transaction, which
+    // is the payment less the deposit. A payment of 184.50 is split into
+    // positive lines and a deposit into negative ones, which is the rule the
+    // entry side and the book itself use.
+    const Money needed = line.payment - line.deposit;
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Split"));
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->addWidget(new QLabel(
+        QString::fromStdString(line.date.iso() + "   " + line.payee + "   " +
+                               needed.in_register()),
+        &dialog));
+
+    auto* table = new QTableWidget(4, 3, &dialog);
+    table->setHorizontalHeaderLabels({tr("Category"), tr("Amount"), tr("Memo")});
+    table->verticalHeader()->setVisible(false);
+    table->setFont(appFont_);
+    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    layout->addWidget(table, 1);
+
+    auto* remaining = new QLabel(&dialog);
+    layout->addWidget(remaining);
+
+    // What the typed cells say, read back out of the table. Read again
+    // whenever a cell changes, so the figure a person is working towards is
+    // always the one on screen.
+    const auto typedLines = [table]() {
+        std::vector<reg::SplitLine> out;
+        for (int r = 0; r < table->rowCount(); ++r) {
+            const QTableWidgetItem* category = table->item(r, 0);
+            const QTableWidgetItem* amount = table->item(r, 1);
+            const QTableWidgetItem* memo = table->item(r, 2);
+            const std::string path =
+                category == nullptr ? std::string()
+                                    : category->text().trimmed().toStdString();
+            const std::string said =
+                amount == nullptr ? std::string() : amount->text().trimmed().toStdString();
+            if (path.empty() && said.empty()) continue;
+            reg::SplitLine row;
+            row.category = path;
+            row.amount = moneyTyped(amount == nullptr ? QString() : amount->text());
+            row.memo = memo == nullptr ? std::string() : memo->text().trimmed().toStdString();
+            out.push_back(row);
+        }
+        return out;
+    };
+    const auto say = [&]() {
+        Money allocated;
+        for (const reg::SplitLine& row : typedLines()) allocated += row.amount;
+        const Money left = needed - allocated;
+        remaining->setText(tr("Remaining to allocate %1")
+                               .arg(QString::fromStdString(left.in_register())));
+    };
+    say();
+    connect(table, &QTableWidget::itemChanged, &dialog,
+            [&say](QTableWidgetItem*) { say(); });
+
+    auto* buttons = new QHBoxLayout;
+    // The picker is the one Recategorize uses, so a category is found the same
+    // way wherever it is being chosen.
+    auto* pick = new QPushButton(tr("Category..."), &dialog);
+    connect(pick, &QPushButton::clicked, &dialog, [&]() {
+        const int row = table->currentRow() < 0 ? 0 : table->currentRow();
+        const QTableWidgetItem* at = table->item(row, 0);
+        CategoryPick choose(&dialog, chart_, book_,
+                            at == nullptr ? std::string() : at->text().toStdString());
+        if (choose.exec() != QDialog::Accepted) return;
+        const std::string into = choose.chosen();
+        if (into.empty()) return;
+        table->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(into)));
+    });
+    buttons->addWidget(pick);
+    auto* add = new QPushButton(tr("Add line"), &dialog);
+    connect(add, &QPushButton::clicked, &dialog,
+            [table]() { table->setRowCount(table->rowCount() + 1); });
+    buttons->addWidget(add);
+    buttons->addStretch();
+    auto* box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
+                                     &dialog);
+    connect(box, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(box, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    buttons->addWidget(box);
+    layout->addLayout(buttons);
+
+    dialog.resize(620, 320);
+    fitToScreen(&dialog);
+    if (dialog.exec() != QDialog::Accepted) return;
+
+    const ui::Workspace::SplitOutcome written = workspace_->split_selected(typedLines());
+    if (!written.saved) {
+        if (!written.reason.empty())
+            QMessageBox::warning(this, tr("Split"),
+                                 QString::fromStdString(written.reason));
+        return;
+    }
+    chart_ = workspace_->accounts();
+    transactions_ = workspace_->transactions();
+    splits_ = workspace_->splits();
+    book_ = workspace_->book();
+    save();
+    rebuildWorkspace();
+    refresh();
 }
 
 // What the import decided the line already was, read off the book. A look, not
