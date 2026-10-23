@@ -812,4 +812,112 @@ public:
         EXPECT_EQ(Money(want.difference.value).cents(), got.difference.cents()) << "difference";
     }
 
+public:
+
+    // The fixture with this Ref. Ref is a device of the tables, so this only
+    // ever looks for something a table just above established.
+    ledger::Transaction* by_ref(const std::string& ref) {
+        for (auto& t : transactions_)
+            if (t.ref.value() == ref) return &t;
+        return nullptr;
+    }
+
+    // Matching two rows already in the book: each ends up naming the other's
+    // account and recording the other's id. The register reads that record and
+    // nothing else -- see a transfer is a line in each of the two registers it
+    // names.
+    void when_the_other_entry_is_matched(const std::vector<EntryMatchString>& values) {
+        for (const auto& value : values) {
+            ledger::Transaction* t = by_ref(value.ref);
+            ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
+            ledger::Transaction* other = by_ref(value.otherref);
+            ASSERT_NE(nullptr, other) << "no transaction " << value.otherref;
+            EXPECT_TRUE(ledger::match_destinations(&transactions_, t->id, other->id))
+                << value.ref << " could not be joined with " << value.otherref;
+        }
+    }
+
+    // The table names a kind of transaction in words; this is the fixture that
+    // is one of that kind.
+    static std::string ref_for_kind(const std::string& kind) {
+        if (kind == "Lives in this account") return "OWN";
+        if (kind == "Names this account") return "IN";
+        if (kind == "A split line names this account") return "SPLIT";
+        if (kind == "Names neither") return "AWAY";
+        if (kind == "Matched by hand to a row here") return "PAIR";
+        return std::string();
+    }
+
+    // One book holding every kind of transaction the rule distinguishes, read
+    // as the register of Assets:Checking. Built here rather than as five
+    // scenarios because the point of the table is the kinds side by side; the
+    // two that have been got wrong have scenarios of their own above.
+    void examples_businessrule_a_transfer_is_a_line_in_each_of_the_two_registers_it_names(
+            const std::vector<RegisterMembershipString>& values) {
+        chart_ = chart::Chart();
+        const char* paths[] = {"Assets:Checking", "Assets:Joint", "Liabilities:Card",
+                               "Expenses:Groceries", "Unassigned"};
+        const types::AccountType kinds[] = {
+            types::AccountType::Checking, types::AccountType::Checking,
+            types::AccountType::CreditCard, types::AccountType::Expense,
+            types::AccountType::OtherAsset};
+        for (int i = 0; i < 5; ++i) {
+            chart::Account one;
+            one.path = types::AccountPath(paths[i]);
+            one.type = kinds[i];
+            chart_.put(one);
+        }
+        transactions_.clear();
+        splits_.clear();
+
+        // Ref, where it lives, what it names, amount. PAIR is the card's side
+        // of the payment MINE pays, and the two are matched below.
+        const char* rows[][4] = {
+            {"OWN",   "Assets:Checking",  "Expenses:Groceries", "-10.00"},
+            {"IN",    "Assets:Joint",     "Assets:Checking",    "-20.00"},
+            {"SPLIT", "Assets:Joint",     "Split",              "-30.00"},
+            {"AWAY",  "Assets:Joint",     "Expenses:Groceries", "-40.00"},
+            {"MINE",  "Assets:Checking",  "Unassigned",         "-50.00"},
+            {"PAIR",  "Liabilities:Card", "Unassigned",         "50.00"},
+        };
+        for (const auto& row : rows) {
+            ledger::Transaction t;
+            t.id = ledger::new_id();
+            t.ref = types::TransactionRef(row[0]);
+            const auto on = types::Date::from_iso("2026-05-01");
+            if (on) t.date = *on;
+            t.payee = types::PayeeName(row[0]);
+            t.source_account = chart_.ref_for_path(row[1]);
+            t.destination = chart_.ref_for_path(row[2]);
+            t.amount = Money(row[3]);
+            transactions_.push_back(t);
+        }
+        ledger::Transaction* split_owner = by_ref("SPLIT");
+        ASSERT_NE(nullptr, split_owner);
+        ledger::TransactionSplit part;
+        part.transaction_id = split_owner->id;
+        part.destination = chart_.ref_for_path("Assets:Checking");
+        part.amount = Money("-30.00");
+        splits_.push_back(part);
+
+        ledger::Transaction* mine = by_ref("MINE");
+        ledger::Transaction* pair = by_ref("PAIR");
+        ASSERT_NE(nullptr, mine);
+        ASSERT_NE(nullptr, pair);
+        ASSERT_TRUE(ledger::match_destinations(&transactions_, mine->id, pair->id));
+
+        account_ = "Assets:Checking";
+        lines_ = reg::lines_for(chart_, transactions_, splits_, account_);
+
+        for (const auto& value : values) {
+            const std::string ref = ref_for_kind(value.thetransaction);
+            ASSERT_FALSE(ref.empty()) << "no fixture for " << value.thetransaction;
+            bool shown = false;
+            for (const reg::Line& line : lines_)
+                if (line.ref == ref) shown = true;
+            EXPECT_EQ(parse_bool_cell(value.isaline), shown)
+                << value.thetransaction << " -- " << value.why;
+        }
+    }
+
 };

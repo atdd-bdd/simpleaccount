@@ -1,6 +1,5 @@
 #pragma once
 #include <algorithm>
-#include <map>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -114,8 +113,6 @@ public:
             const auto at = where_.find(s.transaction_id.value());
             if (at != where_.end()) parts_[at->second].push_back(&s);
         }
-        for (const ledger::Transaction& t : transactions)
-            ++points_at_[{t.source_account.value(), t.destination.value()}];
         // Date, then the order the transactions were entered. Entry order is
         // stable: importing more never reshuffles lines already there, so the
         // running balance against a line does not change under the reader.
@@ -151,14 +148,6 @@ public:
         return split_parts(position_of(id));
     }
 
-    // How many transactions start from one account and name the other, which
-    // is what says whether a transfer into an account is matched: the other
-    // half of a movement of money points back at where it came from.
-    int points_at(const chart::Ref& from, const chart::Ref& to) const {
-        const auto at = points_at_.find({from.value(), to.value()});
-        return at == points_at_.end() ? 0 : at->second;
-    }
-
 private:
     const chart::Chart* accounts_;
     const std::vector<ledger::Transaction>* transactions_;
@@ -168,7 +157,6 @@ private:
     // compares for no purpose. See decisions.md.
     std::unordered_map<std::string, std::size_t> where_;
     std::vector<std::vector<const ledger::TransactionSplit*>> parts_;
-    std::map<std::pair<long long, long long>, int> points_at_;
     std::vector<std::size_t> order_;
 };
 
@@ -281,27 +269,27 @@ inline std::vector<Line> lines_for(const BookIndex& book, const std::string& acc
         const std::string& dest_path = index.path_for(t.destination);
         if (!chart::Chart::is_descendant_or_self(dest_path, account)) continue;
 
-        // A matched transfer: the account this points at has a transaction of
-        // its own pointing back here, so that other transaction already shows
-        // this movement from its own side and showing it again would be the
-        // same line twice. That is what matching two entries by hand leaves
-        // behind -- each one naming the other's account, neither deleted --
-        // see the assignment rule in Transactions.spectable.
+        // A pair matched by hand: two rows already in the book that describe
+        // one movement of money. Neither was deleted and each names the
+        // other's account, so this account's own row already shows the
+        // movement and showing the other one here would be the same line
+        // twice. See the assignment rule in Transactions.spectable.
         //
-        // It is the pointing back that says so, not merely that the other
-        // account has transactions of its own. A card register is full of its
-        // own purchases, and a payment transferred into it from checking is
-        // not shown by any of them; counting them made the payment vanish from
-        // the card register, which is what "Choosing none leaves an uncleared
-        // line in the other register" in UserInterface.spectable says it must
-        // not do.
-        if (index.is_real(t.destination)) {
-            int others = book.points_at(t.destination, t.source_account);
-            // This transaction is counted in that figure if it is the one
-            // whose two sides are the same account, and it is not its own
-            // other half.
-            if (t.source_account == t.destination) others -= 1;
-            if (others > 0) continue;
+        // It is the recorded match that says so, and nothing else. It used to
+        // be read off the accounts -- if the account this points at has any
+        // transaction pointing back here, hide this one -- and that is wrong
+        // about two accounts which pay each other both ways. One repayment
+        // from a personal account to the joint one hid all 329 transfers the
+        // joint account had made to it, and the register was out by the whole
+        // year's funding with every transaction in the book correct. See a
+        // transfer is a line in each of the two registers it names, in
+        // TransactionRegister.spectable, and findings/register-and-import.md.
+        if (!t.matched_to.value().empty()) {
+            const std::size_t other = book.position_of(t.matched_to);
+            if (other != BookIndex::nowhere &&
+                chart::Chart::is_descendant_or_self(
+                    index.path_for(transactions[other].source_account), account))
+                continue;
         }
 
         Line line;

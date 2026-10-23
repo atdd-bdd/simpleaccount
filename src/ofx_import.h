@@ -243,6 +243,15 @@ struct Existing {
     // test answers the same way however many there are, and the second coffee
     // of the day is silently lost.
     bool claimed = false;
+    // This is a line of the account being imported into, but the transaction
+    // itself lives in another account: a transfer entered from the other side.
+    // It is a duplicate test like any other -- the money is already in this
+    // register -- but nothing is written to it when a row settles against it,
+    // because the cleared marker and the identifier belong to the account the
+    // transaction lives in and this file is not that account's bank speaking.
+    // See a transfer entered from the other account is a duplicate in this
+    // one, in ImportOfx.spectable.
+    bool far_side = false;
 };
 
 // Three ways into what the account already holds, built once per import
@@ -288,17 +297,33 @@ inline std::vector<detail::Existing> existing_in(
     std::vector<detail::Existing> out;
     const chart::Ref account_ref = accounts.ref_for_path(account);
     for (const ledger::Transaction& t : transactions) {
-        if (t.source_account != account_ref) continue;
+        // A transfer entered against the other account names this one, and is
+        // a line of this register on the strength of that -- so a row of this
+        // account's own statement reaches it and is a duplicate. Offering only
+        // the transactions this account owns made every transfer in look new,
+        // and the money arrived a second time: the author's own book had four
+        // of them, 39,000.00 between them. See findings/register-and-import.md.
+        //
+        // The amount is the other way up here, which is how the register shows
+        // it, because the test compares it against the row as the file states
+        // it. The check number and the identifier are left off: both are the
+        // other account's, so tests one and two cannot claim a far-side entry
+        // and it is the date and the amount that decide.
+        const bool mine = t.source_account == account_ref;
+        const bool far = !mine && t.destination == account_ref;
+        if (!mine && !far) continue;
         detail::Existing one;
+        one.far_side = far;
         one.id = t.id.value();
         one.ref = t.ref.value();
         one.date = t.date;
-        one.amount = t.amount;
+        one.amount = far ? -t.amount : t.amount;
         one.payee = t.payee.value();
-        one.raw_name = t.raw_name;
-        one.check_no = t.check_no.value();
-        if (const std::string* id = ledger::id_from(t, source))
-            one.source_id = *id;
+        one.raw_name = far ? std::string() : t.raw_name;
+        one.check_no = far ? std::string() : t.check_no.value();
+        if (!far) {
+            if (const std::string* id = ledger::id_from(t, source)) one.source_id = *id;
+        }
         one.cleared = t.cleared;
         out.push_back(one);
     }
@@ -533,6 +558,11 @@ inline std::vector<Judgement> judge(std::vector<detail::Existing>* already,
     // both are worth a note; neither changes the answer.
     const auto and_what_changed = [&](Judgement* j, const detail::Existing& e,
                                       const Candidate& row) {
+        // Nothing changes on a far-side entry, so there is nothing to note:
+        // its cleared marker and its identifier belong to the account the
+        // transaction lives in and this import leaves both alone. See
+        // apply_duplicates, which claims only what it owns.
+        if (e.far_side) return;
         if (e.cleared == types::ClearedStatus::Uncleared)
             note_once(j, DuplicateNote::Uncleared);
         if (!row.source_id.empty() && e.source_id.empty())

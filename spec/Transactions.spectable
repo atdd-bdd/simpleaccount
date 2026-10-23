@@ -69,6 +69,7 @@ Description What a transaction is: the account it lives in, the other side,
 | Destination   | AccountPath    | none       | The other side: a category, a real account, or the literal Split when the parts are in TransactionSplit below |
 | Amount        | Money          | 0.00       | Signed against SourceAccount; Destination carries the opposite effect by construction |
 | Cleared       | ClearedStatus  | Uncleared  | Per entry: the transaction is one account's own side, and clearing is that account's bank reporting it |
+| MatchedTo     | TransactionRef | none       | The other row of a pair matched by hand, when there is one. These tables name it by Ref; underneath it is that transaction's id. See matching an entry in another register, below, and the register-membership rule in TransactionRegister |
 
 # ---------------------------------------------------------------------------
 # The two kinds of unknown
@@ -1238,9 +1239,9 @@ When the other entry is matched : EntryMatch Vertical
 | Ref      | T1 |
 | OtherRef | T2 |
 Then transactions are : Transaction CompareOnly
-| Ref | SourceAccount          | Destination            |
-| T1  | Assets:Checking        | Liabilities:Chase Visa |
-| T2  | Liabilities:Chase Visa | Assets:Checking         |
+| Ref | SourceAccount          | Destination            | MatchedTo |
+| T1  | Assets:Checking        | Liabilities:Chase Visa | T2        |
+| T2  | Liabilities:Chase Visa | Assets:Checking        | T1        |
 Then balances are : AccountBalance CompareOnly
 | Account    | RawBalance |
 | Unassigned | 0.00       |
@@ -1248,6 +1249,11 @@ Then balances are : AccountBalance CompareOnly
 # side, the card's on the other. The fifteen-day gap was the reason nothing
 # paired them automatically and is no reason not to point them at each other
 # now. Neither row names Unassigned any more, so the suspense balance is zero.
+# Each also records the other, and that is what the register reads: two rows
+# describing one movement, so each is a line of its own register and neither is
+# shown twice. Mutual destinations alone could not say it -- two accounts that
+# pay each other both ways look exactly like this and are not one movement.
+# See a transfer is a line in each of the two registers it names.
 
 Entity TransactionSplit
 Description One category line of a split, kept apart from the transaction that

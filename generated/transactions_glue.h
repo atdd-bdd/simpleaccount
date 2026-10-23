@@ -548,6 +548,12 @@ private:
         s.destination = dest_path.empty() ? "none" : dest_path;
         s.amount = t.amount.in_register();
         s.cleared = types::to_string(t.cleared);
+        // The match is held as the other row's id, and a table names rows by
+        // Ref, so it is read back as that row's Ref.
+        s.matchedto = "none";
+        if (!t.matched_to.value().empty())
+            for (const ledger::Transaction& one : transactions_)
+                if (one.id.value() == t.matched_to.value()) s.matchedto = one.ref.value();
         return s;
     }
 

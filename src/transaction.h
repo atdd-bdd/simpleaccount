@@ -58,6 +58,19 @@ struct Transaction {
     Money amount;
     types::ClearedStatus cleared = types::ClearedStatus::Uncleared;
 
+    // The other row of a pair matched by hand, when there is one, and empty on
+    // everything else. Two rows that describe one movement of money are left
+    // standing -- each keeps its own date and its own payee -- so something has
+    // to say that they are one, and this is it. The register reads it to decide
+    // which of the two is the line; see a transfer is a line in each of the two
+    // registers it names, in TransactionRegister.spectable.
+    //
+    // Not worked out afterwards from the two rows naming each other's account.
+    // Two accounts that pay each other both ways look exactly like that and are
+    // not one movement, and a register that read it that way dropped every
+    // transfer in between two such accounts.
+    types::TransactionId matched_to;
+
     // What an import saw about this transaction and could not say in a field
     // of its own: that it cleared something which had been typed and never
     // cleared, that the file spells the payee differently, that it wrote an
@@ -293,6 +306,11 @@ inline bool match_destinations(std::vector<Transaction>* transactions,
     if (a == nullptr || b == nullptr) return false;
     a->destination = b->source_account;
     b->destination = a->source_account;
+    // And each records the other, which is what the register reads. Without it
+    // the two rows are indistinguishable from an ordinary pair of transfers in
+    // opposite directions, and both registers would show the money twice.
+    a->matched_to = b->id;
+    b->matched_to = a->id;
     return true;
 }
 

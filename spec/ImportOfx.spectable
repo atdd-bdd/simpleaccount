@@ -577,6 +577,13 @@ Details Test one is what makes a second read of the same file do nothing. It
 \ doubles a transaction or loses one. See how many rows match how many
 \ transactions, in ImportCsv.
 \
+\ In this account means in this account's register, which is not the
+\ same as the transactions this account owns. A transfer entered
+\ against the other account names this one as its other side, and is a
+\ line here on the strength of that. Counting only the transactions
+\ whose SourceAccount is this account makes every transfer in look new,
+\ and the money arrives a second time. See a transfer entered from the
+\ other account is a duplicate in this one, below.
 \ The payee is not part of the key. If it were, the first reconciliation
 \ against a history brought over from Quicken would match nothing --
 \ Harris Teeter against HARRIS TEETER #231 -- and a month would import
@@ -603,8 +610,8 @@ Examples: DispositionRule
 | Test | Condition                                                             | Disposition |
 | 1    | A transaction in this account carries this FITID, from an Ofx import   | Duplicate   |
 | 2    | This is a checking account, and a transaction in it has the same check number, amount and payee, dated within the book's check-number window | Duplicate |
-| 3    | The rows and the transactions in this account with this date and this amount are equal in number | Duplicate |
-| 4    | There are transactions in this account with this date and this amount, and they are not equal in number to the rows | Possible |
+| 3    | The rows and the lines of this account's register with this date and this amount are equal in number | Duplicate |
+| 4    | There are lines of this account's register with this date and this amount, and they are not equal in number to the rows | Possible |
 | 5    | Nothing above applies                                                 | New         |
 # A row that is the other half of a payment already in the book is still New
 # here. Whether it is that half is asked after the judging, on the amount and
@@ -995,6 +1002,47 @@ Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 0 |
 | Possible  | 0 |
+
+Scenario A transfer entered from the other account is a duplicate in this one
+Description The movement is already in this account's register. It was entered
+\ against the joint account, naming Ken Checking as its other side, so
+\ Ken Checking shows it as a deposit without owning a row of its own.
+\ Reading Ken Checking's own statement reaches that same movement.
+Details Nothing is brought up to date on a duplicate found this way. The
+\ cleared marker and the identifier both belong to the account the
+\ transaction lives in, and this file is not that account's bank
+\ speaking, so the transaction is left exactly as it is and the row is
+\ reported as a duplicate. See what a duplicate does to the transaction
+\ already there.
+\ The other half of a payment is a different thing and is still New.
+\ There the book holds the other account's own row, whose other side is
+\ nobody yet, and no transaction names this account at all -- so this
+\ account's register has no line for the money and the row is the first
+\ of them. See a half already in the book is found on the amount and
+\ the date.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Joint Checking  | Checking | false       |
+| Assets:Ken Checking    | Checking | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : ImportedTransaction
+| Ref | SourceAccount         | Date       | Payee           | Destination         | Amount   | Cleared | FitId       |
+| T1  | Assets:Joint Checking | 2026-09-30 | TO KEN CHECKING | Assets:Ken Checking | -3000.00 | Cleared | 20260930001 |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Ken Checking |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount  | FitId       | Name               | Memo | CheckNum |
+| CREDIT  | 2026-09-30 | 3000.00 | 20260930777 | TRANSFER FROM 3105 | none | none     |
+Then import summary is : ImportSummary Vertical
+| New       | 0 |
+| Duplicate | 1 |
+| Possible  | 0 |
+Then transactions are : ImportedTransaction
+| Ref | SourceAccount         | Date       | Payee           | Destination         | Amount   | Cleared | FitId       |
+| T1  | Assets:Joint Checking | 2026-09-30 | TO KEN CHECKING | Assets:Ken Checking | -3000.00 | Cleared | 20260930001 |
+# One transaction, untouched: it keeps the identifier the joint account's own
+# download gave it and does not take this one. In Ken Checking's register the
+# line reads 3000.00 the other way up, which is what the row says.
 
 Scenario Two identical downloaded transactions both import
 Description A shop visited twice in one day for the same amount gives two

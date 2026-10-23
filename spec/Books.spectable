@@ -592,6 +592,32 @@ Then transaction is : Transaction Vertical CompareOnly
 # register regardless of which side it was typed against, and the cleared
 # marker is the one account's own -- the account this entry lives in.
 
+Scenario A pair matched by hand reads back still matched
+Description Which two rows were matched is a fact about the book, not a thing
+\ worked out from what the rows look like, so it has to be written.
+\ A save that dropped it would bring the book back with both rows
+\ showing in both registers and the money counted twice.
+Given a new book named Business
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Checking   | false       |
+| Liabilities:Chase Visa | CreditCard | false       |
+| Unassigned             | OtherAsset | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount          | Date       | Payee            | Destination | Amount   |
+| T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | Unassigned  | -1200.00 |
+| T2  | Liabilities:Chase Visa | 2026-04-25 | PAYMENT RECEIVED | Unassigned  | 1200.00  |
+When the other entry is matched : EntryMatch Vertical
+| Ref      | T1 |
+| OtherRef | T2 |
+When the book is saved and opened again
+Then transactions are : Transaction
+| Ref | SourceAccount          | Date       | Payee            | Destination            | Amount   | Memo | Cleared   | MatchedTo |
+| T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | Liabilities:Chase Visa | -1200.00 | none | Uncleared | T2        |
+| T2  | Liabilities:Chase Visa | 2026-04-25 | PAYMENT RECEIVED | Assets:Checking        | 1200.00  | none | Uncleared | T1        |
+# Stored as the other transaction's id, which is why it survives at all: a Ref
+# is a label of these tables and two rows may carry the same one.
+
 # ---------------------------------------------------------------------------
 # What a save writes
 # ---------------------------------------------------------------------------

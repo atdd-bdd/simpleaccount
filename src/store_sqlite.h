@@ -37,7 +37,7 @@ namespace store {
 // deleted while the shape was still being settled, so a file claiming another
 // version is a file this program did not write. Once there are books worth
 // keeping, a bump has to come with a way to read the version before it.
-inline constexpr int kSchemaVersion = 17;
+inline constexpr int kSchemaVersion = 18;
 
 struct Failure {
     bool refused = false;
@@ -249,7 +249,15 @@ CREATE TABLE transactions (
   amount_cents   INTEGER NOT NULL DEFAULT 0,
   -- Per entry under this shape: see the Cleared attribute on Transaction in
   -- Transactions.spectable.
-  cleared        TEXT    NOT NULL DEFAULT 'Uncleared');
+  cleared        TEXT    NOT NULL DEFAULT 'Uncleared',
+  -- The other row of a pair matched by hand, by id, and empty on everything
+  -- else. Which two rows were matched is a fact about the book and not
+  -- something to be worked out again from what the rows look like, so it is
+  -- written: see a pair matched by hand reads back still matched, in
+  -- Books.spectable. No REFERENCES clause, for the reason the cascades below
+  -- do nothing -- foreign keys are never turned on -- and because the register
+  -- treats a match naming a transaction that is no longer there as no match.
+  matched_to     TEXT    NOT NULL DEFAULT '');
 
 CREATE TABLE transaction_splits (
   -- A split's parts under the new shape, kept apart from postings rather
@@ -774,8 +782,8 @@ public:
         detail::Statement header(db_.get(),
             "INSERT INTO transactions "
             "(id, ref, date, payee, raw_name, check_no, memo, tag, "
-            "source_ref, destination_ref, amount_cents, cleared) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            "source_ref, destination_ref, amount_cents, cleared, matched_to) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         if (!header.ok()) return fail(header.why());
         detail::Statement mark(db_.get(),
             "INSERT INTO transaction_import_ids (transaction_id, source, id) "
@@ -850,6 +858,7 @@ public:
             header.bind(10, t.destination.value());
             header.bind(11, static_cast<long long>(t.amount.cents()));
             header.bind(12, types::to_string(t.cleared));
+            header.bind(13, t.matched_to.value());
             if (!header.run()) return fail(header.why());
 
             const auto at = lines.find(t.id.value());
@@ -1024,7 +1033,7 @@ public:
 
         detail::Statement header(db_.get(),
             "SELECT id, ref, date, payee, raw_name, check_no, memo, tag, "
-            "source_ref, destination_ref, amount_cents, cleared "
+            "source_ref, destination_ref, amount_cents, cleared, matched_to "
             "FROM transactions "
             "ORDER BY date, rowid");
         if (!header.ok()) return {true, header.why()};
@@ -1044,6 +1053,7 @@ public:
             t.destination = chart::Ref(header.integer(9));
             t.amount = Money::from_cents(header.integer(10));
             t.cleared = types::cleared_status_from_string(header.text(11));
+            t.matched_to = types::TransactionId(header.text(12));
             transactions->push_back(t);
         }
 
@@ -1146,6 +1156,7 @@ private:
         add(std::to_string(t.destination.value()));
         add(std::to_string(t.amount.cents()));
         add(types::to_string(t.cleared));
+        add(t.matched_to.value());
         for (const ledger::TransactionSplit* s : lines) {
             add(std::to_string(s->destination.value()));
             add(std::to_string(s->amount.cents()));
@@ -1207,7 +1218,8 @@ private:
         std::unordered_map<std::string, std::string> stored;
         detail::Statement header(db_.get(),
             "SELECT id, ref, date, payee, raw_name, check_no, memo, tag, "
-            "source_ref, destination_ref, amount_cents, cleared FROM transactions");
+            "source_ref, destination_ref, amount_cents, cleared, matched_to "
+            "FROM transactions");
         if (!header.ok()) return {true, header.why()};
         while (header.step_row()) {
             ledger::Transaction t;
@@ -1225,6 +1237,7 @@ private:
             t.destination = chart::Ref(header.integer(9));
             t.amount = Money::from_cents(header.integer(10));
             t.cleared = types::cleared_status_from_string(header.text(11));
+            t.matched_to = types::TransactionId(header.text(12));
             const auto mark = marks.find(t.id.value());
             if (mark != marks.end()) t.import_ids = mark->second;
 

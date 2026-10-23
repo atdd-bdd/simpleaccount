@@ -1262,6 +1262,15 @@ public:
             EXPECT_EQ(Money(value.amount).cents(), t->amount.cents()) << value.ref << " amount";
             EXPECT_EQ(blank(value.memo), t->memo) << value.ref << " memo";
             EXPECT_EQ(value.cleared.value, types::to_string(t->cleared)) << value.ref.value << " cleared";
+            // Which row this one was matched to, named by Ref the way the
+            // table names rows. It is held as the other row's id, so this is
+            // the check that the save wrote it and the read brought it back.
+            std::string matched = "none";
+            if (!t->matched_to.value().empty())
+                for (const ledger::Transaction& one : transactions_)
+                    if (one.id.value() == t->matched_to.value()) matched = one.ref.value();
+            if (value.matchedto.value != DNCString)
+                EXPECT_EQ(value.matchedto.value, matched) << value.ref.value << " matched to";
         }
     }
 
@@ -1632,5 +1641,24 @@ private:
     }
 
 public:
+
+public:
+
+    // Matching two rows already in the book. What the save has to keep is
+    // which two they were, so the scenario matches them and then saves.
+    void when_the_other_entry_is_matched(const std::vector<EntryMatchString>& values) {
+        for (const auto& value : values) {
+            const ledger::Transaction* t = nullptr;
+            const ledger::Transaction* other = nullptr;
+            for (const ledger::Transaction& one : transactions_) {
+                if (one.ref.value() == value.ref.value) t = &one;
+                if (one.ref.value() == value.otherref.value) other = &one;
+            }
+            ASSERT_NE(nullptr, t) << "no transaction " << value.ref;
+            ASSERT_NE(nullptr, other) << "no transaction " << value.otherref;
+            EXPECT_TRUE(ledger::match_destinations(&transactions_, t->id, other->id))
+                << value.ref << " could not be joined with " << value.otherref;
+        }
+    }
 
 };

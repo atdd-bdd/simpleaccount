@@ -80,6 +80,119 @@ Then register lines are : RegisterLine
 # the Deposit column. The column heading rule below gives it a better name.
 
 # ---------------------------------------------------------------------------
+# Which transactions are lines of this register
+# ---------------------------------------------------------------------------
+
+BusinessRule A transfer is a line in each of the two registers it names
+Description A transaction is a line of the register of the account it lives in
+\ and of the register of the account it names, and those two lines are
+\ one transaction seen twice. Nothing is kept out of a register
+\ because of what some other transaction says.
+Details The one thing ever hidden is the second row of a pair matched by hand.
+\ Matching says that two rows already in the book describe one movement
+\ of money. Neither is deleted and each ends up naming the other's
+\ account, so each is a line of its own register and the other's row is
+\ not shown there a second time -- it is the same money. See assigning
+\ an account asks whether the other entry already exists, in
+\ Transactions.
+\ Which two rows those are is recorded when the match is made. It is
+\ not worked out afterwards from what the rows look like, and in
+\ particular not from the two accounts having traffic in both
+\ directions. Two accounts paying each other both ways is ordinary --
+\ a joint account funds a personal one all year and is repaid once --
+\ and a register that dropped every transfer in for that reason would
+\ be out by the whole year's funding while every transaction in the
+\ book was right.
+Examples: RegisterMembership
+| TheTransaction                  | IsALine | Why                                      |
+| Lives in this account           | Yes     | It is this account's own row             |
+| Names this account              | Yes     | A transfer is a line in both registers   |
+| A split line names this account | Yes     | One line per category the split touches  |
+| Names neither                   | No      | Nothing to do with this account          |
+| Matched by hand to a row here   | No      | The row it was matched to is the line     |
+
+Attributes RegisterMembership
+| Attribute      | Type   | Default |
+| TheTransaction | String |         |
+| IsALine        | String | Yes     |
+| Why            | String | none    |
+
+Scenario Two accounts that pay each other both ways keep every line
+Description The joint account funds this one twice and is repaid once. All three
+\ are lines of this register -- two in, one out -- and the balance is
+\ what it works out to. The repayment is not evidence about the
+\ funding and hides nothing.
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type     | Placeholder |
+| Assets:Checking | Checking | false       |
+| Assets:Joint    | Checking | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee    | Destination     | Amount   |
+| T1  | Assets:Joint    | 2026-01-05 | Transfer | Assets:Checking | -500.00  |
+| T2  | Assets:Joint    | 2026-02-05 | Transfer | Assets:Checking | -500.00  |
+| T3  | Assets:Checking | 2026-03-05 | Transfer | Assets:Joint    | -1000.00 |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register lines are : RegisterLine
+| Ref | Date       | Payee    | Category | Payment | Deposit | Balance |
+| T1  | 2026-01-05 | Transfer | [Joint]  | 0.00    | 500.00  | 500.00  |
+| T2  | 2026-02-05 | Transfer | [Joint]  | 0.00    | 500.00  | 1000.00 |
+| T3  | 2026-03-05 | Transfer | [Joint]  | 1000.00 | 0.00    | 0.00    |
+# One transaction out of three names this account from the other side, which
+# says nothing about the two that name it from this one.
+
+Scenario A pair matched by hand shows in this register as this account's own row
+Description The card was imported weeks ago and the payment never paired, so
+\ each side is its own row. Matching them says they are one movement.
+\ This register shows the row that lives here and not the card's.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Checking   | false       |
+| Liabilities:Chase Visa | CreditCard | false       |
+| Unassigned             | OtherAsset | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount          | Date       | Payee            | Destination | Amount   |
+| T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | Unassigned  | -1200.00 |
+| T2  | Liabilities:Chase Visa | 2026-04-25 | PAYMENT RECEIVED | Unassigned  | 1200.00  |
+When the other entry is matched : EntryMatch Vertical
+| Ref      | T1 |
+| OtherRef | T2 |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register lines are : RegisterLine
+| Ref | Date       | Payee     | Category     | Payment | Deposit | Balance  |
+| T1  | 2026-04-10 | CHASEBANK | [Chase Visa] | 1200.00 | 0.00    | -1200.00 |
+# T2 names this account now, and is not a line here: it is the card's own row
+# and this is the same 1200.00 seen from the other side.
+
+Scenario The same matched pair shows in the other register as the other row
+Description The card's register is the mirror of it. The card's own row is the
+\ line, dated the day the card recorded the payment, and the bank's
+\ row is not shown again.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Checking   | false       |
+| Liabilities:Chase Visa | CreditCard | false       |
+| Unassigned             | OtherAsset | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount          | Date       | Payee            | Destination | Amount   |
+| T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | Unassigned  | -1200.00 |
+| T2  | Liabilities:Chase Visa | 2026-04-25 | PAYMENT RECEIVED | Unassigned  | 1200.00  |
+When the other entry is matched : EntryMatch Vertical
+| Ref      | T1 |
+| OtherRef | T2 |
+When register opened on : AccountSelect
+| Path                   |
+| Liabilities:Chase Visa |
+Then register lines are : RegisterLine
+| Ref | Date       | Payee            | Category   | Payment | Deposit | Balance  |
+| T2  | 2026-04-25 | PAYMENT RECEIVED | [Checking] | 0.00    | 1200.00 | -1200.00 |
+# Each register keeps its own date and its own payee, which is the reason the
+# two rows were left standing rather than merged into one.
+
+# ---------------------------------------------------------------------------
 # Column headings
 # ---------------------------------------------------------------------------
 
