@@ -250,6 +250,154 @@ Attributes BalanceColumnState
 | Reason    | Text    | none    |
 
 # ---------------------------------------------------------------------------
+# The two balances at the top of the register
+# ---------------------------------------------------------------------------
+
+Description The top of the register states what the account comes to, what the
+\ part of it the bank has seen comes to, and what the bank last said
+\ it came to.
+Details Reconciling is comparing two numbers, and until now only one of them
+\ was on the screen. The other was on the bank's website, in another
+\ window, and the difference had to be worked out in one's head
+\ against a figure that had already scrolled away.
+\
+\ Three figures, because two of them answer different questions.
+\ Balance is every transaction in the account, including the cheque
+\ written this morning that the bank has not seen -- it is what the
+\ money actually is. Cleared counts only what is marked cleared, which
+\ is what the bank should agree with, and it is the one the downloaded
+\ figure is compared against. Comparing the bank against Balance would
+\ show a difference every time something was in flight, which is most
+\ of the time, and a warning that is usually on is not read.
+\
+\ Downloaded is the balance the last download stated and the date it
+\ was for; see what a download teaches an account in ImportOfx, which
+\ is where it is written. It is shown as it was stated, with its date,
+\ because a balance without a date cannot be compared with anything.
+\
+\ Difference is Cleared less Downloaded, and zero is the ordinary case
+\ -- it means the import agreed, and it goes on being true for the
+\ rest of the month if nothing is marked cleared by hand. Anything
+\ else is the number to go looking with.
+
+Attributes RegisterBalances
+Description The three figures across the top of one register, in the display
+\ sign of the account, the same as the running balance column. Never
+\ stands in for the date when no download has reached the account, and
+\ Downloaded and Difference are then both zero and are not shown.
+| Attribute    | Type        | Default |
+| Account      | AccountPath |         |
+| Balance      | Money       | 0.00    |
+| Cleared      | Money       | 0.00    |
+| Downloaded   | Money       | 0.00    |
+| DownloadedAt | Text        | never   |
+| Difference   | Money       | 0.00    |
+
+Scenario The top of the register shows both balances and the difference
+Description A download agreed with the book at the end of January, and a cheque
+\ written in February has not reached the bank. The three figures say
+\ so: the account is down by the cheque, the bank is not, and nothing
+\ is wrong.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder | DownloadedBalance | DownloadedBalanceAt |
+| Assets:Checking        | Checking | false       | 1705.00           | 2024-01-31          |
+| Expenses:Uncategorized | Expense  | false       | 0.00              | never               |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination            | Amount  | Cleared   |
+| T1  | Assets:Checking | 2024-01-01 | Opening       | Expenses:Uncategorized | 1750.00 | Cleared   |
+| T2  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Uncategorized | -45.00  | Cleared   |
+| T3  | Assets:Checking | 2024-02-03 | Plumber       | Expenses:Uncategorized | -200.00 | Uncleared |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register balances are : RegisterBalances Vertical
+| Account      | Assets:Checking |
+| Balance      | 1505.00         |
+| Cleared      | 1705.00         |
+| Downloaded   | 1705.00         |
+| DownloadedAt | 2024-01-31      |
+| Difference   | 0.00            |
+# Cleared and Downloaded agree, which is the point: the 200.00 is in the
+# register and not at the bank, and that is a difference between Balance and
+# Cleared rather than a disagreement with anybody.
+
+Scenario A cleared balance that disagrees with the bank is a difference
+Description The usual cause is a transaction marked cleared that the bank has
+\ not seen, which is the same thing the import reports; this is where
+\ it is still visible three weeks later.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder | DownloadedBalance | DownloadedBalanceAt |
+| Assets:Checking        | Checking | false       | 1705.00           | 2024-01-31          |
+| Expenses:Uncategorized | Expense  | false       | 0.00              | never               |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination            | Amount  | Cleared |
+| T1  | Assets:Checking | 2024-01-01 | Opening       | Expenses:Uncategorized | 1750.00 | Cleared |
+| T2  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Uncategorized | -45.00  | Cleared |
+| T3  | Assets:Checking | 2024-01-20 | Plumber       | Expenses:Uncategorized | -100.00 | Cleared |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register balances are : RegisterBalances Vertical
+| Account      | Assets:Checking |
+| Balance      | 1605.00         |
+| Cleared      | 1605.00         |
+| Downloaded   | 1705.00         |
+| DownloadedAt | 2024-01-31      |
+| Difference   | -100.00         |
+# A hundred the register thinks the bank has seen and the bank does not. The
+# figure is shown rather than a word, because the figure is what finds it.
+
+Scenario A register of an account never downloaded for shows what it works out
+Description Which is every account of a book imported from Quicken, so it is
+\ the ordinary case rather than the exception. Nothing is missing from
+\ the top of the register; there is simply nothing to compare.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder | DownloadedBalance | DownloadedBalanceAt |
+| Assets:Checking        | Checking | false       | 0.00              | never               |
+| Expenses:Uncategorized | Expense  | false       | 0.00              | never               |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination            | Amount  | Cleared   |
+| T1  | Assets:Checking | 2024-01-01 | Opening       | Expenses:Uncategorized | 1750.00 | Uncleared |
+| T2  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Uncategorized | -45.00  | Uncleared |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register balances are : RegisterBalances Vertical
+| Account      | Assets:Checking |
+| Balance      | 1705.00         |
+| Cleared      | 0.00            |
+| Downloaded   | 0.00            |
+| DownloadedAt | never           |
+| Difference   | 0.00            |
+# Cleared is zero because nothing is cleared, not because the account is empty,
+# and Difference is zero rather than 1705.00 because there is nothing to
+# differ from. A number made up out of never would read as a problem.
+
+Scenario A credit card register shows both balances the way the statement reads
+Description The display sign applies to all three, because a card balance of
+\ 450.00 owed compared against negative 450.00 is a comparison nobody
+\ can make at a glance. See the display sign rule above.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder | DownloadedBalance | DownloadedBalanceAt |
+| Liabilities:Visa       | CreditCard | false       | 450.00            | 2024-01-31          |
+| Expenses:Uncategorized | Expense    | false       | 0.00              | never               |
+Given transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee     | Destination            | Amount  | Cleared |
+| T1  | Liabilities:Visa | 2024-01-10 | Amazon    | Expenses:Uncategorized | -450.00 | Cleared |
+When register opened on : AccountSelect
+| Path             |
+| Liabilities:Visa |
+Then register balances are : RegisterBalances Vertical
+| Account      | Liabilities:Visa |
+| Balance      | 450.00           |
+| Cleared      | 450.00           |
+| Downloaded   | 450.00           |
+| DownloadedAt | 2024-01-31       |
+| Difference   | 0.00             |
+# The posting is negative 450.00 and all four figures read 450.00, which is
+# what the statement says is owed.
+
+# ---------------------------------------------------------------------------
 # Sorting by a column other than the date
 # ---------------------------------------------------------------------------
 

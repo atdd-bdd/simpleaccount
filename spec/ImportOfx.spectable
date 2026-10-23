@@ -361,6 +361,87 @@ Description The two things on an account that a download is matched against.
 | BankId        | Text        | none    |
 | AccountNumber | Text        | none    |
 
+Description The balance the download stated is written on the account, with the
+\ date it was the balance on, and kept there.
+Details The check against LEDGERBAL above happens once, during the import, and
+\ then the number is gone. What it is wanted for is the other three
+\ weeks of the month: the register says one thing, the bank's website
+\ says another, and the question is always which of the two moved
+\ since. Knowing the balance the bank last agreed to, and the day it
+\ agreed to it, turns that into arithmetic. Not knowing it turns it
+\ into reading a statement line by line.
+\
+\ So it is one more thing the account knows, like the bank id and the
+\ number -- written by the import, not typed -- and the register shows
+\ it beside the balance it works out for itself. See the two balances
+\ at the top of the register in TransactionRegister.
+\
+\ A balance older than the one already written is not an answer to
+\ anything, so it is not written. Downloads arrive out of order often
+\ enough -- a file saved last month and imported today -- and the most
+\ recent statement is the only one worth keeping.
+
+Attributes AccountDownloadedBalance
+Description The balance a download last stated for one account. Never is a word
+\ rather than a date, because an account the program has never
+\ downloaded for has no balance to disagree with, which is not the
+\ same as one whose bank said zero.
+| Attribute  | Type        | Default |
+| Path       | AccountPath |         |
+| Balance    | Money       | 0.00    |
+| BalanceAt  | Text        | never   |
+
+Scenario The balance a download states is written on the account
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When ledger balance checked : LedgerBalanceCheck Vertical
+| Account     | Assets:Checking |
+| StatedBal   | 1705.00         |
+| StatedBalAt | 2024-01-31      |
+Then downloaded balances are : AccountDownloadedBalance
+| Path            | Balance | BalanceAt  |
+| Assets:Checking | 1705.00 | 2024-01-31 |
+
+Scenario An account no download has reached has no balance from the bank
+Description The case the word never is for. The register shows what it works
+\ out and nothing to compare it against, which is every account in a
+\ book imported from Quicken.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Then downloaded balances are : AccountDownloadedBalance
+| Path            | Balance | BalanceAt |
+| Assets:Checking | 0.00    | never     |
+
+Scenario A download older than the balance on the account does not replace it
+Description February is imported, then a January file somebody had saved. The
+\ account keeps February, because the question it answers is what the
+\ bank last agreed to.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given import target is : ImportTarget Vertical
+| AccountPath | Assets:Checking |
+When ledger balance checked : LedgerBalanceCheck Vertical
+| Account     | Assets:Checking |
+| StatedBal   | 1705.00         |
+| StatedBalAt | 2024-02-29      |
+When ledger balance checked : LedgerBalanceCheck Vertical
+| Account     | Assets:Checking |
+| StatedBal   | 1900.00         |
+| StatedBalAt | 2024-01-31      |
+Then downloaded balances are : AccountDownloadedBalance
+| Path            | Balance | BalanceAt  |
+| Assets:Checking | 1705.00 | 2024-02-29 |
+# The January figure is not wrong; it is simply not the latest, and the latest
+# is the only one the register has room to show.
+
 Scenario A number already on the account is left as it is and noted
 Description The account says one number, the file says another, and the person
 \ confirmed that account anyway. Which of the two is right is not

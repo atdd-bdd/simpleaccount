@@ -5,6 +5,8 @@
 #include <unordered_map>
 #include <vector>
 #include "account_type.h"
+#include "date.h"
+#include "money.h"
 #include "text_types.h"
 
 // The chart of accounts: one tree holding both the accounts that keep money and
@@ -149,6 +151,27 @@ struct Account {
     // account writes it down, so that the one after that is placed without
     // asking. See the teaching rule in ImportOfx.spectable.
     std::string bank_id;
+    // What the last download said the balance was, and the date it was the
+    // balance on. Written by an import, never typed. Absent means no download
+    // has ever reached this account, which is not the same as a bank that said
+    // zero -- the register shows nothing to compare against rather than a
+    // difference of the whole balance. See the two balances at the top of the
+    // register in TransactionRegister.spectable.
+    Money downloaded_balance;
+    std::optional<types::Date> downloaded_balance_at;
+};
+
+// What the dialog of one category holds, which is what the dialog that adds one
+// asks. It held the alias alone to begin with, which made it the one editor in
+// the program that could not correct what somebody had got wrong. See what is
+// kept about a category in Accounts.spectable.
+struct CategorySettings {
+    types::AccountPath path;     // what the dialog was opened on
+    types::AccountName name;
+    std::string under;           // the parent; empty for one at the top of its tree
+    types::AccountType type = types::AccountType::Expense;
+    std::string alias;
+    bool hidden = false;
 };
 
 // Why an operation was refused. The text is what the register shows, so it names
@@ -351,6 +374,95 @@ public:
                           " postings; hide it instead"};
         accounts_.erase(path.value());
         return {};
+    }
+
+    // What the dialog of one category comes up showing. Under is the path with
+    // the name taken off, which is how a parent is arrived at everywhere else.
+    std::optional<CategorySettings> category_settings(const std::string& path) const {
+        const Account* a = find(path);
+        if (a == nullptr) return std::nullopt;
+        CategorySettings c;
+        c.path = a->path;
+        c.name = types::AccountName(types::name_of(a->path));
+        c.under = types::parent_of(a->path);
+        c.type = a->type;
+        c.alias = a->alias;
+        c.hidden = a->hidden;
+        return c;
+    }
+
+    // The dialog, answered. Each of the five is the chart's own operation and
+    // keeps its own rules: a rename rewrites the paths beneath it, a move
+    // carries the subtree, a type change refuses to cross a class once there
+    // are postings. Moving first, then renaming, so that a dialog which changed
+    // both does not rename into a path the move is about to take.
+    Rejection apply_category_settings(const CategorySettings& want) {
+        const Account* a = find(want.path.value());
+        if (a == nullptr)
+            return {true, "There is no account named " + want.path.value()};
+
+        // Read off before anything is changed. A move erases the subtree and
+        // puts it back under the new parent, so the pointer find() just gave
+        // back is dangling from that moment on -- which read as a crash in
+        // the move scenario and, in a longer run, as nothing at all.
+        const std::string had_name = types::name_of(a->path);
+        const std::string had_parent = types::parent_of(a->path);
+
+        std::string at = want.path.value();
+        if (want.under != had_parent) {
+            const Rejection no = want.under.empty()
+                ? move_subtree(at, had_name)
+                : move(types::AccountPath(at), types::AccountPath(want.under));
+            if (no.refused) return no;
+            at = want.under.empty() ? had_name : want.under + ":" + had_name;
+        }
+        if (want.name.value() != types::name_of(types::AccountPath(at))) {
+            const Rejection no = rename(types::AccountPath(at), want.name);
+            if (no.refused) return no;
+            const std::string parent = types::parent_of(types::AccountPath(at));
+            at = parent.empty() ? want.name.value() : parent + ":" + want.name.value();
+        }
+        const auto now = accounts_.find(at);
+        if (now == accounts_.end()) return {true, "There is no account named " + at};
+        if (now->second.type != want.type) {
+            const Rejection no = change_type(types::AccountPath(at), want.type);
+            if (no.refused) return no;
+        }
+        now->second.alias = want.alias;
+        now->second.hidden = want.hidden;
+        return {};
+    }
+
+    // A category added from the listing. No parent means the top of its own
+    // tree, which is its root -- Income, Expenses or Equity -- and not a root
+    // of its own: a category outside those trees is invisible to every report
+    // there is. The root is created if the book has not got one, which is the
+    // rule a missing parent follows anywhere else in the chart.
+    Rejection add_category_under(const types::AccountName& name, const std::string& under,
+                                 types::AccountType type, const std::string& alias,
+                                 std::vector<Account>* created = nullptr) {
+        const std::string parent = under.empty() ? root_for(type) : under;
+        const std::string path = parent.empty() ? name.value() : parent + ":" + name.value();
+        const Rejection no = add(types::AccountPath(path), type, created);
+        if (no.refused) return no;
+        const auto at = accounts_.find(path);
+        if (at != accounts_.end()) {
+            at->second.alias = alias;
+            at->second.placeholder = false;
+        }
+        return {};
+    }
+
+    // Which tree a category of this type belongs in. A real account's type has
+    // no one root -- a Bank and a Checking account live wherever somebody put
+    // them -- so this answers for the three category types only.
+    static std::string root_for(types::AccountType type) {
+        switch (type) {
+            case types::AccountType::Income:  return "Income";
+            case types::AccountType::Expense: return "Expenses";
+            case types::AccountType::Equity:  return "Equity";
+            default:                          return std::string();
+        }
     }
 
     Rejection hide(const types::AccountPath& path) {

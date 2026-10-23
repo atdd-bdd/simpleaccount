@@ -105,4 +105,8 @@ if [ $BUILT -ne 0 ]; then
 fi
 
 echo "== run =="
-"$BIN" "$@" 2>&1 | tail -4
+# The exit status is the binary's and not tail's. Piped through tail the
+# status was always 0, so a suite with seven failures in it reported
+# success -- which is the one thing this script exists to say.
+"$BIN" "$@" 2>&1 | tail -6
+exit "${PIPESTATUS[0]}"

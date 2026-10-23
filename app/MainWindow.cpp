@@ -229,7 +229,12 @@ QTableWidgetItem* text(const std::string& s, const std::string& tooltip) {
 // and its buttons are connected to lambdas.
 class RuleForm : public QDialog {
 public:
-    RuleForm(QWidget* parent, const QString& title, const payees::Rule& start)
+    // pick, when it is given, is what opens the category picker: it is handed
+    // the category the form holds and returns the one chosen, or nothing. The
+    // form cannot open it itself -- the picker is declared below this -- and a
+    // callback keeps the two in one direction rather than in a circle.
+    RuleForm(QWidget* parent, const QString& title, const payees::Rule& start,
+             std::function<std::string(const std::string&)> pick = {})
         : QDialog(parent) {
         setWindowTitle(title);
         auto* form = new QFormLayout(scrollingBody(this));
@@ -254,7 +259,26 @@ public:
         category_ = new QLineEdit(QString::fromStdString(start.category));
         category_->setToolTip("Left empty, the rule tidies the name and leaves "
                               "the category alone.");
-        form->addRow("Category", category_);
+        // Chosen from the same list the register's Recategorize offers, rather
+        // than typed. A path typed by hand is how a rule ends up naming a
+        // category the book has not got, which reads afterwards as a rule that
+        // does nothing at all.
+        if (pick) {
+            auto* row = new QWidget(this);
+            auto* across = new QHBoxLayout(row);
+            across->setContentsMargins(0, 0, 0, 0);
+            across->addWidget(category_, 1);
+            auto* choose = new QPushButton("Choose...", row);
+            across->addWidget(choose);
+            connect(choose, &QPushButton::clicked, this, [this, pick]() {
+                const std::string chosen =
+                    pick(category_->text().trimmed().toStdString());
+                if (!chosen.empty()) category_->setText(QString::fromStdString(chosen));
+            });
+            form->addRow("Category", row);
+        } else {
+            form->addRow("Category", category_);
+        }
 
         enabled_ = new QCheckBox("Apply this rule");
         enabled_->setChecked(start.enabled);
@@ -310,7 +334,8 @@ class CategoryPick : public QDialog {
 public:
     CategoryPick(QWidget* parent, const chart::Chart& accounts,
                  const ledger::Ledger& book, const std::string& start)
-        : QDialog(parent), accounts_(accounts), book_(book) {
+        : QDialog(parent), accounts_(accounts), book_(book),
+          latest_(chart::last_used_dates(book)) {
         setWindowTitle("Choose a category");
         resize(460, 420);
         auto* layout = new QVBoxLayout(this);
@@ -361,8 +386,13 @@ private:
     void filter() {
         const std::string typed = typed_->text().trimmed().toStdString();
         const types::Date today = asDate(QDate::currentDate());
+        // The dates are read once, when the dialog opens, and not again:
+        // asking the book for them on every keystroke is one pass over thirty
+        // thousand postings per letter typed, which is what made this dialog
+        // slow to open and slower to type in. Nobody posts anything while the
+        // dialog is up, so the answer cannot have changed.
         std::vector<chart::Account> offered =
-            chart::offered_for_typed(accounts_, book_, typed, false, today);
+            chart::offered_for_typed(accounts_, latest_, typed, false, today);
         std::sort(offered.begin(), offered.end(),
                  [](const chart::Account& a, const chart::Account& b) {
                      return a.path.value() < b.path.value();
@@ -379,6 +409,8 @@ private:
 
     const chart::Chart& accounts_;
     const ledger::Ledger& book_;
+    // Read once at construction. See filter().
+    chart::LastUsedDates latest_;
     QLineEdit* typed_ = nullptr;
     QListWidget* list_ = nullptr;
     QPushButton* ok_ = nullptr;
@@ -673,7 +705,16 @@ void MainWindow::showCategoryListing() {
     dialog.setWindowTitle("Categories");
     dialog.resize(700, 520);
     auto* layout = new QVBoxLayout(&dialog);
-    layout->addWidget(new QLabel("Double-click a line to edit the category.", &dialog));
+    // Adding one from here rather than from the account dialog, which is where
+    // the only way to add a category used to be -- a list of categories with
+    // no way to add one is a list that sends a person somewhere else to use
+    // it.
+    auto* across = new QHBoxLayout;
+    auto* addOne = new QPushButton("Add a category...", &dialog);
+    across->addWidget(addOne);
+    across->addStretch(1);
+    across->addWidget(new QLabel("Double-click a line to edit the category.", &dialog));
+    layout->addLayout(across);
     auto* table = new QTableWidget(&dialog);
     table->setColumnCount(5);
     table->setHorizontalHeaderLabels({"Category", "Type", "Group", "Hidden", "Alias"});
@@ -704,6 +745,10 @@ void MainWindow::showCategoryListing() {
         if (item == nullptr) return;
         editCategorySettings(item->text());
         fill();
+    });
+
+    connect(addOne, &QPushButton::clicked, &dialog, [this, &dialog, fill]() {
+        if (addCategoryFromListing(&dialog)) fill();
     });
     fitToScreen(&dialog);
     dialog.exec();
@@ -776,21 +821,158 @@ void MainWindow::editAccountSettings(const QString& path) {
     refresh();
 }
 
-// A category's own editor. The alias is the short way to type it, and this is
-// the only place it is set; see the finding rule in Accounts.spectable.
+// Adding a category from the listing it will turn up in. It asks what the
+// editor asks, less the path, which is the parent and the name together. The
+// chart settles where a category with no parent goes -- under its own root --
+// because nothing in the program can find one that is anywhere else.
+bool MainWindow::addCategoryFromListing(QWidget* parent) {
+    QDialog dialog(parent);
+    dialog.setWindowTitle("Add a category");
+    auto* form = new QFormLayout(scrollingBody(&dialog));
+
+    auto* name = new QLineEdit(&dialog);
+    name->setPlaceholderText("Fuel");
+    form->addRow("Name", name);
+
+    // Only the three category trees are offered as a parent. A category under
+    // a checking account is a category no report can reach, and offering it is
+    // offering a mistake.
+    auto* under = new QComboBox(&dialog);
+    under->addItem("(top of its own tree)", QString());
+    std::vector<chart::Account> everything = chart_.all();
+    std::sort(everything.begin(), everything.end(),
+             [](const chart::Account& x, const chart::Account& y) {
+                 return x.path.value() < y.path.value();
+             });
+    for (const chart::Account& a : everything)
+        if (a.type == types::AccountType::Income || a.type == types::AccountType::Expense ||
+            a.type == types::AccountType::Equity)
+            under->addItem(QString::fromStdString(a.path.value()),
+                           QString::fromStdString(a.path.value()));
+    form->addRow("Under", under);
+
+    auto* kind = new QComboBox(&dialog);
+    for (types::AccountType one : {types::AccountType::Income,
+                                   types::AccountType::Expense,
+                                   types::AccountType::Equity})
+        kind->addItem(QString::fromStdString(types::to_string(one)),
+                      QString::fromStdString(types::to_string(one)));
+    kind->setCurrentIndex(1);   // an expense, which is what nearly all of them are
+    form->addRow("Type", kind);
+
+    auto* alias = new QLineEdit(&dialog);
+    alias->setToolTip("A short way to type this category when categorising, "
+                      "written with an @ in front of it.");
+    form->addRow("Alias", alias);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
+                                         &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    form->addRow(buttons);
+    name->setFocus();
+    fitToScreen(&dialog);
+    if (dialog.exec() != QDialog::Accepted) return false;
+
+    const QString wanted = name->text().trimmed();
+    if (wanted.isEmpty()) return false;
+    const chart::Rejection no = workspace_->add_category_from_listing(
+        types::AccountName(wanted.toStdString()),
+        under->currentData().toString().toStdString(),
+        types::account_type_from_string(kind->currentData().toString().toStdString()),
+        alias->text().trimmed().toStdString());
+    if (no.refused) {
+        QMessageBox::warning(&dialog, "SimpleAccount", QString::fromStdString(no.reason));
+        return false;
+    }
+    // The workspace made it, so the window's chart follows it rather than
+    // adding a second copy of the same category.
+    chart_ = workspace_->accounts();
+    save();
+    refresh();
+    return true;
+}
+
+// A category's own editor. It asks what the dialog that adds one asks -- the
+// name, the parent, the kind, the alias and whether it is out of the way --
+// because it held the alias and nothing else to begin with, which made it the
+// one editor in the program that could not correct what somebody had got
+// wrong. Each of the five is the chart's own operation; see the
+// what-is-kept-about-a-category section of Accounts.spectable.
 void MainWindow::editCategorySettings(const QString& path) {
     const std::string which = path.toStdString();
-    const chart::Account* asAccount = chart_.find(which);
-    const chart::Category* asCategory = chart_.find_category(which);
-    if (asAccount == nullptr && asCategory == nullptr) return;
+    const std::optional<chart::CategorySettings> was = chart_.category_settings(which);
+    if (!was.has_value()) {
+        // A category that is only in the categories table and not in the chart
+        // has nothing but its alias to edit, which is what this used to be.
+        const chart::Category* asCategory = chart_.find_category(which);
+        if (asCategory == nullptr) return;
+        bool said = false;
+        const QString now = QInputDialog::getText(
+            this, "Category settings", "Alias", QLineEdit::Normal,
+            QString::fromStdString(asCategory->alias), &said).trimmed();
+        if (!said) return;
+        chart::Category c = *asCategory;
+        c.alias = now.toStdString();
+        chart_.put_category(c);
+        save();
+        rebuildWorkspace();
+        refresh();
+        return;
+    }
 
     QDialog dialog(this);
     dialog.setWindowTitle("Category settings");
     auto* form = new QFormLayout(scrollingBody(&dialog));
     form->addRow("Category", new QLabel(path, &dialog));
-    const std::string was = asAccount != nullptr ? asAccount->alias : asCategory->alias;
-    auto* alias = new QLineEdit(QString::fromStdString(was), &dialog);
+
+    auto* name = new QLineEdit(QString::fromStdString(was->name.value()), &dialog);
+    form->addRow("Name", name);
+
+    // The parent, chosen from what is there rather than typed. (top level)
+    // means the top of its own tree -- Income, Expenses or Equity -- because a
+    // category outside those is invisible to every report there is.
+    auto* parent = new QComboBox(&dialog);
+    parent->addItem("(top level)", QString());
+    std::vector<chart::Account> everything = chart_.all();
+    std::sort(everything.begin(), everything.end(),
+             [](const chart::Account& x, const chart::Account& y) {
+                 return x.path.value() < y.path.value();
+             });
+    for (const chart::Account& a : everything) {
+        // Not under itself, and not under one of its own children: either one
+        // is a move that cannot be made, and offering it is offering a
+        // refusal.
+        if (chart::Chart::is_descendant_or_self(a.path.value(), which)) continue;
+        parent->addItem(QString::fromStdString(a.path.value()),
+                        QString::fromStdString(a.path.value()));
+    }
+    const int at = parent->findData(QString::fromStdString(was->under));
+    if (at >= 0) parent->setCurrentIndex(at);
+    form->addRow("Under", parent);
+
+    // The same three the adding dialog offers. A category entered as an
+    // expense when it was income reads as the wrong sign on every report that
+    // covers it, so this is askable rather than fixed.
+    auto* kind = new QComboBox(&dialog);
+    for (types::AccountType one : {types::AccountType::Income,
+                                   types::AccountType::Expense,
+                                   types::AccountType::Equity})
+        kind->addItem(QString::fromStdString(types::to_string(one)),
+                      QString::fromStdString(types::to_string(one)));
+    const int kindAt = kind->findData(QString::fromStdString(types::to_string(was->type)));
+    if (kindAt >= 0) kind->setCurrentIndex(kindAt);
+    form->addRow("Type", kind);
+
+    auto* alias = new QLineEdit(QString::fromStdString(was->alias), &dialog);
+    alias->setToolTip("A short way to type this category when categorising, "
+                      "written with an @ in front of it.");
     form->addRow("Alias", alias);
+
+    auto* hidden = new QCheckBox("Keep it out of the pickers", &dialog);
+    hidden->setChecked(was->hidden);
+    form->addRow(QString(), hidden);
+
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
                                          &dialog);
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
@@ -799,14 +981,21 @@ void MainWindow::editCategorySettings(const QString& path) {
     fitToScreen(&dialog);
     if (dialog.exec() != QDialog::Accepted) return;
 
-    if (asAccount != nullptr) {
-        chart::Account a = *asAccount;
-        a.alias = alias->text().trimmed().toStdString();
-        chart_.put(a);
-    } else {
-        chart::Category c = *asCategory;
-        c.alias = alias->text().trimmed().toStdString();
-        chart_.put_category(c);
+    const QString wanted = name->text().trimmed();
+    if (wanted.isEmpty()) return;
+
+    chart::CategorySettings now;
+    now.path = types::AccountPath(which);
+    now.name = types::AccountName(wanted.toStdString());
+    now.under = parent->currentData().toString().toStdString();
+    now.type = types::account_type_from_string(kind->currentData().toString().toStdString());
+    now.alias = alias->text().trimmed().toStdString();
+    now.hidden = hidden->isChecked();
+
+    const chart::Rejection no = chart_.apply_category_settings(now);
+    if (no.refused) {
+        QMessageBox::warning(this, "SimpleAccount", QString::fromStdString(no.reason));
+        return;
     }
     save();
     rebuildWorkspace();
@@ -1290,6 +1479,15 @@ void MainWindow::newAccount() {
 
     auto* opening = new QLineEdit(&dialog);
     opening->setPlaceholderText("0.00");
+    // The bank and the number on the statement. Both are asked here because
+    // the statement is usually on the desk at the moment an account is being
+    // opened, and an account that carries its number from its first day is one
+    // the first download can be placed into without anybody being asked which
+    // account it belongs to. Neither is required; a cash account has neither.
+    auto* bank = new QLineEdit(&dialog);
+    bank->setPlaceholderText("The bank's name or id");
+    auto* number = new QLineEdit(&dialog);
+    number->setPlaceholderText("As it appears on the statement");
     auto* asAt = new QDateEdit(QDate::currentDate(), &dialog);
     asAt->setCalendarPopup(true);
     asAt->setDisplayFormat("yyyy-MM-dd");
@@ -1300,6 +1498,8 @@ void MainWindow::newAccount() {
     form->addRow("Under", parent);
     form->addRow("Opening balance", opening);
     form->addRow("As at", asAt);
+    form->addRow("Bank", bank);
+    form->addRow("Number on the statement", number);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
                                          &dialog);
     form->addRow(buttons);
@@ -1339,6 +1539,18 @@ void MainWindow::newAccount() {
     if (no.refused) {
         QMessageBox::warning(this, "SimpleAccount", QString::fromStdString(no.reason));
         return;
+    }
+
+    // Written onto the account the chart just made. add() takes a path and a
+    // type and nothing else, so the two statement lines go on afterwards --
+    // and only onto the account itself, never onto a placeholder the path
+    // happened to create on the way down.
+    const chart::Account* made = chart_.find(wanted);
+    if (made != nullptr) {
+        chart::Account withNumbers = *made;
+        withNumbers.bank = bank->text().trimmed().toStdString();
+        withNumbers.account_number = number->text().trimmed().toStdString();
+        chart_.put(withNumbers);
     }
 
     // An opening balance is a transaction against Equity, so the book balances
@@ -1509,7 +1721,7 @@ QString MainWindow::chooseImportFile(const QString& title, const QString& filter
 // or the tab in front pointed at, says which of the three that was, and lets it
 // be changed -- a proposal is a proposal. Empty means cancelled, and cancelled
 // reads nothing at all.
-std::string MainWindow::confirmImportAccount(
+MainWindow::ImportAnswer MainWindow::confirmImportAccount(
         const ui::Workspace::ImportConfirmation& proposed) {
     QDialog dialog(this);
     dialog.setWindowTitle("Import");
@@ -1559,6 +1771,26 @@ std::string MainWindow::confirmImportAccount(
     why->setWordWrap(true);
     layout->addWidget(why);
 
+    // What the bank says the account stands at. A QFX states it and this
+    // arrives filled in; a CSV states nothing and the line is here to be
+    // typed into off the bank's own website, which is the only way the
+    // register can ever say whether the two agree. Left empty it is no
+    // answer -- which is not the same thing as a balance of zero.
+    auto* figures = new QFormLayout;
+    auto* online = new QLineEdit(QString::fromStdString(proposed.online_balance), &dialog);
+    online->setPlaceholderText("0.00");
+    figures->addRow("On-line balance", online);
+    auto* onlineAt = new QDateEdit(&dialog);
+    onlineAt->setCalendarPopup(true);
+    onlineAt->setDisplayFormat("yyyy-MM-dd");
+    const std::optional<types::Date> stated =
+        types::Date::from_iso(proposed.online_balance_at);
+    onlineAt->setDate(stated.has_value()
+                          ? QDate(stated->year(), stated->month(), stated->day())
+                          : QDate::currentDate());
+    figures->addRow("as at", onlineAt);
+    layout->addLayout(figures);
+
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
                                          &dialog);
     buttons->button(QDialogButtonBox::Ok)->setText("Import");
@@ -1568,7 +1800,19 @@ std::string MainWindow::confirmImportAccount(
     fitToScreen(&dialog);
 
     if (dialog.exec() != QDialog::Accepted) return {};
-    return accounts->currentText().toStdString();
+
+    ImportAnswer answered;
+    answered.account = accounts->currentText().toStdString();
+    // An amount that cannot be read is no answer rather than a refusal: the
+    // import is the thing being done here, and it is not worth stopping over
+    // a figure that is only a check on it. The register says nothing about a
+    // downloaded balance it was never given.
+    const std::string typed = online->text().trimmed().toStdString();
+    if (!typed.empty() && Money::is_valid(typed)) {
+        answered.online_balance = Money(typed).in_csv();
+        answered.online_balance_at = asDate(onlineAt->date()).iso();
+    }
+    return answered;
 }
 
 // Every pairing the import found between a row being reviewed and a half the
@@ -1623,8 +1867,10 @@ void MainWindow::importTransactionsFrom(const QString& path) {
     // The dialog opens whatever the file turned out to say, including when it
     // said nothing at all, which is the case the numbers are shown for.
     workspace_->choose_import_file(QFileInfo(path).fileName().toStdString(), in_file,
-                                   numbers.bank_id, numbers.account_number);
-    const std::string account = confirmImportAccount(workspace_->import_confirmation());
+                                   numbers.bank_id, numbers.account_number,
+                                   numbers.balance, numbers.balance_at);
+    const ImportAnswer answered = confirmImportAccount(workspace_->import_confirmation());
+    const std::string account = answered.account;
     if (account.empty()) {
         workspace_->cancel_import_confirmation();
         return;
@@ -1661,8 +1907,19 @@ void MainWindow::importTransactionsFrom(const QString& path) {
     // is the whole reason the review is a panel under a register rather than a
     // dialog of its own.
     rebuildWorkspace();
-    workspace_->confirm_import_into(account, prepared.rows);
+    const int wrote = workspace_->book_writes();
+    workspace_->confirm_import_with(account, answered.online_balance,
+                                    answered.online_balance_at, prepared.rows);
     askAboutTransfers();
+    // The first download confirmed for an account teaches it the bank id and
+    // the account number the file carried, and that is a change to the book
+    // rather than to the review -- so it is written now, rather than waiting
+    // for a review that may be cancelled. teach_account fills what is blank
+    // and leaves what disagrees, so a second download writes nothing.
+    if (workspace_->book_writes() != wrote) {
+        chart_ = workspace_->accounts();
+        save();
+    }
     refresh();
 
     // Said out loud rather than swallowed. A note nobody is shown is a note
@@ -2077,7 +2334,11 @@ void MainWindow::editRules() {
     const auto chosen = [&]() { return table->currentRow(); };
 
     QObject::connect(add, &QPushButton::clicked, &box, [&]() {
-        RuleForm form(&box, "Add a rule", payees::Rule{});
+        RuleForm form(&box, "Add a rule", payees::Rule{}, [this](const std::string& start) {
+            CategoryPick choose(this, chart_, book_, start);
+            if (choose.exec() != QDialog::Accepted) return std::string();
+            return choose.chosen();
+        });
         if (form.exec() != QDialog::Accepted) return;
         const payees::Refusal no = payees::add(&rules_, form.rule());
         if (no.refused) {
@@ -2093,7 +2354,11 @@ void MainWindow::editRules() {
         const int at = chosen();
         if (at < 0) return;
         const payees::Rule was = rules_[static_cast<std::size_t>(at)];
-        RuleForm form(&box, "Edit a rule", was);
+        RuleForm form(&box, "Edit a rule", was, [this](const std::string& start) {
+            CategoryPick choose(this, chart_, book_, start);
+            if (choose.exec() != QDialog::Accepted) return std::string();
+            return choose.chosen();
+        });
         if (form.exec() != QDialog::Accepted) return;
         const payees::Refusal no =
             payees::change(&rules_, was.pattern, was.match_type, form.rule());
@@ -2597,9 +2862,16 @@ void MainWindow::registerMenu(int tabPosition, const QPoint& at) {
         else if (entry.item.rfind("Delete", 0) == 0)
             connect(action, &QAction::triggered, this,
                     [this]() { deleteSelection(1); });
-        else
+        else if (entry.item.rfind("Apply payee rules", 0) == 0)
+            connect(action, &QAction::triggered, this,
+                    [this]() { applyPayeeRulesToSelection(1); });
+        else if (entry.item.rfind("Add payee rule", 0) == 0)
             connect(action, &QAction::triggered, this,
                     [this]() { addPayeeRuleFrom(1); });
+        // Nothing else is connected. The menu used to send everything it did
+        // not recognise to the rule dialog, which was right while there were
+        // three items and wrong the moment there was a fourth: an item nobody
+        // has wired up should do nothing rather than something else.
     }
     menu.exec(p.reg->viewport()->mapToGlobal(at));
 }
@@ -2806,7 +3078,11 @@ void MainWindow::addPayeeRuleFrom(int paneOneBased) {
                                  "There is no name on that line to make a rule from.");
         return;
     }
-    RuleForm form(this, "Add payee rule", offered);
+    RuleForm form(this, "Add payee rule", offered, [this](const std::string& start) {
+            CategoryPick choose(this, chart_, book_, start);
+            if (choose.exec() != QDialog::Accepted) return std::string();
+            return choose.chosen();
+        });
     if (form.exec() != QDialog::Accepted) return;
     const payees::Rule wanted = form.rule();
     const payees::Refusal no = payees::add(&rules_, wanted);
@@ -2817,6 +3093,39 @@ void MainWindow::addPayeeRuleFrom(int paneOneBased) {
     save();
     status_->setText(QString("Rule added for %1")
                          .arg(QString::fromStdString(wanted.pattern)));
+}
+
+// The rules a person has already written, run over the lines in front of
+// them. It is the same pass the import makes, so a month categorised by hand
+// and a month downloaded come out looking the same -- and a rule written a
+// minute ago is usually meant for the twenty lines it was written from.
+void MainWindow::applyPayeeRulesToSelection(int paneOneBased) {
+    (void)paneOneBased;
+    if (workspace_->selected_lines().empty()) return;
+    if (rules_.empty()) {
+        QMessageBox::information(this, "SimpleAccount",
+                                 "There are no payee rules yet. Add payee rule, on a "
+                                 "line in the register, writes the first one.");
+        return;
+    }
+    const payees::BookApplication done =
+        workspace_->apply_payee_rules_to_selection(rules_);
+    if (done.matched > 0) {
+        transactions_ = workspace_->transactions();
+        book_ = workspace_->book();
+        save();
+        rebuildWorkspace();
+    }
+    refresh();
+    // Said in full, because the interesting number is usually not the first
+    // one: a pass that changed nothing is either a selection the rules do not
+    // cover or a selection that was already right, and those are different
+    // answers to be given the same way.
+    QString said = QString("%1 changed").arg(done.matched);
+    if (done.already_correct > 0)
+        said += QString(", %1 already right").arg(done.already_correct);
+    if (done.skipped > 0) said += QString(", %1 left alone").arg(done.skipped);
+    status_->setText(said);
 }
 
 void MainWindow::toggleHidden() {
@@ -2841,6 +3150,10 @@ void MainWindow::acceptImport() {
     // follow it rather than the other way round.
     transactions_ = workspace_->transactions();
     book_ = workspace_->book();
+    // The chart with them: accepting is when the balance the dialog was
+    // answered with goes onto the account, and a chart left behind here is a
+    // balance that is never written and never shown.
+    chart_ = workspace_->accounts();
     // A book is a file rather than a session: an import that is not written is
     // an import that is lost when the window closes.
     save();
@@ -2884,6 +3197,12 @@ MainWindow::TabWidgets MainWindow::makeRegisterTab(int tabPosition) {
     bar->addWidget(t.since);
     t.note = new QLabel(container);
     bar->addWidget(t.note, 1);
+    // What the account stands at, beside what the bank last said it stands
+    // at. The difference between the two is the whole of reconciling, and it
+    // was previously only arrived at by adding up a column by hand. See the
+    // balances section of TransactionRegister.spectable.
+    t.balances = new QLabel(container);
+    bar->addWidget(t.balances);
     stack->addLayout(bar);
     stack->addWidget(t.reg, 1);
     t.widget = container;
@@ -2907,9 +3226,25 @@ MainWindow::TabWidgets MainWindow::makeRegisterTab(int tabPosition) {
                 const std::string name = registerColumnName(column);
                 if (name.empty()) return;
                 workspace_->resize_column(name, width);
-                columnWidths_ = workspace_->column_widths();
-                applyColumnWidths();
-                save();
+                // The width is recorded and nothing else happens yet. Applying
+                // it lays every other open register out again and writing it
+                // writes the whole book, and a drag of fifty pixels reports
+                // fifty widths -- which is why dragging a divider across a
+                // book of thirty thousand transactions took seconds. So the
+                // work waits until the drag has stopped. See the column-width
+                // section of UserInterface.spectable.
+                if (resizeSettle_ == nullptr) {
+                    resizeSettle_ = new QTimer(this);
+                    resizeSettle_->setSingleShot(true);
+                    resizeSettle_->setInterval(400);
+                    connect(resizeSettle_, &QTimer::timeout, this, [this]() {
+                        if (!workspace_ || !workspace_->finish_resize()) return;
+                        columnWidths_ = workspace_->column_widths();
+                        applyColumnWidths();
+                        save();
+                    });
+                }
+                resizeSettle_->start();
             });
     // Typing is allowed, and only the blank line's cells carry the editable
     // flag, so the rest of a register stays read-only: a stray keypress must
@@ -3156,6 +3491,21 @@ void MainWindow::refreshPane(int tabPosition, const reg::BookIndex& book) {
             says = says.empty() ? order.reason : says + "   --   " + order.reason;
     }
     if (p.note != nullptr) p.note->setText(QString::fromStdString(says));
+    if (p.balances != nullptr) {
+        // The figures are the register's own, worked out from the index the
+        // lines were worked out from, so this is one more pass over this
+        // account and not a second reading of the book.
+        const reg::Balances figures = reg::balances_for(book, account);
+        std::string said = "Balance " + figures.balance.in_register() +
+                           "    Cleared " + figures.cleared.in_register();
+        if (figures.downloaded_at.has_value())
+            said += "    Downloaded " + figures.downloaded.in_register() + " on " +
+                    figures.downloaded_at->iso() + "    Difference " +
+                    figures.difference.in_register();
+        else
+            said += "    No downloaded balance";
+        p.balances->setText(QString::fromStdString(said));
+    }
     // The two amount columns are headed with the words the account uses: a
     // credit card is charged and paid, not paid and deposited into.
     const chart::Account* a = account.empty() ? nullptr : chart_.find(account);

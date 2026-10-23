@@ -30,6 +30,8 @@ Uses AccountPath and AccountType from CoreTypes
 | Bank        | Text        | none    | Which institution it is at; see what is kept about an account |
 | BankId      | Text        | none    | What the institution calls itself in a download -- its routing number |
 | AccountNumber | Text      | none    | The number on the statement, kept as written |
+| DownloadedBalance | Money | 0.00 | What the last download said the balance was; written by the import, never typed |
+| DownloadedBalanceAt | Text | never | The date that balance was for, or never |
 
 Collection ChartOfAccounts
 Description Every account in the book, in one tree.
@@ -632,6 +634,128 @@ Then account settings are : AccountSettings
 # which they would not if a number were read as a number.
 
 # ---------------------------------------------------------------------------
+# What is kept about a category
+# ---------------------------------------------------------------------------
+
+Description A category has a dialog of its own, and it asks what the dialog
+\ that adds one asks: the name, what it sits under, which kind it is,
+\ the short way to type it, and whether it is kept out of the way.
+Details It held the alias and nothing else to begin with, which made it the
+\ one editor in the program that could not correct what a person had
+\ got wrong. A category entered under the wrong parent, or named badly,
+\ had to be added again in the right place and the old one hidden --
+\ and the transactions stayed on the old one, so the mistake outlived
+\ the fix.
+\
+\ Renaming and moving are the chart's own operations and are specified
+\ in the sections above: a rename rewrites the paths beneath it, a move
+\ carries the subtree, and the transactions on a category are untouched
+\ by either, because a transaction names the category and not the text
+\ of its path. The dialog is where they are reached for a category,
+\ which was the only kind of node with no way to reach them.
+\
+\ Type is asked because a category entered as an expense when it was
+\ income reads as the wrong sign on every report that covers it. It is
+\ the same question the adding dialog asks, so it gets the same answer
+\ and the same list of three.
+
+Attributes CategorySettings
+Description What the dialog of one category holds. Path is what it was opened
+\ on; the rest is what it comes up showing, and what it writes back
+\ when it is changed.
+| Attribute | Type        | Default |
+| Path      | AccountPath |         |
+| Name      | AccountName | none    |
+| Under     | AccountPath | none    |
+| Type      | AccountType | Expense |
+| Alias     | Text        | none    |
+| Hidden    | Boolean     | false   |
+
+Scenario The category dialog comes up holding everything the category has
+Description Opened on a category, it shows the five answers rather than one.
+\ Under is the parent it sits beneath, which is the path with the name
+\ taken off.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Expenses:Auto      | Expense | true        |
+| Expenses:Auto:Fuel | Expense | false       |
+When category settings opened : AccountSelect
+| Path               |
+| Expenses:Auto:Fuel |
+Then category settings are : CategorySettings Vertical
+| Path   | Expenses:Auto:Fuel |
+| Name   | Fuel               |
+| Under  | Expenses:Auto      |
+| Type   | Expense            |
+| Alias  | none               |
+| Hidden | false              |
+
+Scenario A category renamed from its dialog renames what is under it
+Description The chart's rename, reached from the dialog. Everything beneath it
+\ follows, because a child's path is built from its parent's.
+Given the chart of accounts is : ChartOfAccounts
+| Path                 | Type    | Placeholder |
+| Expenses             | Expense | true        |
+| Expenses:Auto        | Expense | true        |
+| Expenses:Auto:Fuel   | Expense | false       |
+| Expenses:Auto:Repair | Expense | false       |
+When category settings changed : CategorySettings Vertical
+| Path   | Expenses:Auto |
+| Name   | Vehicle       |
+| Under  | Expenses      |
+| Type   | Expense       |
+| Alias  | none          |
+| Hidden | false         |
+Then the chart of accounts is : ChartOfAccounts CompareOnly
+| Path                    |
+| Expenses:Vehicle        |
+| Expenses:Vehicle:Fuel   |
+| Expenses:Vehicle:Repair |
+
+Scenario A category moved from its dialog takes its children with it
+Description Changing Under is the chart's move. The name is unchanged, so the
+\ subtree arrives under the new parent reading as it did before.
+Given the chart of accounts is : ChartOfAccounts
+| Path                 | Type    | Placeholder |
+| Expenses             | Expense | true        |
+| Expenses:Auto        | Expense | true        |
+| Expenses:Auto:Repair | Expense | false       |
+| Expenses:Household   | Expense | true        |
+When category settings changed : CategorySettings Vertical
+| Path   | Expenses:Auto      |
+| Name   | Auto               |
+| Under  | Expenses:Household |
+| Type   | Expense            |
+| Alias  | none               |
+| Hidden | false              |
+Then the chart of accounts is : ChartOfAccounts CompareOnly
+| Path                           |
+| Expenses:Household:Auto        |
+| Expenses:Household:Auto:Repair |
+
+Scenario An alias set from the dialog is what it always was
+Description The one thing the dialog could already do, stated here so that
+\ adding the other four is seen not to have cost it.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder |
+| Expenses:Auto      | Expense | true        |
+| Expenses:Auto:Fuel | Expense | false       |
+When category settings changed : CategorySettings Vertical
+| Path   | Expenses:Auto:Fuel |
+| Name   | Fuel               |
+| Under  | Expenses:Auto      |
+| Type   | Expense            |
+| Alias  | @fuel             |
+| Hidden | false              |
+Then category settings are : CategorySettings Vertical
+| Path   | Expenses:Auto:Fuel |
+| Name   | Fuel               |
+| Under  | Expenses:Auto      |
+| Type   | Expense            |
+| Alias  | @fuel             |
+| Hidden | false              |
+
+# ---------------------------------------------------------------------------
 # The starting balance, in the dialog rather than only at creation
 # ---------------------------------------------------------------------------
 
@@ -901,6 +1025,52 @@ Then categories offered are : CategoryOffered
 | Expenses:Auto:Fuel     |
 # Which is the point of it being a search and not a deletion.
 
+Attributes LastUsed
+Description The most recent date anything posted to one account. Never is a
+\ word rather than a date, because an account nobody has posted to is
+\ not the same thing as one used long ago -- see the rule above, which
+\ offers the first and hides the second.
+| Attribute | Type        | Default |
+| Account   | AccountPath |         |
+| LastUsed  | Text        | never   |
+
+Scenario The date each account was last used is read in one pass over the book
+Description Offering categories needs the last-used date of every candidate,
+\ because a category nobody has posted to for two years is left out.
+\ Asked one account at a time, each answer is a scan of the whole
+\ book, so offering from a chart of five hundred accounts reads the
+\ book five hundred times -- which on a book of thirty thousand
+\ transactions is why the dialog took seconds to open and why every
+\ keystroke took as long again.
+Details So the dates are read together, all of them, in one pass over the
+\ postings, and what is offered reads its answer out of that. Opening
+\ the dialog is one pass; a keystroke is none, because the dates
+\ cannot have changed while somebody is typing.
+\
+\ What is offered does not change by a line. This says only that the
+\ same answer is arrived at once rather than once per account, which
+\ is why the scenarios above are untouched and still pass.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder |
+| Assets:Checking    | Checking | false       |
+| Expenses:Auto:Fuel | Expense  | false       |
+| Expenses:Dentist   | Expense  | false       |
+| Expenses:Postage   | Expense  | false       |
+Given dated entries are : DatedAccountEntry
+| Date       | Account            | Amount |
+| 2024-03-01 | Expenses:Auto:Fuel | 40.00  |
+| 2026-02-01 | Expenses:Auto:Fuel | 44.00  |
+| 2019-05-06 | Expenses:Dentist   | 90.00  |
+When the last used dates are read
+Then last used dates are : LastUsed
+| Account            | LastUsed   |
+| Expenses:Auto:Fuel | 2026-02-01 |
+| Expenses:Dentist   | 2019-05-06 |
+| Expenses:Postage   | never      |
+# The latest of the two fuel entries, not the first one read and not the last.
+# Postage is in the chart and in no entry, which is the case that has to be
+# told apart from a date.
+
 # ---------------------------------------------------------------------------
 # What a balance is
 # ---------------------------------------------------------------------------
@@ -1089,6 +1259,8 @@ Attributes AccountWithOpeningBalance
 | Type           | AccountType | Checking   |
 | OpeningBalance | Money       | 0.00       |
 | OpeningDate    | Date        | 2005-01-01 |
+| Bank           | Text        | none       |
+| AccountNumber  | Text        | none       |
 
 Scenario Opening a credit card with a balance owed
 Description The opening balance is entered the way the statement reads, as an
@@ -1116,6 +1288,36 @@ When account added with an opening balance : AccountWithOpeningBalance Vertical
 Then transactions created are : Transaction
 | Ref | SourceAccount | Date | Destination | Amount |
 # No rows: an opening balance of zero is not worth a transaction.
+
+Scenario An account is opened with its bank and the number on the statement
+Description The dialog that opens an account asks for both, rather than
+\ leaving them to a second visit to the settings dialog. They are
+\ what a person has in front of them at that moment -- the statement
+\ is on the desk, which is usually why the account is being opened at
+\ all -- and an account carrying its number from the first day is one
+\ the first download can place without asking. See what a download
+\ teaches an account in ImportOfx, which is the other way they are
+\ filled in.
+Details Neither is required. An account opened with no bank and no number is
+\ what every account used to be, and the settings dialog is still where
+\ one is labelled afterwards. The number is kept exactly as typed,
+\ which is the account-number rule above and not a second decision
+\ taken here.
+Given the chart of accounts is as previous
+When account added with an opening balance : AccountWithOpeningBalance Vertical
+| Path           | Assets:Second Checking |
+| Type           | Checking               |
+| OpeningBalance | 0.00                   |
+| OpeningDate    | 2005-01-01             |
+| Bank           | First Bank             |
+| AccountNumber  | 0012-3456              |
+Then account settings are : AccountSettings Vertical
+| Path          | Assets:Second Checking |
+| Bank          | First Bank             |
+| BankId        | none                   |
+| AccountNumber | 0012-3456              |
+# BankId is not asked for and stays empty. Nobody types a routing number to
+# label an account; the first download writes it down.
 
 # ---------------------------------------------------------------------------
 # Changing the type of an account

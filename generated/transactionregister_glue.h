@@ -46,6 +46,13 @@ public:
             a.placeholder = parse_bool_cell(value.placeholder);
             a.hidden = parse_bool_cell(value.hidden);
             a.alias = blank(value.alias);
+            const std::string balance = blank(value.downloadedbalance.value);
+            if (!balance.empty() && Money::is_valid(balance))
+                a.downloaded_balance = Money(balance);
+            // never is no download rather than a date: there is nothing to
+            // compare the register against, which is not a bank saying zero.
+            const std::string at = blank(value.downloadedbalanceat);
+            if (!at.empty() && at != "never") a.downloaded_balance_at = types::Date::from_iso(at);
             chart_.put(a);
         }
     }
@@ -786,6 +793,23 @@ public:
                 EXPECT_EQ(Money("948.00"), got.opening) << value.whattheregistershows;
             }
         }
+    }
+
+public:
+
+    void then_register_balances_are(const std::vector<RegisterBalancesString>& values) {
+        ASSERT_FALSE(values.empty());
+        const RegisterBalancesString& want = values.front();
+        const reg::Balances got =
+            reg::balances_for(chart_, transactions_, splits_, want.account.value);
+        EXPECT_EQ(Money(want.balance.value).cents(), got.balance.cents()) << "balance";
+        EXPECT_EQ(Money(want.cleared.value).cents(), got.cleared.cents()) << "cleared balance";
+        EXPECT_EQ(Money(want.downloaded.value).cents(), got.downloaded.cents())
+            << "downloaded balance";
+        const std::string at =
+            got.downloaded_at.has_value() ? got.downloaded_at->iso() : std::string("never");
+        EXPECT_EQ(want.downloadedat, at) << "the date the downloaded balance was for";
+        EXPECT_EQ(Money(want.difference.value).cents(), got.difference.cents()) << "difference";
     }
 
 };

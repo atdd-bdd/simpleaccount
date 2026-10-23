@@ -1355,4 +1355,31 @@ inline LedgerBalanceResult check_ledger_balance(
     return r;
 }
 
+// The balance the download stated, written onto the account with the date it
+// was the balance on, so that the register can show it beside the balance it
+// works out for itself three weeks later. See the two balances at the top of
+// the register in TransactionRegister.spectable.
+//
+// Kept in the display sign of the account, as the statement reads it, which is
+// what the register shows; the figure a bank states for a card is negated on
+// the way in for that reason.
+//
+// A balance older than the one already on the account is not written. Files
+// arrive out of order often enough -- one saved last month, imported today --
+// and the question the figure answers is what the bank last agreed to.
+inline bool record_stated_balance(chart::Chart* accounts, const std::string& account,
+                                  const Money& stated_bal, const types::Date& stated_at) {
+    if (accounts == nullptr) return false;
+    const chart::Account* found = accounts->find(account);
+    if (found == nullptr) return false;
+    if (found->downloaded_balance_at.has_value() && !(*found->downloaded_balance_at < stated_at))
+        return false;
+    chart::Account now = *found;
+    now.downloaded_balance =
+        types::display_sign(now.type) < 0 ? -stated_bal : stated_bal;
+    now.downloaded_balance_at = stated_at;
+    accounts->put(now);
+    return true;
+}
+
 }  // namespace ofx

@@ -249,6 +249,46 @@ inline bool has_category(const Rule& rule) {
     return !rule.category.empty() && rule.category != "none";
 }
 
+// One transaction, counted into out. The whole of what applying the rules
+// means, so that doing it to a book and doing it to a selection cannot drift
+// apart.
+inline void apply_to_one(const std::vector<Rule>& rules, const chart::Chart& accounts,
+                         ledger::Transaction* t, BookApplication* out) {
+    if (t->cleared == types::ClearedStatus::Reconciled) { ++out->skipped; return; }
+    if (t->destination.is_none() || chart::is_split(t->destination) ||
+        !is_a_category_account(accounts, t->destination)) {
+        // A split, a transfer, or nothing known yet -- none of them a
+        // category a rule has anything to move.
+        ++out->skipped;
+        return;
+    }
+
+    const std::string raw = t->raw_name.empty() ? t->payee.value() : t->raw_name;
+    const Rule* rule = best_for(rules, raw);
+    if (rule == nullptr) { ++out->skipped; return; }
+
+    bool changed = false;
+    if (!rule->payee.empty() && rule->payee != raw && t->payee.value() != rule->payee) {
+        t->payee = types::PayeeName(rule->payee);
+        t->raw_name = raw;
+        changed = true;
+    }
+
+    if (!has_category(*rule)) {
+        if (changed) ++out->matched; else ++out->already_correct;
+        return;
+    }
+    const chart::Ref rule_ref = accounts.ref_for_path(rule->category);
+    if (t->destination == rule_ref) {
+        ++out->already_correct;
+    } else if (is_uncategorized(accounts, t->destination)) {
+        t->destination = rule_ref;
+        ++out->matched;
+    } else {
+        ++out->skipped;
+    }
+}
+
 }  // namespace detail
 
 // Runs every enabled rule over every transaction already in the book: the
@@ -267,42 +307,30 @@ inline BookApplication apply_to_book(const std::vector<Rule>& rules,
                                      std::vector<ledger::Transaction>* transactions) {
     BookApplication out;
     if (transactions == nullptr) return out;
+    for (ledger::Transaction& t : *transactions) detail::apply_to_one(rules, accounts, &t, &out);
+    return out;
+}
 
-    for (ledger::Transaction& t : *transactions) {
-        if (t.cleared == types::ClearedStatus::Reconciled) { ++out.skipped; continue; }
-        if (t.destination.is_none() || chart::is_split(t.destination) ||
-            !detail::is_a_category_account(accounts, t.destination)) {
-            // A split, a transfer, or nothing known yet -- none of them a
-            // category a rule has anything to move.
-            ++out.skipped;
-            continue;
-        }
-
-        const std::string raw = t.raw_name.empty() ? t.payee.value() : t.raw_name;
-        const Rule* rule = best_for(rules, raw);
-        if (rule == nullptr) { ++out.skipped; continue; }
-
-        bool changed = false;
-        if (!rule->payee.empty() && rule->payee != raw && t.payee.value() != rule->payee) {
-            t.payee = types::PayeeName(rule->payee);
-            t.raw_name = raw;
-            changed = true;
-        }
-
-        if (!detail::has_category(*rule)) {
-            if (changed) ++out.matched; else ++out.already_correct;
-            continue;
-        }
-        const chart::Ref rule_ref = accounts.ref_for_path(rule->category);
-        if (t.destination == rule_ref) {
-            ++out.already_correct;
-        } else if (detail::is_uncategorized(accounts, t.destination)) {
-            t.destination = rule_ref;
-            ++out.matched;
-        } else {
-            ++out.skipped;
-        }
-    }
+// The same pass over the same rules in the same order, given a selection
+// rather than a book. Applying the rules to everything is the right thing
+// after a long import and the wrong thing while working through one statement:
+// a rule written a minute ago is meant for the twenty lines in front of
+// somebody, not for twenty years, where it will also rewrite transactions that
+// were already right and that nobody asked about.
+//
+// Only the set of transactions is different. The two protections, the order,
+// and the three counts are all apply_to_book's; see the register's context
+// menu in UserInterface.spectable.
+inline BookApplication apply_to_selection(const std::vector<Rule>& rules,
+                                          const chart::Chart& accounts,
+                                          std::vector<ledger::Transaction>* transactions,
+                                          const std::vector<types::TransactionId>& selected) {
+    BookApplication out;
+    if (transactions == nullptr) return out;
+    std::set<std::string> wanted;
+    for (const types::TransactionId& id : selected) wanted.insert(id.value());
+    for (ledger::Transaction& t : *transactions)
+        if (wanted.count(t.id.value()) != 0) detail::apply_to_one(rules, accounts, &t, &out);
     return out;
 }
 

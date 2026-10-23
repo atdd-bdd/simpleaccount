@@ -37,7 +37,7 @@ namespace store {
 // deleted while the shape was still being settled, so a file claiming another
 // version is a file this program did not write. Once there are books worth
 // keeping, a bump has to come with a way to read the version before it.
-inline constexpr int kSchemaVersion = 16;
+inline constexpr int kSchemaVersion = 17;
 
 struct Failure {
     bool refused = false;
@@ -196,7 +196,14 @@ CREATE TABLE accounts (
   account_number  TEXT  NOT NULL DEFAULT '',
   -- The routing number the downloads carry, learned from the first one
   -- confirmed for this account. See the teaching rule in ImportOfx.
-  bank_id         TEXT  NOT NULL DEFAULT '');
+  bank_id         TEXT  NOT NULL DEFAULT '',
+  -- What the last download said the balance was, in cents, and the date it
+  -- was the balance on -- an ISO date, or empty for an account no download
+  -- has reached. Empty is not the same thing as a bank that said zero, which
+  -- is why the date is what says whether there is a figure at all. See the
+  -- register's three balances in TransactionRegister.spectable.
+  downloaded_balance     INTEGER NOT NULL DEFAULT 0,
+  downloaded_balance_at  TEXT    NOT NULL DEFAULT '');
 
 CREATE TABLE categories (
   id            INTEGER NOT NULL DEFAULT 0 UNIQUE,
@@ -708,7 +715,9 @@ public:
 
         detail::Statement account(db_.get(),
             "INSERT INTO accounts (id, path, type, placeholder, hidden, alias, "
-            "bank, account_number, bank_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            "bank, account_number, bank_id, downloaded_balance, "
+            "downloaded_balance_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         if (!account.ok()) return fail(account.why());
         for (const chart::Account& a : accounts.all()) {
             account.reset();
@@ -721,6 +730,10 @@ public:
             account.bind(7, a.bank);
             account.bind(8, a.account_number);
             account.bind(9, a.bank_id);
+            account.bind(10, static_cast<long long>(a.downloaded_balance.cents()));
+            account.bind(11, a.downloaded_balance_at.has_value()
+                                 ? a.downloaded_balance_at->iso()
+                                 : std::string());
             if (!account.run()) return fail(account.why());
         }
 
@@ -937,7 +950,8 @@ public:
 
         detail::Statement account(db_.get(),
             "SELECT id, path, type, placeholder, hidden, alias, "
-            "bank, account_number, bank_id FROM accounts ORDER BY path");
+            "bank, account_number, bank_id, downloaded_balance, "
+            "downloaded_balance_at FROM accounts ORDER BY path");
         if (!account.ok()) return {true, account.why()};
         while (account.step_row()) {
             chart::Account a;
@@ -950,6 +964,12 @@ public:
             a.bank = account.text(6);
             a.account_number = account.text(7);
             a.bank_id = account.text(8);
+            a.downloaded_balance = Money::from_cents(account.integer(9));
+            // No date is no download. The balance beside it is read all the
+            // same and is zero, which nothing compares against because the
+            // date is what says there is a figure.
+            const std::string at = account.text(10);
+            if (!at.empty()) a.downloaded_balance_at = types::Date::from_iso(at);
             accounts->put(a);
         }
 

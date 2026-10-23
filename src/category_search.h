@@ -3,6 +3,8 @@
 #include <cctype>
 #include <optional>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include "chart.h"
 #include "date.h"
@@ -48,6 +50,30 @@ inline std::optional<types::Date> last_used(const ledger::Ledger& book,
     return latest;
 }
 
+// The same answer for every account at once, in one pass over the postings.
+// Asked one account at a time it is a scan of the whole book each time, so
+// offering from a chart of a few hundred categories read a book of thirty
+// thousand transactions a few hundred times -- which is what made the picker
+// take seconds to open and every keystroke take as long again.
+//
+// An account that is in no posting is absent from the map rather than present
+// with some stand-in date: never used and used long ago are different answers
+// and the first one is offered.
+using LastUsedDates = std::unordered_map<std::string, types::Date>;
+
+inline LastUsedDates last_used_dates(const ledger::Ledger& book) {
+    LastUsedDates latest;
+    latest.reserve(book.postings().size() / 4 + 1);
+    for (const ledger::DatedPosting& p : book.postings()) {
+        const auto at = latest.find(p.account.value());
+        if (at == latest.end())
+            latest.emplace(p.account.value(), p.date);
+        else if (p.date > at->second)
+            at->second = p.date;
+    }
+    return latest;
+}
+
 // What is offered while typing, in path order. Typing a parent brings every
 // category under it, because that is how a person says "somewhere in here" --
 // except for an alias (a token starting with '@'), which stands for exactly
@@ -55,7 +81,8 @@ inline std::optional<types::Date> last_used(const ledger::Ledger& book,
 // saying exactly which category is meant. A hidden account is never offered,
 // and neither is a placeholder-free category nobody has posted to in
 // kCategoryIsUnusedAfterDays, unless unused ones were asked for.
-inline std::vector<Account> offered_for_typed(const Chart& accounts, const ledger::Ledger& book,
+inline std::vector<Account> offered_for_typed(const Chart& accounts,
+                                              const LastUsedDates& latest,
                                               const std::string& typed, bool include_unused,
                                               const types::Date& today) {
     std::vector<Account> all = accounts.all();
@@ -72,22 +99,21 @@ inline std::vector<Account> offered_for_typed(const Chart& accounts, const ledge
     }
 
     std::vector<Account> out;
-    const auto already_have = [&](const std::string& path) {
-        return std::any_of(out.begin(), out.end(),
-                           [&](const Account& a) { return a.path.value() == path; });
-    };
+    std::unordered_set<std::string> already_have;
     for (const Account& m : matched) {
         for (const Account& a : all) {
-            if (a.hidden || already_have(a.path.value())) continue;
+            if (a.hidden || already_have.count(a.path.value())) continue;
             const bool belongs = is_alias ? a.path.value() == m.path.value()
                                           : Chart::is_descendant_or_self(a.path.value(),
                                                                          m.path.value());
             if (!belongs) continue;
             if (!include_unused && !a.placeholder) {
-                const std::optional<types::Date> used = last_used(book, a.path.value());
-                if (used && types::Date::days_between(*used, today) > kCategoryIsUnusedAfterDays)
+                const auto used = latest.find(a.path.value());
+                if (used != latest.end() &&
+                    types::Date::days_between(used->second, today) > kCategoryIsUnusedAfterDays)
                     continue;
             }
+            already_have.insert(a.path.value());
             out.push_back(a);
         }
     }
@@ -95,6 +121,14 @@ inline std::vector<Account> offered_for_typed(const Chart& accounts, const ledge
         return a.path.value() < b.path.value();
     });
     return out;
+}
+
+// The old shape, kept for callers with a book and no map in hand. It reads the
+// dates first, which is one pass rather than one per candidate.
+inline std::vector<Account> offered_for_typed(const Chart& accounts, const ledger::Ledger& book,
+                                              const std::string& typed, bool include_unused,
+                                              const types::Date& today) {
+    return offered_for_typed(accounts, last_used_dates(book), typed, include_unused, today);
 }
 
 }  // namespace chart

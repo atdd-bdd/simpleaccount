@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QMenu>
 #include <QPoint>
+#include <QTimer>
 #include <functional>
 #include <map>
 #include <memory>
@@ -62,9 +63,18 @@ public:
     // the review is accepted.
     void importTransactionsFrom(const QString& path);
 
-    // The dialog in front of an import. Returns the account to import into,
-    // or nothing at all if it was cancelled.
-    std::string confirmImportAccount(const ui::Workspace::ImportConfirmation& proposed);
+    // What the dialog in front of an import was answered with: the account,
+    // and the balance the bank says the account stands at. The second is the
+    // file's own figure where it stated one, and is typed where it did not --
+    // a CSV never states a balance and is the reason the field is there. An
+    // empty account means cancelled, and an empty balance means no answer,
+    // which is not the same thing as zero.
+    struct ImportAnswer {
+        std::string account;
+        std::string online_balance;
+        std::string online_balance_at;
+    };
+    ImportAnswer confirmImportAccount(const ui::Workspace::ImportConfirmation& proposed);
     void askAboutTransfers();
     // The program's own file dialog, which an import uses so that the newest
     // file is the first one offered.
@@ -142,6 +152,12 @@ private:
         QComboBox* range = nullptr;
         QDateEdit* since = nullptr;
         QLabel* note = nullptr;
+        // The three figures across the top: what the register adds up to, what
+        // of it has cleared, and what the last download said -- with the
+        // difference between the last two, which is the number a person is
+        // actually reconciling. See the three-balances section of
+        // TransactionRegister.spectable.
+        QLabel* balances = nullptr;
         std::string sortColumn = "Date";
         std::string sortDirection = "Ascending";
 
@@ -211,6 +227,10 @@ private:
     // Edit on the tree -- the same window either way.
     void editAccountSettings(const QString& path);
     void editCategorySettings(const QString& path);
+    // Adds one from the category listing, which is where a person is looking
+    // when they find the category they wanted is not there. True when one was
+    // added, so the listing behind it can fill itself again.
+    bool addCategoryFromListing(QWidget* parent);
     void hideAccount(const QString& path);
     void deleteAccount(const QString& path);
     // Puts the widths somebody dragged onto every register. The width belongs
@@ -220,6 +240,10 @@ private:
     void recategorise(int tabPosition);
     void deleteSelection(int tabPosition);
     void addPayeeRuleFrom(int tabPosition);
+    // Runs the rules already written over the lines selected, which is the
+    // same pass the import makes. See applying the payee rules to a selection
+    // in UserInterface.spectable.
+    void applyPayeeRulesToSelection(int tabPosition);
     void rebuildRecent();
     void rememberRecent(const QString& name);
     // Reads what was typed on the blank line of that tab back out of the
@@ -257,6 +281,12 @@ private:
     // Set while the widgets are being filled in, so that the signals that
     // firing causes are not read back as the user changing something.
     bool refreshing_ = false;
+
+    // Dragging a divider reports every pixel. Applying and writing each one
+    // laid every other register out again and wrote the book to disk a hundred
+    // times for one drag, so the pixels are recorded and this says when the
+    // drag has stopped. Made on the first drag and kept.
+    QTimer* resizeSettle_ = nullptr;
 
     QTreeWidget* accounts_ = nullptr;
     QSplitter* outer_ = nullptr;

@@ -68,6 +68,19 @@ public:
             const types::AccountPath path{value.path};
             const types::AccountType type = types::account_type_from_string(value.type);
             rejection_ = chart_.add(path, type, &created_);
+
+            // Both are optional and both belong to the account, so the dialog
+            // that opens it writes them rather than leaving them to a second
+            // visit to the settings dialog. The number is kept as typed, less
+            // the blanks at either end, which is the account-number rule.
+            const chart::Account* made = chart_.find(path.value());
+            if (made != nullptr) {
+                chart::Account a = *made;
+                a.bank = blank(value.bank);
+                a.account_number = trimmed(blank(value.accountnumber));
+                chart_.put(a);
+            }
+
             const auto on = types::Date::from_iso(value.openingdate);
             ASSERT_TRUE(on.has_value()) << value.openingdate;
             for (const auto& p : ledger::Ledger::opening_balance_postings(
@@ -271,6 +284,13 @@ private:
         s.bank = a.bank.empty() ? "none" : a.bank;
         s.bankid = a.bank_id.empty() ? "none" : a.bank_id;
         s.accountnumber = a.account_number.empty() ? "none" : a.account_number;
+        // Plain and ungrouped, which is how every table here writes an amount.
+        // No date is "never" rather than a date nobody stated -- an account no
+        // download has ever been placed into is the ordinary case.
+        s.downloadedbalance = a.downloaded_balance.in_csv();
+        s.downloadedbalanceat = a.downloaded_balance_at.has_value()
+                                    ? a.downloaded_balance_at->iso()
+                                    : std::string("never");
         return s;
     }
 
@@ -802,5 +822,65 @@ public:
             EXPECT_EQ(std::stoll(value.nextidgivenout), fixture.last_id_used() + 1) << what;
         }
     }
+
+public:
+
+    // Opening it remembers the category and nothing else: what the dialog
+    // comes up showing is read off the chart, and the Then reads it the same
+    // way whether the dialog was opened or answered.
+    void when_category_settings_opened(const std::vector<AccountSelectString>& values) {
+        ASSERT_FALSE(values.empty());
+        opened_ = values.front().path;
+    }
+
+    void then_category_settings_are(const std::vector<CategorySettingsString>& values) {
+        for (const CategorySettingsString& want : values) {
+            const std::optional<chart::CategorySettings> got =
+                chart_.category_settings(want.path.value);
+            ASSERT_TRUE(got.has_value()) << "no account " << want.path.value;
+            EXPECT_EQ(want.name.value, got->name.value()) << want.path.value << " name";
+            EXPECT_EQ(blank(want.under.value), got->under) << want.path.value << " under";
+            EXPECT_EQ(want.type.value, types::to_string(got->type))
+                << want.path.value << " type";
+            EXPECT_EQ(blank(want.alias), got->alias) << want.path.value << " alias";
+            EXPECT_EQ(parse_bool_cell(want.hidden), got->hidden)
+                << want.path.value << " hidden";
+        }
+    }
+
+    // The dialog answered. Each of the five is the chart's own operation, so
+    // what this does is hand the five over and say it was not refused -- the
+    // rules of a rename or a move are specified where they are.
+    void when_category_settings_changed(const std::vector<CategorySettingsString>& values) {
+        for (const CategorySettingsString& value : values) {
+            chart::CategorySettings want;
+            want.path = types::AccountPath(value.path.value);
+            want.name = types::AccountName(value.name.value);
+            want.under = blank(value.under.value);
+            want.type = types::account_type_from_string(value.type.value);
+            want.alias = blank(value.alias);
+            want.hidden = parse_bool_cell(value.hidden);
+            rejection_ = chart_.apply_category_settings(want);
+            EXPECT_FALSE(rejection_.refused) << rejection_.reason;
+        }
+    }
+
+    // Every account's date at once, which is the point: one pass over the
+    // postings rather than one pass per account.
+    void when_the_last_used_dates_are_read() { last_used_ = chart::last_used_dates(ledger_); }
+
+    void then_last_used_dates_are(const std::vector<LastUsedString>& values) {
+        for (const LastUsedString& want : values) {
+            const auto at = last_used_.find(want.account.value);
+            // Absent from the map is never used, which is a different answer
+            // from a date and not a stand-in for one.
+            const std::string got = at == last_used_.end() ? std::string("never") : at->second.iso();
+            EXPECT_EQ(want.lastused, got) << want.account.value << " last used";
+        }
+    }
+
+private:
+    chart::LastUsedDates last_used_;
+public:
 
 };

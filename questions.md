@@ -363,3 +363,194 @@ if either half was -- is `transfers::merge` unchanged.
 If the one-row shape was what was meant all along, the thing to change is
 `reg::commit`, not this; it is the same decision in both places and it is
 written down in only one of them.
+
+## 16. A drag of a column divider wrote the whole book, once per pixel
+
+`sectionResized` fires for every pixel of a drag, and the lambda wired to it
+called `applyColumnWidths()` and then `save()`. A save hashes every small table
+and compares 37,460 transactions against what is stored, so a divider moved
+forty pixels was forty of those. That is item 2 of the change list -- "altering
+size of columns takes a long time" -- and it is not the saving being slow, it
+is the saving happening forty times.
+
+**Decision.** The width is recorded as the drag goes, so the column keeps
+following the divider, and the book is written once, when the drag stops. Qt
+gives no "drag finished" signal on a header, so the seam is explicit:
+`Workspace::resize_column` records, and `Workspace::finish_resize()` reports
+whether there is anything to write. The UI calls the second one when the drag
+has stopped, which in a widget toolkit that will not say so means a short timer
+restarted on each resize.
+
+Two scenarios in `UserInterface.spectable` state it: three widths reported and
+one write, and a drag still going with no write at all. `BookWrites` counts
+writes in a table, which is a measurement in a specification and wants a word:
+how *often* the book is written is a fact about the program, not about the
+machine, and it is the fact that was wrong here.
+
+**Not decided here.** The write is still a whole-book write. A widths-only
+write would be better and is a bigger change to `store_sqlite`; one write per
+drag is already the difference between a second and nothing.
+
+## 17. The category picker read the whole book once per candidate
+
+Item 4 -- "creating the category selection dialog takes a long time; doing a
+simple recategorization takes a long time". `chart::offered_for_typed` filters
+candidates and then, for each survivor, calls `last_used`, which is a linear
+scan of every posting in the book looking for the newest date on that account.
+On a chart of a few hundred categories and a book of 37,460 transactions that
+is millions of comparisons, and `filter()` is wired to `textChanged`, so it
+happened again on every keystroke. The Debug binary makes it worse, which is
+what the author is running.
+
+**Decision.** The dates are read together, in one pass over the postings, into
+a map from account path to its newest date, and `offered_for_typed` reads its
+answer out of that map. The pass happens when the picker opens; a keystroke
+does none, because nothing can post to an account while somebody is typing.
+
+What is offered does not change by a line, which is why the existing scenarios
+are untouched -- they are the regression test for this. The new scenario in
+`Accounts.spectable` states the one-pass read on its own terms, including the
+case the map has to keep: an account in the chart that is in no posting at all,
+which is `never` rather than a date.
+
+## 18. Three balances at the top of the register, not two
+
+Item 7 asks for "the current balance as computed and the last balance
+downloaded". Taken literally that is two figures, and comparing them would show
+a difference nearly all the time: a cheque written this morning is in the
+register and not at the bank, which is not a disagreement with anybody.
+
+**Decision.** Three figures. **Balance** is every transaction, which is what
+the money is. **Cleared** is only what is marked cleared, which is what the
+bank should agree with. **Downloaded** is what the last download said, with the
+date it was for. **Difference** is Cleared less Downloaded, so zero is the
+ordinary case and anything else is worth looking at. All four in the display
+sign of the account, so a card reads the way its statement reads.
+
+The downloaded figure is kept on the account -- `DownloadedBalance` and
+`DownloadedBalanceAt` on `Entity Account` -- written by the import and never
+typed. A download older than the one already recorded does not replace it:
+files arrive out of order and only the latest is worth the space. That is a
+schema change, so the version goes to 17 and, as decided before, there is no
+migration: an older book is refused.
+
+## 19. The on-line balance is a dialog field for every format, not only CSV
+
+Item 7 also asks for an "On-line balance" entry on the import, for CSV files
+that state none. Rather than a second, CSV-only dialog, the field is on the
+confirmation dialog that every import already shows: filled in from LEDGERBAL
+for a QFX and correctable, empty for a CSV and a QIF and optional.
+
+**Decision.** Empty means no answer, which is not zero: no check is made and
+the balance already on the account is left alone. A date goes with the figure,
+defaulting to the latest date in the file, because a balance with no date
+cannot be compared with anything. What is typed is used for exactly what the
+file's own figure is used for -- the check at the end of the import, and the
+balance written onto the account.
+
+This closes the deferred question in the memory note about CSV online balances:
+the dialog it was waiting for is this one.
+
+## 20. Item 10 was already specified and already written; it was never called
+
+"The first time a QFX file is read, and the account is confirmed on the dialog,
+copy the bank id and the account number into the account and save it."
+
+`ofx::teach_account` does this, `ImportOfx.spectable` specifies it in three
+scenarios, and all three pass. Nothing in `app/` calls it:
+`confirmImportAccount` shows the bank id and the account number as labels and
+throws them away. The only caller is the generated glue.
+
+**Decision.** Called from the confirmation, before a row of the file is read,
+and the chart written immediately -- so the answer survives the import being
+cancelled a moment later, which is the likeliest outcome for the first import
+into a new account. Two scenarios in `UserInterface.spectable` state it at the
+UI level: a confirmation that teaches writes once, and one that disagrees with
+what the account already says writes nothing at all. The rule about what is
+filled in and what is left alone is ImportOfx's and is not restated.
+
+## 21. Editing a category offered one field out of five
+
+Item 5. `editCategorySettings` put up a dialog with Alias on it, so a category
+entered under the wrong parent, or named badly, could not be corrected -- it
+had to be added again elsewhere and the old one hidden, and the transactions
+stayed on the old one.
+
+**Decision.** The category dialog asks what the adding dialog asks: Name,
+Under, Type, Alias, Hidden. Renaming and moving are the chart's own operations
+and are already specified -- a rename rewrites the paths beneath it, a move
+carries the subtree, and a transaction names its category rather than the text
+of a path, so neither touches any transaction. The dialog is where they are
+reached for a category, which was the only kind of node with no way to reach
+them.
+
+Type is asked because a category entered as an expense when it was income reads
+as the wrong sign on every report that covers it.
+
+## 22. A category is added from the listing, with no parent meaning its root
+
+Item 6. The only way to add a category was the account dialog, which offers the
+three category kinds at the bottom of a list of seven account groups and then
+puts the new category somewhere the listing has to be reopened to see.
+
+**Decision.** A button at the top of the category listing, and the new row
+appears in the listing without it being reopened. The dialog is the one from
+decision 21, minus Hidden. A category added with no parent goes under the root
+of its own kind -- `Income`, `Expenses`, `Equity` -- rather than becoming a
+root of its own, because a category outside those trees is invisible to every
+report there is. The root is created if the book has not got one, which is the
+same rule as a missing parent anywhere else in the chart.
+
+## 23. The category on a payee rule was a string nobody checked
+
+Item 3. `RuleForm`'s category was a `QLineEdit`. A rule carrying
+`Expenses:Grocerys` matched every visit to the shop and then wrote a category
+that does not exist, so the rule looked right in the list of rules and the
+transactions went on arriving in Uncategorized, with nothing to say so.
+
+**Decision.** The field is a button onto the same picker Recategorize opens --
+`CategoryPick`, one picker in the program, reached from a second place -- and
+what comes back is a path that is in the book. Left empty is still how a rule
+says it tidies the name and leaves the category alone, so the picker can be
+cancelled and the field stays as it was.
+
+## 24. Applying the payee rules to a selection
+
+Item 8. Applying the rules to the whole book is right after a long import and
+wrong while working through one statement: a rule written a minute ago is meant
+for the twenty lines in front of somebody, not for twenty years, where it will
+also rewrite transactions that were already right and that nobody asked about.
+
+**Decision.** `Apply payee rules...` on the register's context menu, over the
+current selection. It is the same pass over the same rules in the same order,
+reporting the same three counts through the existing `RuleApplication` -- only
+the set of transactions it is given is different. Nothing about how a rule is
+applied changes, and the whole-book pass in `Payees.spectable` is untouched.
+
+## 25. Three smaller decisions taken while writing these eight
+
+**The category-settings scenarios are stated over the chart, not over the
+categories table.** `Given the categories are` fills `chart::Category`, which
+is the old listing's own table; `category_settings` and
+`apply_category_settings` read `chart::Account`, because a category is an
+account in the same tree. The four scenarios of "what is kept about a category"
+were written over the first and would have asserted against an empty table.
+They are stated over `ChartOfAccounts` instead, and a rename or a move is
+checked with `Then the chart of accounts is : ChartOfAccounts CompareOnly` over
+Path alone -- a presence check, which is what a move is: the path is there and
+the old one is not.
+
+**The drag settles after 400 ms.** Decision 16 left it as "a short timer". 400
+ms is long enough that a divider dragged in two movements is one write and
+short enough that nobody notices the wait before the column lays out. It is one
+number in `MainWindow` and not in the specification, which states only that a
+drag writes once.
+
+**A file is asked whether it stated a balance, not what its balance is.**
+`ofx::Statement` carries `ledger_balance` and `ledger_balance_at` as a `Money`
+and a `Date`, both of which have a value before anything has been read, so
+there is no way to tell a stated zero from a file that said nothing. A balance
+of zero is a real balance, so `numbers_in_file` looks for `<LEDGERBAL` in the
+text and reports nothing when it is absent. The alternative -- a `bool stated`
+on `ofx::Statement` -- is the better answer and is a change to the reader and
+its own scenarios; this one is in the place that asks the question.

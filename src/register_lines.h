@@ -172,6 +172,32 @@ private:
     std::vector<std::size_t> order_;
 };
 
+// The three figures across the top of one register, in the display sign of
+// the account, the same as the running balance column.
+//
+// Balance is every transaction, which is what the money is. Cleared is only
+// what is marked cleared, which is what the bank should agree with -- and it is
+// the one the downloaded figure is compared against, because comparing the bank
+// against Balance would show a difference every time something was in flight,
+// which is most of the time, and a warning that is usually on is not read.
+//
+// Downloaded is held on the account in display sign already, as the statement
+// reads it; see the account's downloaded_balance in chart.h. Without one,
+// downloaded_at is absent and difference is zero rather than the whole
+// balance: there is nothing to differ from.
+//
+// See the two balances at the top of the register in
+// TransactionRegister.spectable.
+struct Balances {
+    std::string account;
+    Money balance;
+    Money cleared;
+    Money downloaded;
+    std::optional<types::Date> downloaded_at;
+    Money difference;
+};
+
+
 inline std::vector<Line> lines_for(const BookIndex& book, const std::string& account) {
     const chart::Chart& accounts = book.accounts();
     const chart::RefIndex& index = book.refs();
@@ -317,6 +343,47 @@ inline std::vector<Line> lines_for(
         const std::vector<ledger::TransactionSplit>& splits,
         const std::string& account) {
     return lines_for(BookIndex(accounts, transactions, splits), account);
+}
+
+inline Balances balances_for(const BookIndex& book, const std::string& account) {
+    const chart::Chart& accounts = book.accounts();
+    const chart::Account* a = accounts.find(account);
+    const int sign = a != nullptr ? types::display_sign(a->type) : 1;
+
+    // The register's own lines, because which transactions belong to this
+    // account is a question only lines_for answers: a transfer in is somebody
+    // else's transaction and a line here all the same, a matched transfer is a
+    // line in one register and not in both, and a split is a line in each
+    // category it touches.
+    const std::vector<Line> lines = lines_for(book, account);
+
+    Balances out;
+    out.account = account;
+    // The last line's running balance is the balance, in the display sign
+    // already. The cleared figure is added up here, where a line says what it
+    // contributed: deposit less payment, which is what the running balance
+    // moved by.
+    if (!lines.empty()) out.balance = lines.back().balance;
+    Money cleared;
+    for (const Line& line : lines)
+        if (line.cleared == types::ClearedStatus::Cleared)
+            cleared += line.deposit - line.payment;
+    out.cleared = sign < 0 ? -cleared : cleared;
+
+    if (a != nullptr && a->downloaded_balance_at.has_value()) {
+        out.downloaded = a->downloaded_balance;
+        out.downloaded_at = a->downloaded_balance_at;
+        out.difference = out.cleared - out.downloaded;
+    }
+    return out;
+}
+
+// The three figures for one register, for the same caller.
+inline Balances balances_for(const chart::Chart& accounts,
+                             const std::vector<ledger::Transaction>& transactions,
+                             const std::vector<ledger::TransactionSplit>& splits,
+                             const std::string& account) {
+    return balances_for(BookIndex(accounts, transactions, splits), account);
 }
 
 // --- what the register shows, beyond the lines themselves -------------------

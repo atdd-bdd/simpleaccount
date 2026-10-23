@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include "account_type.h"
+#include "category_search.h"
 #include "chart.h"
 #include "date.h"
 #include "find.h"
@@ -13,6 +14,7 @@
 #include "import_target.h"
 #include "ledger.h"
 #include "money.h"
+#include "ofx_import.h"
 #include "transaction.h"
 #include "transaction_id.h"
 #include "payee_rules.h"
@@ -665,6 +667,14 @@ public:
         // showing an empty one.
         std::string bank_id;
         std::string account_number;
+        // What the bank says the balance is, and the date it is the balance
+        // on. A QFX arrives with LEDGERBAL in it and the dialog shows that; a
+        // CSV or a QIF arrives with nothing, and the field is there to be
+        // typed into off the bank's own website. Text, and empty for no
+        // answer, which is not the same as a balance of zero. See asking for
+        // the on-line balance in UserInterface.spectable.
+        std::string online_balance;
+        std::string online_balance_at;
     };
 
     // A file has been chosen and nothing has been read out of it yet. What the
@@ -680,7 +690,9 @@ public:
     ActiveRegister choose_import_file(const std::string& file_name,
                                       const std::string& account_in_file,
                                       const std::string& bank_id = std::string(),
-                                      const std::string& account_number = std::string()) {
+                                      const std::string& account_number = std::string(),
+                                      const std::string& online_balance = std::string(),
+                                      const std::string& online_balance_at = std::string()) {
         const std::string from_name =
             importing::account_from_file_name(accounts_, file_name);
         std::string active;
@@ -693,7 +705,8 @@ public:
         // Importing into whichever register happened to be open last is how a
         // statement ends up in the wrong account; asking is not.
         confirming_ = ImportConfirmation{true, file_name, p.account, p.source,
-                                         bank_id, account_number};
+                                         bank_id, account_number,
+                                         online_balance, online_balance_at};
         return {false, std::string(), p.account};
     }
 
@@ -712,6 +725,35 @@ public:
 
     void confirm_import_into(const std::string& account,
                              const std::vector<ReviewRow>& rows) {
+        confirm_import_with(account, confirming_.online_balance,
+                            confirming_.online_balance_at, rows);
+    }
+
+    // The dialog, answered: the account, and the on-line balance as it was
+    // left -- the file's own figure, corrected, or typed where the file had
+    // none. Empty is the answer that there is no figure.
+    //
+    // Two things happen here and nowhere else. The account is taught the
+    // bank's numbers, because answering this dialog is the only moment at
+    // which anybody has said that this file and this account belong together,
+    // and a learned number kept only in memory would have to be given again
+    // after the program next closed. And the balance is put aside until the
+    // import is accepted, which is when there is something for it to be a
+    // check on. See confirming a download in UserInterface.spectable.
+    void confirm_import_with(const std::string& account, const std::string& online_balance,
+                             const std::string& online_balance_at,
+                             const std::vector<ReviewRow>& rows) {
+        stated_balance_ = online_balance;
+        stated_balance_at_ = online_balance_at;
+        // The rule is ofx::teach_account's: what is blank is filled in, what
+        // disagrees is left alone. Nothing learned is nothing written -- a
+        // book written for no change is a second of the program not
+        // responding, for nothing.
+        const ofx::Teaching taught =
+            ofx::teach_account(&accounts_, account, confirming_.bank_id,
+                               confirming_.account_number);
+        if (taught.learned) ++book_writes_;
+
         std::vector<ReviewRow> stamped = rows;
         for (ReviewRow& r : stamped) r.account = account;
         review_import(stamped, account);
@@ -854,6 +896,18 @@ public:
         paired_halves_.clear();
         asking_ = TransferQuestion();
         questions_.clear();
+        // The balance the dialog was answered with, now that the rows it was
+        // an answer about are in the book. Left empty it does nothing: an
+        // import nobody has a balance for is the ordinary case for twenty
+        // years of history and is not an error.
+        if (!stated_balance_.empty() && Money::is_valid(stated_balance_)) {
+            const std::optional<types::Date> at = types::Date::from_iso(stated_balance_at_);
+            if (at.has_value())
+                ofx::record_stated_balance(&accounts_, review_account_,
+                                           Money(stated_balance_), *at);
+        }
+        stated_balance_.clear();
+        stated_balance_at_.clear();
         committed_ = true;
         ++changes_;
         // The review was there to compare the import against the register
@@ -885,9 +939,30 @@ public:
     // The width belongs to the column and not to the register: every register
     // is the same columns in the same order, so a width learned in one of them
     // is right in all of them. See the width rule in UserInterface.spectable.
+    // Every pixel of a drag is reported, so this records and nothing more.
+    // It used to write the book, which on thirty thousand transactions is
+    // about a second, forty times over for a divider moved forty pixels --
+    // which is what made widening a column look like a program that had hung.
     void resize_column(const std::string& column, int width) {
         widths_[column] = width < minimum_column_width() ? minimum_column_width() : width;
+        resize_pending_ = true;
     }
+
+    // The drag has stopped, so the width is now an answer rather than a
+    // position on the way to one. True when there is something to write, which
+    // is once per drag however many pixels it was. See a drag writes the width
+    // once in UserInterface.spectable.
+    bool finish_resize() {
+        if (!resize_pending_) return false;
+        resize_pending_ = false;
+        ++book_writes_;
+        return true;
+    }
+
+    // How many times the book has been asked to be written. Counted because
+    // writing it is the expensive thing this program does, so how often is a
+    // fact about the program rather than about the machine it is on.
+    int book_writes() const { return book_writes_; }
 
     // Only the columns somebody resized. A column nobody touched keeps whatever
     // width the program gives it, and that number is deliberately not one this
@@ -912,6 +987,23 @@ public:
 
     void open_account_listing() { listing_ = Listing::Accounts; }
     void open_category_listing() { listing_ = Listing::Categories; }
+
+    // A category added from the listing it will appear in. The listing stays
+    // open and the new line is in it, which is the whole point of the button:
+    // the way in before was the account dialog, which put the category
+    // somewhere the listing had to be reopened to see. See a category is added
+    // from the listing in UserInterface.spectable.
+    chart::Rejection add_category_from_listing(const types::AccountName& name,
+                                               const std::string& under,
+                                               types::AccountType type,
+                                               const std::string& alias) {
+        const chart::Rejection no =
+            accounts_.add_category_under(name, under, type, alias);
+        if (no.refused) return no;
+        ++book_writes_;
+        rebuild_book();
+        return {};
+    }
 
     // Which editor came up and what it came up on. What the account settings
     // window holds is in Accounts.spectable; what is recorded here is only that
@@ -1053,6 +1145,10 @@ public:
                               tabs_[active_tab_].kind == TabKind::Register;
         return {MenuEntry{"Recategorize...", anything},
                 MenuEntry{"Add payee rule...", anything},
+                // The rules a person has already written, run over the lines in
+                // front of them. The same rules the import applies, so a month
+                // categorised by hand and a month imported come out the same.
+                MenuEntry{"Apply payee rules...", anything},
                 MenuEntry{"Delete...", anything}};
     }
 
@@ -1092,6 +1188,26 @@ public:
             if (found != nullptr) refs.push_back(found->ref.value());
         }
         return recategorise(refs, category);
+    }
+
+    // The rules, over the selected lines only. Applying them to everything is
+    // the right thing after a long import and the wrong thing while working
+    // through one statement: a rule written a minute ago is meant for the
+    // twenty lines in front of somebody. The pass itself is payees' and is the
+    // same one the whole book gets. See applying the payee rules to a
+    // selection in UserInterface.spectable.
+    payees::BookApplication apply_payee_rules_to_selection(
+            const std::vector<payees::Rule>& rules) {
+        const std::vector<reg::Line> lines = register_lines(active_pane());
+        std::vector<types::TransactionId> ids;
+        for (const int line : selected_) {
+            const ledger::Transaction* found = transaction_on(lines, line);
+            if (found != nullptr) ids.push_back(found->id);
+        }
+        const payees::BookApplication out =
+            payees::apply_to_selection(rules, accounts_, &transactions_, ids);
+        if (out.matched > 0) rebuild_book();
+        return out;
     }
 
     // The same by name rather than by line, which is how the report reaches it:
@@ -1185,8 +1301,30 @@ public:
         if (found == nullptr) return payees::Rule{};
         const std::string raw =
             found->raw_name.empty() ? found->payee.value() : found->raw_name;
-        return payees::suggest(raw, category_worth_offering(lines, selected_.front()));
+        payees::Rule out =
+            payees::suggest(raw, category_worth_offering(lines, selected_.front()));
+        // A category chosen in the dialog's own picker is the answer; what the
+        // line suggested was only an opening offer.
+        if (!rule_category_.empty()) out.category = rule_category_;
+        return out;
     }
+
+    // The rule dialog's category, chosen from the same list the register's
+    // recategorise offers, on the same rule -- a category that cannot be
+    // chosen there cannot be chosen here either. It was a line to type a path
+    // into, which meant a rule could name a category that did not exist and
+    // nothing said so until the rule failed to do anything.
+    std::vector<chart::Account> rule_categories_offered(const std::string& typed,
+                                                        bool include_unused,
+                                                        const types::Date& today) const {
+        return chart::offered_for_typed(accounts_, book_, typed, include_unused, today);
+    }
+
+    // The path, which is what every other part of the program looks a category
+    // up by -- not the words on the list, which read Auto:Fuel (Expense).
+    void choose_rule_category(const std::string& path) { rule_category_ = path; }
+
+    void forget_rule_category() { rule_category_.clear(); }
 
     // ---------------------------------------------------------------- asking
 
@@ -1574,6 +1712,11 @@ private:
     Listing listing_ = Listing::None;
     Editor editor_;
     std::map<std::string, int> widths_;
+    bool resize_pending_ = false;
+    int book_writes_ = 0;
+    std::string stated_balance_;
+    std::string stated_balance_at_;
+    std::string rule_category_;
     std::vector<BottomTabKind> bottom_;
     std::size_t active_bottom_ = 0;
     std::vector<ReviewRow> review_;

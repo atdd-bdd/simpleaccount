@@ -784,12 +784,14 @@ Details AccountInFile is the account of this book the file turned out to be
 \ whose number is unknown -- that is the case where they matter most,
 \ because they are the whole of what the user has to go on when asked
 \ which account the download belongs to.
-| Attribute     | Type             | Default |
-| FileName      | Text             |         |
-| Format        | ImportFileFormat | Csv     |
-| AccountInFile | AccountPath      | none    |
-| BankId        | Text             | none    |
-| AccountNumber | Text             | none    |
+| Attribute       | Type             | Default |
+| FileName        | Text             |         |
+| Format          | ImportFileFormat | Csv     |
+| AccountInFile   | AccountPath      | none    |
+| BankId          | Text             | none    |
+| AccountNumber   | Text             | none    |
+| OnlineBalance   | Text             | none    |
+| OnlineBalanceAt | Text             | none    |
 
 DataType ImportTargetSource
 Description Where the account in the confirmation came from. It is shown, because
@@ -815,13 +817,15 @@ Details BankId and AccountNumber are shown because they are the only things in
 \ They are shown as the file wrote them, not reformatted, so that they
 \ can be read against a statement. A download that states neither
 \ leaves both lines out of the dialog rather than showing an empty one.
-| Attribute     | Type               | Default     |
-| Shown         | Boolean            | true        |
-| FileName      | Text               | none        |
-| Account       | AccountPath        | none        |
-| Source        | ImportTargetSource | NoneOffered |
-| BankId        | Text               | none        |
-| AccountNumber | Text               | none        |
+| Attribute       | Type               | Default     |
+| Shown           | Boolean            | true        |
+| FileName        | Text               | none        |
+| Account         | AccountPath        | none        |
+| Source          | ImportTargetSource | NoneOffered |
+| BankId          | Text               | none        |
+| AccountNumber   | Text               | none        |
+| OnlineBalance   | Text               | none        |
+| OnlineBalanceAt | Text               | none        |
 
 BusinessRule Which account the import proposes
 Description The file first, its name second, the register in front last. Each
@@ -861,6 +865,196 @@ Attributes ImportTargetProposal
 | ActiveTab     | AccountPath        | none        |
 | Proposed      | AccountPath        | none        |
 | Source        | ImportTargetSource | NoneOffered |
+
+Description The dialog also asks what the bank says the balance is, filled in
+\ for a file that states one and empty for a file that does not.
+Details A download that states LEDGERBAL is checked against the book, and the
+\ disagreement, when there is one, is the most useful thing an import
+\ ever says. A CSV states nothing of the kind, so that check has
+\ simply never been made on one -- and a CSV is what several banks
+\ here will give. The number is on the website the file was downloaded
+\ from, in front of the person doing the downloading, and a box to
+\ type it into is the whole of what was missing.
+\
+\ So the line is in the dialog for every format. A QFX arrives with it
+\ filled in, and it can be corrected; a CSV or a QIF arrives with it
+\ empty, and typing it is optional. What is typed is used for exactly
+\ what the file's own figure is used for: the check at the end of the
+\ import, and the balance written on the account afterwards. See the
+\ two balances at the top of the register in TransactionRegister, and
+\ the balance a download states in ImportOfx.
+\
+\ Left empty, nothing happens -- no check is made and the account's
+\ balance from the bank, if it has one, is left as it was. An import
+\ nobody has a balance for is the ordinary case for twenty years of
+\ history and is not an error.
+\
+\ A date goes with it, defaulting to the latest date in the file,
+\ because a balance without a date cannot be compared with anything.
+\ For a QFX it is the date LEDGERBAL states.
+
+Attributes ImportConfirmationAnswer
+Description The dialog, answered. OnlineBalance empty is the answer that there
+\ is no figure, which is different from zero.
+| Attribute       | Type        | Default |
+| Account         | AccountPath |         |
+| OnlineBalance   | Text        | none    |
+| OnlineBalanceAt | Text        | none    |
+
+Scenario A QFX that states its balance offers it in the dialog
+Description Read out of LEDGERBAL, with its date, so that the figure the import
+\ is about to check against is visible before the file is read rather
+\ than afterwards.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder | BankId    | AccountNumber |
+| Assets:Checking        | Checking | false       | 053000196 | 1234567890    |
+| Expenses:Uncategorized | Expense  | false       | none      | none          |
+When import file chosen : ImportFileChosen Vertical
+| FileName      | statement.qfx   |
+| Format        | Qfx             |
+| AccountInFile | Assets:Checking |
+| BankId        | 053000196       |
+| AccountNumber | 1234567890      |
+| OnlineBalance   | 1705.00       |
+| OnlineBalanceAt | 2024-01-31    |
+Then import confirmation is : ImportConfirmation Vertical CompareOnly
+| Shown           | true          |
+| Account         | Assets:Checking |
+| Source          | File          |
+| OnlineBalance   | 1705.00       |
+| OnlineBalanceAt | 2024-01-31    |
+
+Scenario A CSV has nowhere to read a balance from and the dialog asks for one
+Description Empty rather than zero, because zero is a balance and no answer is
+\ not. This is the case the field was added for.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Uncategorized | Expense  | false       |
+When import file chosen : ImportFileChosen Vertical
+| FileName | checking.csv |
+| Format   | Csv          |
+Then import confirmation is : ImportConfirmation Vertical CompareOnly
+| Shown           | true |
+| OnlineBalance   | none |
+| OnlineBalanceAt | none |
+
+Scenario A balance typed into the dialog is checked and kept like the file's own
+Description Typed off the bank's website while the download was being made.
+\ What follows is what follows from a QFX stating the same figure --
+\ the check at the end of the import, and the balance on the account
+\ for the register to show.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given the file holds : ImportReviewRow
+| Line | Date       | Payee         | Category               | Amount |
+| 1    | 2024-01-15 | Harris Teeter | Expenses:Uncategorized | -45.00 |
+When import file chosen : ImportFileChosen Vertical
+| FileName | checking.csv |
+| Format   | Csv          |
+When import confirmed with : ImportConfirmationAnswer Vertical
+| Account         | Assets:Checking |
+| OnlineBalance   | 1705.00         |
+| OnlineBalanceAt | 2024-01-31      |
+When import accepted
+Then downloaded balances are : AccountDownloadedBalance
+| Path            | Balance | BalanceAt  |
+| Assets:Checking | 1705.00 | 2024-01-31 |
+
+Scenario An import with the balance left empty checks nothing and keeps nothing
+Description Twenty years of history imported from a spreadsheet, where nobody
+\ has a balance for any of it. The field is optional and this is what
+\ optional means.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder | DownloadedBalance | DownloadedBalanceAt |
+| Assets:Checking        | Checking | false       | 1705.00           | 2024-01-31          |
+| Expenses:Uncategorized | Expense  | false       | 0.00              | never               |
+Given the file holds : ImportReviewRow
+| Line | Date       | Payee         | Category               | Amount |
+| 1    | 2024-03-15 | Harris Teeter | Expenses:Uncategorized | -45.00 |
+When import file chosen : ImportFileChosen Vertical
+| FileName | old-history.csv |
+| Format   | Csv             |
+When import confirmed with : ImportConfirmationAnswer Vertical
+| Account         | Assets:Checking |
+| OnlineBalance   | none            |
+| OnlineBalanceAt | none            |
+When import accepted
+Then downloaded balances are : AccountDownloadedBalance
+| Path            | Balance | BalanceAt  |
+| Assets:Checking | 1705.00 | 2024-01-31 |
+# January's figure is still January's figure. An import that says nothing about
+# the balance does not erase what the last download said.
+
+Description Confirming the dialog for a download writes the bank's numbers onto
+\ the account it was confirmed for, and the book is saved.
+Details The rule itself is in ImportOfx -- what is blank is filled in, what
+\ disagrees is left alone and noted. What is said here is that it
+\ happens at the moment the dialog is answered, and that it reaches
+\ the book rather than only the copy in memory.
+\
+\ Both halves matter. Answering the dialog is the only moment at which
+\ a person has told the program that this file and this account belong
+\ together; nothing later in the import asks again. And an answer kept
+\ only in memory would have to be given again after the program was
+\ next closed, which is the thing the account was being taught in
+\ order to avoid.
+\
+\ It is one write, of the chart, before any row of the file has been
+\ read. The rows are a separate matter and are written when the
+\ import is accepted, which may be a long time later or never.
+
+Scenario Confirming a download for an account teaches it the bank's numbers
+Description The account was imported from Quicken and knows no numbers. One
+\ confirmation is the last time it has to be asked.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder | BankId | AccountNumber |
+| Assets:Checking        | Checking | false       | none   | none          |
+| Expenses:Uncategorized | Expense  | false       | none   | none          |
+When import file chosen : ImportFileChosen Vertical
+| FileName      | statement.qfx |
+| Format        | Qfx           |
+| AccountInFile | none          |
+| BankId        | 053000196     |
+| AccountNumber | 1234567890    |
+When import confirmed into : AccountSelect
+| Path            |
+| Assets:Checking |
+Then account numbering is : AccountNumbering
+| Path            | BankId    | AccountNumber |
+| Assets:Checking | 053000196 | 1234567890    |
+Then book writes are : BookWrites Vertical
+| Writes | 1 |
+# Written before a row of the file has been read, so that the answer survives
+# the import being cancelled a moment later -- which is the import it is most
+# likely to be, the first one for a new account.
+
+Scenario A confirmation that disagrees with the account changes neither number
+Description The account says one number and the file says another. The rule is
+\ ImportOfx's and is not restated; what is shown here is that the
+\ dialog does not become a way around it.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder | BankId    | AccountNumber |
+| Assets:Checking        | Checking | false       | 053000196 | 0012-3456     |
+| Expenses:Uncategorized | Expense  | false       | none      | none          |
+When import file chosen : ImportFileChosen Vertical
+| FileName      | statement.qfx |
+| Format        | Qfx           |
+| AccountInFile | none          |
+| BankId        | 053000196     |
+| AccountNumber | 1234567890    |
+When import confirmed into : AccountSelect
+| Path            |
+| Assets:Checking |
+Then account numbering is : AccountNumbering
+| Path            | BankId    | AccountNumber |
+| Assets:Checking | 053000196 | 0012-3456     |
+Then book writes are : BookWrites Vertical
+| Writes | 0 |
+# Nothing was learned, so nothing is written. A book written for no change is
+# a second of the program not responding, for nothing.
 
 BusinessRule When the name of a file fits an account
 Description Whether one account is what a file name is talking about. Asked of
@@ -2997,10 +3191,11 @@ When register lines selected : RegisterSelect
 | Line |
 | 1    |
 Then menu items are : MenuItem
-| Item              | Enabled |
-| Recategorize...   | true    |
-| Add payee rule... | true    |
-| Delete...         | true    |
+| Item                 | Enabled |
+| Recategorize...      | true    |
+| Add payee rule...    | true    |
+| Apply payee rules... | true    |
+| Delete...            | true    |
 
 Scenario Recategorising a selection puts every line in the new category
 Description Three visits to the same filling station, selected together and
@@ -3164,6 +3359,172 @@ Then rule offered is : PayeeRule Vertical
 # Uncategorized is not a category anybody chose, so it is not offered as one. A
 # rule carrying it would put every future visit back in the bucket it is the
 # program's job to empty.
+
+Description The category on a rule is chosen from the list of categories, the
+\ same way the register's Recategorize chooses one, rather than typed
+\ into a box.
+Details Typed, a category was a string nobody checked. A rule carrying
+\ Expenses:Grocerys matched every visit to the shop and then wrote a
+\ category that does not exist, so the rule looked right in the list
+\ of rules and the transactions went on arriving in Uncategorized.
+\ Nothing said so, because nothing had any reason to look.
+\
+\ So the field is a button onto the category picker, and what comes
+\ back from it is a path that is in the book. The matching rule is the
+\ one in the finding-a-category section of Accounts: any segment of a
+\ path, an alias standing for exactly one, the unused left out. There
+\ is one picker in the program and this is it, reached from a second
+\ place.
+\
+\ Left empty is still how a rule says it tidies the name and leaves
+\ the category alone, so the picker can be cancelled and the field
+\ stays as it was.
+
+Scenario The categories offered for a rule are the ones the picker offers
+Description The rule dialog opens the same list on the same rule, so a
+\ category that cannot be chosen in the register cannot be chosen
+\ here either.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Auto          | Expense  | true        |
+| Expenses:Auto:Fuel     | Expense  | false       |
+| Expenses:Groceries     | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee          | Destination            | Amount |
+| T1  | Assets:Checking | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | -40.00 |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register lines selected : RegisterSelect
+| Line |
+| 1    |
+When payee rule asked for
+When the rule category picker is opened : CategorySearch Vertical
+| Typed         | fuel |
+| IncludeUnused | true |
+Then categories offered are : CategoryOffered
+| Path               |
+| Expenses:Auto:Fuel |
+# Auto matches by segment and Fuel by name; what is asked for here is Fuel, and
+# Groceries is not offered because nothing about it matches.
+
+Scenario A category chosen for a rule is the path and not the words on the list
+Description The list reads Auto:Fuel (Expense); the rule is given
+\ Expenses:Auto:Fuel, which is what every other part of the program
+\ looks a category up by. The same decision the register's picker
+\ makes, for the same reason.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Auto          | Expense  | true        |
+| Expenses:Auto:Fuel     | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee          | Destination            | Amount |
+| T1  | Assets:Checking | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | -40.00 |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register lines selected : RegisterSelect
+| Line |
+| 1    |
+When payee rule asked for
+When the rule category is chosen : CategoryChoice Vertical
+| Category | Expenses:Auto:Fuel |
+Then rule offered is : PayeeRule Vertical
+| Pattern   | SHELL OIL          |
+| MatchType | Contains           |
+| Payee     | SHELL OIL          |
+| Category  | Expenses:Auto:Fuel |
+| Enabled   | true               |
+
+Description The menu on a selection applies the payee rules to the lines
+\ selected, which is the whole-book pass narrowed to what is in front
+\ of somebody.
+Details Applying the rules to the whole book is the right thing after a long
+\ import and the wrong thing while working through one statement.
+\ Twenty lines of a register are what a person is actually looking at,
+\ and a rule written one minute ago is meant for those twenty -- not
+\ for twenty years, where it will also rewrite transactions that were
+\ already right and that nobody asked about.
+\
+\ So it is the same pass over the same rules, in the same order, with
+\ the same counts reported; only the set of transactions it is given
+\ is different. See how a rule is applied in Payees, which this does
+\ not change.
+
+Scenario Applying the payee rules to a selection changes only what is selected
+Description Two visits to the same filling station, one of them selected. The
+\ rule matches the name on both and is applied to one, because the
+\ other was not asked about.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Auto:Fuel     | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given payee rules are : PayeeRule
+| Pattern   | MatchType | Payee | Category           | Enabled |
+| SHELL OIL | Contains  | Shell | Expenses:Auto:Fuel | true    |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee          | Destination            | Amount |
+| T1  | Assets:Checking | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | -40.00 |
+| T2  | Assets:Checking | 2026-02-18 | SHELL OIL 8871 | Expenses:Uncategorized | -44.00 |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register lines selected : RegisterSelect
+| Line |
+| 1    |
+When the payee rules are applied to the selection
+Then transactions are : Transaction CompareOnly
+| Ref | Payee          | Destination            |
+| T1  | Shell          | Expenses:Auto:Fuel     |
+| T2  | SHELL OIL 8871 | Expenses:Uncategorized |
+# T2 matches the rule and is left alone. Applying the rules to the book is
+# how T2 gets its turn, and that is the pass specified in Payees.
+
+Scenario Applying the payee rules to a selection says how many it changed
+Description A selection of twenty is too many to check by eye, which is the
+\ same reason recategorising reports a count.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder |
+| Assets:Checking        | Checking | false       |
+| Expenses:Auto:Fuel     | Expense  | false       |
+| Expenses:Dining        | Expense  | false       |
+| Expenses:Uncategorized | Expense  | false       |
+Given payee rules are : PayeeRule
+| Pattern   | MatchType | Payee     | Category           | Enabled |
+| SHELL OIL | Contains  | Shell Oil | Expenses:Auto:Fuel | true    |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee          | Destination            | Amount |
+| T1  | Assets:Checking | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | -40.00 |
+| T2  | Assets:Checking | 2026-02-18 | SHELL OIL 9981 | Expenses:Auto:Fuel     | -44.00 |
+| T3  | Assets:Checking | 2026-02-20 | TACO PLACE     | Expenses:Dining        | -12.00 |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register lines selected : RegisterSelect
+| Line |
+| 1    |
+| 2    |
+| 3    |
+When the payee rules are applied to the selection
+Then applying the rules reported is : RuleApplication Vertical
+| Matched        | 1 |
+| AlreadyCorrect | 1 |
+| Skipped        | 1 |
+Then transactions are : Transaction CompareOnly
+| Ref | Payee      | Destination            |
+| T1  | Shell Oil  | Expenses:Auto:Fuel     |
+| T2  | Shell Oil  | Expenses:Auto:Fuel     |
+| T3  | TACO PLACE | Expenses:Dining        |
+# T1 was Uncategorized and the rule caught it. T2 already had the rule's own
+# category and still had its name tidied, which is why AlreadyCorrect is not
+# the same as untouched. T3 matches no rule and keeps the category somebody
+# chose. The three counts, and what each of them means, are the whole-book
+# pass's; see Payees. What is new here is only the set of transactions.
 
 # ---------------------------------------------------------------------------
 # From a figure in a report to the transaction behind it
@@ -3656,6 +4017,69 @@ Then category listing rows are : CategoryListingRow CompareOnly
 # Assets:Checking is an account and is in the other listing. The hidden salary
 # category is here, which is the point of the window.
 
+Attributes NewCategory
+Description What is asked for when a category is added. Under is empty for one
+\ at the top of its own tree.
+| Attribute | Type        | Default |
+| Name      | AccountName |         |
+| Under     | AccountPath | none    |
+| Type      | AccountType | Expense |
+| Alias     | Text        | none    |
+
+Scenario A category is added from the listing it will appear in
+Description The listing is where categories are found, so it is where one is
+\ added -- a button at the top of it. The only way in before was the
+\ account dialog, which offered the three category kinds at the
+\ bottom of a list of seven account groups and then put the new
+\ category somewhere the listing had to be reopened to see.
+\ The new line is in the listing without closing it.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder | Hidden |
+| Expenses           | Expense | true        | false  |
+| Expenses:Auto      | Expense | true        | false  |
+| Expenses:Auto:Fuel | Expense | false       | false  |
+When category listing opened
+When category added from the listing : NewCategory Vertical
+| Name  | Tolls         |
+| Under | Expenses:Auto |
+| Type  | Expense       |
+| Alias | none          |
+Then category listing rows are : CategoryListingRow CompareOnly
+| Path                | Type    | Placeholder | Hidden |
+| Expenses            | Expense | true        | false  |
+| Expenses:Auto       | Expense | true        | false  |
+| Expenses:Auto:Fuel  | Expense | false       | false  |
+| Expenses:Auto:Tolls | Expense | false       | false  |
+
+Scenario A category added with no parent goes under the root of its own kind
+Description Income and Expenses are the two roots the program looks reports up
+\ by, so a category outside them would be invisible to every report
+\ there is. Picking no parent is not a way to make one: it means the
+\ top of its own tree, which is its root.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder | Hidden |
+| Expenses:Auto:Fuel | Expense | false       | false  |
+When category listing opened
+When category added from the listing : NewCategory Vertical
+| Name  | Consulting |
+| Under | none       |
+| Type  | Income     |
+| Alias | none       |
+When category added from the listing : NewCategory Vertical
+| Name  | Postage |
+| Under | none    |
+| Type  | Expense |
+| Alias | none    |
+Then category listing rows are : CategoryListingRow CompareOnly
+| Path               | Type    | Placeholder |
+| Expenses           | Expense | true        |
+| Expenses:Auto:Fuel | Expense | false       |
+| Expenses:Postage   | Expense | false       |
+| Income             | Income  | true        |
+| Income:Consulting  | Income  | false       |
+# Not Consulting and not Postage. The root is added if the book has not got
+# one, the same way a missing parent is filled in; see Accounts.
+
 Scenario Clicking a line of the account listing opens that account's settings
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder | Hidden |
@@ -3883,6 +4307,69 @@ When register column resized : RegisterColumnWidth Vertical
 Then register column widths are : RegisterColumnWidth CompareOnly
 | Column  | Width |
 | CheckNo | 20    |
+
+Attributes BookWrites
+Description How many times the book was written. A count appears in a table
+\ here for one reason only -- that writing it is the expensive thing
+\ the program does, so how often is a fact about the program and not
+\ about its speed on a particular machine.
+| Attribute | Type    | Default |
+| Writes    | Integer | 0       |
+
+Description A drag writes the width once, when the drag stops.
+Details A drag is not one event. Every pixel of it is reported, so a divider
+\ moved forty pixels is forty widths, and the register wrote the whole
+\ book for each of them. On a book of thirty thousand transactions
+\ that is about a second each, which is why widening the payee column
+\ appeared to hang the program.
+\
+\ The widths that end up in the book are the same either way, and the
+\ rule above about which columns are recorded is unchanged. What is
+\ said here is when: the width is kept as the drag goes, so the
+\ register redraws, and it is written when the drag has stopped.
+\ Nothing is lost by waiting, because a width nobody has finished
+\ choosing is not yet an answer.
+
+Scenario Dragging a divider writes the width once, when the drag stops
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type     | Placeholder | Hidden |
+| Assets:Checking | Checking | false       | false  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register column dragged through : RegisterColumnWidth
+| Column | Width |
+| Payee  | 200   |
+| Payee  | 220   |
+| Payee  | 240   |
+When the drag stops
+Then register column widths are : RegisterColumnWidth CompareOnly
+| Column | Width |
+| Payee  | 240   |
+Then book writes are : BookWrites Vertical
+| Writes | 1 |
+# Three widths reported, the last of them kept, and one write. The two before
+# it were on their way somewhere and were never an answer to anything.
+
+Scenario A drag that is still going has written nothing yet
+Description The register is already showing the width -- the column moves with
+\ the divider -- and the book has not been touched. This is the half
+\ of the rule that makes the one above worth having.
+Given the chart of accounts is : ChartOfAccounts
+| Path            | Type     | Placeholder | Hidden |
+| Assets:Checking | Checking | false       | false  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+When register column dragged through : RegisterColumnWidth
+| Column | Width |
+| Payee  | 200   |
+| Payee  | 220   |
+Then register column widths are : RegisterColumnWidth CompareOnly
+| Column | Width |
+| Payee  | 220   |
+Then book writes are : BookWrites Vertical
+| Writes | 0 |
 
 # ---------------------------------------------------------------------------
 # The scroll bar

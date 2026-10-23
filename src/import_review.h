@@ -251,6 +251,12 @@ inline Prepared from_file(const std::string& text, const std::string& account,
 struct FileNumbers {
     std::string bank_id;
     std::string account_number;
+    // The balance the file states and the date it states it on, as text, and
+    // empty when the file states none. A balance of zero is a balance, so the
+    // two cannot be told apart by their value -- which is why these are text
+    // and not a Money and a Date.
+    std::string balance;
+    std::string balance_at;
 };
 
 inline FileNumbers numbers_in_file(const std::string& text) {
@@ -258,7 +264,19 @@ inline FileNumbers numbers_in_file(const std::string& text) {
     const ofx::Read read = ofx::read(text);
     if (read.refused || read.statements.empty()) return {};
     const ofx::Statement& s = read.statements.front();
-    return {s.bank_id, s.account_id};
+    FileNumbers out;
+    out.bank_id = s.bank_id;
+    out.account_number = s.account_id;
+    // A statement carries a balance and a date whether or not the file said
+    // so -- they are a Money and a Date, and both have a value before anything
+    // is read. So the file is asked whether it mentioned one at all; without
+    // this a download with no LEDGERBAL in it would come out stating 0.00,
+    // which is an assertion about the account rather than a silence.
+    if (text.find("<LEDGERBAL") != std::string::npos) {
+        out.balance = s.ledger_balance.in_csv();
+        out.balance_at = s.ledger_balance_at.iso();
+    }
+    return out;
 }
 
 // What the file itself says about the account it is for, asked before a row of

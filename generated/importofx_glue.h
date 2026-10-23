@@ -59,6 +59,13 @@ public:
             a.bank = blank(value.bank);
             a.account_number = blank(value.accountnumber);
             a.bank_id = blank(value.bankid);
+            const std::string balance = blank(value.downloadedbalance.value);
+            if (!balance.empty() && Money::is_valid(balance))
+                a.downloaded_balance = Money(balance);
+            // never is no download rather than a date, which is not the same
+            // thing as a bank that said zero.
+            const std::string at = blank(value.downloadedbalanceat);
+            if (!at.empty() && at != "never") a.downloaded_balance_at = types::Date::from_iso(at);
             chart_.put(a);
         }
         rebuild_mappings(values);
@@ -588,6 +595,13 @@ public:
         ASSERT_FALSE(values.empty());
         const LedgerBalanceCheckString& v = values.front();
         balance_check_ = ofx::check_ledger_balance(chart_, transactions_, v.account.value, Money(v.statedbal.value));
+        // The check is the moment the figure arrives, so it is also the moment
+        // the account is told what the bank said and when. A date it cannot
+        // read is no date, and nothing is written without one: a balance with
+        // no date cannot be compared with anything.
+        const std::optional<types::Date> at = types::Date::from_iso(blank(v.statedbalat));
+        if (at.has_value())
+            ofx::record_stated_balance(&chart_, v.account.value, Money(v.statedbal.value), *at);
     }
 
     void then_balance_check_is(const std::vector<LedgerBalanceResultString>& values) {
@@ -1827,6 +1841,21 @@ public:
                 EXPECT_EQ(1, found.front().days_apart) << value.whathappens;
                 EXPECT_EQ("CHASEBANK", found.front().payee) << value.whathappens;
             }
+        }
+    }
+
+public:
+
+    void then_downloaded_balances_are(const std::vector<AccountDownloadedBalanceString>& values) {
+        for (const AccountDownloadedBalanceString& want : values) {
+            const chart::Account* got = chart_.find(want.path.value);
+            ASSERT_NE(nullptr, got) << want.path.value;
+            EXPECT_EQ(Money(want.balance.value).cents(), got->downloaded_balance.cents())
+                << want.path.value << " downloaded balance";
+            const std::string at = got->downloaded_balance_at.has_value()
+                                       ? got->downloaded_balance_at->iso()
+                                       : std::string("never");
+            EXPECT_EQ(want.balanceat, at) << want.path.value << " downloaded balance date";
         }
     }
 

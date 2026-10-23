@@ -42,6 +42,8 @@ public:
             a.type = types::account_type_from_string(value.type.value);
             a.placeholder = parse_bool_cell(value.placeholder);
             a.hidden = parse_bool_cell(value.hidden);
+            a.alias = blank(value.alias);
+            take_download_fields(value, &a);
             chart_.put(a);
         }
         // A new chart is a new book. A transaction established against the one
@@ -406,6 +408,9 @@ private:
     ui::Workspace::ActiveRegister import_refusal_;
     ui::Recategorised recategorised_;
     payees::Rule offered_;
+    std::vector<chart::Account> offered_accounts_;
+    std::vector<payees::Rule> rules_;
+    payees::BookApplication applied_;
     chart::Chart chart_;
     ledger::Ledger book_;
     std::vector<ledger::Transaction> transactions_;
@@ -679,6 +684,22 @@ private:
     }
 
     static bool dnc(const std::string& s) { return s == DNCString || s.empty(); }
+
+    // What a download has taught an account, where a table says so: the two
+    // numbers it is recognised by, and the balance the last one stated with the
+    // date it was the balance on. A column the table has not got arrives empty
+    // and leaves the field as the account had it.
+    static void take_download_fields(const AccountString& value, chart::Account* a) {
+        a->bank = blank(value.bank);
+        a->bank_id = blank(value.bankid);
+        a->account_number = blank(value.accountnumber);
+        const std::string balance = blank(value.downloadedbalance.value);
+        if (!balance.empty() && Money::is_valid(balance)) a->downloaded_balance = Money(balance);
+        // never is the word for no download, which is absent rather than a
+        // date -- and not the same thing as a bank that said zero.
+        const std::string at = blank(value.downloadedbalanceat);
+        if (!at.empty() && at != "never") a->downloaded_balance_at = types::Date::from_iso(at);
+    }
 
     static std::string blank(const std::string& s) {
         return (s == "none" || s == DNCString) ? std::string() : s;
@@ -1286,7 +1307,8 @@ public:
         for (const auto& value : values)
             import_refusal_ = workspace().choose_import_file(
                 value.filename, blank(value.accountinfile.value), blank(value.bankid),
-                blank(value.accountnumber));
+                blank(value.accountnumber), blank(value.onlinebalance),
+                blank(value.onlinebalanceat));
     }
 
     void then_import_confirmation_is(const std::vector<ImportConfirmationString>& values) {
@@ -1303,6 +1325,14 @@ public:
             if (!dnc(value.accountnumber))
                 EXPECT_EQ(blank(value.accountnumber), got.account_number)
                     << "account number";
+            // Empty is the answer that there is no figure, which is why these
+            // two are compared where a table states them as none.
+            if (!value.onlinebalance.empty())
+                EXPECT_EQ(blank(value.onlinebalance), got.online_balance)
+                    << "on-line balance";
+            if (!value.onlinebalanceat.empty())
+                EXPECT_EQ(blank(value.onlinebalanceat), got.online_balance_at)
+                    << "on-line balance date";
         }
     }
 
@@ -1794,18 +1824,27 @@ public:
             const ledger::Transaction& made = transactions_[i];
             const TransactionString& want = values[i];
             const std::string where = "transaction " + std::to_string(i + 1);
+            // Each column is checked only where the table has one. A
+            // CompareOnly table names the columns the scenario is about and
+            // the rest arrive as do-not-care -- which is not an assertion that
+            // the field is empty, and for Amount is not even a number.
             EXPECT_EQ(want.ref.value, made.ref.value()) << where << " ref";
-            EXPECT_EQ(want.date, made.date.iso()) << where << " date";
-            EXPECT_EQ(blank(want.payee.value), made.payee.value()) << where << " payee";
-            EXPECT_EQ(blank(want.sourceaccount.value),
-                      chart_.path_for_ref(made.source_account))
-                << where << " source account";
-            EXPECT_EQ(blank(want.destination.value),
-                      chart_.path_for_ref(made.destination))
-                << where << " destination";
-            EXPECT_EQ(Money(want.amount.value).cents(), made.amount.cents())
-                << where << " amount";
-            EXPECT_EQ(blank(want.tag), made.tag) << where << " tag";
+            if (!dnc(want.date))
+                EXPECT_EQ(want.date, made.date.iso()) << where << " date";
+            if (!dnc(want.payee.value))
+                EXPECT_EQ(blank(want.payee.value), made.payee.value()) << where << " payee";
+            if (!dnc(want.sourceaccount.value))
+                EXPECT_EQ(blank(want.sourceaccount.value),
+                          chart_.path_for_ref(made.source_account))
+                    << where << " source account";
+            if (!dnc(want.destination.value))
+                EXPECT_EQ(blank(want.destination.value),
+                          chart_.path_for_ref(made.destination))
+                    << where << " destination";
+            if (!dnc(want.amount.value))
+                EXPECT_EQ(Money(want.amount.value).cents(), made.amount.cents())
+                    << where << " amount";
+            if (!dnc(want.tag)) EXPECT_EQ(blank(want.tag), made.tag) << where << " tag";
         }
     }
 
@@ -2130,5 +2169,124 @@ public:
         return transfers::halves_in(typed, "Assets:Checking", mine.date, mine.amount,
                                     transactions, accounts);
     }
+
+public:
+
+    // The dialog answered in full: the account, and the on-line balance as it
+    // was left -- the file's own figure, corrected, or typed where the file
+    // had none.
+    void when_import_confirmed_with(const std::vector<ImportConfirmationAnswerString>& values) {
+        ASSERT_FALSE(values.empty());
+        const ImportConfirmationAnswerString& want = values.front();
+        last_review_ = file_rows_;
+        last_into_ = want.account.value;
+        workspace().confirm_import_with(want.account.value, blank(want.onlinebalance),
+                                        blank(want.onlinebalanceat), file_rows_);
+    }
+
+    // What the register will show beside the balance it works out for itself.
+    // never is absent rather than a date: no download has reached the account,
+    // which is not a bank that said zero.
+    void then_downloaded_balances_are(const std::vector<AccountDownloadedBalanceString>& values) {
+        for (const AccountDownloadedBalanceString& want : values) {
+            const chart::Account* got = workspace().accounts().find(want.path.value);
+            ASSERT_NE(nullptr, got) << want.path.value;
+            EXPECT_EQ(Money(want.balance.value).cents(), got->downloaded_balance.cents())
+                << want.path.value << " downloaded balance";
+            const std::string at = got->downloaded_balance_at.has_value()
+                                       ? got->downloaded_balance_at->iso()
+                                       : std::string("never");
+            EXPECT_EQ(want.balanceat, at) << want.path.value << " downloaded balance date";
+        }
+    }
+
+    void then_account_numbering_is(const std::vector<AccountNumberingString>& values) {
+        for (const AccountNumberingString& want : values) {
+            const chart::Account* got = workspace().accounts().find(want.path.value);
+            ASSERT_NE(nullptr, got) << want.path.value;
+            EXPECT_EQ(blank(want.bankid), got->bank_id) << want.path.value << " bank id";
+            EXPECT_EQ(blank(want.accountnumber), got->account_number)
+                << want.path.value << " account number";
+        }
+    }
+
+    void then_book_writes_are(const std::vector<BookWritesString>& values) {
+        ASSERT_FALSE(values.empty());
+        EXPECT_EQ(std::stoi(values.front().writes), workspace().book_writes())
+            << "times the book was written";
+    }
+
+    // The same list the register's picker offers, on the same rule. Unused ones
+    // are asked for here, so what today is does not come into it.
+    void when_the_rule_category_picker_is_opened(const std::vector<CategorySearchString>& values) {
+        ASSERT_FALSE(values.empty());
+        offered_accounts_ = workspace().rule_categories_offered(
+            values.front().typed.value, parse_bool_cell(values.front().includeunused),
+            types::Date(2026, 2, 1));
+    }
+
+    void then_categories_offered_are(const std::vector<CategoryOfferedString>& values) {
+        std::vector<std::string> got;
+        for (const chart::Account& a : offered_accounts_) got.push_back(a.path.value());
+        std::sort(got.begin(), got.end());
+        std::vector<std::string> want;
+        for (const auto& value : values) want.push_back(value.path.value);
+        std::sort(want.begin(), want.end());
+        EXPECT_EQ(want, got);
+    }
+
+    // Chosen from the list, which is the path and not the words the list reads.
+    void when_the_rule_category_is_chosen(const std::vector<CategoryChoiceString>& values) {
+        for (const auto& value : values) workspace().choose_rule_category(value.category.value);
+        offered_ = workspace().rule_offered();
+    }
+
+    void given_payee_rules_are(const std::vector<PayeeRuleString>& values) {
+        rules_.clear();
+        for (const auto& value : values) {
+            payees::Rule r;
+            r.pattern = blank(value.pattern);
+            r.match_type = payees::match_type_from_string(value.matchtype.value);
+            r.payee = blank(value.payee.value);
+            r.category = blank(value.category.value);
+            r.enabled = parse_bool_cell(value.enabled);
+            rules_.push_back(r);
+        }
+    }
+
+    void when_the_payee_rules_are_applied_to_the_selection() {
+        applied_ = workspace().apply_payee_rules_to_selection(rules_);
+        // The pass is the workspace's own and it changed the workspace's
+        // transactions, so these are read back here -- which is exactly what
+        // the window does after the same call. Without it the Then reads the
+        // copies as they were before the rules ran.
+        transactions_ = workspace().transactions();
+        book_ = workspace().book();
+    }
+
+    void then_applying_the_rules_reported_is(const std::vector<RuleApplicationString>& values) {
+        ASSERT_FALSE(values.empty());
+        const RuleApplicationString& want = values.front();
+        EXPECT_EQ(std::stoi(want.matched), applied_.matched) << "matched";
+        EXPECT_EQ(std::stoi(want.alreadycorrect), applied_.already_correct) << "already correct";
+        EXPECT_EQ(std::stoi(want.skipped), applied_.skipped) << "skipped";
+    }
+
+    void when_category_added_from_the_listing(const std::vector<NewCategoryString>& values) {
+        for (const auto& value : values) {
+            const chart::Rejection no = workspace().add_category_from_listing(
+                types::AccountName(value.name.value), blank(value.under.value),
+                types::account_type_from_string(value.type.value), blank(value.alias));
+            EXPECT_FALSE(no.refused) << no.reason;
+        }
+    }
+
+    // Every pixel of a drag, in the order it was reported.
+    void when_register_column_dragged_through(const std::vector<RegisterColumnWidthString>& values) {
+        for (const RegisterColumnWidthString& value : values)
+            workspace().resize_column(value.column, std::stoi(value.width));
+    }
+
+    void when_the_drag_stops() { workspace().finish_resize(); }
 
 };
