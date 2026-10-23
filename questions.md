@@ -710,3 +710,289 @@ file of their own, because reconciling is a window and its scenarios are about
 what the window shows and what ticking in it does. The arithmetic underneath is
 already specified as the register's two balances in
 `TransactionRegister.spectable`.
+
+## 30. Every balance in the 1/1/2026 report, against the book
+
+The register for `Ken Checking - Wachovia 3112` on the real `pughkilleen` book
+was reported as way off. It is, and the whole of the difference is accounted
+for; so is every other non-investment difference against
+`testdata/account balancesw 1 1 2026.pdf`. Investments were left alone, as
+asked.
+
+Of the 48 accounts the report names, 33 agree to the cent, 10 are Brokerage and
+out of scope, and 5 differ. Each of the 5 is explained below to the cent. The
+reading was done read-only against `C:\ProgramData\SimpleAccount\
+pughkilleen17.sadb`; nothing was written to the book.
+
+### What Ken Checking is off by, and why
+
+At 1/1/2026 Ken Checking agrees with the report exactly (24,346.36), so the
+history is sound and the damage is in 2026. At 9/30/2026 the book says
+-23,138.89 and Quicken says 15,861.11 -- **39,000.00 apart**, and four
+transactions account for all of it:
+
+| Ref | Date | Amount | Payee | Went to |
+|---|---|---|---|---|
+| T37478 | 2026-07-31 | -3,000.00 | TO PUGH K CHECKING REF #OP0Z5NX4 | Expenses:Uncategorized |
+| T37479 | 2026-08-26 | -30,000.00 | ONLINE TRANSFER TO PUGH K | Expenses:Uncategorized |
+| T37480 | 2026-08-31 | -3,000.00 | TO PUGH K CHECKING REF #OP0ZL8TN | Expenses:Uncategorized |
+| T37471 | 2026-09-30 | -3,000.00 | FROM PUGH K PRIME CHECKING REF # | Joint - Crown |
+
+The first three each sit beside a transfer that was already in the book --
+T6166, T6180, T6182, same date, same amount, same payee text -- and Quicken's
+register report has exactly one row for each of those dates. The fourth is the
+9/30 transfer read from both sides at once: T37471 from the Crown statement and
+T37485 from the Checking statement are one 3,000.00 transfer entered twice
+under two payee texts.
+
+**Why the import did not see the first three.** `ofx::existing_in` is what the
+duplicate test is given to work against, and it is one line:
+
+```cpp
+if (t.source_account != account_ref) continue;      // src/ofx_import.h:292
+```
+
+Only transactions whose **source** is the account being imported into are
+considered. T6166, T6180 and T6182 were entered from the Crown side -- source
+Crown, destination Ken Checking -- so none of them is in the list the test
+looks at, and a statement row naming the same date, amount and payee is judged
+`New`. Both importers go through that one function (`src/csv_import.h:562`,
+`src/ofx_import.h:699`), so a CSV and an OFX fail the same way.
+
+This is not the multiset-pairing rule doing its job. Two identical rows in a
+file are two transactions, and that is settled. This is a transaction already
+in the book that the test could not see, which is a different thing: the row
+was never compared against it at all.
+
+**The decision.** `existing_in` should offer the account's whole register, not
+half of it: a transaction whose destination is the account is a line in that
+account's register, the statement will report it, and it must be a candidate.
+The amount a destination-side transaction contributes is the negative of what
+is stored, which is the signed figure the register already shows, so
+`e.amount.cents() == row.amount.cents()` keeps working unchanged. Split lines
+whose destination is the account are the same case and belong in the same fix.
+Specified before written, as everything here is -- so the next pass is
+scenarios in `ImportOfx.spectable` for a transfer entered from the far side,
+and only then the code.
+
+### The other four
+
+**Chase Sapphire 4391 (7253)** -- report -654.76, book -4,958.06, off
+-4,303.30. One transaction: T6053, the January autopay of 4,303.30, dated
+2026-01-02 in the book. -4,958.06 + 4,303.30 = -654.76 exactly. Quicken holds
+the two halves as separate rows -- the card's own download says `AUTOMATIC
+PAYMENT - THANK YOU` at the end of December, the bank's says `CHASE CREDIT CRD
+AUTOPAY` on 1/2 -- so its card balance at 1/1 has the payment in it. The book
+pairs the halves into one transaction and keeps the bank's date. The register
+is otherwise identical.
+
+**Wells Fargo Ken Visa 1333 (3932)** -- report -2,050.18, book -5,208.34, off
+-3,158.16. The same thing: T6052, 2026-01-02, 3,158.16, and -5,208.34 +
+3,158.16 = -2,050.18.
+
+Both are a consequence of pairing, not a defect in it, and the book's single
+dated transaction is the better record. What it costs is that an as-of balance
+between the two dates disagrees with Quicken's. Nothing is changed for it; it
+is written down here so the next reading of these two accounts is not
+investigated twice.
+
+**Transfer Account - Should be 0** -- report -10,001.00, book -55,428.30, off
+-45,427.30. The report's figure is the book's own running balance at 2025-06-30.
+Three rows come after it: T7493 (-5,000.00, 2025-10-14) and T7507 (+5,000.00,
+2025-12-08), a pair that cancels, and T887 (2025-11-21, 45,427.30 into Cap One
+Savings 0852, no payee), which is the whole difference. Cap One Savings agrees
+with the report, so Quicken has the money arriving too and gives it a different
+other half -- a category or an investment account, neither of which appears on
+an Account Balances report. The importer put the far side of all three into
+this catch-all account instead.
+
+**Paypal - Payments and Charges** -- report 961.86, book 2,045.47, off
++1,083.61. 1,083.61 is credited to Paypal twice: T9247 (2020-03-19, `ONLINE
+TRANSFER TO KEN PUGH,`) and T9265 (2021-01-08, `PAYPAL TRANSFER`), both from
+Online KP Wachovia 3668. Online KP agrees with the report, so Quicken has both
+rows and sends one of them somewhere other than Paypal.
+
+**Amex Hilton Ken 1002** -- report -59.30, book -62.30, off -3.00. Three
+December 2025 rows, netting +3.00:
+
+- the card payment of 62.30 is in the book as T6045, 2025-12-23, from Joint -
+  Crown to `Expenses:Uncategorized` -- so the card never received the credit.
+  This is the same blind spot as Ken Checking's, read from the paying side: the
+  payment's far half is the card, and nothing paired them.
+- TMobile -55.00 and NYTimes -4.30 for December are absent from the book
+  altogether, though every other month from 2025-08 to 2026-08 has both. The
+  December statement for this card was never imported.
+
+62.30 - 55.00 - 4.30 = 3.00.
+
+### What this says about the import as a whole
+
+1,038 transactions in this book land in an `Uncategorized` account. Most are
+old and were Uncategorized in Quicken too, so they cost nothing; the report
+agrees with them. The ones that matter are where Quicken has a transfer and the
+book has a category, and they share one cause with the Ken Checking duplicates:
+the importer is not finding the far half of a transfer that is already in the
+book. Groups worth looking at when that is fixed -- `CHASE CREDIT CRD AUTOPAY`
+(7 rows, -30,960.83), `AUTOMATIC PAYMENT - THANK YOU` from the Wells Fargo card
+(2 rows, 5,535.04), `Preauthorized Withdrawal to WELLS` (-45,000.00),
+`AMICA INSURANCE debitpmt` (6 rows, -5,847.52).
+
+Nothing in the book was changed. The four 2026 duplicates in Ken Checking are
+still there and are still 39,000.00.
+
+## 31. Questions on the replies in `questions with replies.md`
+
+Twenty-nine replies, read one at a time. Most settle their question outright and
+raise nothing; what follows is only where a reply opens something new or where
+two replies pull in different directions. Each has a decision under it, so
+nothing is waiting on an answer.
+
+### a. One correction first: the matching was not working (reply 15)
+
+Reply 15 says "It appears that the matching is working." For an import into an
+account whose transfer had already been entered from the *other* account, it was
+not. `ofx::existing_in` only ever offered transactions whose source is the
+account being imported into, so the far half was never a candidate and the
+statement row came in as `New`. That is the 39,000.00 in Ken Checking
+(section 30) and the 62.30 on the Amex. It is now specified -- "A transfer
+entered from the other account is a duplicate in this one",
+`ImportOfx.spectable` -- and fixed. The rest of reply 15 stands: matching the
+two sides of a transfer as the second statement is imported does work, and what
+was missing was the case where the transfer was entered by hand first.
+
+### b. Cleared on the far side of a transfer (replies 15 and 29)
+
+Both replies say the two sides of a manual transfer are uncleared, and that is
+the sharpest thing in the set, because a transaction carries one cleared status
+and shows in two registers. So an imported, cleared row that the user then
+categorises with an account would show as cleared in the other account's
+register too, although that bank has confirmed nothing. A far-side *split* line
+is already forced to Uncleared (`src/register_lines.h`), a far-side transfer
+line copies the status, and nothing written down says which is right.
+
+**Decision.** Cleared belongs to the register the transaction lives in. A
+far-side line always shows Uncleared, which makes the transfer rule agree with
+the split rule it sits beside, and a manual transfer is then uncleared in both
+registers without the far account having to hold a row of its own. To be written
+as a scenario in `TransactionRegister.spectable` next to the membership rule.
+
+### c. What the balance adjustment account is, and how it clears (reply 29)
+
+"Balance Adjustment should be an account rather than an expense. Creating a
+balance adjustment in a register also creates an entry in Balance Adjustment.
+Both are uncleared (just like a manual transfer)." Two things follow that the
+reply does not say. First, if the adjustment is uncleared in the account being
+reconciled, that account's cleared balance still does not come to the statement
+figure, so the reconciliation the adjustment was made for cannot close. Second,
+"creates an entry" reads like a second row, where a transfer here is one
+transaction seen in two registers.
+
+**Decision.** One transaction, as everywhere else: it lives in the account being
+reconciled and names `Balance Adjustment`, so it is a line in both registers
+without a second row existing. It is created **Cleared** in the account being
+reconciled -- that is the whole point of making it -- and by (b) it shows
+Uncleared in `Balance Adjustment`, which is what the reply asks for in the place
+the reply is about. The account is top-level `Balance Adjustment`, type
+OtherAsset, created the first time one is made.
+
+### d. The transaction editor dialog, and what is left in the register (reply 1)
+
+A dialog that edits tag, memo, check number, cleared status and amount answers
+the question. It leaves two: whether the cleared tick in the register column
+stays clickable (it is specified and written), and whether the warning on
+changing a cleared amount refuses or merely warns.
+
+**Decision.** The tick stays -- reconciling is a column of ticks and a dialog
+per line would make it unusable. Everything else belongs to the dialog. The
+warning warns: Change anyway / Cancel, with Cancel the default. A split
+transaction's amount is not editable there; that button opens the split dialog,
+which is reply 28's dialog and already knows what the lines have to come to.
+
+### e. The modeless progress dialog replaces the strip (replies 3 and 14)
+
+**Decision.** A modeless dialog naming the job ("Importing <file>...",
+"Opening <book>...") is shown before a long job starts and dismissed when it
+ends. No Stop button in it yet: stopping needs the import off the UI thread,
+which is TASKS item 17 and still owed. The `ProgressStrip` blocks in the spec
+are retagged `$TBD` rather than deleted, because the dialog needs the same two
+facts the strip did and they are already written down.
+
+### f. Percentage splits leave the specification (reply 6)
+
+"There does not need to be anything as a percentage split. Every split is based
+on the amount which the user types."
+
+**Decision.** The percentage rounding rule and its worked table come out of the
+spec rather than being corrected -- a rule nobody will implement is worse than
+no rule. A remembered split therefore remembers amounts. Offered against a
+transaction with a different total, the amounts are offered unchanged and the
+difference is left unassigned for the user to type over; the split dialog
+already says what is unassigned.
+
+### g. A payee on a split line (reply 7)
+
+A split line carrying its own payee, for a deposit slip with several payers,
+with the payee rules not applying to it.
+
+**Decision.** The column goes on the split line. A category register's line for
+that split shows the line's payee where it has one and the transaction's payee
+otherwise, which is the only way the deposit is readable from the category side.
+Payee reports read it the same way. No rule is applied to it, no payee record is
+created from it, and `payees::convert` never sees it.
+
+### h. May an import create a *category* (replies 10 and 11)
+
+"An import should not create an account" is clear, and is about accounts. Reply
+10 is about a category the user types into a register, and says an error dialog
+rather than a new category. Neither says what the importer does with a category
+it has no account for -- and today's imports create `Expenses:Uncategorized` and
+have put 1,038 transactions in it.
+
+**Decision.** An import creates no account, ever: a file naming an account that
+is not in the chart is refused before a row is read. It does create categories,
+because the money has to land somewhere and refusing a whole statement over a
+category nobody has typed yet would stop the work. The import summary says which
+categories it created. The register is reply 10's rule and is stricter: an
+unknown category typed into a register line is refused with a dialog, and the
+category list grows only from its own Add.
+
+### i. Deleting a category that is in use (reply 23)
+
+"Deleting a category should delete the payee rule, so that non-existent
+categories are never assigned", with "(and possibly reassign all the
+transactions to another category)" left open.
+
+**Decision.** Deleting a category no transaction names deletes it, and any payee
+rule naming it goes with it. Deleting one that transactions name asks for a
+replacement category and moves them, because the alternative is transactions
+pointing at nothing. The payee rules naming it are deleted either way rather
+than repointed at the replacement: a rule is a decision about where money goes,
+and inheriting one silently is how a chart comes to disagree with itself.
+
+### j. Seeding a new book's CSV profiles (reply 13)
+
+Per-book profiles with user-assigned titles, chosen or created when a file is
+read, and the header matching done by the user. That leaves the shipped profile
+list: a brand-new book would have none, so the first import of every file would
+begin with a mapping dialog.
+
+**Decision.** A new book is seeded with the shipped profiles under their present
+names, so the first import of a known bank's file still just works, and the
+chooser lists them like any other. `csv_header_matches` stays as the thing that
+suggests which profile to pick.
+
+### k. `Define` and `=Define` in place of `as previous` (reply 12)
+
+Agreed, and already the practice here: the six files without a `Background` are
+spelled out. The one thing to check before leaning on the table-form `Define` is
+whether 0.9.2 resolves `=Name` across the files given as `--context`, which is
+how this folder is generated. **Decision.** Spell a table out where it is used
+once; use `Define` only where the same table is wanted by several scenarios of
+the same file, until a cross-file `Define` has been seen to work.
+
+### l. The replies that say "I will check this"
+
+19 (the online-balance field for every format) and 21, 22 (the category editor's
+five fields, and a category added with no parent meaning a root). Nothing is
+waiting on them; they are written and specified. Listed here so they are not
+read later as open questions.

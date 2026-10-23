@@ -601,6 +601,34 @@ fix in 10 cannot be taken without the break in 11.
 
 ---
 
+
+## 12. `And` works and is in no document
+
+The converter accepts `And` for the second and later steps of a run, so
+
+```
+Given the chart of accounts is : ChartOfAccounts
+| ... |
+And payee rules are : PayeeRules
+| ... |
+```
+
+is the same as repeating `Given`, and the same holds after `When` and after
+`Then`. Checked on 0.9.2 against a copy of this project's `spec/`: two Givens
+turned into `And` in `Payees.spectable` and one Then in
+`AcceptanceAgainstQuicken.spectable` analyze at 0 diagnostics and generate
+`test_*.cpp` **byte-identical** to the versions generated from the keyword
+spelled out -- 51 tests either way for Payees.
+
+The word does not appear in `spectable syntax v3.3a.md`. Section 4 lists
+`Given`, `When` and `Then` and says nothing about continuing a run, so a reader
+of the document has no way to know `And` is allowed, and this project wrote
+every step with its own keyword for two months for that reason. It is a
+one-line addition to §4 and it changes how every scenario in a specification
+reads.
+
+---
+
 ## What was not AlignThree's fault
 
 Recorded so the list above is not read as longer than it is.
