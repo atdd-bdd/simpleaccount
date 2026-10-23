@@ -22,6 +22,7 @@
 #include "register_lines.h"
 #include "scrolling.h"
 #include "split_edit.h"
+#include "reconcile.h"
 #include "standard_chart.h"
 #include "text_types.h"
 #include "transaction_edit.h"
@@ -1042,6 +1043,10 @@ public:
         out.push_back({"New account...", true});
         if (accounts_.find(node) == nullptr) return out;
         out.push_back({"Edit...", true});
+        // Reconciling is done to an account that holds money. A category has no
+        // statement and nothing to clear, so the item is greyed rather than left
+        // off, for the reason Delete is.
+        out.push_back({"Reconcile...", recon::reconcilable(accounts_, node)});
         out.push_back({"Hide", true});
         out.push_back({"Delete...", !has_entries(node)});
         return out;
@@ -1294,6 +1299,68 @@ public:
         }
         if (out.changed > 0) rebuild_book();
         return out;
+    }
+
+    // --- reconciling an account against what the bank said ------------------
+    //
+    // The window is opened on an account and then asks for the figures every
+    // time it draws, rather than being handed them once: a tick changes a
+    // transaction, and the difference closing as lines are ticked is the whole
+    // of the work. See "Reconciling an account against what the bank said" in
+    // UserInterface.spectable and decision 29 in questions.md.
+    void open_reconcile(const std::string& account) {
+        recon_account_ =
+            recon::reconcilable(accounts_, account) ? account : std::string();
+    }
+
+    void close_reconcile() { recon_account_.clear(); }
+
+    recon::Figures reconcile_state() const {
+        if (recon_account_.empty()) return {};
+        return recon::figures_for(reg::BookIndex(accounts_, transactions_, splits_),
+                                  recon_account_);
+    }
+
+    std::vector<recon::Item> uncleared_offered() const {
+        if (recon_account_.empty()) return {};
+        return recon::uncleared_in(reg::BookIndex(accounts_, transactions_, splits_),
+                                   recon_account_);
+    }
+
+    // A tick is a cleared status and nothing else: no amount moves, and what
+    // was already cleared is left alone rather than counted again.
+    int clear_in_reconcile(const std::vector<std::string>& refs) {
+        int changed = 0;
+        for (const std::string& ref : refs) {
+            ledger::Transaction* writable = by_ref(ref);
+            if (writable == nullptr) continue;
+            if (writable->cleared == types::ClearedStatus::Cleared) continue;
+            writable->cleared = types::ClearedStatus::Cleared;
+            ++changed;
+        }
+        if (changed > 0) rebuild_book();
+        return changed;
+    }
+
+    recon::Adjustment balance_adjustment_offered() const {
+        return recon::offer_for(reconcile_state());
+    }
+
+    // Accepting writes one transaction, uncleared, as asked for. The balance
+    // then agrees with the bank and the cleared figure does not -- which is
+    // what an uncleared adjustment means, and why it is worth writing rather
+    // than quietly moving a figure.
+    bool accept_balance_adjustment() {
+        const recon::Adjustment offer = balance_adjustment_offered();
+        if (!offer.shown) return false;
+        const std::string ref =
+            "T" + std::to_string(ledger::transaction_count(transactions_) + 1);
+        const ledger::Transaction written =
+            recon::balance_adjustment(&accounts_, recon_account_, offer, ref);
+        if (written.ref.value().empty()) return false;
+        transactions_.push_back(written);
+        rebuild_book();
+        return true;
     }
 
     // The registers a transaction could be read in: the real accounts it
@@ -1680,6 +1747,9 @@ private:
         book_ = fresh;
         ++changes_;
     }
+
+    // The account the reconciling window is open on, empty when it is not.
+    std::string recon_account_;
 
     chart::Chart accounts_;
     ledger::Ledger book_;

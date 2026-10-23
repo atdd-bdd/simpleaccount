@@ -287,6 +287,9 @@ public:
             if (!dnc(want.balance.value))
                 EXPECT_EQ(Money(want.balance.value).cents(), got[i].balance.cents())
                     << "line " << i << " balance";
+            if (!dnc(want.cleared.value))
+                EXPECT_EQ(want.cleared.value, types::to_string(got[i].cleared))
+                    << "line " << i << " cleared";
         }
     }
 
@@ -2329,5 +2332,85 @@ public:
     }
 
 public:
+
+    // --- reconciling ------------------------------------------------------
+    //
+    // The window is asked for its figures every time rather than being handed
+    // them once, so these steps read the workspace after each tick: the
+    // difference closing as lines are ticked is the whole of the work.
+
+    void when_reconciling_is_opened_on(const std::vector<AccountSelectString>& values) {
+        for (const auto& value : values) workspace().open_reconcile(value.path.value);
+    }
+
+    void then_reconciling_shows(const std::vector<ReconciliationString>& values) {
+        ASSERT_FALSE(values.empty());
+        const ReconciliationString& want = values.front();
+        const recon::Figures got = workspace().reconcile_state();
+        EXPECT_EQ(parse_bool_cell(want.shown), got.shown) << "shown";
+        if (!dnc(want.account.value)) EXPECT_EQ(blank(want.account.value), got.account);
+        if (!dnc(want.balance.value))
+            EXPECT_EQ(Money(want.balance.value).cents(), got.balance.cents()) << "balance";
+        if (!dnc(want.cleared.value))
+            EXPECT_EQ(Money(want.cleared.value).cents(), got.cleared.cents()) << "cleared";
+        if (!dnc(want.online.value))
+            EXPECT_EQ(Money(want.online.value).cents(), got.online.cents()) << "on-line";
+        if (!dnc(want.onlineat)) {
+            // never is an account no download has reached, which is a date
+            // that is absent rather than a date of its own.
+            const std::string said = got.online_at.has_value() ? got.online_at->iso()
+                                                               : std::string("never");
+            EXPECT_EQ(want.onlineat, said) << "on-line at";
+        }
+        if (!dnc(want.difference.value))
+            EXPECT_EQ(Money(want.difference.value).cents(), got.difference.cents())
+                << "difference";
+        if (!dnc(want.agrees)) EXPECT_EQ(parse_bool_cell(want.agrees), got.agrees) << "agrees";
+    }
+
+    void then_uncleared_items_offered_are(const std::vector<UnclearedItemString>& values) {
+        const std::vector<recon::Item> got = workspace().uncleared_offered();
+        ASSERT_EQ(values.size(), got.size()) << "number of uncleared items";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const UnclearedItemString& want = values[i];
+            if (!dnc(want.ref.value)) EXPECT_EQ(want.ref.value, got[i].ref) << "item " << i;
+            if (!dnc(want.date)) EXPECT_EQ(want.date, got[i].date.iso()) << "item " << i;
+            if (!dnc(want.payee.value))
+                EXPECT_EQ(blank(want.payee.value), got[i].payee) << "item " << i << " payee";
+            if (!dnc(want.amount.value))
+                EXPECT_EQ(Money(want.amount.value).cents(), got[i].amount.cents())
+                    << "item " << i << " amount";
+        }
+    }
+
+    void when_items_ticked_in_reconciling(const std::vector<ClearedTickString>& values) {
+        std::vector<std::string> refs;
+        for (const auto& value : values) refs.push_back(value.ref.value);
+        workspace().clear_in_reconcile(refs);
+    }
+
+    void then_the_balance_adjustment_offered_is(
+            const std::vector<BalanceAdjustmentOfferString>& values) {
+        ASSERT_FALSE(values.empty());
+        const BalanceAdjustmentOfferString& want = values.front();
+        const recon::Adjustment got = workspace().balance_adjustment_offered();
+        EXPECT_EQ(parse_bool_cell(want.shown), got.shown) << "shown";
+        // A question that is not being asked says nothing else, so a table
+        // stating Shown false is asking about that and no more.
+        if (!parse_bool_cell(want.shown)) return;
+        if (!dnc(want.amount.value))
+            EXPECT_EQ(Money(want.amount.value).cents(), got.amount.cents()) << "amount";
+        if (!dnc(want.date)) EXPECT_EQ(want.date, got.date.iso()) << "date";
+        if (!dnc(want.payee.value)) EXPECT_EQ(blank(want.payee.value), got.payee) << "payee";
+        if (!dnc(want.category.value))
+            EXPECT_EQ(blank(want.category.value), got.category) << "category";
+        if (!dnc(want.cleared.value))
+            EXPECT_EQ(want.cleared.value, types::to_string(got.cleared)) << "cleared";
+    }
+
+    void when_the_balance_adjustment_is_accepted() {
+        EXPECT_TRUE(workspace().accept_balance_adjustment())
+            << "nothing was offered to adjust";
+    }
 
 };

@@ -3683,6 +3683,288 @@ Then menu items are : MenuItem
 | Delete...            | true    |
 
 # ---------------------------------------------------------------------------
+# Reconciling an account against what the bank said
+# ---------------------------------------------------------------------------
+
+Description Reconciling is the question the register's two balances raise,
+\ answered in one place.
+Details The top of every register says what the book has cleared and what the
+\ last download said, and the difference between them. Where that
+\ difference is not zero, something is in flight or something is
+\ wrong, and the way to find out which is to go through what is not
+\ cleared yet and tick off what the statement shows. That is
+\ reconciling, and it is reached from the account's own menu because
+\ it is done to an account rather than to a selection.
+\
+\ The window shows the two figures, the difference, and every line of
+\ the account that is not cleared. Ticking a line clears it and the
+\ figures move as it is ticked -- the difference closing to zero is
+\ the whole of the work, and watching it close is how somebody knows
+\ which tick was the one that mattered.
+\
+\ What is left when there is nothing more to tick is the part nobody
+\ can explain. That is offered as a Balance Adjustment: one
+\ transaction for the difference, dated the day the balance was
+\ stated, which makes the book agree with the bank. It is written
+\ uncleared, so the register still shows the difference and the
+\ adjustment is the line that says what it was. Clearing it is a
+\ deliberate act and means the figure is accepted; most of the time
+\ it is left alone, as a standing note of something never found.
+
+Attributes Reconciliation
+Description The reconciling window. Cleared is the book's cleared balance in the
+\ display sign of the account; OnLine is what the last download said,
+\ with never standing in for an account no download has reached.
+\ Difference is Cleared less OnLine, and Agrees is whether there is a
+\ stated balance and the difference is nothing.
+| Attribute  | Type        | Default |
+| Shown      | Boolean     | false   |
+| Account    | AccountPath | none    |
+| Balance    | Money       | 0.00    |
+| Cleared    | Money       | 0.00    |
+| OnLine     | Money       | 0.00    |
+| OnLineAt   | Text        | never   |
+| Difference | Money       | 0.00    |
+| Agrees     | Boolean     | false   |
+
+Attributes UnclearedItem
+Description One line of the account that is not cleared, offered to be ticked.
+\ The amount is signed the way the register shows it -- a payment is
+\ negative -- because a statement is read by its figures and the sign
+\ is what tells a payment from a deposit.
+| Attribute | Type           | Default    |
+| Ref       | TransactionRef |            |
+| Date      | Date           | 2024-01-01 |
+| Payee     | PayeeName      | none       |
+| Amount    | Money          | 0.00       |
+
+Attributes ClearedTick
+Description A line ticked in the reconciling window, named by its ref.
+| Attribute | Type           | Default |
+| Ref       | TransactionRef |         |
+
+Attributes BalanceAdjustmentOffer
+Description What the window offers to write for a difference nobody could
+\ explain. Shown false is the ordinary end of reconciling -- the
+\ figures agree and there is nothing to adjust.
+| Attribute | Type          | Default    |
+| Shown     | Boolean       | false      |
+| Amount    | Money         | 0.00       |
+| Date      | Date          | 2024-01-01 |
+| Payee     | PayeeName     | none       |
+| Category  | AccountPath   | none       |
+| Cleared   | ClearedStatus | Uncleared  |
+
+Scenario Reconciling shows the two balances and what is not cleared yet
+Description The bank said 1000.00 on the tenth. The book has a cleared deposit
+\ of 1200.00 and two payments nobody has ticked, which is why the
+\ cleared figure and the bank's figure do not agree yet.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder | DownloadedBalance | DownloadedBalanceAt |
+| Assets:Checking    | Checking | false       | 1000.00           | 2026-02-10          |
+| Expenses:Groceries | Expense  | false       | 0.00              | never               |
+| Income:Salary      | Income   | false       | 0.00              | never               |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount  | Cleared   |
+| T1  | Assets:Checking | 2026-02-01 | Acme Payroll  | Income:Salary      | 1200.00 | Cleared   |
+| T2  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -150.00 | Uncleared |
+| T3  | Assets:Checking | 2026-02-09 | Costco        | Expenses:Groceries | -50.00  | Uncleared |
+When reconciling is opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then reconciling shows : Reconciliation Vertical
+| Shown      | true            |
+| Account    | Assets:Checking |
+| Balance    | 1000.00         |
+| Cleared    | 1200.00         |
+| OnLine     | 1000.00         |
+| OnLineAt   | 2026-02-10      |
+| Difference | 200.00          |
+| Agrees     | false           |
+Then uncleared items offered are : UnclearedItem
+| Ref | Date       | Payee         | Amount  |
+| T2  | 2026-02-05 | Harris Teeter | -150.00 |
+| T3  | 2026-02-09 | Costco        | -50.00  |
+# The balance and the bank agree here by arithmetic rather than by luck: both
+# payments are in flight, and the difference is the two of them.
+
+Scenario Ticking what the statement shows closes the difference
+Description Both payments are on the statement, so both are ticked. The
+\ difference goes to nothing, which is reconciling finished, and
+\ nothing is offered to adjust.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder | DownloadedBalance | DownloadedBalanceAt |
+| Assets:Checking    | Checking | false       | 1000.00           | 2026-02-10          |
+| Expenses:Groceries | Expense  | false       | 0.00              | never               |
+| Income:Salary      | Income   | false       | 0.00              | never               |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount  | Cleared   |
+| T1  | Assets:Checking | 2026-02-01 | Acme Payroll  | Income:Salary      | 1200.00 | Cleared   |
+| T2  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -150.00 | Uncleared |
+| T3  | Assets:Checking | 2026-02-09 | Costco        | Expenses:Groceries | -50.00  | Uncleared |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+When reconciling is opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+When items ticked in reconciling : ClearedTick
+| Ref |
+| T2  |
+| T3  |
+Then reconciling shows : Reconciliation Vertical
+| Shown      | true            |
+| Account    | Assets:Checking |
+| Balance    | 1000.00         |
+| Cleared    | 1000.00         |
+| OnLine     | 1000.00         |
+| OnLineAt   | 2026-02-10      |
+| Difference | 0.00            |
+| Agrees     | true            |
+Then the balance adjustment offered is : BalanceAdjustmentOffer Vertical
+| Shown | false |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Cleared |
+| T1  | Cleared |
+| T2  | Cleared |
+| T3  | Cleared |
+# A tick is a cleared status on the transaction and nothing else. No amount
+# moved, and the register shows what the bank has seen.
+
+Scenario A difference nothing explains is offered as a balance adjustment
+Description One of the two payments is on the statement and the other is not,
+\ and when the first is ticked 50.00 is still missing. There is
+\ nothing left to tick, so the 50.00 is what nobody can explain: the
+\ window offers to write it, dated the day the bank stated its
+\ balance.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder | DownloadedBalance | DownloadedBalanceAt |
+| Assets:Checking    | Checking | false       | 1000.00           | 2026-02-10          |
+| Expenses:Groceries | Expense  | false       | 0.00              | never               |
+| Income:Salary      | Income   | false       | 0.00              | never               |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount  | Cleared   |
+| T1  | Assets:Checking | 2026-02-01 | Acme Payroll  | Income:Salary      | 1200.00 | Cleared   |
+| T2  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -150.00 | Uncleared |
+When reconciling is opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+When items ticked in reconciling : ClearedTick
+| Ref |
+| T2  |
+Then reconciling shows : Reconciliation Vertical
+| Shown      | true            |
+| Account    | Assets:Checking |
+| Balance    | 1050.00         |
+| Cleared    | 1050.00         |
+| OnLine     | 1000.00         |
+| OnLineAt   | 2026-02-10      |
+| Difference | 50.00           |
+| Agrees     | false           |
+Then the balance adjustment offered is : BalanceAdjustmentOffer Vertical
+| Shown    | true                       |
+| Amount   | -50.00                     |
+| Date     | 2026-02-10                 |
+| Payee    | Balance~Adjustment         |
+| Category | Equity:Balance~Adjustments |
+| Cleared  | Uncleared                  |
+# The book is 50.00 above the bank, so the adjustment takes 50.00 out. It is
+# not an expense: nobody knows what it was, and a spending report that said
+# Groceries would be inventing an answer. See decision 29.
+
+Scenario The balance adjustment is written uncleared
+Description Accepting it writes one transaction, for the difference, on the
+\ date the balance was stated. It is uncleared, so the register still
+\ shows the difference and the adjustment is the line that says what
+\ it was -- which is the point of writing it rather than quietly
+\ moving the cleared figure.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder | DownloadedBalance | DownloadedBalanceAt |
+| Assets:Checking    | Checking | false       | 1000.00           | 2026-02-10          |
+| Expenses:Groceries | Expense  | false       | 0.00              | never               |
+| Income:Salary      | Income   | false       | 0.00              | never               |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount  | Cleared   |
+| T1  | Assets:Checking | 2026-02-01 | Acme Payroll  | Income:Salary      | 1200.00 | Cleared   |
+| T2  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -150.00 | Uncleared |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+When reconciling is opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+When items ticked in reconciling : ClearedTick
+| Ref |
+| T2  |
+When the balance adjustment is accepted
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Payee              | Category                   | Payment | Cleared   |
+| T1  | 2026-02-01 | Acme Payroll       | Income:Salary              | 0.00    | Cleared   |
+| T2  | 2026-02-05 | Harris Teeter      | Expenses:Groceries         | 150.00  | Cleared   |
+| T3  | 2026-02-10 | Balance~Adjustment | Equity:Balance~Adjustments | 50.00   | Uncleared |
+Then reconciling shows : Reconciliation Vertical
+| Shown      | true            |
+| Account    | Assets:Checking |
+| Balance    | 1000.00         |
+| Cleared    | 1050.00         |
+| OnLine     | 1000.00         |
+| OnLineAt   | 2026-02-10      |
+| Difference | 50.00           |
+| Agrees     | false           |
+# The balance now agrees with the bank and the cleared figure does not, which
+# is what an uncleared adjustment means: the money is accounted for, and
+# nobody has said the bank has seen it.
+
+Scenario Reconciling an account no download has reached has nothing to agree with
+Description The window opens and says so rather than refusing to open, because
+\ there being no statement balance for the account is the answer to
+\ the question that was asked. Nothing is offered to adjust: there is
+\ nothing to differ from.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type    | Placeholder | DownloadedBalance | DownloadedBalanceAt |
+| Assets:Wallet      | Cash    | false       | 0.00              | never               |
+| Expenses:Groceries | Expense | false       | 0.00              | never               |
+Given transactions are : Transaction
+| Ref | SourceAccount | Date       | Payee  | Destination        | Amount | Cleared   |
+| T1  | Assets:Wallet | 2026-02-03 | Costco | Expenses:Groceries | -20.00 | Uncleared |
+When reconciling is opened on : AccountSelect
+| Path          |
+| Assets:Wallet |
+Then reconciling shows : Reconciliation Vertical
+| Shown      | true          |
+| Account    | Assets:Wallet |
+| Balance    | -20.00        |
+| Cleared    | 0.00          |
+| OnLine     | 0.00          |
+| OnLineAt   | never         |
+| Difference | 0.00          |
+| Agrees     | false         |
+Then the balance adjustment offered is : BalanceAdjustmentOffer Vertical
+| Shown | false |
+
+Scenario Reconciling is offered on a real account and not on a category
+Description A category has no statement and nothing to clear. The item is
+\ greyed rather than left off, for the reason Delete is -- the menu
+\ answers the question either way.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder | Hidden |
+| Assets:Checking    | Checking | false       | false  |
+| Expenses:Groceries | Expense  | false       | false  |
+Given transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
+| T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
+When account list shown
+When account list node right clicked : TreeNode Vertical
+| Node | Expenses:Groceries |
+Then menu items are : MenuItem
+| Item           | Enabled |
+| New account... | true    |
+| Edit...        | true    |
+| Reconcile...   | false   |
+| Hide           | true    |
+| Delete...      | false   |
+
+# ---------------------------------------------------------------------------
 # From a figure in a report to the transaction behind it
 # ---------------------------------------------------------------------------
 
@@ -4280,6 +4562,7 @@ Then menu items are : MenuItem
 | Item           | Enabled |
 | New account... | true    |
 | Edit...        | true    |
+| Reconcile...   | true    |
 | Hide           | true    |
 | Delete...      | false   |
 
@@ -4301,6 +4584,7 @@ Then menu items are : MenuItem
 | Item           | Enabled |
 | New account... | true    |
 | Edit...        | true    |
+| Reconcile...   | true    |
 | Hide           | true    |
 | Delete...      | true    |
 
@@ -4338,7 +4622,7 @@ Then the editor opened is : EditorOpened Vertical
 Description Dragging the divider between two headings makes a column wider or
 \ narrower. The width belongs to the column, is the same in every
 \ register, and is kept with the book.
-Details Every register is the same shape -- the same nine columns in the same
+Details Every register is the same shape -- the same ten columns in the same
 \ order, whatever the account -- so a width learned in one of them is
 \ right in all of them. Widths held per account would mean widening the
 \ payee column once per account, twenty times, for one preference about
@@ -4406,7 +4690,7 @@ Then register column widths are : RegisterColumnWidth CompareOnly
 | Payee  | 240   |
 
 Scenario Only the columns somebody resized are recorded
-Description The register has nine columns and one of them was dragged, so one
+Description The register has ten columns and one of them was dragged, so one
 \ of them is written down. The other eight are whatever the program
 \ makes them, which is deliberately not a number this
 \ specification knows.

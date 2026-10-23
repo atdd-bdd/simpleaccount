@@ -240,9 +240,11 @@ private:
     void applyColumnWidths();
     void recategorise(int tabPosition);
     void deleteSelection(int tabPosition);
-    // Splitting a transaction already in the register. See the splitting
-    // section of UserInterface.spectable.
+    // Splitting a transaction already in the register, and reconciling an
+    // account against what the bank last said. See the splitting and
+    // reconciling sections of UserInterface.spectable.
     void splitSelection(int tabPosition);
+    void reconcileAccount(const QString& account);
     void addPayeeRuleFrom(int tabPosition);
     // Runs the rules already written over the lines selected, which is the
     // same pass the import makes. See applying the payee rules to a selection

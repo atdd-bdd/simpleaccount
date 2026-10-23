@@ -653,3 +653,60 @@ way.
 exists. That is a separate question from being able to make one, and the
 request was explicit that an imported split need not be changeable.
 
+## 29. Reconciling an account, and where a balance adjustment goes
+
+**The request.** A Cleared column on the register; a Reconcile option on an
+account's context menu that checks the local balance against the on-line one;
+uncleared items listed there with the option to clear them; and, where the
+balances do not agree, a *Balance Adjustment* offered as a transaction to make
+them agree -- set to not cleared, because a user will probably never clear it.
+
+**The Cleared column was already specified.** `Attributes RegisterLine` in
+`TransactionRegister.spectable` has carried a Cleared column from the start,
+and *What each column sorts on* already says uncleared sorts before cleared.
+What was missing was the column in the window, so the register went from nine
+columns to ten and the prose that counted them was corrected. No new
+specification was needed for that half of the request.
+
+**The figures are the register's own two.** Reconciling asks exactly the
+question the top of a register already raises -- the book's cleared balance
+against the last downloaded one -- so `recon::figures_for` wraps
+`reg::balances_for` rather than adding a second way of working out the same
+three numbers. Agreeing means there is a stated balance *and* the difference is
+nothing: an account no download has reached does not agree, because the
+question has no second figure rather than the answer yes. The window opens on
+such an account all the same and says so, which is the answer to what was
+asked.
+
+**The adjustment's other side is Equity, not an expense.** `Equity:Balance
+Adjustments`, created on first use, the way `Equity:Opening Balances` is.
+Nobody knows what the money was; a spending report that put it under Groceries
+would be inventing an answer, and one that put it under Uncategorized would be
+asking somebody to categorise something that cannot be categorised. Equity
+keeps it off the spending reports and on the balance sheet, where an
+unexplained difference belongs.
+
+**Written uncleared, and what that means for the two figures.** The request was
+explicit, so the adjustment is written uncleared -- and that has a consequence
+worth stating: the **Balance** then agrees with the bank and the **Cleared**
+figure still shows the difference, so the register goes on reporting it until
+somebody clears the adjustment. That is the point of writing it rather than
+quietly moving a figure: there is now a dated line, with a payee that says what
+it is, standing for the difference nobody could find. Clearing it is the
+deliberate act of accepting the figure.
+
+**Sign.** The amount the window offers is in the display sign of the account,
+which is the sign the person reading it sees: a book 50.00 above the bank is
+offered -50.00. What is stored is the account's own sign, so a credit card --
+shown with its sign turned over -- is adjusted in the direction the window
+said.
+
+**Greyed on a category.** A category has no statement and nothing to clear, so
+`Reconcile...` is offered and refused rather than left off, for the reason
+`Delete...` is: the menu answers the question either way.
+
+**Where the scenarios live.** In `UserInterface.spectable` rather than a spec
+file of their own, because reconciling is a window and its scenarios are about
+what the window shows and what ticking in it does. The arithmetic underneath is
+already specified as the register's two balances in
+`TransactionRegister.spectable`.

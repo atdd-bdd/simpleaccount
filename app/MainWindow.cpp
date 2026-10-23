@@ -616,7 +616,7 @@ void MainWindow::applyFont(const QFont& font) {
 static std::string registerColumnName(int column) {
     static const char* const names[] = {"Date",    "CheckNo", "Payee",   "Category",
                                         "Memo",    "Tag",     "Payment", "Deposit",
-                                        "Balance"};
+                                        "Cleared", "Balance"};
     if (column < 0 || column >= static_cast<int>(sizeof(names) / sizeof(names[0])))
         return {};
     return names[column];
@@ -1050,6 +1050,8 @@ void MainWindow::treeMenu(const QPoint& at) {
     } else if (what.startsWith("Edit")) {
         if (chart_.find(node.toStdString()) != nullptr) editAccountSettings(node);
         else editCategorySettings(node);
+    } else if (what.startsWith("Reconcile")) {
+        reconcileAccount(node);
     } else if (what == "Hide") {
         hideAccount(node);
     } else if (what.startsWith("Delete")) {
@@ -3095,6 +3097,122 @@ void MainWindow::splitSelection(int tabPosition) {
     refresh();
 }
 
+// Reconciling an account against what the bank last said. The two figures and
+// the difference are the register's own; what the window adds is the list of
+// what is not cleared, with the option to tick it, and -- for a difference
+// nobody can tick away -- the offer of a Balance Adjustment. See the
+// reconciling section of UserInterface.spectable and decision 29.
+void MainWindow::reconcileAccount(const QString& account) {
+    if (!workspace_) return;
+    const std::string path = account.toStdString();
+    workspace_->open_reconcile(path);
+    if (!workspace_->reconcile_state().shown) return;
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Reconcile %1").arg(account));
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* figures = new QLabel(&dialog);
+    layout->addWidget(figures);
+
+    auto* table = new QTableWidget(0, 3, &dialog);
+    table->setHorizontalHeaderLabels({tr("Date"), tr("Payee"), tr("Amount")});
+    table->verticalHeader()->setVisible(false);
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->setFont(appFont_);
+    table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    layout->addWidget(table, 1);
+    layout->addWidget(new QLabel(
+        tr("Tick what the statement shows and press Clear ticked."), &dialog));
+
+    // The figures and the list are read from the workspace every time, because
+    // a tick changes a transaction and the difference closing as lines are
+    // ticked is the whole of the work.
+    std::vector<recon::Item> offered;
+    const auto show = [&]() {
+        const recon::Figures f = workspace_->reconcile_state();
+        std::string said = "Balance " + f.balance.in_register() + "    Cleared " +
+                           f.cleared.in_register();
+        if (f.online_at.has_value())
+            said += "    On-line " + f.online.in_register() + " on " +
+                    f.online_at->iso() + "    Difference " + f.difference.in_register();
+        else
+            said += "    No on-line balance has been downloaded for this account";
+        if (f.agrees) said += "    --  agrees";
+        figures->setText(QString::fromStdString(said));
+
+        offered = workspace_->uncleared_offered();
+        const QSignalBlocker quiet(table);
+        table->setRowCount(static_cast<int>(offered.size()));
+        for (int r = 0; r < static_cast<int>(offered.size()); ++r) {
+            const recon::Item& item = offered[static_cast<std::size_t>(r)];
+            auto* when = new QTableWidgetItem(QString::fromStdString(item.date.iso()));
+            when->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
+            when->setCheckState(Qt::Unchecked);
+            table->setItem(r, 0, when);
+            table->setItem(r, 1,
+                           new QTableWidgetItem(QString::fromStdString(item.payee)));
+            setAmount(table, r, 2, item.amount);
+        }
+        table->resizeColumnToContents(0);
+    };
+    show();
+
+    auto* buttons = new QHBoxLayout;
+    auto* clear = new QPushButton(tr("Clear ticked"), &dialog);
+    connect(clear, &QPushButton::clicked, &dialog, [&]() {
+        std::vector<std::string> refs;
+        for (int r = 0; r < table->rowCount(); ++r) {
+            const QTableWidgetItem* at = table->item(r, 0);
+            if (at == nullptr || at->checkState() != Qt::Checked) continue;
+            if (static_cast<std::size_t>(r) < offered.size())
+                refs.push_back(offered[static_cast<std::size_t>(r)].ref);
+        }
+        if (refs.empty()) return;
+        workspace_->clear_in_reconcile(refs);
+        show();
+    });
+    buttons->addWidget(clear);
+    buttons->addStretch();
+    auto* finished = new QPushButton(tr("Done"), &dialog);
+    connect(finished, &QPushButton::clicked, &dialog, &QDialog::accept);
+    buttons->addWidget(finished);
+    layout->addLayout(buttons);
+
+    dialog.resize(680, 400);
+    fitToScreen(&dialog);
+    dialog.exec();
+
+    // What is left when there is nothing more to tick. Offered rather than
+    // written: it is a figure nobody could explain, and whether to record it
+    // is the person's decision.
+    const recon::Adjustment offer = workspace_->balance_adjustment_offered();
+    if (offer.shown) {
+        const QString question =
+            tr("The book and the bank differ by %1.\n\n"
+               "Add a Balance Adjustment of %2 on %3, against %4?\n\n"
+               "It is written uncleared, so the register goes on showing the "
+               "difference until somebody clears it.")
+                .arg(QString::fromStdString(
+                    workspace_->reconcile_state().difference.in_register()))
+                .arg(QString::fromStdString(offer.amount.in_register()))
+                .arg(QString::fromStdString(offer.date.iso()))
+                .arg(QString::fromStdString(offer.category));
+        if (QMessageBox::question(this, tr("Balance Adjustment"), question,
+                                  QMessageBox::Yes | QMessageBox::No,
+                                  QMessageBox::No) == QMessageBox::Yes)
+            workspace_->accept_balance_adjustment();
+    }
+
+    chart_ = workspace_->accounts();
+    transactions_ = workspace_->transactions();
+    splits_ = workspace_->splits();
+    book_ = workspace_->book();
+    workspace_->close_reconcile();
+    save();
+    rebuildWorkspace();
+    refresh();
+}
+
 // What the import decided the line already was, read off the book. A look, not
 // a decision: the tick in the review is where the decision is made, so this
 // changes nothing and only has to be closed.
@@ -3342,9 +3460,9 @@ MainWindow::TabWidgets MainWindow::makeRegisterTab(int tabPosition) {
     stack->addLayout(bar);
     stack->addWidget(t.reg, 1);
     t.widget = container;
-    t.reg->setColumnCount(9);
+    t.reg->setColumnCount(10);
     t.reg->setHorizontalHeaderLabels({"Date", "Num", "Payee", "Category", "Memo", "Tag",
-                                      "Payment", "Deposit", "Balance"});
+                                      "Payment", "Deposit", "Cleared", "Balance"});
     t.reg->verticalHeader()->setVisible(false);
     t.reg->setSelectionBehavior(QAbstractItemView::SelectRows);
     // Dragging a divider is how a width is set. It goes to the workspace, is
@@ -3650,10 +3768,10 @@ void MainWindow::refreshPane(int tabPosition, const reg::BookIndex& book) {
     p.reg->setHorizontalHeaderLabels({"Date", "Num", "Payee", "Category", "Memo", "Tag",
                                       QString::fromStdString(headings.out_column),
                                       QString::fromStdString(headings.in_column),
-                                      "Balance"});
+                                      "Cleared", "Balance"});
     p.reg->setRowCount(static_cast<int>(lines.size()));
     // Filling the cells is the wait a person actually sits through -- thirty
-    // thousand lines of twenty years, nine cells each -- and it is a count with
+    // thousand lines of twenty years, ten cells each -- and it is a count with
     // a total, so the strip can say how far it has got. Nothing here is written
     // to the book: this is the painting of what the book already says.
     beginProgress("Showing " + (account.empty() ? std::string("the register") : account),
@@ -3671,10 +3789,20 @@ void MainWindow::refreshPane(int tabPosition, const reg::BookIndex& book) {
         p.reg->setItem(r, 5, text(line.tag, line.tag));
         setAmount(p.reg, r, 6, line.payment);
         setAmount(p.reg, r, 7, line.deposit);
+        // What the bank has seen. Most of a long register is cleared, so the
+        // column is written for the lines that are not and left empty for the
+        // ones that are: a column of the same word thirty thousand times says
+        // nothing, and the handful of blanks are the ones being looked for.
+        // See the reconciling section of UserInterface.spectable.
+        p.reg->setItem(r, 8,
+                       text(line.cleared == types::ClearedStatus::Cleared
+                                ? std::string("c")
+                                : std::string(),
+                            types::to_string(line.cleared)));
         // A running balance down a list that is not in date order is a column
         // of meaningless numbers, so it is emptied rather than filled in.
-        if (balanceShown) setAmount(p.reg, r, 8, line.balance);
-        else p.reg->setItem(r, 8, text(std::string()));
+        if (balanceShown) setAmount(p.reg, r, 9, line.balance);
+        else p.reg->setItem(r, 9, text(std::string()));
     }
     endProgress();
     // The blank line: one more row at the end, which is where a transaction is
@@ -3701,10 +3829,15 @@ void MainWindow::refreshPane(int tabPosition, const reg::BookIndex& book) {
                                         ? std::string() : line.payment.in_register()));
         p.reg->setItem(at, 7, typed(line.deposit.cents() == 0
                                         ? std::string() : line.deposit.in_register()));
+        // A line being typed is not cleared and is not typed into either: the
+        // bank has not seen a transaction that is not in the book yet.
+        auto* cleared = new QTableWidgetItem;
+        cleared->setFlags(Qt::ItemIsEnabled);
+        p.reg->setItem(at, 8, cleared);
         auto* balance = new QTableWidgetItem;
         balance->setFlags(Qt::ItemIsEnabled);
-        p.reg->setItem(at, 8, balance);
-        for (int c = 0; c <= 8; ++c)
+        p.reg->setItem(at, 9, balance);
+        for (int c = 0; c <= 9; ++c)
             p.reg->item(at, c)->setBackground(QColor(248, 248, 230));
     }
 
