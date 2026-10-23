@@ -4222,6 +4222,9 @@ Then panes are : PaneState
 # opening.
 
 Scenario Going to the chosen register of a transfer opens that one
+Description The payment of the scenario above, read in the card's register
+\ rather than the current account's. A transfer is one transaction, and
+\ which register it is opened in is the reader's choice, not another row.
 Given the chart of accounts is : ChartOfAccounts
 | Path               | Type       | Placeholder |
 | Assets:Checking    | Checking   | false       |
@@ -4231,12 +4234,8 @@ Given transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee        | Destination        | Amount  |
 | T1  | Liabilities:Visa | 2026-02-05 | Amazon       | Expenses:Groceries | -60.00  |
 | T2  | Assets:Checking  | 2026-02-25 | Visa Payment | Liabilities:Visa   | -200.00 |
-| T3  | Liabilities:Visa | 2026-02-25 | Visa Payment | Assets:Checking    | 200.00  |
-# The payment is two transactions, one in each account, the way every transfer
-# is -- see the transfer scenario in Transactions. T3 is the card's own entry,
-# which is what its register holds and what opening it there finds.
 When the transaction is opened in : RegisterChoice Vertical
-| Ref     | T3               |
+| Ref     | T2               |
 | Account | Liabilities:Visa |
 Then panes are : PaneState
 | Pane | Showing  | Account          | Active |

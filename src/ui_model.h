@@ -821,7 +821,7 @@ public:
         if (same_payment) {
             for (ReviewRow& r : review_)
                 if (r.line == asking_.line) r.category = asking_.already_here_account;
-            pairings_.push_back({asking_.already_here, review_account_});
+            pairings_.push_back({asking_.already_here, review_account_, asking_.line});
             paired_lines_.insert(asking_.line);
             paired_halves_.insert(asking_.already_here);
         }
@@ -839,6 +839,7 @@ public:
         // book again for every row -- which was a scan of the whole book per
         // accepted transaction. See decisions.md.
         int next_ref = ledger::transaction_count(transactions_) + 1;
+        std::map<int, types::TransactionId> made_for_line;
         for (const ReviewRow& r : review_) {
             if (!r.accepted) continue;
             ledger::Transaction t;
@@ -866,6 +867,7 @@ public:
             t.destination = accounts_.ref_for_path(r.category);
             transactions_.push_back(t);
             accepted_.push_back(t);
+            made_for_line[r.line] = t.id;
             book_.add({r.date, types::AccountPath(r.account), t.amount});
             book_.add({r.date, types::AccountPath(r.category), other_amount});
         }
@@ -875,10 +877,30 @@ public:
         // spending on both sides rather than on one of them.
         bool paired_anything = false;
         if (!pairings_.empty()) {
-            // The pairings name transactions by id, so one pass over the book
-            // settles all of them. It was a pass per pairing.
+            // Where the row was accepted there are two transactions to join,
+            // and ledger::match_destinations is the one thing that joins them:
+            // each one's destination becomes the other's account and each
+            // records the other's id. Without that recorded match the register
+            // cannot tell the pair from an ordinary pair of transfers in
+            // opposite directions, and shows the money in both registers
+            // twice. See a transfer is a line in each of the two registers it
+            // names, in TransactionRegister.spectable.
+            //
+            // Where it was not accepted there is nothing to join, and the half
+            // already here is left pointing at the account the answer named,
+            // as it was before the match was recorded anywhere.
             std::map<std::string, const Pairing*> by_id;
-            for (const Pairing& pairing : pairings_) by_id[pairing.transaction_id] = &pairing;
+            for (const Pairing& pairing : pairings_) {
+                const auto made = made_for_line.find(pairing.line);
+                if (made != made_for_line.end()) {
+                    if (ledger::match_destinations(&transactions_,
+                                                   types::TransactionId(pairing.transaction_id),
+                                                   made->second))
+                        paired_anything = true;
+                    continue;
+                }
+                by_id[pairing.transaction_id] = &pairing;
+            }
             for (ledger::Transaction& t : transactions_) {
                 const auto at = by_id.find(t.id.value());
                 if (at == by_id.end()) continue;
@@ -1764,6 +1786,11 @@ private:
     struct Pairing {
         std::string transaction_id;
         std::string becomes;
+        // Which row of the review the half already here was paired with. The
+        // register hides the far side of a matched pair only when the match is
+        // recorded on both transactions, so accepting has to know which of the
+        // transactions it just made is this half's partner.
+        int line = 0;
     };
     std::vector<Pairing> pairings_;
     std::vector<TransferQuestion> questions_;

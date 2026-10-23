@@ -1053,7 +1053,11 @@ public:
             t.destination = chart::Ref(header.integer(9));
             t.amount = Money::from_cents(header.integer(10));
             t.cleared = types::cleared_status_from_string(header.text(11));
-            t.matched_to = types::TransactionId(header.text(12));
+            // Most transactions are matched to nothing, and the column holds an
+            // empty string for them. An id refuses to be empty, so it is only
+            // built when there is something to build it from.
+            const std::string matched = header.text(12);
+            if (!matched.empty()) t.matched_to = types::TransactionId(matched);
             transactions->push_back(t);
         }
 
@@ -1237,7 +1241,11 @@ private:
             t.destination = chart::Ref(header.integer(9));
             t.amount = Money::from_cents(header.integer(10));
             t.cleared = types::cleared_status_from_string(header.text(11));
-            t.matched_to = types::TransactionId(header.text(12));
+            // Most transactions are matched to nothing, and the column holds an
+            // empty string for them. An id refuses to be empty, so it is only
+            // built when there is something to build it from.
+            const std::string matched = header.text(12);
+            if (!matched.empty()) t.matched_to = types::TransactionId(matched);
             const auto mark = marks.find(t.id.value());
             if (mark != marks.end()) t.import_ids = mark->second;
 

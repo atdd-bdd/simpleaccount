@@ -996,3 +996,39 @@ the same file, until a cross-file `Define` has been seen to work.
 five fields, and a category added with no parent meaning a root). Nothing is
 waiting on them; they are written and specified. Listed here so they are not
 read later as open questions.
+
+### m. A transfer entered as two rows, in two scenarios written before the rule
+
+Found on 2026-10-23 while clearing the eleven failures left by the two commits
+that made a transfer a line in both of its registers. Two things in the
+specification still describe the old shape, where a transfer was a row in each
+account and each register showed only its own:
+
+- `UserInterface.spectable`, *Going to the chosen register of a transfer opens
+  that one*, entered the Visa payment twice -- T2 in the current account, T3 in
+  the card -- and expected the card's register to hold two lines. Under *a
+  transfer is a line in each of the two registers it names*
+  (`TransactionRegister.spectable`) those are two movements of money, so the
+  card's register holds three lines and nothing is wrong with the program.
+  The scenario immediately above it, which offers both registers and opens
+  neither, already uses the one-transaction form.
+
+**Decision.** The scenario now has the same Given as the one above it and opens
+T2 in `Liabilities:Visa`. A transfer is one transaction; which of its two
+registers it is read in is the reader's choice, and that is the whole of what
+the scenario is about. T3 was never a second movement, only the old way of
+drawing the first one.
+
+- `UserInterface.spectable`, *Answering yes makes the two halves one transfer*,
+  was right and the program was wrong: accepting the import rewrote the half
+  already in the book to name the import's account but recorded no match, and
+  an unrecorded pair is indistinguishable from two accounts paying each other
+  both ways -- so the money showed in the current account twice. Accepting now
+  joins the two through `ledger::match_destinations`, which is the one place
+  that points each destination at the other and records each id on the other.
+
+**Decision.** Where the paired row was not ticked there is no second
+transaction to join, and the half already here is left naming the account the
+answer gave it, exactly as before. That case has no scenario; it is written
+this way so that answering yes and then unticking cannot leave a match
+pointing at nothing.
