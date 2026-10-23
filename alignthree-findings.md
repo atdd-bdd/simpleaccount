@@ -627,6 +627,22 @@ every step with its own keyword for two months for that reason. It is a
 one-line addition to §4 and it changes how every scenario in a specification
 reads.
 
+### 12a. The whole specification converted, at scale
+
+Done on 2026-10-23, after the two rulings in the reply below. All fourteen
+files in one pass: **1,117** steps became `And`, from 20 in
+`WorkedExample.spectable` to 426 in `UserInterface.spectable`. 0 diagnostics
+over 14 files, and `diff -r` between a generation of the old specification and
+a generation of the new one is **empty** -- the fourteen `test_*.cpp` and the
+fifteen `*_glue.h` stubs alike, so not a step name moved either. 678 of 678
+after the rebuild.
+
+Which is worth saying upstream for two reasons. It is a second body of
+evidence that `And` is the same step as the keyword above it, over a thousand
+steps rather than three. And it is what the documentation is for: the rewrite
+took one script and one diff, and the two months this project spent repeating
+`Given` on every line were spent only because §4 does not mention the word.
+
 ---
 
 ## What was not AlignThree's fault

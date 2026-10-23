@@ -132,7 +132,7 @@ Given the chart of accounts is as previous
 When account added : Account Vertical
 | Path | Expenses:Auto:Insurance |
 | Type | Expense                 |
-When account added : Account Vertical
+And account added : Account Vertical
 | Path | Expenses:Home:Insurance |
 | Type | Expense                 |
 Then accounts named Insurance are : ChartOfAccounts CompareOnly
@@ -194,7 +194,7 @@ Scenario An account with entries is not deleted
 Description Twenty years of history is the point of the program, so nothing
 \ silently discards a transaction. Hide the account instead.
 Given the chart of accounts is as previous
-Given Expenses:Groceries has entries : EntryCount
+And Expenses:Groceries has entries : EntryCount
 | Count |
 | 412   |
 When account deleted : AccountSelect
@@ -211,7 +211,7 @@ Description How many transactions name an account, counting both sides.
 
 Scenario An account with no entries is deleted
 Given the chart of accounts is as previous
-Given Expenses:Auto:Repairs has entries : EntryCount
+And Expenses:Auto:Repairs has entries : EntryCount
 | Count |
 | 0     |
 When account deleted : AccountSelect
@@ -231,7 +231,7 @@ Then account is : Account Vertical
 | Type        | Expense            |
 | Placeholder | false              |
 | Hidden      | true               |
-Then category picker offers : ChartOfAccounts CompareOnly
+And category picker offers : ChartOfAccounts CompareOnly
 | Path                  |
 | Expenses:Auto:Fuel    |
 | Expenses:Auto:Repairs |
@@ -292,7 +292,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto          | Expense | true        |
 | Expenses:Auto:Fuel     | Expense | false       |
 | Expenses:Vehicle       | Expense | true        |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Destination        | Amount |
 | T1  | Assets:Checking | Expenses:Auto:Fuel | -40.00 |
 When account moved under : AccountMove Vertical
@@ -301,7 +301,7 @@ When account moved under : AccountMove Vertical
 Then the chart of accounts is : ChartOfAccounts CompareOnly
 | Path                  |
 | Expenses:Vehicle:Fuel |
-Then balances are : AccountBalance CompareOnly
+And balances are : AccountBalance CompareOnly
 | Account               | RawBalance |
 | Expenses:Vehicle:Fuel | 40.00      |
 # The forty pounds did not move and was never rewritten: the transaction names the
@@ -597,7 +597,7 @@ When account settings changed : AccountSettings Vertical
 | Bank          | First Bank      |
 | BankId        | 053000196       |
 | AccountNumber | 1234567890      |
-When the book is reopened
+And the book is reopened
 Then account settings are : AccountSettings Vertical
 | Path          | Assets:Checking |
 | Bank          | First Bank      |
@@ -621,7 +621,7 @@ When account settings changed : AccountSettings Vertical
 | Path          | Assets:Checking |
 | Bank          | First Bank      |
 | AccountNumber | 0012-3456       |
-When account settings changed : AccountSettings Vertical
+And account settings changed : AccountSettings Vertical
 | Path          | Liabilities:Visa    |
 | Bank          | Second Bank         |
 | AccountNumber | ~4111 1111 1111 1111 |
@@ -786,7 +786,7 @@ Scenario The dialog shows the starting balance the account was given
 Description Read off the transaction rather than out of a field, because the
 \ transaction is where it is.
 Given the chart of accounts is as previous
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount  | Date       | Destination             | Amount  |
 | T1  | Assets:Savings | 2005-01-01 | Equity:Opening Balances | 1200.00 |
 When account settings opened : AccountSelect
@@ -827,7 +827,7 @@ Scenario Changing the starting balance changes the transaction it already has
 Description Not a second one. The dialog is editing the transaction it showed,
 \ which is the whole reason the figure is not kept twice.
 Given the chart of accounts is as previous
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount  | Date       | Destination             | Amount  |
 | T1  | Assets:Savings | 2005-01-01 | Equity:Opening Balances | 1200.00 |
 When account settings changed : AccountSettings Vertical
@@ -844,14 +844,14 @@ Scenario The date a balance starts from can be changed on its own
 Description The amount was right and the date was a guess, which is what
 \ happens when a statement is found after the account was opened.
 Given the chart of accounts is as previous
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount  | Date       | Destination             | Amount  |
 | T1  | Assets:Savings | 2005-01-01 | Equity:Opening Balances | 1200.00 |
 When account settings changed : AccountSettings Vertical
 | Path            | Assets:Savings |
 | StartingBalance | 1200.00        |
 | StartingDate    | 2004-07-31     |
-When account settings opened : AccountSelect
+And account settings opened : AccountSelect
 | Path           |
 | Assets:Savings |
 Then account settings are : AccountSettings Vertical
@@ -863,7 +863,7 @@ Scenario A starting balance cleared to zero takes its transaction away
 Description Zero is no starting balance, so what is left is an account with
 \ none -- not an account with a transaction for nothing.
 Given the chart of accounts is as previous
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount  | Date       | Destination             | Amount  |
 | T1  | Assets:Savings | 2005-01-01 | Equity:Opening Balances | 1200.00 |
 When account settings changed : AccountSettings Vertical
@@ -886,14 +886,14 @@ When account settings changed : AccountSettings Vertical
 | Path            | Liabilities:Visa |
 | StartingBalance | 300.00           |
 | StartingDate    | 2005-01-01       |
-When account settings opened : AccountSelect
+And account settings opened : AccountSelect
 | Path             |
 | Liabilities:Visa |
 Then account settings are : AccountSettings Vertical
 | Path            | Liabilities:Visa |
 | StartingBalance | 300.00           |
 | StartingDate    | 2005-01-01       |
-Then balances are : AccountBalance
+And balances are : AccountBalance
 | Account          | RawBalance | DisplayBalance | Notes            |
 | Liabilities:Visa | -300.00    | 300.00         | Owed, as entered |
 
@@ -985,12 +985,12 @@ Description It is still in the book, still has its history, and still appears in
 \ front of someone categorising a transaction today.
 Given today is : Today Vertical
 | Date | 2026-10-05 |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Auto          | Expense | true        |
 | Expenses:Auto:Fuel     | Expense | false       |
 | Expenses:Auto:Carriage | Expense | false       |
-Given dated entries are : DatedAccountEntry
+And dated entries are : DatedAccountEntry
 | Date       | Account                | Amount |
 | 2026-09-01 | Expenses:Auto:Fuel     | 40.00  |
 | 2009-04-02 | Expenses:Auto:Carriage | 12.00  |
@@ -1006,12 +1006,12 @@ Then categories offered are : CategoryOffered
 Scenario Asking for the unused ones brings them back
 Given today is : Today Vertical
 | Date | 2026-10-05 |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Auto          | Expense | true        |
 | Expenses:Auto:Fuel     | Expense | false       |
 | Expenses:Auto:Carriage | Expense | false       |
-Given dated entries are : DatedAccountEntry
+And dated entries are : DatedAccountEntry
 | Date       | Account                | Amount |
 | 2026-09-01 | Expenses:Auto:Fuel     | 40.00  |
 | 2009-04-02 | Expenses:Auto:Carriage | 12.00  |
@@ -1056,7 +1056,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto:Fuel | Expense  | false       |
 | Expenses:Dentist   | Expense  | false       |
 | Expenses:Postage   | Expense  | false       |
-Given dated entries are : DatedAccountEntry
+And dated entries are : DatedAccountEntry
 | Date       | Account            | Amount |
 | 2024-03-01 | Expenses:Auto:Fuel | 40.00  |
 | 2026-02-01 | Expenses:Auto:Fuel | 44.00  |
@@ -1138,7 +1138,7 @@ Description The entries the next three scenarios all read, named so that each
 
 Scenario Balances of an account after some entries
 Given the chart of accounts is as previous
-Given entries are : AccountEntry
+And entries are : AccountEntry
 =SomeEntries
 Then balances are : AccountBalance
 | Account            | RawBalance | DisplayBalance | Notes            |
@@ -1169,7 +1169,7 @@ Description A placeholder takes no transactions of its own, so its balance is
 \ entirely the roll-up. A node that is both posted to and a parent
 \ reports both numbers, which is why there are two columns.
 Given the chart of accounts is as previous
-Given entries are : AccountEntry
+And entries are : AccountEntry
 =SomeEntries
 Then rolled up balances are : RolledUpBalance
 | Account            | OwnBalance | TotalBalance | Notes                       |
@@ -1190,7 +1190,7 @@ Scenario Net worth is the total of the real accounts
 Description The nominal accounts are left out: including them would always give
 \ zero, because every transaction balances.
 Given the chart of accounts is as previous
-Given entries are : AccountEntry
+And entries are : AccountEntry
 =SomeEntries
 Then net worth is : NetWorth Vertical
 | Assets      | 955.00 |
@@ -1207,7 +1207,7 @@ Scenario A balance as at a date ignores later entries
 Description Every balance in the program is a balance as at a date; the figure
 \ shown without one is the balance as at today. See Reports.
 Given the chart of accounts is as previous
-Given dated entries are : DatedAccountEntry
+And dated entries are : DatedAccountEntry
 | Date       | Account         | Amount  |
 | 2024-01-05 | Assets:Checking | 1000.00 |
 | 2024-02-10 | Assets:Checking | -45.00  |
@@ -1274,7 +1274,7 @@ When account added with an opening balance : AccountWithOpeningBalance Vertical
 Then transactions created are : Transaction
 | Ref | SourceAccount    | Date       | Destination             | Amount  |
 | T1  | Liabilities:Amex | 2005-01-01 | Equity:Opening Balances | -300.00 |
-Then balances are : AccountBalance
+And balances are : AccountBalance
 | Account          | RawBalance | DisplayBalance | Notes            |
 | Liabilities:Amex | -300.00    | 300.00         | Owed, as entered |
 
@@ -1325,7 +1325,7 @@ Then account settings are : AccountSettings Vertical
 
 Scenario The type of an unused account may be changed
 Given the chart of accounts is as previous
-Given Expenses:Auto:Repairs has entries : EntryCount
+And Expenses:Auto:Repairs has entries : EntryCount
 | Count |
 | 0     |
 When account type changed : AccountTypeChange Vertical
@@ -1344,7 +1344,7 @@ Scenario Changing type across the real and nominal divide is refused
 Description Changing an Expense into a Bank would change the sign that every
 \ existing transaction is read with, and so rewrite history in silence.
 Given the chart of accounts is as previous
-Given Expenses:Groceries has entries : EntryCount
+And Expenses:Groceries has entries : EntryCount
 | Count |
 | 412   |
 When account type changed : AccountTypeChange Vertical
@@ -1358,7 +1358,7 @@ Scenario Changing type within the real accounts is allowed
 Description A Bank mistakenly set up as Cash is a common correction, and the
 \ display sign is the same for both, so no transaction changes meaning.
 Given the chart of accounts is as previous
-Given Assets:Savings has entries : EntryCount
+And Assets:Savings has entries : EntryCount
 | Count |
 | 96    |
 When account type changed : AccountTypeChange Vertical

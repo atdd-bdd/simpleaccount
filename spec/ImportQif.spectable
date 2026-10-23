@@ -104,12 +104,12 @@ Description The simplest export, and the one a bank or an old Quicken produces.
 \ account to import into, as for a CSV file.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given the file contains
+And the file contains
 """
 !Type:Bank
 D01/15/2024
@@ -150,7 +150,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses           | Expense | true        |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Shopping  | Expense | false       |
-Given the file contains
+And the file contains
 """
 !Option:AutoSwitch
 !Account
@@ -193,7 +193,7 @@ Then accounts created are : ChartOfAccounts
 # The roots come with them: adding an account fills in every level above it as a
 # placeholder, and a filled-in parent takes the type of the child that caused it
 # so that a roll-up in a report adds up. See the chart rules in Accounts.
-Then qif records read are : QifRecord
+And qif records read are : QifRecord
 | Account          | Date       | Amount | Payee         | CategoryText |
 | Assets:Checking  | 2024-01-15 | -45.00 | Harris Teeter | Groceries    |
 | Liabilities:Visa | 2024-01-20 | -89.99 | Amazon        | Shopping     |
@@ -278,7 +278,7 @@ Then accounts created are : ChartOfAccounts CompareOnly
 | Path                        |
 | Assets                      |
 | Assets:Savings - Rainy Day  |
-Then migration notes are : MigrationNote
+And migration notes are : MigrationNote
 | Kind         | Detail                                                      |
 | NameChanged  | Account "Savings: Rainy Day" became "Savings - Rainy Day"   |
 
@@ -406,7 +406,7 @@ T-13.00
 LMystery
 ^
 """
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When qif file imported
 Then migration notes are : MigrationNote
@@ -456,7 +456,7 @@ Description The business file has 24,324 dates whose second part is above
 \ the user is not asked.
 Given the qif profile is : QifProfile Vertical
 | DateOrder | MDY |
-Given the file contains
+And the file contains
 """
 !Type:Bank
 D3/12'17
@@ -470,7 +470,7 @@ PShop B
 """
 Then date order is ambiguous : DateOrderWarning Vertical
 | Ambiguous | false |
-Then date order evidence is : DateOrderEvidence Vertical
+And date order evidence is : DateOrderEvidence Vertical
 | FirstPartOver12  | 0   |
 | SecondPartOver12 | 1   |
 | Proven           | MDY |
@@ -487,7 +487,7 @@ Description If the file proves DMY and the profile says MDY, one of them is
 \ wrong and importing either way would be a guess.
 Given the qif profile is : QifProfile Vertical
 | DateOrder | MDY |
-Given the file contains
+And the file contains
 """
 !Type:Bank
 D25/12'17
@@ -513,7 +513,7 @@ Description The same rule as for a CSV file, and it matters more here: a whole
 \ by looking at one register.
 Given the qif profile is : QifProfile Vertical
 | DateOrder | MDY |
-Given the file contains
+And the file contains
 """
 !Type:Bank
 D03/04/2024
@@ -569,7 +569,7 @@ Description They are the same field written twice and they should never differ.
 \ knowing before twenty years of it is trusted.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
-Given the file contains
+And the file contains
 """
 !Type:Bank
 D01/15/2024
@@ -610,11 +610,11 @@ Description The marker belongs to the account whose section the record is in,
 \ other side of the transaction is left uncleared.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given the file contains
+And the file contains
 """
 !Type:Bank
 D01/15/2024
@@ -660,12 +660,12 @@ Attributes SplitCategorySource
 Scenario A split record keeps --Split-- out of the chart of accounts
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
 | Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
-Given the file contains
+And the file contains
 """
 !Type:Bank
 D4/ 2'24
@@ -682,10 +682,10 @@ When qif file imported
 Then accounts created are : ChartOfAccounts
 | Path | Type | Placeholder |
 # No rows: every account named was already there, and --Split-- is not a name.
-Then transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
 | T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -154.50 |
-Then split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount |
 | Expenses:Home:Maintenance | 100.00 |
 | Expenses:Home:Garden      | 54.50  |
@@ -722,13 +722,13 @@ Description The S, E and dollar fields repeat, one group per split line, and
 \ they come after the fields of the transaction itself.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
 | Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
 | Expenses:Auto:Repairs     | Expense | false       |
-Given the file contains
+And the file contains
 """
 !Type:Bank
 D04/02/2024
@@ -749,7 +749,7 @@ When qif file imported
 Then transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination | Amount  | Memo  |
 | T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 | none  |
-Then split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount | Memo         |
 | Expenses:Home:Maintenance | 100.00 | Paint        |
 | Expenses:Home:Garden      | 54.50  | Compost      |
@@ -763,12 +763,12 @@ Description Refusing the record would lose it. The difference goes to
 \ record is listed in the migration report.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
 | Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Uncategorized    | Expense | false       |
-Given the file contains
+And the file contains
 """
 !Type:Bank
 D04/02/2024
@@ -782,11 +782,11 @@ When qif file imported
 Then transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
 | T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
-Then split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount |
 | Expenses:Home:Maintenance | 154.50 |
 | Expenses:Uncategorized    | 30.00  |
-Then migration notes are : MigrationNote
+And migration notes are : MigrationNote
 | Kind         | Detail                                                        |
 | SplitShort   | 2024-04-02 Home Depot: split lines are 30.00 short of 184.50; put to Uncategorized |
 
@@ -833,7 +833,7 @@ Description This is the rule that stops the migration doubling every transfer
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
-Given the file contains
+And the file contains
 """
 !Option:AutoSwitch
 !Account
@@ -869,7 +869,7 @@ When qif file imported
 Then transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee               | Destination    | Amount  |
 | T1  | Assets:Checking | 2024-03-01 | Transfer to savings | Assets:Savings | -500.00 |
-Then import summary is : ImportSummary Vertical
+And import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 1 |
 | Possible  | 0 |
@@ -882,7 +882,7 @@ Description Both are real. Each half pairs with exactly one other half, and
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
-Given the file contains
+And the file contains
 """
 !Option:AutoSwitch
 !Account
@@ -929,7 +929,7 @@ Then transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee        | Destination    | Amount  |
 | T1  | Assets:Checking | 2024-03-01 | Transfer one | Assets:Savings | -500.00 |
 | T2  | Assets:Checking | 2024-03-01 | Transfer two | Assets:Savings | -500.00 |
-Then import summary is : ImportSummary Vertical
+And import summary is : ImportSummary Vertical
 | New       | 2 |
 | Duplicate | 2 |
 | Possible  | 0 |
@@ -942,7 +942,7 @@ Description The bracketed account names both sides, so the transaction can be
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
-Given the file contains
+And the file contains
 """
 !Option:AutoSwitch
 !Account
@@ -967,10 +967,10 @@ Then accounts created are : ChartOfAccounts CompareOnly
 | Assets          |
 | Assets:Checking |
 | Assets:Savings  |
-Then transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee               | Destination    | Amount  |
 | T1  | Assets:Checking | 2024-03-01 | Transfer to savings | Assets:Savings | -500.00 |
-Then migration notes are : MigrationNote
+And migration notes are : MigrationNote
 | Kind            | Detail                                                      |
 | UnpairedTransfer | 2024-03-01 Assets:Checking to Assets:Savings 500.00: only one half was in the file |
 
@@ -981,7 +981,7 @@ Description Quicken does not always write both halves with the same date: 558 of
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
-Given the file contains
+And the file contains
 """
 !Option:AutoSwitch
 !Account
@@ -1018,7 +1018,7 @@ Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 1 |
 | Possible  | 0 |
-Then transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee        | Destination    | Amount  |
 | T1  | Assets:Checking | 2024-03-01 | Transfer out | Assets:Savings | -500.00 |
 # One transaction, dated and named from the account the money left.
@@ -1031,7 +1031,7 @@ Description Quicken writes the opening balance of an account as a transfer from
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type   | Placeholder |
 | Equity:Opening Balances | Equity | false       |
-Given the file contains
+And the file contains
 """
 !Option:AutoSwitch
 !Account
@@ -1062,7 +1062,7 @@ Description Brackets mean an account, so a bracketed name that is not in the
 Given the chart of accounts is : ChartOfAccounts
 | Path                    | Type   | Placeholder |
 | Equity:Opening Balances | Equity | false       |
-Given the file contains
+And the file contains
 """
 !Type:Bank
 D03/01/2024
@@ -1071,14 +1071,14 @@ PTransfer
 L[Old Brokerage]
 ^
 """
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When qif file imported
 Then accounts created are : ChartOfAccounts CompareOnly
 | Path                 |
 | Assets               |
 | Assets:Old Brokerage |
-Then migration notes are : MigrationNote
+And migration notes are : MigrationNote
 | Kind           | Detail                                                        |
 | AccountGuessed | "[Old Brokerage]" was not in the account list; made Assets:Old Brokerage of type Bank |
 
@@ -1092,11 +1092,11 @@ Description Reporting by class is not in this release. Discarding the class
 \ stored on the transaction and reported as not yet shown anywhere.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                | Type    | Placeholder |
 | Assets:Checking     | Checking | false       |
 | Expenses:Home:Rates | Expense | false       |
-Given the file contains
+And the file contains
 """
 !Type:Class
 NRental
@@ -1114,10 +1114,10 @@ Then transaction is : Transaction Vertical CompareOnly
 | Date  | 2024-02-01        |
 | Payee | County Tax Office |
 | Tag   | Rental            |
-Then transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee             | Destination         | Amount   | Tag    |
 | T1  | Assets:Checking | 2024-02-01 | County Tax Office | Expenses:Home:Rates | -1250.00 | Rental |
-Then migration notes are : MigrationNote
+And migration notes are : MigrationNote
 | Kind      | Detail                                                       |
 | TagsKept  | 1 class kept as a tag; no report groups by tag in this release |
 
@@ -1211,7 +1211,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Dividends            | Income | false       |
 | Equity:Market Value Changes | Equity | false       |
 | Equity:Opening Balances     | Equity | false       |
-Given the file contains
+And the file contains
 """
 !Type:Security
 NVanguard Total Stock Mkt Idx
@@ -1257,12 +1257,12 @@ Then accounts created are : ChartOfAccounts CompareOnly
 | Assets:Brokerage:Cash  |
 | Assets:Brokerage:VTSAX |
 | Assets:Checking        |
-Then transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount          | Date       | Destination           | Amount   |
 | T1  | Assets:Brokerage:Cash  | 2024-01-02 | Assets:Checking       | 20000.00 |
 | T2  | Assets:Brokerage:VTSAX | 2024-02-01 | Assets:Brokerage:Cash | 10000.00 |
 | T3  | Assets:Brokerage:VTSAX | 2024-06-30 | Income:Dividends      | 250.00   |
-Then holdings are : Holdings
+And holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 102.5  | 100.0000 | 2024-06-30 |
 
@@ -1273,7 +1273,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Dividends            | Income | false       |
 | Equity:Market Value Changes | Equity | false       |
 | Equity:Opening Balances     | Equity | false       |
-Given the file contains
+And the file contains
 """
 !Type:Security
 NOld Employer Stock Plan
@@ -1303,7 +1303,7 @@ Then accounts created are : ChartOfAccounts CompareOnly
 | Path                                      |
 | Assets:Brokerage                          |
 | Assets:Brokerage:Old Employer Stock Plan  |
-Then transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount                            | Date       | Destination             | Amount  |
 | T1  | Assets:Brokerage:Old Employer Stock Plan | 2005-01-02 | Equity:Opening Balances | 1000.00 |
 
@@ -1318,10 +1318,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Dividends            | Income | false       |
 | Equity:Market Value Changes | Equity | false       |
 | Equity:Opening Balances     | Equity | false       |
-Given holdings are : Holdings
+And holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-02-01 |
-Given the file contains
+And the file contains
 """
 !Type:Invst
 D03/01/2024
@@ -1333,7 +1333,7 @@ Q20
 When qif file imported
 Then transactions created are : Transaction
 | Ref | SourceAccount | Date | Destination | Amount |
-Then holdings are : Holdings
+And holdings are : Holdings
 | Account                | Symbol | Shares | Price   | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 200    | 50.0000 | 2024-03-01 |
 
@@ -1369,7 +1369,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Dividends            | Income | false       |
 | Equity:Market Value Changes | Equity | false       |
 | Equity:Opening Balances     | Equity | false       |
-Given the file contains
+And the file contains
 """
 !Type:Invst
 D03/01/2024
@@ -1381,7 +1381,7 @@ Q50
 When qif file imported
 Then transactions created are : Transaction
 | Ref | SourceAccount | Date | Destination | Amount |
-Then migration notes are : MigrationNote
+And migration notes are : MigrationNote
 | Kind        | Detail                                            |
 | Unsupported | 2024-03-01 action "Vest" is not imported; 1 record |
 
@@ -1395,10 +1395,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Dividends            | Income | false       |
 | Equity:Market Value Changes | Equity | false       |
 | Equity:Opening Balances     | Equity | false       |
-Given the qif profile is : QifProfile Vertical
+And the qif profile is : QifProfile Vertical
 | DateOrder      | MDY           |
 | InvestmentMode | PositionsOnly |
-Given the file contains
+And the file contains
 """
 !Type:Prices
 "VTSAX",110.00,"6/28'24"
@@ -1433,7 +1433,7 @@ When qif file imported
 Then transactions are : Transaction
 | Ref | SourceAccount          | Date       | Destination             | Amount   |
 | T1  | Assets:Brokerage:VTSAX | 2024-06-28 | Equity:Opening Balances | 16500.00 |
-Then holdings are : Holdings
+And holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 150    | 110.0000 | 2024-06-28 |
 
@@ -1452,10 +1452,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Dividends            | Income | false       |
 | Equity:Market Value Changes | Equity | false       |
 | Equity:Opening Balances     | Equity | false       |
-Given holdings are : Holdings
+And holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 100.0000 | 2024-02-01 |
-Given the file contains
+And the file contains
 """
 !Type:Prices
 "VTSAX",105.00,"3/29'24"
@@ -1467,10 +1467,10 @@ When qif file imported
 Then transactions are : Transaction
 | Ref | SourceAccount          | Date       | Destination                 | Amount  |
 | T1  | Assets:Brokerage:VTSAX | 2024-06-28 | Equity:Market Value Changes | 1000.00 |
-Then holdings are : Holdings
+And holdings are : Holdings
 | Account                | Symbol | Shares | Price    | PriceAsOf  |
 | Assets:Brokerage:VTSAX | VTSAX  | 100    | 110.0000 | 2024-06-28 |
-Then migration notes are : MigrationNote
+And migration notes are : MigrationNote
 | Kind          | Detail                                            |
 | PricesSkipped | 1 earlier price for VTSAX was not used            |
 
@@ -1548,7 +1548,7 @@ Then payee split rules created are : PayeeSplitRule Vertical
 | MatchType | Contains       |
 | Payee     | First National |
 | Shape     | Amounts        |
-Then remembered split lines created are : RememberedSplitLine
+And remembered split lines created are : RememberedSplitLine
 | Category               | Amount | Memo |
 | Expenses:Home:Interest | 820.00 | none |
 | Expenses:Mortgage      | 430.00 | none |
@@ -1585,9 +1585,9 @@ Description A migration that half succeeded would leave a book that is neither
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
-Given the file contains
+And the file contains
 """
 !Type:Bank
 D01/15/2024
@@ -1603,7 +1603,7 @@ When qif file imported
 Then rejected because : Rejection
 | Reason                                                        |
 | Line 6: 99/99/9999 is not a date; nothing was imported        |
-Then transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount | Date | Destination | Amount |
 # No rows: the good record was not written either.
 
@@ -1614,7 +1614,7 @@ Description The report is the deliverable of a migration, not a by-product. It
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
-Given the file contains
+And the file contains
 """
 !Option:AutoSwitch
 !Account
@@ -1671,7 +1671,7 @@ Then migration report is : MigrationReport Vertical
 # The one note is Groceries falling back to the sign: it is used inline with
 # no !Type:Cat entry, so the sign-fallback rule in the scenario above applies
 # here too.
-Then balance checks are : LedgerBalanceResult Vertical
+And balance checks are : LedgerBalanceResult Vertical
 | ClearedBalance | 955.00 |
 | StatedBal      | 955.00 |
 | Difference     | 0.00   |
@@ -1697,7 +1697,7 @@ Description The check from Transactions, run over the whole book at the end of
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
-Given the file contains
+And the file contains
 """
 !Type:Bank
 D01/15/2024
@@ -1706,10 +1706,10 @@ PHarris Teeter
 LGroceries
 ^
 """
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When qif file imported
-When book checked
+And book checked
 Then book check is : BookCheck Vertical
 | TransactionsChecked | 1    |
 | OutOfBalance        | 0    |
@@ -1731,9 +1731,9 @@ Description A migration gets run again: because the first attempt was abandoned,
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
-Given the file contains
+And the file contains
 """
 !Type:Bank
 D01/15/2024
@@ -1841,10 +1841,10 @@ Description Nineteen banking and card records transfer to an investment account.
 Given the qif profile is : QifProfile Vertical
 | DateOrder      | MDY      |
 | InvestmentMode | CashOnly |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
-Given the file contains
+And the file contains
 """
 !Option:AutoSwitch
 !Account
@@ -1872,7 +1872,7 @@ Then accounts created are : ChartOfAccounts CompareOnly
 | Assets                |
 | Assets:Checking       |
 | Assets:Ken Roth IRA   |
-Then transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee    | Destination         | Amount   |
 | T1  | Assets:Checking | 2024-04-15 | Vanguard | Assets:Ken Roth IRA | -6000.00 |
 When report run : ReportSpec Vertical
@@ -1902,14 +1902,14 @@ Description The twenty-one records that keep the investment sections in scope at
 Given the qif profile is : QifProfile Vertical
 | DateOrder      | MDY      |
 | InvestmentMode | CashOnly |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                  | Type       | Placeholder |
 | Assets:Vanguard       | Brokerage  | false       |
 | Expenses              | Expense    | true        |
 | Expenses:Misc Expense | Expense    | false       |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Vanguard |
-Given the file contains
+And the file contains
 """
 !Type:Invst
 D3/ 1'24
@@ -1941,12 +1941,12 @@ Description A reinvested dividend in a retirement account changes what the
 Given the qif profile is : QifProfile Vertical
 | DateOrder      | MDY      |
 | InvestmentMode | CashOnly |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path            | Type       | Placeholder |
 | Assets:Vanguard | Brokerage  | false       |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Vanguard |
-Given the file contains
+And the file contains
 """
 !Type:Invst
 D6/30'24
@@ -1968,10 +1968,10 @@ When qif file imported
 Then transactions created are : Transaction
 | Ref | SourceAccount | Date | Destination | Amount |
 # No rows.
-Then migration notes are : MigrationNote
+And migration notes are : MigrationNote
 | Kind              | Detail                                                       |
 | SecuritiesSkipped | 2 investment records not imported this round; Assets:Vanguard holds an incomplete balance |
-Then accounts with incomplete balances are : IncompleteBalance
+And accounts with incomplete balances are : IncompleteBalance
 | Account         | Reason                                        | SkippedRecords |
 | Assets:Vanguard | The securities side is not imported this round | 2             |
 
@@ -1988,7 +1988,7 @@ Description The account appears in the chart, its transfers are right, and its
 Given the qif profile is : QifProfile Vertical
 | DateOrder      | MDY      |
 | InvestmentMode | CashOnly |
-Given accounts with incomplete balances are : IncompleteBalance
+And accounts with incomplete balances are : IncompleteBalance
 | Account         | Reason                                        | SkippedRecords |
 | Assets:Vanguard | The securities side is not imported this round | 848            |
 Then balance display is : BalanceDisplay Vertical
@@ -2223,11 +2223,11 @@ Description Marked cleared, so the money came. The receivable and the category
 \ a category is.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Customer Invoices |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                     | Type   | Placeholder |
 | Assets:Customer Invoices | OtherAsset | false       |
 | Income:Consulting        | Income | false       |
-Given the file contains
+And the file contains
 """
 !Type:Invoice
 D11/15'25
@@ -2252,12 +2252,12 @@ Then transactions are : Transaction
 Scenario A collected split invoice posts every one of its categories
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Customer Invoices |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                     | Type   | Placeholder |
 | Assets:Customer Invoices | OtherAsset | false       |
 | Income:Consulting        | Income | false       |
 | Income:Royalty           | Income | false       |
-Given the file contains
+And the file contains
 """
 !Type:Invoice
 D3/15'25
@@ -2277,7 +2277,7 @@ When qif file imported
 Then transactions are : Transaction
 | Ref | SourceAccount            | Date       | Payee    | Destination | Amount  | Memo | Cleared |
 | T1  | Assets:Customer Invoices | 2025-03-15 | A Client | Split       | 1500.00 | none | Cleared |
-Then split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination       | Amount   | Memo |
 | Income:Consulting | -1000.00 | none |
 | Income:Royalty    | -500.00  | none |
@@ -2289,12 +2289,12 @@ Description The 975.00 from 2008 that Ken confirmed was never paid. It has no
 \ cleared marker, so the amount is owed and none of it is income.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Customer Invoices |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                            | Type      | Placeholder |
 | Assets:Customer Invoices        | OtherAsset | false       |
 | Liabilities:Unrecognised Income | OtherDebt | false       |
 | Income:Consulting               | Income    | false       |
-Given the file contains
+And the file contains
 """
 !Type:Invoice
 D4/24'08
@@ -2313,7 +2313,7 @@ Then transactions are : Transaction
 | T1  | Assets:Customer Invoices | 2008-04-24 | Guideline | Liabilities:Unrecognised Income | 975.00 |
 # Income:Consulting is not posted to at all, which is what takes the 975.00 out
 # of the spending report and brings it to Quicken's 311,128.75.
-Then unpaid invoices are : UnpaidInvoice
+And unpaid invoices are : UnpaidInvoice
 | Date       | Payee     | Amount | Category          | Note                   |
 | 2008-04-24 | Guideline | 975.00 | Income:Consulting | Not cleared            |
 
@@ -2332,11 +2332,11 @@ Description The four recent invoices to Warp And Bytes and Ken Pugh, Inc. are
 \ claim is made, whether or not the company has paid it yet.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Customer Invoices |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                                            | Type    | Placeholder |
 | Assets:Customer Invoices                        | OtherAsset | false       |
 | Expenses:Warp And Byte Expenses To be Reimbursed | Expense | false      |
-Given the file contains
+And the file contains
 """
 !Type:Invoice
 D12/9'25
@@ -2355,7 +2355,7 @@ Then transactions are : Transaction
 | T1  | Assets:Customer Invoices | 2025-12-09 | Warp And Bytes | Expenses:Warp And Byte Expenses To be Reimbursed | 9390.84 |
 # No cleared marker, and it is still posted. Leaving it out moved 2025 expenses
 # 13,403.46 away from Quicken's figure; see the cleared marker rule above.
-Then unpaid invoices are : UnpaidInvoice
+And unpaid invoices are : UnpaidInvoice
 | Date       | Payee          | Amount  | Category                                         | Note                        |
 | 2025-12-09 | Warp And Bytes | 9390.84 | Expenses:Warp And Byte Expenses To be Reimbursed  | Not cleared; an expense claim |
 # It is on the list even though its expense was recognised. The list answers
@@ -2371,12 +2371,12 @@ Details The chart is spelled out rather than taken as previous, because Misc
 \ the other way, so the sign of the transaction would place it under Expenses.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Customer Invoices |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                            | Type      | Placeholder |
 | Assets:Customer Invoices        | OtherAsset | false       |
 | Liabilities:Unrecognised Income | OtherDebt | false       |
 | Income:Misc Income              | Income    | false       |
-Given the file contains
+And the file contains
 """
 !Type:Invoice
 D12/11'09
@@ -2406,9 +2406,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                        | Type      | Placeholder |
 | Liabilities:Business Bills  | OtherDebt | false       |
 | Expenses:Office             | Expense   | false       |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Liabilities:Business Bills |
-Given the file contains
+And the file contains
 """
 !Type:Bill
 D3/15'25
@@ -2457,7 +2457,7 @@ Description Four numbers that say how much of the invoice history did not
 \ trusted.
 Given import target is : ImportTarget Vertical
 | AccountPath | Liabilities:Business Bills |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                        | Type      | Placeholder |
 | Liabilities:Business Bills  | OtherDebt | false       |
 | Expenses:Office             | Expense   | false       |
@@ -2585,11 +2585,11 @@ Description The X fields carry the line items, terms and numbering of a Quicken
 \ nothing is lost quietly.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Receivables |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Receivables     | OtherAsset | false       |
 | Income:Consulting      | Income  | false       |
-Given the file contains
+And the file contains
 """
 !Type:Invoice
 D4/ 2'24
@@ -2610,7 +2610,7 @@ When qif file imported
 Then transactions are : Transaction
 | Ref | SourceAccount      | Date       | Payee    | CheckNo | Destination       | Amount  | Cleared    |
 | T1  | Assets:Receivables | 2024-04-02 | A Client | 1041    | Income:Consulting | 2500.00 | Reconciled |
-Then migration notes are : MigrationNote
+And migration notes are : MigrationNote
 | Kind           | Detail                                                      |
 | InvoiceDetail  | 1 invoice record: 3 X fields and 2 address lines not imported |
 
@@ -2656,9 +2656,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Equity:Market Value Changes | Equity     | false       |
 | Equity:Opening Balances     | Equity     | false       |
 | Income:Dividends            | Income     | false       |
-Given today is : Today Vertical
+And today is : Today Vertical
 | Date | 2026-10-03 |
-Given the file contains
+And the file contains
 """
 !Option:AutoSwitch
 !Account
@@ -2690,10 +2690,10 @@ When qif file imported
 Then holdings are : Holdings
 | Account                                   | SecurityName                   | Shares | Price   | PriceAsOf  |
 | Assets:Portfolio:ISHARES U S TRANSPORTATION ETF | ISHARES U S TRANSPORTATION ETF | 101.6 | 62.5000 | 2024-06-30 |
-Then migration notes are : MigrationNote
+And migration notes are : MigrationNote
 | Kind         | Detail                                                        |
 | NoPriceList  | No !Type:Prices section; 1 holding carries a price from its last transaction |
-Then holdings report rows are : HoldingsReportRow CompareOnly
+And holdings report rows are : HoldingsReportRow CompareOnly
 | SecurityName                   | Stale |
 | ISHARES U S TRANSPORTATION ETF | true  |
 # Priced in June 2024 and read in October 2026, so it is stale by any measure.
@@ -2720,7 +2720,7 @@ Then balance check is : LedgerBalanceResult Vertical
 | StatedBal      | 0.00  |
 | Difference     | 0.00  |
 | Agrees         | false |
-Then migration notes are : MigrationNote
+And migration notes are : MigrationNote
 | Kind            | Detail                                                      |
 | NoStatedBalance | No account block carries a statement balance; the import was not checked against one |
 
@@ -2732,9 +2732,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Portfolio         | Brokerage  | true        |
 | Assets:Portfolio:Cash    | Brokerage  | false       |
 | Expenses:Investment:Fees | Expense    | false       |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Portfolio |
-Given the file contains
+And the file contains
 """
 !Type:Invst
 D3/ 1'24
@@ -2762,10 +2762,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Portfolio         | Brokerage  | true        |
 | Assets:Portfolio:Cash    | Brokerage  | false       |
 | Expenses:Investment:Fees | Expense    | false       |
-Given holdings are : Holdings
+And holdings are : Holdings
 | Account                                         | SecurityName                   | Shares | Price    | PriceAsOf  |
 | Assets:Portfolio:ISHARES U S TRANSPORTATION ETF | ISHARES U S TRANSPORTATION ETF | 100    | 240.0000 | 2024-03-06 |
-Given the file contains
+And the file contains
 """
 !Type:Invst
 D3/ 7'24
@@ -2778,7 +2778,7 @@ Mfrom data feed
 When qif file imported
 Then transactions created are : Transaction
 | Ref | SourceAccount | Date | Destination | Amount |
-Then holdings are : Holdings
+And holdings are : Holdings
 | Account                                         | SecurityName                   | Shares | Price   | PriceAsOf  |
 | Assets:Portfolio:ISHARES U S TRANSPORTATION ETF | ISHARES U S TRANSPORTATION ETF | 400    | 60.0000 | 2024-03-07 |
 # No transactions: four hundred shares at sixty is the same twenty-four thousand
@@ -2792,7 +2792,7 @@ Details The only records where the two differ are in !Type:Template, which is
 \ a report definition rather than a transaction and is not imported.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
-Given the file contains
+And the file contains
 """
 !Type:Bank
 D1/15'24
@@ -2850,7 +2850,7 @@ Description There are 8,228 bracketed category fields in the business file, so
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Expenses:Uncategorized | Expense | false       |
-Given the file contains
+And the file contains
 """
 !Option:AutoSwitch
 !Account

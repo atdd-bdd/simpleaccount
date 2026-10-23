@@ -88,7 +88,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto:Fuel     | Expense | false       |
 | Expenses:Auto:Repairs  | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination            | Amount   |
 | T1  | Assets:Checking | 2023-06-30 | Acme Payroll  | Income:Salary          | 40000.00 |
 | T2  | Assets:Checking | 2023-07-15 | Harris Teeter | Expenses:Groceries     | -400.00  |
@@ -108,7 +108,7 @@ Scenario A category report for one year
 Description The tree is kept, with a subtotal on every placeholder, and income
 \ and expenses both read as positive figures.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-01-01 |
@@ -125,7 +125,7 @@ Then report rows are : ReportRow
 | Expenses:Auto:Repairs  | 2     | 300.00   | false      |
 | Expenses:Groceries     | 1     | 500.00   | false      |
 | Expenses:Uncategorized | 1     | 10.00    | false      |
-Then report total is : ReportTotal Vertical
+And report total is : ReportTotal Vertical
 | TotalIncome   | 42025.00 |
 | TotalExpenses | 960.00   |
 | Net           | 41065.00 |
@@ -157,7 +157,7 @@ Details The rule is uniform and has no special cases: a Quicken expense figure
 \ figure, so a payee with both has no sensible sign here, and flipping it
 \ would make the number meaningless rather than differently signed.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy      | Category   |
 | From         | 2024-01-01 |
@@ -175,7 +175,7 @@ Then report rows are : ReportRow
 | Expenses:Auto:Repairs  | 2     | -300.00  | false      |
 | Expenses:Groceries     | 1     | -500.00  | false      |
 | Expenses:Uncategorized | 1     | -10.00   | false      |
-Then report total is : ReportTotal Vertical
+And report total is : ReportTotal Vertical
 | TotalIncome   | 42025.00 |
 | TotalExpenses | -960.00  |
 | Net           | 41065.00 |
@@ -193,7 +193,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Zoo   | Expense | false       |
 | Expenses:Apples | Expense | false      |
 | Expenses:Milk  | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination     | Amount  |
 | T1  | Assets:Checking | 2024-01-10 | Shop A | Expenses:Zoo    | -300.00 |
 | T2  | Assets:Checking | 2024-01-11 | Shop B | Expenses:Apples | -10.00  |
@@ -220,7 +220,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses           | Expense | true        |
 | Expenses:Groceries | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
 | T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
 When report run : ReportSpec Vertical
@@ -235,7 +235,7 @@ Then report rows are : ReportRow
 
 Scenario A date range takes only the transactions inside it
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-03-01 |
@@ -255,7 +255,7 @@ Scenario Asking for zero rows keeps every category in the report
 Description Useful when the report is a form to be filled in, or compared with
 \ the same report from another year.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-03-01 |
@@ -278,7 +278,7 @@ Scenario A depth limit rolls the detail up into its parent
 Description Twenty years of history grows a deep tree. A report to depth one is
 \ the summary; the figures still add to the same total.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-01-01 |
@@ -306,7 +306,7 @@ Description The summary: Auto reads 450.00 with nothing under it, and the figure
 \ still adds to the same total as the full tree. The section lines stay,
 \ because the totals have to be somewhere.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category    |
 | From     | 2024-01-01  |
@@ -322,7 +322,7 @@ Then report rows are : ReportRow
 | Expenses:Auto          | 1     | 450.00   | false      |
 | Expenses:Groceries     | 1     | 500.00   | false      |
 | Expenses:Uncategorized | 1     | 10.00    | false      |
-Then report total is : ReportTotal Vertical
+And report total is : ReportTotal Vertical
 | TotalIncome   | 42025.00 |
 | TotalExpenses | 960.00   |
 | Net           | 41065.00 |
@@ -336,7 +336,7 @@ Description Every category, each one starting a step further over than its
 \ be written out on the line. The indent is Level: one step per level,
 \ and a transaction line later takes its indent the same way.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category      |
 | From     | 2024-01-01    |
@@ -396,7 +396,7 @@ Description The figures are the ones the full tree already shows; what is added 
 \ a line for each transaction behind them, in date order, one step
 \ further over than the category it belongs to.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category     |
 | From     | 2024-01-01   |
@@ -420,7 +420,7 @@ Then report lines are : ReportDetailLine
 | Transaction | Expenses:Groceries     | 2     | 2024-03-15 | Harris Teeter | 500.00   |          |
 | Category    | Expenses:Uncategorized | 1     |            |               |          | 10.00    |
 | Transaction | Expenses:Uncategorized | 2     | 2024-07-01 | Unknown       | 10.00    |          |
-Then report total is : ReportTotal Vertical
+And report total is : ReportTotal Vertical
 | TotalIncome   | 42025.00 |
 | TotalExpenses | 960.00   |
 | Net           | 41065.00 |
@@ -442,7 +442,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses:Auto      | Expense | false       |
 | Expenses:Auto:Fuel | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee    | Destination        | Amount |
 | T1  | Assets:Checking | 2026-03-01 | Shell    | Expenses:Auto:Fuel | -40.00 |
 | T2  | Assets:Checking | 2026-03-02 | Car Wash | Expenses:Auto      | -10.00 |
@@ -479,7 +479,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Visa   | CreditCard | false       |
 | Expenses           | Expense    | true        |
 | Expenses:Shopping  | Expense    | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee    | Destination       | Amount  |
 | T1  | Liabilities:Visa | 2024-03-02 | Amazon   | Expenses:Shopping | -89.99  |
 | T2  | Liabilities:Visa | 2024-03-25 | Visa     | Assets:Checking   | 300.00  |
@@ -493,7 +493,7 @@ Then report rows are : ReportRow
 | Account           | Level | Amount | IsSubtotal |
 | Expenses          | 0     | 89.99  | true       |
 | Expenses:Shopping | 1     | 89.99  | false      |
-Then report total is : ReportTotal Vertical
+And report total is : ReportTotal Vertical
 | TotalIncome   | 0.00  |
 | TotalExpenses | 89.99 |
 | Net           | -89.99 |
@@ -506,7 +506,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       | false  |
 | Expenses           | Expense | true        | false  |
 | Expenses:Groceries | Expense | false       | true   |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
 | T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
 When report run : ReportSpec Vertical
@@ -572,7 +572,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Auto          | Expense | false       |
 | Expenses:Auto:Fuel     | Expense | false       |
-Given dated entries are : DatedAccountEntry
+And dated entries are : DatedAccountEntry
 | Date       | Account            | Amount |
 | 2026-03-01 | Assets:Checking    | -40.00 |
 | 2026-03-01 | Expenses:Auto:Fuel | 40.00  |
@@ -600,7 +600,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given dated entries are : DatedAccountEntry
+And dated entries are : DatedAccountEntry
 | Date       | Account            | Amount |
 | 2026-03-01 | Assets:Checking    | -25.00 |
 | 2026-03-01 | Expenses:Groceries | 25.00  |
@@ -623,7 +623,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto           | Expense | true        |
 | Expenses:Auto:Fuel      | Expense | false       |
 | Expenses:Auto:Insurance | Expense | false       |
-Given dated entries are : DatedAccountEntry
+And dated entries are : DatedAccountEntry
 | Date       | Account                 | Amount |
 | 2026-03-01 | Assets:Checking         | -40.00 |
 | 2026-03-01 | Expenses:Auto:Fuel      | 40.00  |
@@ -693,7 +693,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Salary     | Income     | false       |
 | Expenses          | Expense    | true        |
 | Expenses:Fees     | Expense    | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee        | Destination       | Amount   |
 | T1  | Assets:Checking | 2024-03-01 | Acme Payroll | Income:Salary     | 5000.00  |
 | T2  | Assets:Ken IRA  | 2024-03-02 | Vanguard     | Income:Invest Inc | 1200.00  |
@@ -710,7 +710,7 @@ Then report rows are : ReportRow
 | Income            | 0     | 5040.00 | true       |
 | Income:Invest Inc | 1     | 40.00   | false      |
 | Income:Salary     | 1     | 5000.00 | false      |
-Then report total is : ReportTotal Vertical
+And report total is : ReportTotal Vertical
 | TotalIncome   | 5040.00 |
 | TotalExpenses | 0.00    |
 | Net           | 5040.00 |
@@ -729,7 +729,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Salary     | Income     | false       |
 | Expenses          | Expense    | true        |
 | Expenses:Fees     | Expense    | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee        | Destination       | Amount   |
 | T1  | Assets:Checking | 2024-03-01 | Acme Payroll | Income:Salary     | 5000.00  |
 | T2  | Assets:Ken IRA  | 2024-03-02 | Vanguard     | Income:Invest Inc | 1200.00  |
@@ -749,7 +749,7 @@ Then report rows are : ReportRow
 | Income:Salary     | 1     | 5000.00 | false      |
 | Expenses          | 0     | 25.00   | true       |
 | Expenses:Fees     | 1     | 25.00   | false      |
-Then report total is : ReportTotal Vertical
+And report total is : ReportTotal Vertical
 | TotalIncome   | 6240.00 |
 | TotalExpenses | 25.00   |
 | Net           | 6215.00 |
@@ -766,10 +766,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Ken IRA    | Brokerage  | false       |
 | Income            | Income     | true        |
 | Income:Invest Inc | Income     | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount  | Date       | Payee    | Destination | Amount   |
 | T1  | Assets:Ken IRA | 2024-06-01 | Vanguard | Split       | -9000.00 |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination       | Amount   |
 | Assets:Checking   | 10000.00 |
 | Income:Invest Inc | -1000.00 |
@@ -794,7 +794,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Ken IRA    | Brokerage  | false       |
 | Income:Invest Inc | Income     | false       |
 | Income:Salary     | Income     | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee        | Destination       | Amount  |
 | T1  | Assets:Checking | 2024-03-01 | Acme Payroll | Income:Salary     | 5000.00 |
 | T2  | Assets:Ken IRA  | 2024-03-02 | Vanguard     | Income:Invest Inc | 1200.00 |
@@ -838,7 +838,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Due~from~Ken~Pugh~Inc | OtherAsset | false       |
 | Income                       | Income | true        |
 | Income:Salary~Ken            | Income | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount       | Date       | Payee                      | Destination                  | Amount   |
 | T1  | Assets:Ken~Checking | 2021-03-15 | Transfer from Ken Pugh Inc | Assets:Due~from~Ken~Pugh~Inc | 27500.00 |
 | T2  | Assets:Ken~Checking | 2021-03-31 | Acme Payroll               | Income:Salary~Ken            | 1800.00  |
@@ -851,7 +851,7 @@ Then report rows are : ReportRow
 | Account           | Level | Amount  | IsSubtotal |
 | Income            | 0     | 1800.00 | true       |
 | Income:Salary~Ken | 1     | 1800.00 | false      |
-Then report total is : ReportTotal Vertical
+And report total is : ReportTotal Vertical
 | TotalIncome   | 1800.00 |
 | TotalExpenses | 0.00    |
 | Net           | 1800.00 |
@@ -866,7 +866,7 @@ Scenario A payee report over one year
 Description Flat, because payees have no tree, and ordered by amount because
 \ the question being asked is usually which is the largest.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Payee      |
 | From     | 2024-01-01 |
@@ -897,10 +897,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
 | Expenses:Auto:Repairs     | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
 | T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount |
 | Expenses:Home:Maintenance | 100.00 |
 | Expenses:Home:Garden      | 54.50  |
@@ -927,10 +927,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
 | Expenses:Auto:Repairs     | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
 | T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount |
 | Expenses:Home:Maintenance | 100.00 |
 | Expenses:Home:Garden      | 54.50  |
@@ -969,7 +969,7 @@ Description This is the multi-year history, and it is the reason the transaction
 \ are never summarised into a stored total: a column for 2007 is the
 \ same calculation as a column for this year.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2023-01-01 |
@@ -992,7 +992,7 @@ Description An empty column is information: it says nothing happened that year,
 \ which is a different statement from the year being absent from the
 \ report altogether. Nothing was posted in 2025, and 2025 is a column.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2023-01-01 |
@@ -1015,7 +1015,7 @@ Scenario A range that stops inside a year gives a short last column
 Description The column is labelled with the part of the year it covers, so that
 \ a figure covering five months is not read as a whole year.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2023-01-01 |
@@ -1031,7 +1031,7 @@ Description The average is over the columns in the report, not over the years in
 \ which something happened, so a category used twice in three years
 \ averages over three.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When report run with average : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2023-01-01 |
@@ -1108,7 +1108,7 @@ Description Any figure, including a subtotal. A report that cannot be taken
 \ apart is a report that cannot be checked, and over twenty years
 \ every odd-looking number is worth checking.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When report figure opened : ReportCell Vertical
 | Account | Expenses:Auto |
 | From    | 2024-01-01    |
@@ -1202,7 +1202,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Salary           | Income     | false       |
 | Expenses:Groceries      | Expense    | false       |
 | Equity:Opening Balances | Equity     | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee         | Destination             | Amount    |
 | T1  | Assets:Checking  | 2026-01-01 | Opening       | Equity:Opening Balances | 5000.00   |
 | T2  | Assets:House     | 2026-01-01 | Opening       | Split                   | 200000.00 |
@@ -1211,7 +1211,7 @@ Given transactions are : Transaction
 | T5  | Liabilities:Visa | 2026-01-20 | Amazon        | Expenses:Groceries      | -89.99    |
 | T6  | Assets:Checking  | 2026-01-25 | Transfer      | Assets:Savings          | -500.00   |
 | T7  | Assets:Checking  | 2026-03-10 | Acme Payroll  | Income:Salary           | 1000.00   |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination             | Amount     |
 | Liabilities:Mortgage    | -150000.00 |
 | Equity:Opening Balances | -50000.00  |
@@ -1230,7 +1230,7 @@ Then balance sheet rows are : BalanceSheetRow
 | Liabilities | none        | Liabilities:Visa     | 1     | 89.99     | false     | false      |
 | Liabilities | Liabilities | none                 | 0     | 150000.00 | true      | false      |
 | Liabilities | none        | Liabilities:Mortgage | 1     | 150000.00 | false     | false      |
-Then balance sheet total is : NetWorth Vertical
+And balance sheet total is : NetWorth Vertical
 | Assets      | 207955.00 |
 | Liabilities | 150089.99 |
 | NetWorth    | 57865.01  |
@@ -1251,7 +1251,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Visa        | CreditCard | false       |
 | Expenses:Groceries      | Expense    | false       |
 | Equity:Opening Balances | Equity     | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee   | Destination             | Amount  |
 | T1  | Assets:Checking  | 2026-01-05 | Opening | Equity:Opening Balances | 1000.00 |
 | T2  | Liabilities:Visa | 2026-01-10 | Amazon  | Expenses:Groceries      | -50.00  |
@@ -1264,7 +1264,7 @@ Then balance sheet rows are : BalanceSheetRow
 | Section | Group   | Account         | Level | Balance | IsHeading | IsSubtotal |
 | Assets  | Banking | none            | 0     | 950.00  | true      | false      |
 | Assets  | none    | Assets:Checking | 1     | 950.00  | false     | false      |
-Then balance sheet total is : NetWorth Vertical
+And balance sheet total is : NetWorth Vertical
 | Assets      | 950.00 |
 | Liabilities | 0.00   |
 | NetWorth    | 950.00 |
@@ -1284,7 +1284,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Visa        | CreditCard | false       |
 | Expenses:Groceries      | Expense    | false       |
 | Equity:Opening Balances | Equity     | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee   | Destination             | Amount  |
 | T1  | Assets:Checking  | 2026-01-05 | Opening | Equity:Opening Balances | 1000.00 |
 | T2  | Liabilities:Visa | 2026-01-10 | Amazon  | Expenses:Groceries      | -50.00  |
@@ -1301,7 +1301,7 @@ Then balance sheet rows are : BalanceSheetRow
 | Assets      | none        | Assets:Wallet    | 1     | 0.00    | false     | false      |
 | Liabilities | CreditCards | none             | 0     | 0.00    | true      | false      |
 | Liabilities | none        | Liabilities:Visa | 1     | 0.00    | false     | false      |
-Then balance sheet total is : NetWorth Vertical
+And balance sheet total is : NetWorth Vertical
 | Assets      | 950.00 |
 | Liabilities | 0.00   |
 | NetWorth    | 950.00 |
@@ -1318,7 +1318,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Brokerage:Cash   | Brokerage  | false       |
 | Assets:Brokerage:VTSAX  | Brokerage  | false       |
 | Equity:Opening Balances | Equity     | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount          | Date       | Payee   | Destination             | Amount   |
 | T1  | Assets:Brokerage:Cash  | 2026-01-05 | Opening | Equity:Opening Balances | 13500.00 |
 | T2  | Assets:Brokerage:VTSAX | 2026-01-06 | Buy     | Assets:Brokerage:Cash   | 11000.00 |
@@ -1332,7 +1332,7 @@ Then balance sheet rows are : BalanceSheetRow
 | Assets  | none        | Assets:Brokerage       | 1     | 13500.00 | false     | true       |
 | Assets  | none        | Assets:Brokerage:Cash  | 2     | 2500.00  | false     | false      |
 | Assets  | none        | Assets:Brokerage:VTSAX | 2     | 11000.00 | false     | false      |
-Then balance sheet total is : NetWorth Vertical
+And balance sheet total is : NetWorth Vertical
 | Assets      | 13500.00 |
 | Liabilities | 0.00     |
 | NetWorth    | 13500.00 |
@@ -1355,7 +1355,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:In Transit       | TransferIn  | false       |
 | Liabilities:Owed Out    | TransferOut | false       |
 | Equity:Opening Balances | Equity      | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount        | Date       | Payee   | Destination             | Amount  |
 | T1  | Assets:Checking      | 2026-01-05 | Opening | Equity:Opening Balances | 1000.00 |
 | T2  | Assets:In Transit    | 2026-01-06 | Moving  | Assets:Checking         | 250.00  |
@@ -1368,7 +1368,7 @@ Then balance sheet rows are : BalanceSheetRow
 | Section | Group   | Account         | Level | Balance | IsHeading | IsSubtotal |
 | Assets  | Banking | none            | 0     | 825.00  | true      | false      |
 | Assets  | none    | Assets:Checking | 1     | 825.00  | false     | false      |
-Then balance sheet total is : NetWorth Vertical
+And balance sheet total is : NetWorth Vertical
 | Assets      | 825.00 |
 | Liabilities | 0.00   |
 | NetWorth    | 825.00 |
@@ -1387,7 +1387,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking         | Checking | false       | false  |
 | Assets:Old Savings      | Checking | false       | true   |
 | Equity:Opening Balances | Equity | false       | false  |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount      | Date       | Payee   | Destination             | Amount  |
 | T1  | Assets:Checking    | 2026-01-05 | Opening | Equity:Opening Balances | 1000.00 |
 | T2  | Assets:Old Savings | 2026-01-06 | Opening | Equity:Opening Balances | 250.00  |
@@ -1400,7 +1400,7 @@ Then balance sheet rows are : BalanceSheetRow
 | Assets  | Banking | none               | 0     | 1250.00 | true      | false      |
 | Assets  | none    | Assets:Checking    | 1     | 1000.00 | false     | false      |
 | Assets  | none    | Assets:Old Savings | 1     | 250.00  | false     | false      |
-Then balance sheet total is : NetWorth Vertical
+And balance sheet total is : NetWorth Vertical
 | Assets      | 1250.00 |
 | Liabilities | 0.00    |
 | NetWorth    | 1250.00 |
@@ -1435,7 +1435,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Salary           | Income     | false       |
 | Expenses:Groceries      | Expense    | false       |
 | Equity:Opening Balances | Equity     | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee         | Destination             | Amount    |
 | T1  | Assets:Checking  | 2026-01-01 | Opening       | Equity:Opening Balances | 5000.00   |
 | T2  | Assets:House     | 2026-01-01 | Opening       | Split                   | 200000.00 |
@@ -1444,7 +1444,7 @@ Given transactions are : Transaction
 | T5  | Liabilities:Visa | 2026-01-20 | Amazon        | Expenses:Groceries      | -89.99    |
 | T6  | Assets:Checking  | 2026-01-25 | Transfer      | Assets:Savings          | -500.00   |
 | T7  | Assets:Checking  | 2026-03-10 | Acme Payroll  | Income:Salary           | 1000.00   |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination             | Amount     |
 | Liabilities:Mortgage    | -150000.00 |
 | Equity:Opening Balances | -50000.00  |
@@ -1477,7 +1477,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Visa | CreditCard | false       |
 | Income:Salary    | Income     | false       |
 | Expenses:Shopping | Expense   | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee        | Destination       | Amount   |
 | T1  | Assets:Checking  | 2023-06-30 | Acme Payroll | Income:Salary     | 40000.00 |
 | T2  | Liabilities:Visa | 2023-12-01 | Amazon       | Expenses:Shopping | -500.00  |
@@ -1508,7 +1508,7 @@ Description The file is for a spreadsheet, so the grouping separators and the
 \ parentheses of the displayed report are left out and the sign is
 \ written as a minus.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When report exported as csv : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2024-01-01 |

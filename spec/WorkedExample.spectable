@@ -51,7 +51,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Shopping       | Expense    | false       |
 | Expenses:Uncategorized  | Expense    | false       |
 | Income:Uncategorized    | Income     | false       |
-Given the csv profile is : CsvProfile Vertical
+And the csv profile is : CsvProfile Vertical
 | Name         | Bank Download |
 | HasHeader    | true          |
 | DateColumn   | Date          |
@@ -61,9 +61,9 @@ Given the csv profile is : CsvProfile Vertical
 | AmountStyle  | Signed        |
 | AmountColumn | Amount        |
 | OutwardSign  | Negative      |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
-Given the file contains
+And the file contains
 """
 Date,Payee,Check,Amount
 03/02/2026,Acme Payroll,,2500.00
@@ -72,25 +72,25 @@ Date,Payee,Check,Amount
 03/12/2026,Chapel Hill Dental,1022,-140.00
 03/25/2026,Visa Payment,,-200.00
 """
-Given rows imported
-Given import target is : ImportTarget Vertical
+And rows imported
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Savings |
-Given the file contains
+And the file contains
 """
 Date,Payee,Check,Amount
 03/03/2026,Deposit,,1000.00
 03/31/2026,Interest Paid,,1.25
 """
-Given rows imported
-Given import target is : ImportTarget Vertical
+And rows imported
+And import target is : ImportTarget Vertical
 | AccountPath | Liabilities:Car Loan |
-Given the file contains
+And the file contains
 """
 Date,Payee,Check,Amount
 03/10/2026,Interest Charged,,-18.75
 """
-Given rows imported
-Given the csv profile is : CsvProfile Vertical
+And rows imported
+And the csv profile is : CsvProfile Vertical
 | Name         | Card Download |
 | HasHeader    | true          |
 | DateColumn   | Posted        |
@@ -99,16 +99,16 @@ Given the csv profile is : CsvProfile Vertical
 | AmountStyle  | Signed        |
 | AmountColumn | Amount        |
 | OutwardSign  | Negative      |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Liabilities:Visa |
-Given the file contains
+And the file contains
 """
 Posted,Description,Amount
 03/05/2026,SHELL OIL 3344,-52.10
 03/11/2026,AMAZON MARKETPLACE,-129.99
 03/18/2026,HARRIS TEETER #231,-63.40
 """
-Given rows imported
+And rows imported
 
 # ---------------------------------------------------------------------------
 # What arrived
@@ -144,7 +144,7 @@ Then report rows are : ReportRow
 | Income:Uncategorized   | 1     | 3501.25 | false      |
 | Expenses               | 0     | 963.74  | true       |
 | Expenses:Uncategorized | 1     | 963.74  | false      |
-Then report total is : ReportTotal Vertical
+And report total is : ReportTotal Vertical
 | TotalIncome   | 3501.25 |
 | TotalExpenses | 963.74  |
 | Net           | 2537.51 |
@@ -180,7 +180,7 @@ When categories assigned : CategoryAssignment
 | 2026-03-18 | HARRIS TEETER #231 | Expenses:Groceries      |
 | 2026-03-09 | Durham Plumbing    | Expenses:Home:Repairs   |
 | 2026-03-12 | Chapel Hill Dental | Expenses:Medical:Dental |
-When report run : ReportSpec Vertical
+And report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2026-03-01 |
 | To       | 2026-03-31 |
@@ -199,7 +199,7 @@ Then report rows are : ReportRow
 | Expenses:Medical:Dental | 2     | 140.00  | false      |
 | Expenses:Shopping       | 1     | 129.99  | false      |
 | Expenses:Uncategorized  | 1     | 303.25  | false      |
-Then report total is : ReportTotal Vertical
+And report total is : ReportTotal Vertical
 | TotalIncome   | 3501.25 |
 | TotalExpenses | 963.74  |
 | Net           | 2537.51 |
@@ -224,7 +224,7 @@ Description Giving the payment the card account as its category makes the
 When categories assigned : CategoryAssignment
 | Date       | Payee        | Category         |
 | 2026-03-25 | Visa Payment | Liabilities:Visa |
-When report run : ReportSpec Vertical
+And report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2026-03-01 |
 | To       | 2026-03-31 |
@@ -235,11 +235,11 @@ Then report rows are : ReportRow
 | Income:Uncategorized   | 1     | 3501.25 | false      |
 | Expenses               | 0     | 763.74  | true       |
 | Expenses:Uncategorized | 1     | 763.74  | false      |
-Then report total is : ReportTotal Vertical
+And report total is : ReportTotal Vertical
 | TotalIncome   | 3501.25 |
 | TotalExpenses | 763.74  |
 | Net           | 2737.51 |
-Then balances are : AccountBalance
+And balances are : AccountBalance
 | Account          | RawBalance | DisplayBalance | Notes                      |
 | Assets:Checking  | 1800.50    | 1800.50        | A recategory moves nothing |
 | Liabilities:Visa | -45.49     | 45.49          | 245.49 charged, 200.00 paid |

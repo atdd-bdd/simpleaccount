@@ -332,12 +332,12 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Visa  | CreditCard | false       |
 | Expenses          | Expense    | true        |
 | Expenses:Shopping | Expense    | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee    | Destination       | Amount  |
 | T1  | Liabilities:Visa | 2025-03-02 | A Shop   | Expenses:Shopping | -89.99  |
 | T2  | Liabilities:Visa | 2025-03-25 | Card     | Assets:Checking   | 300.00  |
 | T3  | Assets:Checking  | 2025-03-28 | Transfer | Assets:Savings    | -500.00 |
-Given the quicken report states : QuickenFigure
+And the quicken report states : QuickenFigure
 | QuickenLine    | QuickenAmount |
 | Shopping       | 89.99         |
 | TOTAL OUTFLOWS | 89.99         |
@@ -352,7 +352,7 @@ Then comparison lines are : ComparisonLine
 | QuickenLine    | OurAccount        | QuickenAmount | OurAmount | Difference | Agrees |
 | Shopping       | Expenses:Shopping | 89.99         | 89.99     | 0.00       | true   |
 | TOTAL OUTFLOWS | Expenses          | 89.99         | 89.99     | 0.00       | true   |
-Then comparison summary is : ComparisonSummary Vertical
+And comparison summary is : ComparisonSummary Vertical
 | LinesCompared   | 2    |
 | LinesAgreeing   | 2    |
 | LinesDiffering  | 0    |
@@ -383,11 +383,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Income                      | Income     | true        |
 | Income:Dividends            | Income     | false       |
 | Equity:Market Value Changes | Equity     | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount           | Date       | Destination                 | Amount  |
 | T1  | Assets:Portfolio:Cash   | 2025-06-30 | Income:Dividends            | 250.00  |
 | T2  | Assets:Portfolio:A Fund | 2025-06-28 | Equity:Market Value Changes | 1000.00 |
-Given the quicken report states : QuickenFigure
+And the quicken report states : QuickenFigure
 | QuickenLine   | QuickenAmount |
 | Dividends     | 250.00        |
 | TOTAL INFLOWS | 250.00        |
@@ -418,10 +418,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses           | Expense | true        |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Auto      | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
 | T1  | Assets:Checking | 2025-01-15 | Shop A | Expenses:Groceries | -400.00 |
-Given the quicken report states : QuickenFigure
+And the quicken report states : QuickenFigure
 | QuickenLine | QuickenAmount |
 | Groceries   | 450.00        |
 | Auto        | 120.00        |
@@ -436,7 +436,7 @@ Then comparison lines are : ComparisonLine
 | QuickenLine | OurAccount         | QuickenAmount | OurAmount | Difference | Agrees |
 | Groceries   | Expenses:Groceries | 450.00        | 400.00    | 50.00      | false  |
 | Auto        | Expenses:Auto      | 120.00        | 0.00      | 120.00     | false  |
-Then comparison summary is : ComparisonSummary Vertical
+And comparison summary is : ComparisonSummary Vertical
 | LinesCompared   | 2      |
 | LinesAgreeing   | 0      |
 | LinesDiffering  | 2      |
@@ -456,10 +456,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses           | Expense | true        |
 | Expenses:Groceries | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
 | T1  | Assets:Checking | 2025-01-15 | Shop A | Expenses:Groceries | -400.00 |
-Given the quicken report states : QuickenFigure
+And the quicken report states : QuickenFigure
 | QuickenLine | QuickenAmount |
 | Groceries   | 400.00        |
 | Dues        | 75.00         |
@@ -478,7 +478,7 @@ Then comparison summary is : ComparisonSummary Vertical
 | OnlyInOurReport | 0     |
 | TotalDifference | 75.00 |
 | Passes          | false |
-Then lines only in the quicken report are : ComparisonLine CompareOnly
+And lines only in the quicken report are : ComparisonLine CompareOnly
 | QuickenLine | QuickenAmount | OurAmount |
 | Dues        | 75.00         | 0.00      |
 
@@ -493,11 +493,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses           | Expense | true        |
 | Expenses:Groceries | Expense | false       |
 | Expenses:--Split-- | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
 | T1  | Assets:Checking | 2025-01-15 | Shop A | Expenses:Groceries | -400.00 |
 | T2  | Assets:Checking | 2025-01-16 | Shop B | Expenses:--Split-- | -100.00 |
-Given the quicken report states : QuickenFigure
+And the quicken report states : QuickenFigure
 | QuickenLine | QuickenAmount |
 | Groceries   | 400.00        |
 When reports compared : QuickenReport Vertical
@@ -515,7 +515,7 @@ Then comparison summary is : ComparisonSummary Vertical
 | OnlyInOurReport | 1      |
 | TotalDifference | 100.00 |
 | Passes          | false  |
-Then lines only in our report are : ComparisonLine CompareOnly
+And lines only in our report are : ComparisonLine CompareOnly
 | OurAccount         | OurAmount |
 | Expenses:--Split-- | 100.00    |
 
@@ -642,9 +642,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses           | Expense | true        |
 | Expenses:Groceries | Expense | false       |
-Given today is : Today Vertical
+And today is : Today Vertical
 | Date | 2026-10-03 |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
 | T1  | Assets:Checking | 2026-09-15 | Shop A | Expenses:Groceries | -100.00 |
 | T2  | Assets:Checking | 2026-11-20 | Shop B | Expenses:Groceries | -50.00  |
@@ -748,7 +748,7 @@ Description There are two books and several years, so a comparison that did not
 Given migrated books are : MigratedBook
 | Name     | SourceFile      | FirstDate  | LastDate   |
 | business | pughkilleen.QIF | 2005-06-17 | 2026-01-31 |
-Given the quicken report states : QuickenFigure
+And the quicken report states : QuickenFigure
 | QuickenLine | QuickenAmount |
 When reports compared : QuickenReport Vertical
 | Run        | PerYear            |
@@ -889,7 +889,7 @@ When balance report compared : QuickenReport Vertical
 Then comparison summary is : ComparisonSummary CompareOnly
 | Passes |
 | true   |
-Then lines not compared are : LineNotCompared
+And lines not compared are : LineNotCompared
 | QuickenLine                | QuickenAmount | Reason                                   |
 | TOTAL Investment Accounts  | 1422171.38    | The securities side is not imported this round |
 | OVERALL TOTAL              | 1712248.03    | Includes the investment total            |
@@ -918,10 +918,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses               | Expense | true        |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given imported transactions are : ImportedTransaction
+And imported transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  | Cleared   | FitId |
 | T1  | Assets:Checking | 2026-09-15 | Shop A | Expenses:Groceries | -100.00 | Uncleared | none  |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount  | FitId | Name   | Memo | CheckNum |
@@ -968,11 +968,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Dividends         | Income     | false       |
 | Expenses                 | Expense    | true        |
 | Expenses:Investment:Fees | Expense    | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount         | Date       | Destination              | Amount |
 | T1  | Assets:Portfolio:Cash | 2025-06-30 | Income:Dividends         | 250.00 |
 | T2  | Assets:Portfolio:Cash | 2025-07-01 | Expenses:Investment:Fees | -25.00 |
-Given the quicken report states : QuickenFigure
+And the quicken report states : QuickenFigure
 | QuickenLine     | QuickenAmount |
 | Dividends       | 250.00        |
 | Investment:Fees | 25.00         |
@@ -1003,12 +1003,12 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Dividends         | Income     | false       |
 | Expenses                 | Expense    | true        |
 | Expenses:Investment:Fees | Expense    | false       |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name   | Memo | CheckNum |
 | DEBIT   | 2026-09-20 | -60.00 | F2    | SHOP C | none | none     |
-When transactions imported : OfxTransactions
+And transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name   | Memo | CheckNum |
 | DEBIT   | 2026-09-20 | -60.00 | F2    | SHOP C | none | none     |
 Then report rows are : ReportRow

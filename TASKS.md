@@ -8,9 +8,10 @@ Each item says whether a spec table already exists for it. Per CLAUDE.md,
 anything marked **spec first** starts with a `.spectable` and stops for review
 before any production code.
 
-Twenty-two of the first twenty-three items are done. They have moved, in full,
-to `archive/completed-tasks.md`, which is also where the record of what each
-one settled now lives. What follows is what is owed.
+Twenty-three of the twenty-four items are done. They have moved, in full, to
+`archive/completed-tasks.md`, which is also where the record of what each one
+settled now lives. What follows is what is owed: item 17, the half of the
+progress report that wants a thread.
 
 Two traps found while writing those tables, worth knowing before adding to
 them:
@@ -73,34 +74,3 @@ there, is the author's call.
       worse than none. advanceProgress() already returns whether to carry on
       and the callers already read it. *Code left: a tick callback in the
       readers, and the work off this thread.* questions.md 14.
-
-## Last
-
-- [ ] **24. `And` for the second and later steps of a Given, When or Then.**
-      Asked for on 2026-10-23. In a scenario, only the first step of a run
-      needs its keyword: `Given ... And ... And ...` reads the way the author
-      would say it out loud, and the same holds for `When` and `Then`. The spec
-      tables here repeat the keyword on every step, which is how they were
-      first written and not a decision.
-
-      To be done once the defects in hand are fixed, not before, and it is a
-      rewrite of all fourteen files rather than a file at a time. The test for
-      it is exact: **the generated `test_*.cpp` must come out byte-identical.**
-      `And` is the same step as the keyword above it, so nothing about what is
-      generated changes -- as with the 2,851 `#` continuations converted to
-      `\`, where byte-identical output was what said the conversion was sound.
-
-      So: analyze (0 diagnostics), generate into a scratch folder, `diff -r`
-      against the generated folder, and only then commit. A diff means an `And`
-      landed under the wrong keyword, which is the one way this can go wrong --
-      an `And` after a `Then` that was meant to begin a new `When` would be a
-      silently different test.
-
-      Checked before the item was written, on a copy of `spec/` so nothing in
-      the repo moved: `Given`/`And`/`And` in `Payees.spectable` and
-      `Then`/`And` in `AcceptanceAgainstQuicken.spectable` both analyze at 0
-      diagnostics under 0.9.2 and generate test files byte-identical to the
-      ones on disk, 51 tests either way for Payees. So the keyword is accepted
-      and the byte-identical test is a real test. Worth knowing: `And` is not
-      in `spectable syntax v3.3a.md` anywhere, so the converter is the only
-      authority for it -- one for `alignthree-findings.md`.

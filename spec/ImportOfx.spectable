@@ -111,7 +111,7 @@ Then statement is : OfxStatement Vertical
 | EndDate      | 2024-01-31 |
 | LedgerBal    | 1705.00    |
 | LedgerBalAt  | 2024-01-31 |
-Then transactions read are : OfxTransactions
+And transactions read are : OfxTransactions
 | TrnType   | DatePosted | Amount   | FitId       | Name               | Memo     | CheckNum |
 | DEBIT     | 2024-01-15 | -45.00   | 20240115001 | HARRIS TEETER #231 | PURCHASE | none     |
 | CHECK     | 2024-01-18 | -1250.00 | 20240118002 | COUNTY TAX OFFICE  | none     | 2041     |
@@ -149,7 +149,7 @@ Then statement is : OfxStatement Vertical
 | EndDate      | 2024-03-31       |
 | LedgerBal    | -89.99           |
 | LedgerBalAt  | 2024-03-31       |
-Then transactions read are : OfxTransactions
+And transactions read are : OfxTransactions
 | TrnType | DatePosted | Amount | FitId         | Name            | Memo | CheckNum |
 | DEBIT   | 2024-03-05 | -89.99 | CC-20240305-1 | AMAZON MKTPLACE | none | none     |
 
@@ -346,7 +346,7 @@ When statement imported : OfxStatement Vertical
 | BankId       | 053000196  |
 | OfxAccountId | 1234567890 |
 | OfxAcctType  | CHECKING   |
-When import target chosen : ImportTarget Vertical
+And import target chosen : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 Then account numbering is : AccountNumbering
 | Path            | BankId    | AccountNumber |
@@ -396,7 +396,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When ledger balance checked : LedgerBalanceCheck Vertical
 | Account     | Assets:Checking |
@@ -426,13 +426,13 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When ledger balance checked : LedgerBalanceCheck Vertical
 | Account     | Assets:Checking |
 | StatedBal   | 1705.00         |
 | StatedBalAt | 2024-02-29      |
-When ledger balance checked : LedgerBalanceCheck Vertical
+And ledger balance checked : LedgerBalanceCheck Vertical
 | Account     | Assets:Checking |
 | StatedBal   | 1900.00         |
 | StatedBalAt | 2024-01-31      |
@@ -454,12 +454,12 @@ When statement imported : OfxStatement Vertical
 | BankId       | 053000196  |
 | OfxAccountId | 1234567890 |
 | OfxAcctType  | CHECKING   |
-When import target chosen : ImportTarget Vertical
+And import target chosen : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 Then account numbering is : AccountNumbering
 | Path            | BankId    | AccountNumber |
 | Assets:Checking | 053000196 | 0012-3456     |
-Then import finishes with : ImportCompletion Vertical CompareOnly
+And import finishes with : ImportCompletion Vertical CompareOnly
 | NoteCount | 1 |
 
 Scenario A bank id arrives for an account that only knew its number
@@ -478,7 +478,7 @@ When statement imported : OfxStatement Vertical
 Then import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 | Asked       | false           |
-Then account numbering is : AccountNumbering
+And account numbering is : AccountNumbering
 | Path            | BankId    | AccountNumber |
 | Assets:Checking | 053000196 | 1234567890    |
 # Nobody was asked -- the number was enough to place it -- and the routing
@@ -747,7 +747,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder | BankId    | AccountNumber |
 | Assets:Checking        | Checking | false       | 053000196 | 1234567890    |
 | Expenses:Uncategorized | Expense  | false       | none      | none          |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name          | Memo | CheckNum |
@@ -765,7 +765,7 @@ Then import summary is : ImportSummary Vertical
 | New       | 0 |
 | Duplicate | 1 |
 | Possible  | 0 |
-Then balances are : AccountBalance
+And balances are : AccountBalance
 | Account         | RawBalance | DisplayBalance | Notes                  |
 | Assets:Checking | -45.00     | -45.00         | Imported once, not twice |
 
@@ -784,10 +784,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking   | false       |
 | Liabilities:Visa       | CreditCard | false       |
 | Expenses:Uncategorized | Expense    | false       |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Destination | Amount | FitId |
 | T1  | Assets:Checking | 2024-01-15 | none        | -45.00 | 00001 |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Liabilities:Visa |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name       | Memo | CheckNum |
@@ -825,10 +825,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Home:Rates    | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee             | CheckNo | Destination         | Amount   | Cleared   | FitId |
 | T1  | Assets:Checking | 2024-01-02 | County Tax Office | 2041    | Expenses:Home:Rates | -1250.00 | Uncleared | none  |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount   | FitId       | Name              | Memo | CheckNum |
@@ -837,10 +837,10 @@ Then import summary is : ImportSummary Vertical
 | New       | 0 |
 | Duplicate | 1 |
 | Possible  | 0 |
-Then transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee             | CheckNo | Destination         | Amount   | Cleared | FitId       |
 | T1  | Assets:Checking | 2024-01-02 | County Tax Office | 2041    | Expenses:Home:Rates | -1250.00 | Cleared | 20240103002 |
-Then transaction notes are : TransactionNote
+And transaction notes are : TransactionNote
 | Ref | Note            |
 | T1  | CheckNumberSame |
 | T1  | Uncleared       |
@@ -867,10 +867,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Auto:Fuel     | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee | Destination        | Amount | Cleared | FitId |
 | T1  | Assets:Checking | 2024-01-15 | Shell | Expenses:Auto:Fuel | -45.00 | Cleared | none  |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name               | Memo | CheckNum |
@@ -879,10 +879,10 @@ Then import summary is : ImportSummary Vertical
 | New       | 0 |
 | Duplicate | 1 |
 | Possible  | 0 |
-Then transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee | Destination        | Amount | Cleared | FitId       |
 | T1  | Assets:Checking | 2024-01-15 | Shell | Expenses:Auto:Fuel | -45.00 | Cleared | 20240115001 |
-Then transaction notes are : TransactionNote
+And transaction notes are : TransactionNote
 | Ref | Note           |
 | T1  | PayeeUnmatched |
 | T1  | FitIdAdded     |
@@ -907,10 +907,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared   | FitId |
 | T1  | Assets:Checking | 2024-01-14 | Harris Teeter | Expenses:Groceries | -45.00 | Uncleared | none  |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name               | Memo | CheckNum |
@@ -930,10 +930,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared   | FitId |
 | T1  | Assets:Checking | 2024-01-14 | Harris Teeter | Expenses:Groceries | -45.00 | Uncleared | none  |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name               | Memo | CheckNum |
@@ -961,10 +961,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared | FitId |
 | T1  | Assets:Checking | 2024-01-16 | Harris Teeter | Expenses:Groceries | -45.00 | Cleared | none  |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name               | Memo | CheckNum |
@@ -973,7 +973,7 @@ Then import summary is : ImportSummary Vertical
 | New       | 0 |
 | Duplicate | 1 |
 | Possible  | 0 |
-Then transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared | FitId       |
 | T1  | Assets:Checking | 2024-01-16 | Harris Teeter | Expenses:Groceries | -45.00 | Cleared | 20240116009 |
 # One transaction, the one that was already there. It keeps the payee and the
@@ -990,10 +990,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared | FitId |
 | T1  | Assets:Checking | 2024-01-16 | Harris Teeter | Expenses:Groceries | -45.00 | Cleared | none  |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name               | Memo | CheckNum |
@@ -1025,10 +1025,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Joint Checking  | Checking | false       |
 | Assets:Ken Checking    | Checking | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount         | Date       | Payee           | Destination         | Amount   | Cleared | FitId       |
 | T1  | Assets:Joint Checking | 2026-09-30 | TO KEN CHECKING | Assets:Ken Checking | -3000.00 | Cleared | 20260930001 |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Ken Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount  | FitId       | Name               | Memo | CheckNum |
@@ -1037,7 +1037,7 @@ Then import summary is : ImportSummary Vertical
 | New       | 0 |
 | Duplicate | 1 |
 | Possible  | 0 |
-Then transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount         | Date       | Payee           | Destination         | Amount   | Cleared | FitId       |
 | T1  | Assets:Joint Checking | 2026-09-30 | TO KEN CHECKING | Assets:Ken Checking | -3000.00 | Cleared | 20260930001 |
 # One transaction, untouched: it keeps the identifier the joint account's own
@@ -1052,7 +1052,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name    | Memo | CheckNum |
@@ -1071,7 +1071,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name               | Memo     | CheckNum |
@@ -1215,17 +1215,17 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Home:Rates    | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee             | CheckNo | Destination         | Amount   | Cleared   | FitId |
 | T1  | Assets:Checking | 2024-01-02 | County Tax Office | 2041    | Expenses:Home:Rates | -1250.00 | Uncleared | none  |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount   | FitId       | Name              | Memo | CheckNum |
 | CHECK   | 2024-01-18 | -1250.00 | 20240118002 | COUNTY TAX OFFICE | none | 2041     |
 Then import summary is : ImportSummary Vertical
 | New      | 1 |
-Then import notes are : ImportNote
+And import notes are : ImportNote
 | Kind             | Detail                                                       |
 | CheckNumberStale | Check 2041 is dated 2024-01-02 here and 2024-01-18 in the file |
 # The one entered by hand is untouched and uncleared; the downloaded one is a
@@ -1248,15 +1248,15 @@ Description The same check sixteen days later, in a book whose window is thirty
 \ records checks when they are written needs.
 Given the book setting is : BookSetting Vertical
 | CheckWindowDays | 30 |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Home:Rates    | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee             | CheckNo | Destination         | Amount   | Cleared   | FitId |
 | T1  | Assets:Checking | 2024-01-02 | County Tax Office | 2041    | Expenses:Home:Rates | -1250.00 | Uncleared | none  |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount   | FitId       | Name              | Memo | CheckNum |
@@ -1264,7 +1264,7 @@ When transactions imported : OfxTransactions
 Then import summary is : ImportSummary Vertical
 | New       | 0 |
 | Duplicate | 1 |
-Then import notes are : ImportNote
+And import notes are : ImportNote
 | Kind | Detail |
 # No note: inside the window the number is trusted, so there is nothing a
 # person needs to decide. This is the one thing no other test can do -- every
@@ -1289,10 +1289,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee   | CheckNo | Destination            | Amount  | Cleared   | FitId |
 | T1  | Assets:Checking | 2024-03-01 | Plumber | 3100    | Expenses:Uncategorized | -420.00 | Uncleared | none  |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount  | FitId | Name    | Memo | CheckNum |
@@ -1358,10 +1358,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared   | FitId |
 | T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Uncleared | none  |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name          | Memo | CheckNum |
@@ -1372,7 +1372,7 @@ Then import summary is : ImportSummary Vertical
 When the possible duplicate is answered : PossibleResolution Vertical
 | FitId  | F003    |
 | Answer | TheSame |
-When the possible duplicate is answered : PossibleResolution Vertical
+And the possible duplicate is answered : PossibleResolution Vertical
 | FitId  | F004      |
 | Answer | Different |
 Then transactions are : ImportedTransaction
@@ -1399,19 +1399,19 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared   | FitId |
 | T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Uncleared | none  |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name          | Memo | CheckNum |
 | DEBIT   | 2026-02-05 | -88.20 | F003  | HARRIS TEETER | none | none     |
 | DEBIT   | 2026-02-05 | -88.20 | F004  | HARRIS TEETER | none | none     |
-When the possible duplicate is answered : PossibleResolution Vertical
+And the possible duplicate is answered : PossibleResolution Vertical
 | FitId  | F003      |
 | Answer | Different |
-When the possible duplicate is answered : PossibleResolution Vertical
+And the possible duplicate is answered : PossibleResolution Vertical
 | FitId  | F004      |
 | Answer | Different |
 Then transactions are : ImportedTransaction
@@ -1433,10 +1433,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared   | FitId |
 | T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Uncleared | none  |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name          | Memo | CheckNum |
@@ -1444,7 +1444,7 @@ When transactions imported : OfxTransactions
 | DEBIT   | 2026-02-05 | -88.20 | F004  | HARRIS TEETER | none | none     |
 Then import summary is : ImportSummary Vertical
 | Possible | 2 |
-Then transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared   | FitId |
 | T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 | Uncleared | none  |
 # Unchanged, and neither identifier is anywhere, so the same file asks the same
@@ -1602,7 +1602,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking   | false       |
 | Liabilities:Chase Visa | CreditCard | false       |
 | Expenses:Uncategorized | Expense    | false       |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount   | FitId  | Name      | Memo | CheckNum |
@@ -1610,7 +1610,7 @@ When transactions imported : OfxTransactions
 Then transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Payee     | Destination            | Amount   | Cleared | FitId  |
 | T1  | Assets:Checking | 2026-04-10 | CHASEBANK | Expenses:Uncategorized | -1200.00 | Cleared | BNK-77 |
-Then transfer candidates are : TransferCandidate
+And transfer candidates are : TransferCandidate
 | FromAccount | FromDate | ToAccount | ToDate | Amount | DaysApart | State |
 # No rows: the card has not been read, so there is no other half to find.
 # Uncategorized, and no staging account: a payment whose other side is not
@@ -1685,7 +1685,7 @@ Then transactions are : ImportedTransaction
 | Ref | SourceAccount         | Date       | Payee                      | Destination           | Amount   | Cleared | FitId      |
 | T1  | Assets:Checking       | 2026-07-31 | TO PUGH K CHECKING         | Assets:Checking Prime | -3000.00 | Cleared | 2026073102 |
 | T2  | Assets:Checking Prime | 2026-07-31 | FROM PUGH K PRIME CHECKING | Assets:Checking       | 3000.00  | Cleared | 2026073101 |
-Then import summary is : ImportSummary Vertical
+And import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 0 |
 | Possible  | 0 |
@@ -1763,7 +1763,7 @@ When statements imported : OfxImportFile
 Then transfer candidates are : TransferCandidate
 | FromAccount | FromDate | ToAccount | ToDate | Amount | DaysApart | State |
 # No rows.
-Then import summary is : ImportSummary Vertical
+And import summary is : ImportSummary Vertical
 | New       | 2 |
 | Duplicate | 0 |
 | Possible  | 0 |
@@ -1804,7 +1804,7 @@ When statements imported : OfxImportFile
 Then confirmation dialog shows : ConfirmationRow
 | FromAccount           | FromName                | ToAccount           | ToName                      | Amount  | DaysApart | Choices                          |
 | Assets:Checking Prime | WF Credit Card AUTO PAY | Liabilities:WF Card | AUTOMATIC PAYMENT THANK YOU | 3508.09 | 2         | Approve, Reject, ApproveAndRemember |
-Then import preview is : ImportPreview Vertical
+And import preview is : ImportPreview Vertical
 | NewTransactions    | 0     |
 | Duplicates         | 0     |
 | MatchedToExisting  | 0     |
@@ -1835,7 +1835,7 @@ When statements imported : OfxImportFile
 | OfxAccountId     | TrnType | DatePosted | Amount   | FitId | Name            |
 | 1023711843105    | DEBIT   | 2026-08-03 | -500.00  | C9    | PAYMENT TO SHOP |
 | 4111111111111333 | CREDIT  | 2026-08-03 | 500.00   | V9    | REFUND          |
-When candidate rejected : TransferCandidate Vertical CompareOnly
+And candidate rejected : TransferCandidate Vertical CompareOnly
 | FromAccount | Assets:Checking Prime |
 | ToAccount   | Liabilities:WF Card   |
 | Amount      | 500.00                |
@@ -1843,7 +1843,7 @@ Then transactions are : ImportedTransaction
 | Ref | SourceAccount         | Date       | Payee           | Destination            | Amount  | Cleared | FitId |
 | T1  | Assets:Checking Prime | 2026-08-03 | PAYMENT TO SHOP | Expenses:Uncategorized | -500.00 | Cleared | C9    |
 | T2  | Liabilities:WF Card   | 2026-08-03 | REFUND          | Income:Uncategorized   | 500.00  | Cleared | V9    |
-Then import summary is : ImportSummary Vertical
+And import summary is : ImportSummary Vertical
 | New       | 2 |
 | Duplicate | 0 |
 | Possible  | 0 |
@@ -1930,7 +1930,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       | 053000219 | 1023711843112 |
 | Expenses:Uncategorized | Expense  | false       | none      | none          |
 | Income:Uncategorized   | Income   | false       | none      | none          |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount         | Date       | Payee     | Destination            | Amount  | Cleared   | FitId |
 | T0  | Assets:Checking Prime | 2026-08-03 | A Payment | Expenses:Uncategorized | -750.00 | Uncleared | none  |
 When statements imported : OfxImportFile
@@ -1941,7 +1941,7 @@ Then import summary is : ImportSummary Vertical
 | New       | 1 |
 | Duplicate | 1 |
 | Possible  | 0 |
-Then transfer candidates are : TransferCandidate
+And transfer candidates are : TransferCandidate
 | FromAccount | FromDate | ToAccount | ToDate | Amount | DaysApart | State |
 # No rows: the bank half cleared the transaction that was already entered, so
 # there is nothing left to pair the card half with.
@@ -2001,7 +2001,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:WF Card    | CreditCard | false       | none      | 4111111111111333 |
 | Expenses:Uncategorized | Expense    | false       | none      | none             |
 | Income:Uncategorized   | Income     | false       | none      | none             |
-Given transfer match rules are : TransferMatchRules
+And transfer match rules are : TransferMatchRules
 | FromAccount           | FromPattern             | ToAccount           | ToPattern         |
 | Assets:Checking Prime | WF Credit Card AUTO PAY | Liabilities:WF Card | AUTOMATIC PAYMENT |
 When statements imported : OfxImportFile
@@ -2011,7 +2011,7 @@ When statements imported : OfxImportFile
 Then transfer candidates are : TransferCandidate
 | FromAccount           | FromDate   | ToAccount           | ToDate     | Amount  | DaysApart | State     |
 | Assets:Checking Prime | 2026-09-01 | Liabilities:WF Card | 2026-09-01 | 2026.95 | 0         | Automatic |
-Then transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount         | Date       | Payee                       | Destination           | Amount   | Cleared | FitId |
 | T1  | Assets:Checking Prime | 2026-09-01 | WF Credit Card AUTO PAY     | Liabilities:WF Card   | -2026.95 | Cleared | C2    |
 | T2  | Liabilities:WF Card   | 2026-09-01 | AUTOMATIC PAYMENT THANK YOU | Assets:Checking Prime | 2026.95  | Cleared | V2    |
@@ -2026,7 +2026,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:WF Card    | CreditCard | false       | none      | 4111111111111333 |
 | Expenses:Uncategorized | Expense    | false       | none      | none             |
 | Income:Uncategorized   | Income     | false       | none      | none             |
-Given transfer match rules are : TransferMatchRules
+And transfer match rules are : TransferMatchRules
 | FromAccount           | FromPattern             | ToAccount           | ToPattern         |
 | Assets:Checking Prime | WF Credit Card AUTO PAY | Liabilities:WF Card | AUTOMATIC PAYMENT |
 When statements imported : OfxImportFile
@@ -2078,15 +2078,15 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Destination | Amount  | Cleared | FitId |
 | T0  | Assets:Checking | 2024-01-01 | none        | 1750.00 | Cleared | none  |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name          | Memo | CheckNum |
 | DEBIT   | 2024-01-15 | -45.00 | 20240115001 | HARRIS TEETER | none | none     |
-When ledger balance checked : LedgerBalanceCheck Vertical
+And ledger balance checked : LedgerBalanceCheck Vertical
 | Account     | Assets:Checking |
 | StatedBal   | 1705.00         |
 | StatedBalAt | 2024-01-31      |
@@ -2117,7 +2117,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Destination | Amount  | Cleared | FitId |
 | T0  | Assets:Checking | 2024-01-01 | none        | 1750.00 | Cleared | none  |
 | T9  | Assets:Checking | 2024-01-20 | none        | -100.00 | Cleared | none  |
@@ -2138,7 +2138,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : ImportedTransaction
+And transactions are : ImportedTransaction
 | Ref | SourceAccount   | Date       | Destination | Amount  | Cleared   | FitId |
 | T0  | Assets:Checking | 2024-01-01 | none        | 1750.00 | Cleared   | none  |
 | T9  | Assets:Checking | 2024-01-29 | none        | -250.00 | Uncleared | none  |

@@ -93,12 +93,12 @@ Scenario A category in one book is not in the other
 Description The business book has categories the personal one has no use for,
 \ and the pickers in each offer only their own.
 Given books are as previous
-Given the chart of accounts of Business is : ChartOfAccounts
+And the chart of accounts of Business is : ChartOfAccounts
 | Path                     | Type    | Placeholder |
 | Expenses                 | Expense | true        |
 | Expenses:Consulting Fees | Expense | false       |
 | Expenses:Groceries       | Expense | false       |
-Given the chart of accounts of Personal is : ChartOfAccounts
+And the chart of accounts of Personal is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Expenses           | Expense | true        |
 | Expenses:Groceries | Expense | false       |
@@ -114,10 +114,10 @@ Description The rules are learned from categorising, and a category learned in
 \ the business book names a business category. Applying it in the
 \ personal book would either fail or create that category there.
 Given books are as previous
-Given payee rules of Business are : PayeeRules
+And payee rules of Business are : PayeeRules
 | Pattern | MatchType | Payee  | Category                 |
 | STAPLES | Contains  | Office | Expenses:Consulting Fees |
-Given payee rules of Personal are : PayeeRules
+And payee rules of Personal are : PayeeRules
 | Pattern | MatchType | Payee | Category |
 Then payee rules in force in Personal are : PayeeRules
 | Pattern | MatchType | Payee | Category |
@@ -132,14 +132,14 @@ Description The headings of a CSV file from a bank are the same whichever
 \ on its own would be the permanent cost, and it is the larger one.
 \ The second book asks, and what it is told becomes its own profile.
 Given books are as previous
-Given saved profiles of Business are : SavedProfile
+And saved profiles of Business are : SavedProfile
 | Name         | Signature                                      |
 | Example Bank | Posted Date,Description,Amount,Running Balance |
-Given saved profiles of Personal are : SavedProfile
+And saved profiles of Personal are : SavedProfile
 | Name | Signature |
-Given the current book is : CurrentBook Vertical
+And the current book is : CurrentBook Vertical
 | Name | Personal |
-Given the file contains
+And the file contains
 """
 Posted Date,Description,Amount,Running Balance
 01/15/2024,A SHOP,-45.00,1705.00
@@ -165,13 +165,13 @@ Description Two accounts at one bank, one business and one personal, have two
 \ book that is open. Finding the number in the other book would post
 \ business money to a personal account.
 Given books are as previous
-Given the chart of accounts of Business is : ChartOfAccounts
+And the chart of accounts of Business is : ChartOfAccounts
 | Path            | Type     | Placeholder | BankId    | AccountNumber |
 | Assets:Checking | Checking | false       | 053000196 | 1111111111    |
-Given the chart of accounts of Personal is : ChartOfAccounts
+And the chart of accounts of Personal is : ChartOfAccounts
 | Path            | Type     | Placeholder | BankId    | AccountNumber |
 | Assets:Checking | Checking | false       | 053000196 | 2222222222    |
-Given the current book is : CurrentBook Vertical
+And the current book is : CurrentBook Vertical
 | Name | Personal |
 When statement imported : OfxStatement Vertical
 | BankId       | 053000196  |
@@ -195,10 +195,10 @@ Description The check from Transactions is per book. A book is never balanced
 \ by something in another one, which is what makes each set of
 \ figures defensible on its own.
 Given books are as previous
-Given transactions of Business are : Transaction
+And transactions of Business are : Transaction
 | Ref | SourceAccount   | Date       | Destination              | Amount |
 | B1  | Assets:Checking | 2025-01-15 | Expenses:Consulting Fees | -45.00 |
-Given transactions of Personal are : Transaction
+And transactions of Personal are : Transaction
 | Ref | SourceAccount   | Date       | Destination        | Amount |
 | P1  | Assets:Checking | 2025-01-16 | Expenses:Groceries | -20.00 |
 When each book checked
@@ -220,7 +220,7 @@ Description A transaction names an account, and the accounts of another book are
 \ not in scope. There is no syntax for it and no account picker that
 \ offers it, so this is what happens if a path is typed in.
 Given books are as previous
-Given the current book is : CurrentBook Vertical
+And the current book is : CurrentBook Vertical
 | Name | Personal |
 When register entry committed : RegisterEntry Vertical
 | Account  | Assets:Checking          |
@@ -247,11 +247,11 @@ Details Nothing links the two records. Making the second is the work the two
 \ books cost, and it is a handful of transactions a year against the
 \ certainty that no business report includes household spending.
 Given books are as previous
-Given the chart of accounts of Business is : ChartOfAccounts
+And the chart of accounts of Business is : ChartOfAccounts
 | Path                | Type   | Placeholder |
 | Assets:Checking     | Checking | false       |
 | Equity:Owner Draw   | Equity | false       |
-Given the chart of accounts of Personal is : ChartOfAccounts
+And the chart of accounts of Personal is : ChartOfAccounts
 | Path                   | Type   | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Equity:Owner Draw      | Equity | false       |
@@ -263,7 +263,7 @@ When draw recorded : OwnerDraw Vertical
 Then transactions of Business are : Transaction
 | Ref | SourceAccount   | Date       | Destination       | Amount   |
 | B1  | Assets:Checking | 2025-04-01 | Equity:Owner Draw | -4000.00 |
-Then transactions of Personal are : Transaction
+And transactions of Personal are : Transaction
 | Ref | SourceAccount   | Date       | Destination       | Amount  |
 | P1  | Assets:Checking | 2025-04-01 | Equity:Owner Draw | 4000.00 |
 When each book checked
@@ -285,7 +285,7 @@ Description It would be counted twice: once as business income when it was
 \ nominal, so it moves net worth without entering an income report.
 \ This is the same reasoning as market value changes in Investments.
 Given books are as previous
-Given transactions of Personal are : Transaction
+And transactions of Personal are : Transaction
 | Ref | SourceAccount   | Date       | Destination       | Amount  |
 | P1  | Assets:Checking | 2025-04-01 | Equity:Owner Draw | 4000.00 |
 When report run : ReportSpec Vertical
@@ -295,11 +295,11 @@ When report run : ReportSpec Vertical
 | Interval | Whole      |
 Then report rows are : ReportRow
 | Account | Level | Amount | IsSubtotal |
-Then report total is : ReportTotal Vertical
+And report total is : ReportTotal Vertical
 | TotalIncome   | 0.00 |
 | TotalExpenses | 0.00 |
 | Net           | 0.00 |
-Then net worth is : NetWorth Vertical
+And net worth is : NetWorth Vertical
 | Assets      | 4000.00 |
 | Liabilities | 0.00    |
 | NetWorth    | 4000.00 |
@@ -523,7 +523,7 @@ When a qif profile is saved named : QifProfileSaved Vertical
 Then the qif profiles are : QifProfileRow
 | Name         | DateOrder | DecimalComma | InvestmentMode |
 | Quicken 2026 | MDY       | false        | CashOnly       |
-Then the book names are : BookNameRow
+And the book names are : BookNameRow
 | Name |
 # The settings file is not a book, so it is not offered as one.
 
@@ -569,11 +569,11 @@ Description The round trip is the whole of what storage has to do, so it is
 \ a transaction naming both its accounts, its memo, and its cleared
 \ status.
 Given a new book named Business
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo   | Cleared |
 | T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Apples | Cleared |
 When the book is saved and opened again
@@ -581,7 +581,7 @@ Then the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Then transaction is : Transaction Vertical CompareOnly
+And transaction is : Transaction Vertical CompareOnly
 | Ref           | T1                 |
 | SourceAccount | Assets:Checking    |
 | Destination   | Expenses:Groceries |
@@ -598,19 +598,19 @@ Description Which two rows were matched is a fact about the book, not a thing
 \ A save that dropped it would bring the book back with both rows
 \ showing in both registers and the money counted twice.
 Given a new book named Business
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder |
 | Assets:Checking        | Checking   | false       |
 | Liabilities:Chase Visa | CreditCard | false       |
 | Unassigned             | OtherAsset | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount          | Date       | Payee            | Destination | Amount   |
 | T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | Unassigned  | -1200.00 |
 | T2  | Liabilities:Chase Visa | 2026-04-25 | PAYMENT RECEIVED | Unassigned  | 1200.00  |
 When the other entry is matched : EntryMatch Vertical
 | Ref      | T1 |
 | OtherRef | T2 |
-When the book is saved and opened again
+And the book is saved and opened again
 Then transactions are : Transaction
 | Ref | SourceAccount          | Date       | Payee            | Destination            | Amount   | Memo | Cleared   | MatchedTo |
 | T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | Liabilities:Chase Visa | -1200.00 | none | Uncleared | T2        |
@@ -670,20 +670,20 @@ Description And the transaction beside it, which nobody touched, reads back as
 \ it was. Both halves matter: the edit has to reach the file, and
 \ reaching it must not disturb anything else.
 Given a new book named Business
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo   | Cleared   |
 | T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Apples | Cleared   |
 | T2  | Assets:Checking | 2026-01-16 | Lowes         | Expenses:Groceries | -12.00 | Nails  | Uncleared |
 When the book is saved
-When transactions become : Transaction
+And transactions become : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo             | Cleared   |
 | T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -52.00 | Apples and pears | Cleared   |
 | T2  | Assets:Checking | 2026-01-16 | Lowes         | Expenses:Groceries | -12.00 | Nails            | Uncleared |
-When the book is saved and opened again
+And the book is saved and opened again
 Then transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo             | Cleared   |
 | T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -52.00 | Apples and pears | Cleared   |
@@ -698,28 +698,28 @@ Description Along with its split lines. A transaction is deleted from the
 \ the file, they would be read back as a split of a transaction
 \ that no longer exists.
 Given a new book named Business
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
 | Expenses:Household | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo   | Cleared   |
 | T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Split              | -45.00 | none   | Cleared   |
 | T2  | Assets:Checking | 2026-01-16 | Lowes         | Expenses:Groceries | -12.00 | Nails  | Uncleared |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination        | Amount | Memo   |
 | Expenses:Groceries | 30.00  | Apples |
 | Expenses:Household | 15.00  | Soap   |
 When the book is saved
-When transactions become : Transaction
+And transactions become : Transaction
 | Ref | SourceAccount   | Date       | Payee | Destination        | Amount | Memo  | Cleared   |
 | T2  | Assets:Checking | 2026-01-16 | Lowes | Expenses:Groceries | -12.00 | Nails | Uncleared |
-When the book is saved and opened again
+And the book is saved and opened again
 Then transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee | Destination        | Amount | Memo  | Cleared   |
 | T2  | Assets:Checking | 2026-01-16 | Lowes | Expenses:Groceries | -12.00 | Nails | Uncleared |
-Then split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination | Amount | Memo |
 # No rows: T1's two lines went with it.
 
@@ -728,23 +728,23 @@ Description The split had two lines and now has one. The line that went has to
 \ go from the file as well, because a save that wrote the lines it
 \ has and left the rest would read the split back as seventy-five.
 Given a new book named Business
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
 | Expenses:Household | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination | Amount | Memo | Cleared |
 | T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Split       | -45.00 | none | Cleared |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination        | Amount | Memo   |
 | Expenses:Groceries | 30.00  | Apples |
 | Expenses:Household | 15.00  | Soap   |
 When the book is saved
-When split lines become : TransactionSplit
+And split lines become : TransactionSplit
 | Destination        | Amount | Memo   |
 | Expenses:Groceries | 45.00  | Apples |
-When the book is saved and opened again
+And the book is saved and opened again
 Then split lines are : TransactionSplit
 | Destination        | Amount | Memo   |
 | Expenses:Groceries | 45.00  | Apples |
@@ -754,20 +754,20 @@ Description The common case while somebody is reading rather than typing. A save
 \ with nothing to write is still a save: it may not empty anything,
 \ and what was there is read back whole.
 Given a new book named Business
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo   | Cleared |
 | T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Apples | Cleared |
 When the book is saved
-When the book is saved and opened again
+And the book is saved and opened again
 Then the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Then transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo   | Cleared |
 | T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Apples | Cleared |
 
@@ -777,16 +777,16 @@ Description The account kept its identity and changed its name, so the file has
 \ under the new name. The account renamed here is one no transaction
 \ names, so what is under test is the chart alone.
 Given a new book named Business
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Assets:Savings     | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
 When the book is saved
-When account renamed : AccountRename Vertical
+And account renamed : AccountRename Vertical
 | Path    | Assets:Savings |
 | NewName | Rainy Day      |
-When the book is saved and opened again
+And the book is saved and opened again
 Then the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
@@ -799,15 +799,15 @@ Scenario A payee rule added after a save leaves the earlier rules alone
 Description Rules are learned one at a time, as categories are chosen, so this
 \ is the shape of nearly every save the rules table ever sees.
 Given a new book named Business
-Given payee rules of Business are : PayeeRules
+And payee rules of Business are : PayeeRules
 | Pattern | MatchType | Payee  |
 | STAPLES | Contains  | Office |
 When the book is saved
-When payee rules become : PayeeRules
+And payee rules become : PayeeRules
 | Pattern       | MatchType | Payee         |
 | STAPLES       | Contains  | Office        |
 | HARRIS TEETER | Contains  | Harris Teeter |
-When the book is saved and opened again
+And the book is saved and opened again
 Then payee rules in force in Business are : PayeeRules
 | Pattern       | MatchType | Payee         |
 | STAPLES       | Contains  | Office        |
@@ -920,7 +920,7 @@ Description A window is open on one book and every register, report and import
 Given books are as previous
 When book opened : BookOpen Vertical
 | Name | Business |
-When book opened : BookOpen Vertical
+And book opened : BookOpen Vertical
 | Name | Personal |
 Then windows are : BookWindow
 | Window | Book     |
@@ -943,7 +943,7 @@ Description Two windows on one book would let the same transaction be edited
 Given books are as previous
 When book opened : BookOpen Vertical
 | Name | Business |
-When book opened : BookOpen Vertical
+And book opened : BookOpen Vertical
 | Name | Business |
 Then windows are : BookWindow
 | Window | Book     |
@@ -954,7 +954,7 @@ Description Two reports of the same period from two books look alike, and the
 \ figures are not comparable. The name is on the report so that a
 \ printed one can be told from the other.
 Given books are as previous
-Given the current book is : CurrentBook Vertical
+And the current book is : CurrentBook Vertical
 | Name | Business |
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
@@ -1003,9 +1003,9 @@ Description The business export may name an account that lives in the personal
 \ bracketed name it has not seen. Whether the two should be joined
 \ afterwards is a judgement, and it is left to the user.
 Given no books exist
-Given the current book is : CurrentBook Vertical
+And the current book is : CurrentBook Vertical
 | Name | Business |
-Given the file contains
+And the file contains
 """
 !Type:Bank
 D4/ 1'25
@@ -1014,14 +1014,14 @@ POwner draw
 L[Personal Checking]
 ^
 """
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When qif file imported
 Then accounts created are : ChartOfAccounts CompareOnly
 | Path                     |
 | Assets:Checking          |
 | Assets:Personal Checking |
-Then migration notes are : MigrationNote
+And migration notes are : MigrationNote
 | Kind           | Detail                                                        |
 | AccountGuessed | "[Personal Checking]" was not in the account list; made Assets:Personal Checking of type Bank |
 # In the business book this is an asset: money the business has placed outside
@@ -1072,7 +1072,7 @@ Description The only scenario in this specification that states an id. It can,
 \ where they all do. Assets and Expenses are the two groups here, and
 \ each is numbered before the account under it.
 Given a new book named Business
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets             | Checking | true        |
 | Assets:Checking    | Checking | false       |
@@ -1085,7 +1085,7 @@ Then account ids are : AccountIdentity
 | Assets:Checking    | 2  | false       |
 | Expenses           | 3  | true        |
 | Expenses:Groceries | 4  | false       |
-Then the book records : IdCounter Vertical
+And the book records : IdCounter Vertical
 | LastIdUsed | 4 |
 # Four nodes, four ids, and the book opens again counting from four. Deleting
 # Expenses:Groceries would leave it at four, and the next account made would be

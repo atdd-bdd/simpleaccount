@@ -113,7 +113,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Visa       | CreditCard | false       |
 | Expenses:Groceries     | Expense    | false       |
 | Income:Salary          | Income     | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee         | Destination        | Amount  |
 | T1  | Assets:Checking  | 2026-01-05 | Acme Payroll  | Income:Salary      | 3000.00 |
 | T2  | Assets:Checking  | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00  |
@@ -126,7 +126,7 @@ Description Each balance is the display balance, so a card reads as what is
 \ The categories are absent: Expenses:Groceries and Income:Salary
 \ have transactions and are not accounts to browse.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account list shown
 Then account list rows are : AccountListRow
 | Group   | Account          | Name     | Indent | Balance | IsHeading |
@@ -151,7 +151,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:House         | RealEstate | false       |
 | Liabilities:Visa     | CreditCard | false       |
 | Liabilities:Mortgage | Mortgage   | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount        | Date       | Payee | Destination | Amount     |
 | T1  | Assets:Checking      | 2026-01-05 | Open  | none        | 2455.00    |
 | T2  | Assets:Savings       | 2026-01-05 | Open  | none        | 500.00     |
@@ -183,7 +183,7 @@ Scenario A group with no accounts is not shown
 Description There is nothing under Investments, Assets or Liabilities in this
 \ book, so those headings are left out rather than shown empty.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account list shown
 Then account list groups shown are : GroupShown
 | Group   |
@@ -202,7 +202,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder | Hidden |
 | Assets:Checking | Checking | false       | false  |
 | Assets:Old      | Checking | false       | true   |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee | Destination | Amount |
 | T1  | Assets:Checking | 2026-01-05 | Open  | none        | 100.00 |
 | T2  | Assets:Old      | 2026-01-06 | Open  | none        | 25.00  |
@@ -226,7 +226,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Brokerage        | Brokerage  | true  |
 | Assets:Brokerage:Cash   | Brokerage  | false |
 | Assets:Brokerage:Fund   | Brokerage  | false |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount         | Date       | Payee | Destination | Amount  |
 | T1  | Assets:Brokerage:Cash | 2026-01-05 | Open  | none        | 2500.00 |
 | T2  | Assets:Brokerage:Fund | 2026-01-06 | Open  | none        | 7500.00 |
@@ -251,7 +251,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets          | Checking | true        |
 | Assets:Checking | Checking | false       |
 | Assets:Savings  | Savings  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee | Destination | Amount  |
 | T1  | Assets:Checking | 2026-01-05 | Open  | none        | 2455.00 |
 | T2  | Assets:Savings  | 2026-01-05 | Open  | none        | 500.00  |
@@ -292,14 +292,14 @@ Examples: EnumerationValues
 
 Scenario Selecting an account shows its register
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
 Then panes are : PaneState
 | Pane | Showing  | Account         | Active |
 | 1    | Register | Assets:Checking | true   |
-Then register lines are : RegisterLine CompareOnly
+And register lines are : RegisterLine CompareOnly
 | Ref | Date       | Payee         | Balance |
 | T1  | 2026-01-05 | Acme Payroll  | 3000.00 |
 | T2  | 2026-01-15 | Harris Teeter | 2955.00 |
@@ -315,7 +315,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Brokerage      | Brokerage  | true        |
 | Assets:Brokerage:Cash | Brokerage  | false       |
 | Assets:Brokerage:Fund | Brokerage  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount         | Date       | Payee | Destination | Amount  |
 | T1  | Assets:Brokerage:Cash | 2026-01-05 | Open  | none        | 2500.00 |
 | T2  | Assets:Brokerage:Fund | 2026-01-06 | Open  | none        | 7500.00 |
@@ -332,7 +332,7 @@ Description A transfer appears in both registers, and in each of them the
 \ category column names the other account. It is one transaction seen
 \ twice, not two.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Savings  |
@@ -409,14 +409,14 @@ Attributes TabSelect
 
 Scenario Selecting an account opens its register in a tab
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
 Then open tabs are : OpenTab
 | Position | Kind     | Account         | Name     | Active |
 | 1        | Register | Assets:Checking | Checking | true   |
-Then panes are : PaneState
+And panes are : PaneState
 | Pane | Showing  | Account         | Active |
 | 1    | Register | Assets:Checking | true   |
 
@@ -424,18 +424,18 @@ Scenario Selecting a second account leaves the first one open
 Description This is the whole point. The card and the current account are both
 \ open and the eye moves between them.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When account selected : AccountSelect
+And account selected : AccountSelect
 | Path             |
 | Liabilities:Visa |
 Then open tabs are : OpenTab
 | Position | Kind     | Account          | Name     | Active |
 | 1        | Register | Assets:Checking  | Checking | false  |
 | 2        | Register | Liabilities:Visa | Visa     | true   |
-Then panes are : PaneState
+And panes are : PaneState
 | Pane | Showing  | Account          | Active |
 | 1    | Register | Liabilities:Visa | true   |
 # A new tab goes at the end and becomes the active one, because selecting an
@@ -446,14 +446,14 @@ Description Not a second tab on the same register. Two tabs showing the same
 \ lines would leave which of them to believe an open question, and
 \ nothing would ever answer it.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When account selected : AccountSelect
+And account selected : AccountSelect
 | Path             |
 | Liabilities:Visa |
-When account selected : AccountSelect
+And account selected : AccountSelect
 | Path            |
 | Assets:Checking |
 Then open tabs are : OpenTab
@@ -466,11 +466,11 @@ Then open tabs are : OpenTab
 
 Scenario Asking for a report opens it in a tab of its own
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When report run : ReportSpec Vertical
+And report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2026-01-01 |
 | To       | 2026-12-31 |
@@ -484,13 +484,13 @@ Scenario Asking for the same report again opens a second tab
 Description Two periods side by side is the reason to have two, so a report
 \ does not replace the one already open.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2026-01-01 |
 | To       | 2026-12-31 |
 | Interval | Whole      |
-When report run : ReportSpec Vertical
+And report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2025-01-01 |
 | To       | 2025-12-31 |
@@ -509,16 +509,16 @@ Description A tab bar is clicked by position, not by what is on the tab, so
 \ Without it, clicking back to a report that lost focus has nothing
 \ to tell the workspace, and the next redraw puts the register back.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When report run : ReportSpec Vertical
+And report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2026-01-01 |
 | To       | 2026-12-31 |
 | Interval | Whole      |
-When tab selected : TabSelect Vertical
+And tab selected : TabSelect Vertical
 | Position | 1 |
 Then open tabs are : OpenTab
 | Position | Kind     | Account         | Name                  | Active |
@@ -535,23 +535,23 @@ Scenario Closing the active tab moves to the one beside it
 Description The one to its right, or the one to its left when it was the last,
 \ so that closing a tab always leaves something showing.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When account selected : AccountSelect
+And account selected : AccountSelect
 | Path           |
 | Assets:Savings |
-When account selected : AccountSelect
+And account selected : AccountSelect
 | Path             |
 | Liabilities:Visa |
-When tab closed : TabSelect Vertical
+And tab closed : TabSelect Vertical
 | Position | 3 |
 Then open tabs are : OpenTab
 | Position | Kind     | Account         | Name     | Active |
 | 1        | Register | Assets:Checking | Checking | false  |
 | 2        | Register | Assets:Savings  | Savings  | true   |
-Then panes are : PaneState
+And panes are : PaneState
 | Pane | Showing  | Account        | Active |
 | 1    | Register | Assets:Savings | true   |
 
@@ -560,38 +560,38 @@ Description Closing something that is not being read should not change what is
 \ being read. The position shifts because a tab before it has gone;
 \ the register showing does not.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When account selected : AccountSelect
+And account selected : AccountSelect
 | Path           |
 | Assets:Savings |
-When account selected : AccountSelect
+And account selected : AccountSelect
 | Path             |
 | Liabilities:Visa |
-When tab closed : TabSelect Vertical
+And tab closed : TabSelect Vertical
 | Position | 1 |
 Then open tabs are : OpenTab
 | Position | Kind     | Account          | Name    | Active |
 | 1        | Register | Assets:Savings   | Savings | false  |
 | 2        | Register | Liabilities:Visa | Visa    | true   |
-Then panes are : PaneState
+And panes are : PaneState
 | Pane | Showing  | Account          | Active |
 | 1    | Register | Liabilities:Visa | true   |
 
 Scenario Closing the last tab leaves nothing showing
 Description Back to where the window starts: a book open and nothing chosen.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When tab closed : TabSelect Vertical
+And tab closed : TabSelect Vertical
 | Position | 1 |
 Then open tabs are : OpenTab
 | Position | Kind | Account | Name | Active |
-Then panes are : PaneState
+And panes are : PaneState
 | Pane | Showing | Account | Active |
 | 1    | Empty   | none    | true   |
 # The empty tab table says there are none. The converter does not generate a
@@ -610,19 +610,19 @@ Details Every other change hands the book over and leaves the tabs alone: a
 \ changes to the book that is open, and what is being read is still
 \ worth reading. Another book is the one case where it is not.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When report run : ReportSpec Vertical
+And report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2026-01-01 |
 | To       | 2026-12-31 |
 | Interval | Whole      |
-When another book is opened
+And another book is opened
 Then open tabs are : OpenTab
 | Position | Kind | Account | Name | Active |
-Then panes are : PaneState
+And panes are : PaneState
 | Pane | Showing | Account | Active |
 | 1    | Empty   | none    | true   |
 # A register tab and a report tab, so that both kinds have to go. The empty
@@ -636,28 +636,28 @@ Description Whichever register is in front is what the confirmation proposes
 \ was a dialog to say it in. The dialog itself is specified below;
 \ here it has been confirmed and the review is open.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When account selected : AccountSelect
+And account selected : AccountSelect
 | Path             |
 | Liabilities:Visa |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 | Line | Date       | Payee  | Account          | Category          | Amount | Disposition |
 | 1    | 2026-02-02 | Amazon | Liabilities:Visa | Expenses:Shopping | -31.00 | New         |
 Then open tabs are : OpenTab
 | Position | Kind     | Account          | Name     | Active |
 | 1        | Register | Assets:Checking  | Checking | false  |
 | 2        | Register | Liabilities:Visa | Visa     | true   |
-Then panes are : PaneState
+And panes are : PaneState
 | Pane | Showing  | Account          | Active |
 | 1    | Register | Liabilities:Visa | true   |
-Then bottom panel is : BottomPanel Vertical
+And bottom panel is : BottomPanel Vertical
 | Open      | true |
 | TabCount  | 1    |
 | ActiveTab | 1    |
-Then bottom panel tabs are : BottomPanelTabRow
+And bottom panel tabs are : BottomPanelTabRow
 | Tab | Kind         | Active |
 | 1   | ImportReview | true   |
 # The card was the active tab, so the card is what the statement is read into,
@@ -671,13 +671,13 @@ Description There is no register to fall back on and the file named nothing, so
 \ register happened to be open last is how a statement ends up in the
 \ wrong account; asking is not.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2026-01-01 |
 | To       | 2026-12-31 |
 | Interval | Whole      |
-When import file chosen : ImportFileChosen Vertical
+And import file chosen : ImportFileChosen Vertical
 | FileName | download.csv |
 | Format   | Csv          |
 Then import confirmation is : ImportConfirmation Vertical
@@ -693,8 +693,8 @@ Description The answer the program could not work out, given by the person who
 \ has the statement in front of them. Nothing else about the import
 \ is different for having been asked rather than proposed.
 Given the chart of accounts is as previous
-Given transactions are as previous
-Given the file holds : ImportReviewRow
+And transactions are as previous
+And the file holds : ImportReviewRow
 | Line | Date       | Payee  | Category           | Amount |
 | 1    | 2026-02-02 | Amazon | Expenses:Groceries | -31.00 |
 When report run : ReportSpec Vertical
@@ -702,16 +702,16 @@ When report run : ReportSpec Vertical
 | From     | 2026-01-01 |
 | To       | 2026-12-31 |
 | Interval | Whole      |
-When import file chosen : ImportFileChosen Vertical
+And import file chosen : ImportFileChosen Vertical
 | FileName | download.csv |
 | Format   | Csv          |
-When import confirmed into : AccountSelect
+And import confirmed into : AccountSelect
 | Path             |
 | Liabilities:Visa |
 Then import review rows are : ImportReviewRow
 | Line | Payee  | Account          | Category           | Amount |
 | 1    | Amazon | Liabilities:Visa | Expenses:Groceries | -31.00 |
-Then panes are : PaneState
+And panes are : PaneState
 | Pane | Showing  | Account          | Active |
 | 1    | Register | Liabilities:Visa | true   |
 # The register opens because the import is about to change it, exactly as it
@@ -948,17 +948,17 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given the file holds : ImportReviewRow
+And the file holds : ImportReviewRow
 | Line | Date       | Payee         | Category               | Amount |
 | 1    | 2024-01-15 | Harris Teeter | Expenses:Uncategorized | -45.00 |
 When import file chosen : ImportFileChosen Vertical
 | FileName | checking.csv |
 | Format   | Csv          |
-When import confirmed with : ImportConfirmationAnswer Vertical
+And import confirmed with : ImportConfirmationAnswer Vertical
 | Account         | Assets:Checking |
 | OnlineBalance   | 1705.00         |
 | OnlineBalanceAt | 2024-01-31      |
-When import accepted
+And import accepted
 Then downloaded balances are : AccountDownloadedBalance
 | Path            | Balance | BalanceAt  |
 | Assets:Checking | 1705.00 | 2024-01-31 |
@@ -971,17 +971,17 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder | DownloadedBalance | DownloadedBalanceAt |
 | Assets:Checking        | Checking | false       | 1705.00           | 2024-01-31          |
 | Expenses:Uncategorized | Expense  | false       | 0.00              | never               |
-Given the file holds : ImportReviewRow
+And the file holds : ImportReviewRow
 | Line | Date       | Payee         | Category               | Amount |
 | 1    | 2024-03-15 | Harris Teeter | Expenses:Uncategorized | -45.00 |
 When import file chosen : ImportFileChosen Vertical
 | FileName | old-history.csv |
 | Format   | Csv             |
-When import confirmed with : ImportConfirmationAnswer Vertical
+And import confirmed with : ImportConfirmationAnswer Vertical
 | Account         | Assets:Checking |
 | OnlineBalance   | none            |
 | OnlineBalanceAt | none            |
-When import accepted
+And import accepted
 Then downloaded balances are : AccountDownloadedBalance
 | Path            | Balance | BalanceAt  |
 | Assets:Checking | 1705.00 | 2024-01-31 |
@@ -1019,13 +1019,13 @@ When import file chosen : ImportFileChosen Vertical
 | AccountInFile | none          |
 | BankId        | 053000196     |
 | AccountNumber | 1234567890    |
-When import confirmed into : AccountSelect
+And import confirmed into : AccountSelect
 | Path            |
 | Assets:Checking |
 Then account numbering is : AccountNumbering
 | Path            | BankId    | AccountNumber |
 | Assets:Checking | 053000196 | 1234567890    |
-Then book writes are : BookWrites Vertical
+And book writes are : BookWrites Vertical
 | Writes | 1 |
 # Written before a row of the file has been read, so that the answer survives
 # the import being cancelled a moment later -- which is the import it is most
@@ -1045,13 +1045,13 @@ When import file chosen : ImportFileChosen Vertical
 | AccountInFile | none          |
 | BankId        | 053000196     |
 | AccountNumber | 1234567890    |
-When import confirmed into : AccountSelect
+And import confirmed into : AccountSelect
 | Path            |
 | Assets:Checking |
 Then account numbering is : AccountNumbering
 | Path            | BankId    | AccountNumber |
 | Assets:Checking | 053000196 | 0012-3456     |
-Then book writes are : BookWrites Vertical
+And book writes are : BookWrites Vertical
 | Writes | 0 |
 # Nothing was learned, so nothing is written. A book written for no change is
 # a second of the program not responding, for nothing.
@@ -1098,11 +1098,11 @@ Description Checking is the register in front and the file was downloaded for
 \ the card. The file is the one that knows, and the card is not even
 \ open.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import file chosen : ImportFileChosen Vertical
+And import file chosen : ImportFileChosen Vertical
 | FileName      | visa-feb.qfx     |
 | Format        | Qfx              |
 | AccountInFile | Liabilities:Visa |
@@ -1111,10 +1111,10 @@ Then import confirmation is : ImportConfirmation Vertical
 | FileName | visa-feb.qfx     |
 | Account  | Liabilities:Visa |
 | Source   | File             |
-Then open tabs are : OpenTab
+And open tabs are : OpenTab
 | Position | Kind     | Account         | Name     | Active |
 | 1        | Register | Assets:Checking | Checking | true   |
-Then bottom panel is : BottomPanel Vertical
+And bottom panel is : BottomPanel Vertical
 | Open      | false |
 | TabCount  | 0     |
 | ActiveTab | 0     |
@@ -1132,7 +1132,7 @@ Given the chart of accounts is : ChartOfAccounts
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import file chosen : ImportFileChosen Vertical
+And import file chosen : ImportFileChosen Vertical
 | FileName      | visa-feb.qfx     |
 | Format        | Qfx              |
 | AccountInFile | Liabilities:Visa |
@@ -1162,7 +1162,7 @@ Given the chart of accounts is : ChartOfAccounts
 When account selected : AccountSelect
 | Path             |
 | Liabilities:Visa |
-When import file chosen : ImportFileChosen Vertical
+And import file chosen : ImportFileChosen Vertical
 | FileName | checking-feb.csv |
 | Format   | Csv              |
 Then import confirmation is : ImportConfirmation Vertical
@@ -1185,31 +1185,31 @@ Description Which is the arrangement every other import scenario here starts
 \ dialog is now the one way to reach it. The account the dialog
 \ settled is also what fills the Account column of every row.
 Given the chart of accounts is as previous
-Given transactions are as previous
-Given the file holds : ImportReviewRow
+And transactions are as previous
+And the file holds : ImportReviewRow
 | Line | Date       | Payee  | Category           | Amount |
 | 1    | 2026-02-02 | Amazon | Expenses:Groceries | -31.00 |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import file chosen : ImportFileChosen Vertical
+And import file chosen : ImportFileChosen Vertical
 | FileName      | visa-feb.qfx     |
 | Format        | Qfx              |
 | AccountInFile | Liabilities:Visa |
-When import confirmed
+And import confirmed
 Then import confirmation is : ImportConfirmation Vertical
 | Shown | false |
-Then open tabs are : OpenTab
+And open tabs are : OpenTab
 | Position | Kind     | Account          | Name     | Active |
 | 1        | Register | Assets:Checking  | Checking | false  |
 | 2        | Register | Liabilities:Visa | Visa     | true   |
-Then panes are : PaneState
+And panes are : PaneState
 | Pane | Showing  | Account          | Active |
 | 1    | Register | Liabilities:Visa | true   |
-Then import review rows are : ImportReviewRow
+And import review rows are : ImportReviewRow
 | Line | Payee  | Account          | Category           | Amount |
 | 1    | Amazon | Liabilities:Visa | Expenses:Groceries | -31.00 |
-Then bottom panel is : BottomPanel Vertical
+And bottom panel is : BottomPanel Vertical
 | Open      | true |
 | TabCount  | 1    |
 | ActiveTab | 1    |
@@ -1222,29 +1222,29 @@ Description One tab per account holds here as everywhere else. The card was
 \ open and Checking was in front of it; confirming the card brings
 \ the card's tab forward, and the review opens under that.
 Given the chart of accounts is as previous
-Given transactions are as previous
-Given the file holds : ImportReviewRow
+And transactions are as previous
+And the file holds : ImportReviewRow
 | Line | Date       | Payee  | Category           | Amount |
 | 1    | 2026-02-02 | Amazon | Expenses:Groceries | -31.00 |
 When account selected : AccountSelect
 | Path             |
 | Liabilities:Visa |
-When account selected : AccountSelect
+And account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import file chosen : ImportFileChosen Vertical
+And import file chosen : ImportFileChosen Vertical
 | FileName      | visa-feb.qfx     |
 | Format        | Qfx              |
 | AccountInFile | Liabilities:Visa |
-When import confirmed
+And import confirmed
 Then open tabs are : OpenTab
 | Position | Kind     | Account          | Name     | Active |
 | 1        | Register | Liabilities:Visa | Visa     | true   |
 | 2        | Register | Assets:Checking  | Checking | false  |
-Then panes are : PaneState
+And panes are : PaneState
 | Pane | Showing  | Account          | Active |
 | 1    | Register | Liabilities:Visa | true   |
-Then bottom panel is : BottomPanel Vertical
+And bottom panel is : BottomPanel Vertical
 | Open      | true |
 | TabCount  | 1    |
 | ActiveTab | 1    |
@@ -1256,11 +1256,11 @@ Description The card is in front and the file is the one the bank calls
 \ Checking. A CSV says nothing about itself, so its name is all there
 \ is -- and it is usually right, because the bank wrote it.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path             |
 | Liabilities:Visa |
-When import file chosen : ImportFileChosen Vertical
+And import file chosen : ImportFileChosen Vertical
 | FileName | Checking-2026-02.csv |
 | Format   | Csv                  |
 Then import confirmation is : ImportConfirmation Vertical
@@ -1274,11 +1274,11 @@ Description Which is what an import did before there was a dialog, and still
 \ what it does most of the time. The dialog is worth having anyway,
 \ because the times it is wrong are the expensive ones.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import file chosen : ImportFileChosen Vertical
+And import file chosen : ImportFileChosen Vertical
 | FileName | download.csv |
 | Format   | Csv          |
 Then import confirmation is : ImportConfirmation Vertical
@@ -1293,11 +1293,11 @@ Description Both Checking and Visa are in it, so the name has not named an
 \ instead, and it is a third account, which is the point: a name that
 \ fits two is worth no more than a name that fits none.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path           |
 | Assets:Savings |
-When import file chosen : ImportFileChosen Vertical
+And import file chosen : ImportFileChosen Vertical
 | FileName | Checking~and~Visa.csv |
 | Format   | Csv                   |
 Then import confirmation is : ImportConfirmation Vertical
@@ -1311,23 +1311,23 @@ Description A proposal is a proposal. The file said nothing, so Checking was
 \ offered; the statement is the card's, and saying so once here is
 \ the whole of the correction.
 Given the chart of accounts is as previous
-Given transactions are as previous
-Given the file holds : ImportReviewRow
+And transactions are as previous
+And the file holds : ImportReviewRow
 | Line | Date       | Payee  | Category           | Amount |
 | 1    | 2026-02-02 | Amazon | Expenses:Groceries | -31.00 |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import file chosen : ImportFileChosen Vertical
+And import file chosen : ImportFileChosen Vertical
 | FileName | download.csv |
 | Format   | Csv          |
-When import confirmed into : AccountSelect
+And import confirmed into : AccountSelect
 | Path             |
 | Liabilities:Visa |
 Then import review rows are : ImportReviewRow
 | Line | Payee  | Account          | Category           | Amount |
 | 1    | Amazon | Liabilities:Visa | Expenses:Groceries | -31.00 |
-Then panes are : PaneState
+And panes are : PaneState
 | Pane | Showing  | Account          | Active |
 | 1    | Register | Liabilities:Visa | true   |
 
@@ -1336,31 +1336,31 @@ Description Not the same as cancelling the review, which is a decision about
 \ rows that have already been read. This is before the file has been
 \ opened, so there is nothing to show and nothing to undo.
 Given the chart of accounts is as previous
-Given transactions are as previous
-Given the file holds : ImportReviewRow
+And transactions are as previous
+And the file holds : ImportReviewRow
 | Line | Date       | Payee  | Category           | Amount |
 | 1    | 2026-02-02 | Amazon | Expenses:Groceries | -31.00 |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import file chosen : ImportFileChosen Vertical
+And import file chosen : ImportFileChosen Vertical
 | FileName      | visa-feb.qfx     |
 | Format        | Qfx              |
 | AccountInFile | Liabilities:Visa |
-When import confirmation cancelled
+And import confirmation cancelled
 Then import confirmation is : ImportConfirmation Vertical
 | Shown    | false       |
 | FileName | none        |
 | Account  | none        |
 | Source   | NoneOffered |
-Then open tabs are : OpenTab
+And open tabs are : OpenTab
 | Position | Kind     | Account         | Name     | Active |
 | 1        | Register | Assets:Checking | Checking | true   |
-Then bottom panel is : BottomPanel Vertical
+And bottom panel is : BottomPanel Vertical
 | Open      | false |
 | TabCount  | 0     |
 | ActiveTab | 0     |
-Then register lines are : RegisterLine CompareOnly
+And register lines are : RegisterLine CompareOnly
 | Ref | Date       | Payee         | Balance |
 | T1  | 2026-01-05 | Acme Payroll  | 3000.00 |
 | T2  | 2026-01-15 | Harris Teeter | 2955.00 |
@@ -1373,8 +1373,8 @@ Description The refusal is about having nothing to go on, not about what is on
 \ open, so there is an answer, and confirming it opens the register
 \ the answer names.
 Given the chart of accounts is as previous
-Given transactions are as previous
-Given the file holds : ImportReviewRow
+And transactions are as previous
+And the file holds : ImportReviewRow
 | Line | Date       | Payee  | Category           | Amount |
 | 1    | 2026-02-02 | Amazon | Expenses:Groceries | -31.00 |
 When report run : ReportSpec Vertical
@@ -1382,7 +1382,7 @@ When report run : ReportSpec Vertical
 | From     | 2026-01-01 |
 | To       | 2026-12-31 |
 | Interval | Whole      |
-When import file chosen : ImportFileChosen Vertical
+And import file chosen : ImportFileChosen Vertical
 | FileName      | visa-feb.qfx     |
 | Format        | Qfx              |
 | AccountInFile | Liabilities:Visa |
@@ -1396,7 +1396,7 @@ Then open tabs are : OpenTab
 | Position | Kind     | Account          | Name                 | Active |
 | 1        | Report   | none             | Spending by category | false  |
 | 2        | Register | Liabilities:Visa | Visa                 | true   |
-Then bottom panel is : BottomPanel Vertical
+And bottom panel is : BottomPanel Vertical
 | Open      | true |
 | TabCount  | 1    |
 | ActiveTab | 1    |
@@ -1457,7 +1457,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto      | Expense  | true        |
 | Expenses:Auto:Fuel | Expense  | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 =FebruaryOnChecking
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
@@ -1478,7 +1478,7 @@ Then report rows are : ReportRow
 | Expenses           | 0     | 130.00 | true       |
 | Expenses:Auto      | 1     | 130.00 | true       |
 | Expenses:Auto:Fuel | 2     | 130.00 | false      |
-Then reports worked out are : ReportWork
+And reports worked out are : ReportWork
 | Position | Times |
 | 1        | 2     |
 # Twice: once when it was asked for and once when the book under it moved.
@@ -1488,24 +1488,24 @@ Description The common case while somebody is reading rather than typing, and
 \ the one the first implementation got wrong. Nothing has changed, so
 \ there is nothing to do and the report simply is what it was.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When report run : ReportSpec Vertical
+And report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2026-01-10 |
 | To       | 2026-01-22 |
 | Interval | Whole      |
-When tab selected : TabSelect Vertical
+And tab selected : TabSelect Vertical
 | Position | 1 |
-When tab selected : TabSelect Vertical
+And tab selected : TabSelect Vertical
 | Position | 2 |
 Then report rows are : ReportRow
 | Account            | Level | Amount | IsSubtotal |
 | Expenses           | 0     | 134.99 | true       |
 | Expenses:Groceries | 1     | 134.99 | false      |
-Then reports worked out are : ReportWork
+And reports worked out are : ReportWork
 | Position | Times |
 | 2        | 1     |
 # Once, when it was asked for. Two tab clicks and a redraw of each, and the
@@ -1520,19 +1520,19 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto      | Expense  | true        |
 | Expenses:Auto:Fuel | Expense  | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 =FebruaryOnChecking
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When report run : ReportSpec Vertical
+And report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2026-02-01 |
 | To       | 2026-02-28 |
 | Interval | Whole      |
-When tab selected : TabSelect Vertical
+And tab selected : TabSelect Vertical
 | Position | 1 |
-When register entry committed : RegisterEntry Vertical
+And register entry committed : RegisterEntry Vertical
 | Account  | Assets:Checking    |
 | Date     | 2026-02-12         |
 | Payee    | Harris Teeter      |
@@ -1549,7 +1549,7 @@ Then report rows are : ReportRow
 | Expenses:Auto      | 1     | 70.00  | true       |
 | Expenses:Auto:Fuel | 2     | 70.00  | false      |
 | Expenses:Groceries | 1     | 80.00  | false      |
-Then reports worked out are : ReportWork
+And reports worked out are : ReportWork
 | Position | Times |
 | 2        | 2     |
 # The twenty is in the groceries figure, and the report was totalled once
@@ -1561,28 +1561,28 @@ Description An import is always into the register in front of it, so a report
 \ open at the time is always the tab behind. Several hundred rows
 \ arrive at once, which is the change least worth totalling twice.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When report run : ReportSpec Vertical
+And report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2026-01-10 |
 | To       | 2026-02-28 |
 | Interval | Whole      |
-When tab selected : TabSelect Vertical
+And tab selected : TabSelect Vertical
 | Position | 1 |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 | Line | Date       | Payee         | Account         | Category           | Amount | Disposition |
 | 1    | 2026-02-02 | Harris Teeter | Assets:Checking | Expenses:Groceries | -52.10 | New         |
-When import accepted
-When tab selected : TabSelect Vertical
+And import accepted
+And tab selected : TabSelect Vertical
 | Position | 2 |
 Then report rows are : ReportRow
 | Account            | Level | Amount | IsSubtotal |
 | Expenses           | 0     | 187.09 | true       |
 | Expenses:Groceries | 1     | 187.09 | false      |
-Then reports worked out are : ReportWork
+And reports worked out are : ReportWork
 | Position | Times |
 | 2        | 2     |
 
@@ -1597,30 +1597,30 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto      | Expense  | true        |
 | Expenses:Auto:Fuel | Expense  | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 =FebruaryOnChecking
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When report run : ReportSpec Vertical
+And report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2026-02-01 |
 | To       | 2026-02-28 |
 | Interval | Whole      |
-When tab selected : TabSelect Vertical
+And tab selected : TabSelect Vertical
 | Position | 1 |
-When register lines selected : RegisterSelect
+And register lines selected : RegisterSelect
 | Line |
 | 2    |
-When selection deleted
-When tab selected : TabSelect Vertical
+And selection deleted
+And tab selected : TabSelect Vertical
 | Position | 2 |
 Then report rows are : ReportRow
 | Account            | Level | Amount | IsSubtotal |
 | Expenses           | 0     | 70.00  | true       |
 | Expenses:Auto      | 1     | 70.00  | true       |
 | Expenses:Auto:Fuel | 2     | 70.00  | false      |
-Then reports worked out are : ReportWork
+And reports worked out are : ReportWork
 | Position | Times |
 | 2        | 2     |
 # The supermarket visit was the second line of February, and its sixty is not
@@ -1640,19 +1640,19 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto      | Expense  | true        |
 | Expenses:Auto:Fuel | Expense  | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 =FebruaryOnChecking
 When report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2026-02-01 |
 | To       | 2026-02-28 |
 | Interval | Whole      |
-When report run : ReportSpec Vertical
+And report run : ReportSpec Vertical
 | GroupBy  | Category   |
 | From     | 2026-01-01 |
 | To       | 2026-12-31 |
 | Interval | Whole      |
-When the transactions are recategorised : TransactionRecategorise
+And the transactions are recategorised : TransactionRecategorise
 | Ref | Category           |
 | T1  | Expenses:Groceries |
 | T3  | Expenses:Groceries |
@@ -1666,7 +1666,7 @@ Then report rows are : ReportRow
 | Account            | Level | Amount | IsSubtotal |
 | Expenses           | 0     | 130.00 | true       |
 | Expenses:Groceries | 1     | 130.00 | false      |
-Then reports worked out are : ReportWork
+And reports worked out are : ReportWork
 | Position | Times |
 | 1        | 2     |
 | 2        | 2     |
@@ -1704,7 +1704,7 @@ Details The panel is open exactly when it has a tab in it, and closes itself
 
 Scenario The bottom panel is closed until something opens it
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
@@ -1777,23 +1777,23 @@ Scenario An import opens a tab in the bottom panel with every row proposed
 Description The panel opens by itself if it was not open: the point of
 \ showing an import here is to have the register still in view.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 =AnImportOfThree
 Then panes are : PaneState
 | Pane | Showing  | Account         | Active |
 | 1    | Register | Assets:Checking | true   |
-Then bottom panel is : BottomPanel Vertical
+And bottom panel is : BottomPanel Vertical
 | Open      | true |
 | TabCount  | 1    |
 | ActiveTab | 1    |
-Then bottom panel tabs are : BottomPanelTabRow
+And bottom panel tabs are : BottomPanelTabRow
 | Tab | Kind         | Active |
 | 1   | ImportReview | true   |
-Then import review summary is : ImportReviewSummary Vertical
+And import review summary is : ImportReviewSummary Vertical
 | Rows       | 3     |
 | NewRows    | 2     |
 | Duplicates | 1     |
@@ -1814,11 +1814,11 @@ Description The import has already decided it has seen this one. It is shown
 \ and it starts unticked so that accepting everything does not bring
 \ it in.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 =AnImportOfThree
 Then import review rows are : ImportReviewRow
 | Line | Payee         | Disposition | Accepted |
@@ -1830,11 +1830,11 @@ Scenario Nothing is in the book until the import is accepted
 Description The register in the other pane is unchanged while the review is
 \ open, which is what makes it worth having beside it.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 =AnImportOfThree
 Then register lines are : RegisterLine CompareOnly
 | Ref | Date       | Payee         | Balance |
@@ -1846,11 +1846,11 @@ Scenario Accepting the import adds the ticked rows and closes the review
 Description The two new rows arrive, the duplicate does not, and the panel
 \ closes so that the result can be read in the register it changed.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 =AnImportOfThree
 When import accepted
 Then import review summary is : ImportReviewSummary Vertical
@@ -1859,18 +1859,18 @@ Then import review summary is : ImportReviewSummary Vertical
 | Duplicates | 1    |
 | Accepted   | 2    |
 | Committed  | true |
-Then register lines are : RegisterLine CompareOnly
+And register lines are : RegisterLine CompareOnly
 | Ref | Date       | Payee         | Balance |
 | T1  | 2026-01-05 | Acme Payroll  | 3000.00 |
 | T2  | 2026-01-15 | Harris Teeter | 2955.00 |
 | T4  | 2026-01-25 | Transfer      | 2455.00 |
 | T5  | 2026-02-02 | Harris Teeter | 2402.90 |
 | T6  | 2026-02-03 | Unknown Shop  | 2379.15 |
-Then bottom panel is : BottomPanel Vertical
+And bottom panel is : BottomPanel Vertical
 | Open      | false |
 | TabCount  | 0     |
 | ActiveTab | 0     |
-Then panes are : PaneState
+And panes are : PaneState
 | Pane | Showing  | Account         | Active |
 | 1    | Register | Assets:Checking | true   |
 # The register the import was beside now holds the two new lines, and the
@@ -1878,23 +1878,23 @@ Then panes are : PaneState
 
 Scenario Unticking a row leaves it out
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 =AnImportOfThree
 When review row unticked : ReviewRowSelect
 | Line |
 | 2    |
-When import accepted
+And import accepted
 Then import review summary is : ImportReviewSummary Vertical
 | Rows       | 3    |
 | NewRows    | 2    |
 | Duplicates | 1    |
 | Accepted   | 1    |
 | Committed  | true |
-Then register lines are : RegisterLine CompareOnly
+And register lines are : RegisterLine CompareOnly
 | Ref | Date       | Payee         | Balance |
 | T1  | 2026-01-05 | Acme Payroll  | 3000.00 |
 | T2  | 2026-01-15 | Harris Teeter | 2955.00 |
@@ -1909,16 +1909,16 @@ Scenario Ticking a duplicate brings it in after all
 Description The import's decision is a proposal. A user who knows the bank sent
 \ the same transaction twice for a real reason can say so.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 =AnImportOfThree
 When review row ticked : ReviewRowSelect
 | Line |
 | 3    |
-When import accepted
+And import accepted
 Then import review summary is : ImportReviewSummary Vertical
 | Rows       | 3    |
 | NewRows    | 2    |
@@ -1928,11 +1928,11 @@ Then import review summary is : ImportReviewSummary Vertical
 
 Scenario Cancelling the import changes nothing
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 =AnImportOfThree
 When import cancelled
 Then register lines are : RegisterLine CompareOnly
@@ -1940,11 +1940,11 @@ Then register lines are : RegisterLine CompareOnly
 | T1  | 2026-01-05 | Acme Payroll  | 3000.00 |
 | T2  | 2026-01-15 | Harris Teeter | 2955.00 |
 | T4  | 2026-01-25 | Transfer      | 2455.00 |
-Then bottom panel is : BottomPanel Vertical
+And bottom panel is : BottomPanel Vertical
 | Open      | false |
 | TabCount  | 0     |
 | ActiveTab | 0     |
-Then panes are : PaneState
+And panes are : PaneState
 | Pane | Showing  | Account         | Active |
 | 1    | Register | Assets:Checking | true   |
 # The same as accepting, as far as the panel goes: the import is over either way.
@@ -2028,27 +2028,27 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
 | T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
-Given import claims are : ImportReviewClaim
+And import claims are : ImportReviewClaim
 | Line | Ref |
 | 1    | T1  |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 | Line | Date       | Payee         | Account         | Category           | Amount | Disposition | Accepted |
 | 1    | 2026-01-15 | HARRIS TEETER | Assets:Checking | Expenses:Groceries | -45.00 | Duplicate   | false    |
-When import review line selected : ImportReviewSelect
+And import review line selected : ImportReviewSelect
 | Line |
 | 1    |
-When duplicate transaction asked
+And duplicate transaction asked
 Then duplicate transaction dialog is : DuplicateTransactionDialog Vertical
 | Shown   | true                |
 | Count   | 1                   |
 | Heading | Already~in~the~book |
-Then duplicate transactions shown are : DuplicateTransactionRow
+And duplicate transactions shown are : DuplicateTransactionRow
 | Ref | Date       | Payee         | Account         | Category           | Amount | Cleared   |
 | T1  | 2026-01-15 | Harris Teeter | Assets:Checking | Expenses:Groceries | -45.00 | Uncleared |
 
@@ -2061,29 +2061,29 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
 | T1  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 |
 | T2  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -88.20 |
-Given import claims are : ImportReviewClaim
+And import claims are : ImportReviewClaim
 | Line | Ref |
 | 1    | T1  |
 | 1    | T2  |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 | Line | Date       | Payee         | Account         | Category           | Amount | Disposition | Accepted |
 | 1    | 2026-02-05 | HARRIS TEETER | Assets:Checking | Expenses:Groceries | -88.20 | Possible    | false    |
-When import review line selected : ImportReviewSelect
+And import review line selected : ImportReviewSelect
 | Line |
 | 1    |
-When duplicate transaction asked
+And duplicate transaction asked
 Then duplicate transaction dialog is : DuplicateTransactionDialog Vertical
 | Shown   | true                  |
 | Count   | 2                     |
 | Heading | Could~be~any~of~these |
-Then duplicate transactions shown are : DuplicateTransactionRow
+And duplicate transactions shown are : DuplicateTransactionRow
 | Ref | Date       | Payee         | Account         | Category           | Amount | Cleared   |
 | T1  | 2026-02-05 | Harris Teeter | Assets:Checking | Expenses:Groceries | -88.20 | Uncleared |
 | T2  | 2026-02-05 | Harris Teeter | Assets:Checking | Expenses:Groceries | -88.20 | Uncleared |
@@ -2096,19 +2096,19 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee        | Destination        | Amount |
 | T1  | Assets:Checking | 2026-01-05 | Acme Payroll | Expenses:Groceries | -10.00 |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 | Line | Date       | Payee         | Account         | Category           | Amount | Disposition | Accepted |
 | 1    | 2026-02-02 | Harris Teeter | Assets:Checking | Expenses:Groceries | -52.10 | New         | true     |
-When import review line selected : ImportReviewSelect
+And import review line selected : ImportReviewSelect
 | Line |
 | 1    |
-When duplicate transaction asked
+And duplicate transaction asked
 Then duplicate transaction dialog is : DuplicateTransactionDialog Vertical
 | Shown   | false |
 | Count   | 0     |
@@ -2121,30 +2121,30 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
 | T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
-Given import claims are : ImportReviewClaim
+And import claims are : ImportReviewClaim
 | Line | Ref |
 | 1    | T1  |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 | Line | Date       | Payee         | Account         | Category           | Amount | Disposition | Accepted |
 | 1    | 2026-01-15 | HARRIS TEETER | Assets:Checking | Expenses:Groceries | -45.00 | Duplicate   | false    |
-When import review line selected : ImportReviewSelect
+And import review line selected : ImportReviewSelect
 | Line |
 | 1    |
-When duplicate transaction asked
-When duplicate transaction dialog closed
+And duplicate transaction asked
+And duplicate transaction dialog closed
 Then import review rows are : ImportReviewRow CompareOnly
 | Line | Payee         | Disposition | Accepted |
 | 1    | HARRIS TEETER | Duplicate   | false    |
-Then register lines are : RegisterLine CompareOnly
+And register lines are : RegisterLine CompareOnly
 | Ref | Date       | Payee         | Balance |
 | T1  | 2026-01-15 | Harris Teeter | -45.00  |
-Then bottom panel is : BottomPanel Vertical
+And bottom panel is : BottomPanel Vertical
 | Open      | true |
 | TabCount  | 1    |
 | ActiveTab | 1    |
@@ -2233,10 +2233,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Visa       | CreditCard | false       |
 | Expenses:Groceries     | Expense    | false       |
 | Expenses:Uncategorized | Expense    | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee        | Destination            | Amount   |
 | T1  | Assets:Checking | 2026-03-02 | VISA PAYMENT | Expenses:Uncategorized | -3348.07 |
-Given the file holds : ImportReviewRow
+And the file holds : ImportReviewRow
 | Line | Date       | Payee            | Category               | Amount  |
 | 1    | 2026-03-03 | PAYMENT RECEIVED | Expenses:Uncategorized | 3348.07 |
 When import confirmed into : AccountSelect
@@ -2265,22 +2265,22 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Visa       | CreditCard | false       |
 | Expenses:Groceries     | Expense    | false       |
 | Expenses:Uncategorized | Expense    | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee        | Destination            | Amount   |
 | T1  | Assets:Checking | 2026-03-02 | VISA PAYMENT | Expenses:Uncategorized | -3348.07 |
-Given the file holds : ImportReviewRow
+And the file holds : ImportReviewRow
 | Line | Date       | Payee            | Category               | Amount  |
 | 1    | 2026-03-03 | PAYMENT RECEIVED | Expenses:Uncategorized | 3348.07 |
 When import confirmed into : AccountSelect
 | Path             |
 | Liabilities:Visa |
-When transfer question answered : TransferAnswerGiven Vertical
+And transfer question answered : TransferAnswerGiven Vertical
 | Answer | Yes |
 Then import review rows are : ImportReviewRow
 | Line | Payee            | Account          | Category        | Amount  |
 | 1    | PAYMENT RECEIVED | Liabilities:Visa | Assets:Checking | 3348.07 |
 When import accepted
-When register opened on : AccountSelect
+And register opened on : AccountSelect
 | Path            |
 | Assets:Checking |
 Then register lines are : RegisterLine CompareOnly
@@ -2299,24 +2299,24 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Visa       | CreditCard | false       |
 | Expenses:Groceries     | Expense    | false       |
 | Expenses:Uncategorized | Expense    | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee        | Destination        | Amount  |
 | T1  | Assets:Checking | 2026-03-02 | HARRIS TEETER | Expenses:Groceries | -45.00 |
-Given the file holds : ImportReviewRow
+And the file holds : ImportReviewRow
 | Line | Date       | Payee  | Category           | Amount |
 | 1    | 2026-03-03 | REFUND | Expenses:Groceries | 45.00  |
 When import confirmed into : AccountSelect
 | Path             |
 | Liabilities:Visa |
-When transfer question answered : TransferAnswerGiven Vertical
+And transfer question answered : TransferAnswerGiven Vertical
 | Answer | No |
 Then transfer question is : TransferQuestion Vertical CompareOnly
 | Shown | false |
-Then import review rows are : ImportReviewRow
+And import review rows are : ImportReviewRow
 | Line | Payee  | Account          | Category           | Amount |
 | 1    | REFUND | Liabilities:Visa | Expenses:Groceries | 45.00  |
 When import accepted
-When register opened on : AccountSelect
+And register opened on : AccountSelect
 | Path            |
 | Assets:Checking |
 Then register lines are : RegisterLine CompareOnly
@@ -2330,8 +2330,8 @@ Scenario A review with nothing to pair asks nothing
 Description The ordinary import, which is most of them. No question is shown
 \ and the review is the only thing on screen.
 Given the chart of accounts is as previous
-Given transactions are as previous
-Given the file holds : ImportReviewRow
+And transactions are as previous
+And the file holds : ImportReviewRow
 | Line | Date       | Payee  | Category           | Amount |
 | 1    | 2026-02-02 | Amazon | Expenses:Groceries | -31.00 |
 When import confirmed into : AccountSelect
@@ -2339,7 +2339,7 @@ When import confirmed into : AccountSelect
 | Liabilities:Visa |
 Then transfer question is : TransferQuestion Vertical CompareOnly
 | Shown | false |
-Then import review rows are : ImportReviewRow
+And import review rows are : ImportReviewRow
 | Line | Payee  | Account          | Category           | Amount |
 | 1    | Amazon | Liabilities:Visa | Expenses:Groceries | -31.00 |
 
@@ -2353,17 +2353,17 @@ Description An import and a find's results can be open at once, each in its
 
 Scenario A find opens its own tab in the bottom panel
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | Text | Harris |
 Then bottom panel is : BottomPanel Vertical
 | Open      | true |
 | TabCount  | 1    |
 | ActiveTab | 1    |
-Then bottom panel tabs are : BottomPanelTabRow
+And bottom panel tabs are : BottomPanelTabRow
 | Tab | Kind        | Active |
 | 1   | FindResults | true   |
 
@@ -2371,11 +2371,11 @@ Scenario An import and a find are open in the bottom panel together
 Description Opening the second does not close the first: a find started while
 \ an import is still waiting adds a tab rather than taking its place.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 =AnImportOfThree
 When find performed : FindCriteria Vertical
 | Text | Harris |
@@ -2383,27 +2383,27 @@ Then bottom panel is : BottomPanel Vertical
 | Open      | true |
 | TabCount  | 2    |
 | ActiveTab | 2    |
-Then bottom panel tabs are : BottomPanelTabRow
+And bottom panel tabs are : BottomPanelTabRow
 | Tab | Kind         | Active |
 | 1   | ImportReview | false  |
 | 2   | FindResults  | true   |
 
 Scenario Closing one tab of the bottom panel leaves the other open
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 =AnImportOfThree
 When find performed : FindCriteria Vertical
 | Text | Harris |
-When import cancelled
+And import cancelled
 Then bottom panel is : BottomPanel Vertical
 | Open      | true |
 | TabCount  | 1    |
 | ActiveTab | 1    |
-Then bottom panel tabs are : BottomPanelTabRow
+And bottom panel tabs are : BottomPanelTabRow
 | Tab | Kind        | Active |
 | 1   | FindResults | true   |
 
@@ -2411,24 +2411,24 @@ Scenario Closing the find results tab leaves the import waiting
 Description The panel's own close button, rather than the import being
 \ cancelled from its buttons. Closing a tab closes that tab only.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 =AnImportOfThree
 When find performed : FindCriteria Vertical
 | Text | Harris |
-When bottom panel tab closed : BottomPanelTabSelect
+And bottom panel tab closed : BottomPanelTabSelect
 | Tab | 2 |
 Then bottom panel is : BottomPanel Vertical
 | Open      | true |
 | TabCount  | 1    |
 | ActiveTab | 1    |
-Then bottom panel tabs are : BottomPanelTabRow
+And bottom panel tabs are : BottomPanelTabRow
 | Tab | Kind         | Active |
 | 1   | ImportReview | true   |
-Then import review summary is : ImportReviewSummary Vertical
+And import review summary is : ImportReviewSummary Vertical
 | Rows       | 3     |
 | NewRows    | 2     |
 | Duplicates | 1     |
@@ -2442,24 +2442,24 @@ Description Closing that tab is cancelling the import. There is nowhere else
 \ to accept it from, so leaving it open would be the only way to
 \ say yes, and a closed tab has to mean no.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 =AnImportOfThree
 When find performed : FindCriteria Vertical
 | Text | Harris |
-When bottom panel tab closed : BottomPanelTabSelect
+And bottom panel tab closed : BottomPanelTabSelect
 | Tab | 1 |
 Then bottom panel is : BottomPanel Vertical
 | Open      | true |
 | TabCount  | 1    |
 | ActiveTab | 1    |
-Then bottom panel tabs are : BottomPanelTabRow
+And bottom panel tabs are : BottomPanelTabRow
 | Tab | Kind        | Active |
 | 1   | FindResults | true   |
-Then register lines are : RegisterLine CompareOnly
+And register lines are : RegisterLine CompareOnly
 | Ref | Date       | Payee         | Balance |
 | T1  | 2026-01-05 | Acme Payroll  | 3000.00 |
 | T2  | 2026-01-15 | Harris Teeter | 2955.00 |
@@ -2469,44 +2469,44 @@ Then register lines are : RegisterLine CompareOnly
 
 Scenario Closing the last tab closes the bottom panel
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | Text | Harris |
-When bottom panel tab closed : BottomPanelTabSelect
+And bottom panel tab closed : BottomPanelTabSelect
 | Tab | 1 |
 Then bottom panel is : BottomPanel Vertical
 | Open      | false |
 | TabCount  | 0     |
 | ActiveTab | 0     |
-Then panes are : PaneState
+And panes are : PaneState
 | Pane | Showing  | Account         | Active |
 | 1    | Register | Assets:Checking | true   |
 # The register above it takes the room back.
 
 Scenario Switching the active tab of the bottom panel changes nothing else
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 =AnImportOfThree
 When find performed : FindCriteria Vertical
 | Text | Harris |
-When bottom panel tab selected : BottomPanelTabSelect
+And bottom panel tab selected : BottomPanelTabSelect
 | Tab | 1 |
 Then bottom panel is : BottomPanel Vertical
 | Open      | true |
 | TabCount  | 2    |
 | ActiveTab | 1    |
-Then bottom panel tabs are : BottomPanelTabRow
+And bottom panel tabs are : BottomPanelTabRow
 | Tab | Kind         | Active |
 | 1   | ImportReview | true   |
 | 2   | FindResults  | false  |
-Then import review summary is : ImportReviewSummary Vertical
+And import review summary is : ImportReviewSummary Vertical
 | Rows       | 3     |
 | NewRows    | 2     |
 | Duplicates | 1     |
@@ -2616,11 +2616,11 @@ Attributes FindResultRow
 
 Scenario A find by text matches the payee
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | Text | Harris |
 Then find results are : FindResultRow
 | Ref | Date       | Payee         | Account         | Category           | Amount |
@@ -2628,14 +2628,14 @@ Then find results are : FindResultRow
 
 Scenario A find by text matches the memo when the payee does not
 Given the chart of accounts is as previous
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount | Memo             |
 | T1  | Assets:Checking | 2026-02-01 | Costco | Expenses:Groceries | -60.00 | Birthday~present |
 | T2  | Assets:Checking | 2026-02-02 | Costco | Expenses:Groceries | -40.00 | Groceries        |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | Text | Birthday |
 Then find results are : FindResultRow
 | Ref | Date       | Payee  | Account         | Category           | Amount |
@@ -2647,11 +2647,11 @@ Then find results are : FindResultRow
 
 Scenario A find with a date range leaves out what is outside it
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | DateFrom | 2026-01-14 |
 | DateTo   | 2026-01-16 |
 Then find results are : FindResultRow
@@ -2682,11 +2682,11 @@ Examples: AmountFieldsShown
 
 Scenario A find by amount matches either sign
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | Amount | 89.99        |
 | Scope  | AllRegisters |
 Then find results are : FindResultRow
@@ -2705,11 +2705,11 @@ Description The defect this replaced, and the reason Exact is what the dialog
 \ 89.99, and a lower bound would have answered with all four. One
 \ row is the whole of the answer.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | AmountMatch | Exact        |
 | Amount      | 45.00        |
 | Scope       | AllRegisters |
@@ -2722,11 +2722,11 @@ Description Both ends count, and the absolute value is what falls between
 \ them, so the two payments in the interval are found and the
 \ deposit of 3000.00 and the transfer of -500.00 are not.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | AmountMatch | Range        |
 | Amount      | 40.00        |
 | AmountTo    | 100.00       |
@@ -2746,11 +2746,11 @@ Description What the old dialog did by accident is what this one does on
 \ is what the Account and Category note above says happens to a
 \ transfer nobody has said which side of they meant.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | AmountMatch | Range        |
 | Amount      | 500.00       |
 | Scope       | AllRegisters |
@@ -2770,17 +2770,17 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
 | Expenses:Auto:Fuel | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination | Amount |
 | T1  | Assets:Checking | 2026-02-08 | COSTCO | Split       | -90.00 |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination        | Amount |
 | Expenses:Groceries | 60.00  |
 | Expenses:Auto:Fuel | 30.00  |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | Amount | 60.00 |
 Then find results are : FindResultRow
 | Ref | Date       | Payee  | Account         | Category  | Amount |
@@ -2796,17 +2796,17 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
 | Expenses:Auto:Fuel | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination | Amount |
 | T1  | Assets:Checking | 2026-02-08 | COSTCO | Split       | -90.00 |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination        | Amount |
 | Expenses:Groceries | 45.00  |
 | Expenses:Auto:Fuel | 45.00  |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | Amount | 45.00 |
 Then find results are : FindResultRow
 | Ref | Date       | Payee  | Account         | Category  | Amount |
@@ -2814,11 +2814,11 @@ Then find results are : FindResultRow
 
 Scenario A find by account matches a category the same as a real account
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | Account | Expenses:Groceries |
 | Scope   | AllRegisters       |
 Then find results are : FindResultRow
@@ -2828,11 +2828,11 @@ Then find results are : FindResultRow
 
 Scenario A find scoped to the current register does not look beyond it
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | Text  | Transfer         |
 | Scope | CurrentRegister |
 Then find results are : FindResultRow
@@ -2843,11 +2843,11 @@ Scenario A find scoped to all registers matches a transfer under both sides of i
 Description Transfer has no side that is more the transaction's register than
 \ the other, so a transfer matched this way is a row under each.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | Text  | Transfer     |
 | Scope | AllRegisters |
 Then find results are : FindResultRow
@@ -2878,24 +2878,24 @@ Description Which result was chosen, counting from one in the order the
 
 Scenario Choosing a result opens the register it is read under and selects its line
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | Text  | Transfer     |
 | Scope | AllRegisters |
-When find result chosen : FindResultChoice
+And find result chosen : FindResultChoice
 | Line |
 | 2    |
 Then open tabs are : OpenTab
 | Position | Kind     | Account         | Name     | Active |
 | 1        | Register | Assets:Checking | Checking | false  |
 | 2        | Register | Assets:Savings  | Savings  | true   |
-Then the register line selected is : RegisterSelect
+And the register line selected is : RegisterSelect
 | Line |
 | 1    |
-Then bottom panel tabs are : BottomPanelTabRow
+And bottom panel tabs are : BottomPanelTabRow
 | Tab | Kind        | Active |
 | 1   | FindResults | true   |
 # The second result is the transfer read under Savings, and Savings holds that
@@ -2904,19 +2904,19 @@ Then bottom panel tabs are : BottomPanelTabRow
 
 Scenario Choosing a result in the register already open selects its line there
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | Text | Harris |
-When find result chosen : FindResultChoice
+And find result chosen : FindResultChoice
 | Line |
 | 1    |
 Then open tabs are : OpenTab
 | Position | Kind     | Account         | Name     | Active |
 | 1        | Register | Assets:Checking | Checking | true   |
-Then the register line selected is : RegisterSelect
+And the register line selected is : RegisterSelect
 | Line |
 | 2    |
 # No second tab: the register is the one already open. Harris Teeter is the
@@ -2946,19 +2946,19 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
 | Expenses:Auto:Fuel | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination | Amount |
 | T1  | Assets:Checking | 2026-02-08 | COSTCO | Split       | -90.00 |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination        | Amount |
 | Expenses:Groceries | 60.00  |
 | Expenses:Auto:Fuel | 30.00  |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | Amount | 60.00 |
-When find result right clicked : FindResultChoice Vertical
+And find result right clicked : FindResultChoice Vertical
 | Line | 1 |
 Then menu items are : MenuItem
 | Item                  | Enabled |
@@ -2967,13 +2967,13 @@ Then menu items are : MenuItem
 
 Scenario The menu on a result that is not a split does not offer to show one
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | Text | Harris |
-When find result right clicked : FindResultChoice Vertical
+And find result right clicked : FindResultChoice Vertical
 | Line | 1 |
 Then menu items are : MenuItem
 | Item                     | Enabled |
@@ -2989,19 +2989,19 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
 | Expenses:Auto:Fuel | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination | Amount |
 | T1  | Assets:Checking | 2026-02-08 | COSTCO | Split       | -90.00 |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination        | Amount | Memo        |
 | Expenses:Groceries | 60.00  | Food        |
 | Expenses:Auto:Fuel | 30.00  | Filled~up   |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When find performed : FindCriteria Vertical
+And find performed : FindCriteria Vertical
 | Amount | 60.00 |
-When find result split shown : FindResultChoice Vertical
+And find result split shown : FindResultChoice Vertical
 | Line | 1 |
 Then the split shown is : SplitLineShown
 | Category           | Amount | Memo      |
@@ -3059,14 +3059,14 @@ Scenario Accepting an import keeps the identifier the file gave each row
 Description The identifier belongs to the side the statement is for. The bank
 \ has never heard of the category, so that side carries none.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 | Line | Date       | Payee         | Account         | Category           | Amount | Disposition | Identifier  | Source | RawName                      | Memo          | CheckNo |
 | 1    | 2026-02-02 | Harris Teeter | Assets:Checking | Expenses:Groceries | -52.10 | New         | 20260202001 | Ofx    | HARRIS~TEETER~#231~DURHAM~NC | Weekly~shop   | none    |
-When import accepted
+And import accepted
 Then accepted transactions are : AcceptedTransaction
 | SourceAccount   | Destination        | Amount | Identifier  | Source | RawName                      | Memo        | CheckNo | Cleared |
 | Assets:Checking | Expenses:Groceries | -52.10 | 20260202001 | Ofx    | HARRIS~TEETER~#231~DURHAM~NC | Weekly~shop | none    | Cleared |
@@ -3077,14 +3077,14 @@ Description Two files describing one transaction do not agree on what to call
 \ under Csv does not make a later QFX of the same account do nothing,
 \ and that is deliberate -- see the identifier scope rule.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 | Line | Date       | Payee  | Account         | Category          | Amount | Disposition | Identifier | Source | RawName       |
 | 1    | 2026-02-04 | Amazon | Assets:Checking | Expenses:Shopping | -31.00 | New         | REF-99812  | Csv    | AMAZON~MKTPLACE |
-When import accepted
+And import accepted
 Then accepted transactions are : AcceptedTransaction
 | SourceAccount   | Destination       | Amount | Identifier | Source | RawName         | Cleared |
 | Assets:Checking | Expenses:Shopping | -31.00 | REF-99812  | Csv    | AMAZON~MKTPLACE | Cleared |
@@ -3095,14 +3095,14 @@ Description A QIF carries no identifier, and a row read from one is still worth
 \ check number -- that keep a second reading of the same QIF from
 \ duplicating it.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 | Line | Date       | Payee        | Account         | Category           | Amount | Disposition | Identifier | Source | RawName |
 | 1    | 2026-02-05 | Corner Store | Assets:Checking | Expenses:Groceries | -12.00 | New         | none       | Qif    | none    |
-When import accepted
+And import accepted
 Then accepted transactions are : AcceptedTransaction
 | SourceAccount   | Destination        | Amount | Identifier | Source | RawName | Cleared |
 | Assets:Checking | Expenses:Groceries | -12.00 | none       | Qif    | none    | Cleared |
@@ -3111,18 +3111,18 @@ Scenario An unticked row contributes nothing at all
 Description The identifier of a row that was not accepted must not be stored
 \ either, or the row could never be imported again.
 Given the chart of accounts is as previous
-Given transactions are as previous
+And transactions are as previous
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When import reviewed : ImportReviewRow
+And import reviewed : ImportReviewRow
 | Line | Date       | Payee         | Account         | Category           | Amount | Disposition | Identifier  | Source | RawName        |
 | 1    | 2026-02-02 | Harris Teeter | Assets:Checking | Expenses:Groceries | -52.10 | New         | 20260202001 | Ofx    | HARRIS~TEETER  |
 | 2    | 2026-02-03 | Unknown Shop  | Assets:Checking | Expenses:Shopping  | -23.75 | New         | 20260203002 | Ofx    | UNKNOWN~SHOP   |
-When review row unticked : ReviewRowSelect
+And review row unticked : ReviewRowSelect
 | Line |
 | 2    |
-When import accepted
+And import accepted
 Then accepted transactions are : AcceptedTransaction
 | SourceAccount   | Destination        | Amount | Identifier  | Source | RawName       | Cleared |
 | Assets:Checking | Expenses:Groceries | -52.10 | 20260202001 | Ofx    | HARRIS~TEETER | Cleared |
@@ -3181,13 +3181,13 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee          | Destination            | Amount |
 | T1  | Assets:Checking | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | -40.00 |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register lines selected : RegisterSelect
+And register lines selected : RegisterSelect
 | Line |
 | 1    |
 Then menu items are : MenuItem
@@ -3207,7 +3207,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto          | Expense | true        |
 | Expenses:Auto:Fuel     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee          | Destination            | Amount |
 | T1  | Assets:Checking | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | -40.00 |
 | T2  | Assets:Checking | 2026-02-08 | SHELL OIL 2343 | Expenses:Uncategorized | -35.00 |
@@ -3215,17 +3215,17 @@ Given transactions are : Transaction
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register lines selected : RegisterSelect
+And register lines selected : RegisterSelect
 | Line |
 | 1    |
 | 2    |
 | 3    |
-When selection recategorised : CategoryChoice Vertical
+And selection recategorised : CategoryChoice Vertical
 | Category | Expenses:Auto:Fuel |
 Then recategorising reported is : Recategorised Vertical
 | Changed | 3 |
 | Refused | 0 |
-Then register lines are : RegisterLine CompareOnly
+And register lines are : RegisterLine CompareOnly
 | Ref | Date       | Category           | Payment |
 | T1  | 2026-02-01 | Expenses:Auto:Fuel | 40.00   |
 | T2  | 2026-02-08 | Expenses:Auto:Fuel | 35.00   |
@@ -3246,28 +3246,28 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto:Fuel     | Expense | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee          | Destination            | Amount |
 | T1  | Assets:Checking | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | -40.00 |
 | T2  | Assets:Checking | 2026-02-08 | COSTCO         | Split                  | -90.00 |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination        | Amount |
 | Expenses:Groceries | 60.00  |
 | Expenses:Auto:Fuel | 30.00  |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register lines selected : RegisterSelect
+And register lines selected : RegisterSelect
 | Line |
 | 1    |
 | 2    |
-When selection recategorised : CategoryChoice Vertical
+And selection recategorised : CategoryChoice Vertical
 | Category | Expenses:Auto:Fuel |
 Then recategorising reported is : Recategorised Vertical
 | Changed | 1                                            |
 | Refused | 1                                            |
 | Reason  | COSTCO is a split; open it to change a line  |
-Then register lines are : RegisterLine CompareOnly
+And register lines are : RegisterLine CompareOnly
 | Ref | Date       | Category           |
 | T1  | 2026-02-01 | Expenses:Auto:Fuel |
 | T2  | 2026-02-08 | --Split--          |
@@ -3281,7 +3281,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Auto:Fuel     | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
 | T1  | Assets:Checking | 2026-02-01 | Harris Teeter | Expenses:Groceries | -45.00 |
 | T2  | Assets:Checking | 2026-02-05 | Shell         | Expenses:Auto:Fuel | -40.00 |
@@ -3289,14 +3289,14 @@ Given transactions are : Transaction
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register lines selected : RegisterSelect
+And register lines selected : RegisterSelect
 | Line |
 | 1    |
 | 2    |
-When selection deleted
+And selection deleted
 Then deletion count is : DeletionCount Vertical
 | Removed | 2 |
-Then register lines are : RegisterLine CompareOnly
+And register lines are : RegisterLine CompareOnly
 | Ref | Date       | Payee  |
 | T3  | 2026-02-10 | Costco |
 # T1 and T2 are gone entirely -- both of their transactions -- and T3, which was
@@ -3313,16 +3313,16 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee              | Destination        | Amount |
 | T1  | Assets:Checking | 2026-02-01 | HARRIS TEETER #231 | Expenses:Groceries | -45.00 |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register lines selected : RegisterSelect
+And register lines selected : RegisterSelect
 | Line |
 | 1    |
-When payee rule asked for
+And payee rule asked for
 Then rule offered is : PayeeRule Vertical
 | Pattern   | HARRIS TEETER      |
 | MatchType | Contains           |
@@ -3341,16 +3341,16 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee          | Destination            | Amount |
 | T1  | Assets:Checking | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | -40.00 |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register lines selected : RegisterSelect
+And register lines selected : RegisterSelect
 | Line |
 | 1    |
-When payee rule asked for
+And payee rule asked for
 Then rule offered is : PayeeRule Vertical
 | Pattern   | SHELL OIL |
 | MatchType | Contains  |
@@ -3392,17 +3392,17 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto:Fuel     | Expense  | false       |
 | Expenses:Groceries     | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee          | Destination            | Amount |
 | T1  | Assets:Checking | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | -40.00 |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register lines selected : RegisterSelect
+And register lines selected : RegisterSelect
 | Line |
 | 1    |
-When payee rule asked for
-When the rule category picker is opened : CategorySearch Vertical
+And payee rule asked for
+And the rule category picker is opened : CategorySearch Vertical
 | Typed         | fuel |
 | IncludeUnused | true |
 Then categories offered are : CategoryOffered
@@ -3422,17 +3422,17 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto          | Expense  | true        |
 | Expenses:Auto:Fuel     | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee          | Destination            | Amount |
 | T1  | Assets:Checking | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | -40.00 |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register lines selected : RegisterSelect
+And register lines selected : RegisterSelect
 | Line |
 | 1    |
-When payee rule asked for
-When the rule category is chosen : CategoryChoice Vertical
+And payee rule asked for
+And the rule category is chosen : CategoryChoice Vertical
 | Category | Expenses:Auto:Fuel |
 Then rule offered is : PayeeRule Vertical
 | Pattern   | SHELL OIL          |
@@ -3465,20 +3465,20 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Auto:Fuel     | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given payee rules are : PayeeRule
+And payee rules are : PayeeRule
 | Pattern   | MatchType | Payee | Category           | Enabled |
 | SHELL OIL | Contains  | Shell | Expenses:Auto:Fuel | true    |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee          | Destination            | Amount |
 | T1  | Assets:Checking | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | -40.00 |
 | T2  | Assets:Checking | 2026-02-18 | SHELL OIL 8871 | Expenses:Uncategorized | -44.00 |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register lines selected : RegisterSelect
+And register lines selected : RegisterSelect
 | Line |
 | 1    |
-When the payee rules are applied to the selection
+And the payee rules are applied to the selection
 Then transactions are : Transaction CompareOnly
 | Ref | Payee          | Destination            |
 | T1  | Shell          | Expenses:Auto:Fuel     |
@@ -3495,10 +3495,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto:Fuel     | Expense  | false       |
 | Expenses:Dining        | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given payee rules are : PayeeRule
+And payee rules are : PayeeRule
 | Pattern   | MatchType | Payee     | Category           | Enabled |
 | SHELL OIL | Contains  | Shell Oil | Expenses:Auto:Fuel | true    |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee          | Destination            | Amount |
 | T1  | Assets:Checking | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | -40.00 |
 | T2  | Assets:Checking | 2026-02-18 | SHELL OIL 9981 | Expenses:Auto:Fuel     | -44.00 |
@@ -3506,17 +3506,17 @@ Given transactions are : Transaction
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register lines selected : RegisterSelect
+And register lines selected : RegisterSelect
 | Line |
 | 1    |
 | 2    |
 | 3    |
-When the payee rules are applied to the selection
+And the payee rules are applied to the selection
 Then applying the rules reported is : RuleApplication Vertical
 | Matched        | 1 |
 | AlreadyCorrect | 1 |
 | Skipped        | 1 |
-Then transactions are : Transaction CompareOnly
+And transactions are : Transaction CompareOnly
 | Ref | Payee      | Destination            |
 | T1  | Shell Oil  | Expenses:Auto:Fuel     |
 | T2  | Shell Oil  | Expenses:Auto:Fuel     |
@@ -3569,25 +3569,25 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Maintenance | Expense  | false       |
 | Expenses:Home:Garden      | Expense  | false       |
 | Expenses:Uncategorized    | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination            | Amount  |
 | T1  | Assets:Checking | 2026-02-02 | HOME~DEPOT | Expenses:Uncategorized | -184.50 |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register lines selected : RegisterSelect
+And register lines selected : RegisterSelect
 | Line |
 | 1    |
-When the selection is split into : SplitLine
+And the selection is split into : SplitLine
 | Category                  | Amount | Memo    |
 | Expenses:Home:Maintenance | 100.00 | Paint   |
 | Expenses:Home:Garden      | 84.50  | Compost |
 Then splitting reported is : SplitSaved Vertical
 | Saved | true |
-Then register lines are : RegisterLine CompareOnly
+And register lines are : RegisterLine CompareOnly
 | Ref | Date       | Category  | Payment |
 | T1  | 2026-02-02 | --Split-- | 184.50  |
-Then split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount | Memo    |
 | Expenses:Home:Maintenance | 100.00 | Paint   |
 | Expenses:Home:Garden      | 84.50  | Compost |
@@ -3604,23 +3604,23 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Maintenance | Expense  | false       |
 | Expenses:Home:Garden      | Expense  | false       |
 | Expenses:Uncategorized    | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination            | Amount  |
 | T1  | Assets:Checking | 2026-02-02 | HOME~DEPOT | Expenses:Uncategorized | -184.50 |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register lines selected : RegisterSelect
+And register lines selected : RegisterSelect
 | Line |
 | 1    |
-When the selection is split into : SplitLine
+And the selection is split into : SplitLine
 | Category                  | Amount | Memo    |
 | Expenses:Home:Maintenance | 100.00 | Paint   |
 | Expenses:Home:Garden      | 54.50  | Compost |
 Then splitting reported is : SplitSaved Vertical
 | Saved  | false                              |
 | Reason | The split is 30.00 short of 184.50 |
-Then register lines are : RegisterLine CompareOnly
+And register lines are : RegisterLine CompareOnly
 | Ref | Date       | Category               | Payment |
 | T1  | 2026-02-02 | Expenses:Uncategorized | 184.50  |
 
@@ -3632,14 +3632,14 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee          | Destination            | Amount |
 | T1  | Assets:Checking | 2026-02-01 | SHELL OIL 3344 | Expenses:Uncategorized | -40.00 |
 | T2  | Assets:Checking | 2026-02-08 | HOME~DEPOT     | Expenses:Uncategorized | -90.00 |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register lines selected : RegisterSelect
+And register lines selected : RegisterSelect
 | Line |
 | 1    |
 | 2    |
@@ -3661,17 +3661,17 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense  | false       |
 | Expenses:Home:Garden      | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
 | T1  | Assets:Checking | 2026-02-02 | HOME~DEPOT | Split       | -184.50 |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount | Memo    |
 | Expenses:Home:Maintenance | 100.00 | Paint   |
 | Expenses:Home:Garden      | 84.50  | Compost |
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register lines selected : RegisterSelect
+And register lines selected : RegisterSelect
 | Line |
 | 1    |
 Then menu items are : MenuItem
@@ -3764,7 +3764,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       | 1000.00           | 2026-02-10          |
 | Expenses:Groceries | Expense  | false       | 0.00              | never               |
 | Income:Salary      | Income   | false       | 0.00              | never               |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount  | Cleared   |
 | T1  | Assets:Checking | 2026-02-01 | Acme Payroll  | Income:Salary      | 1200.00 | Cleared   |
 | T2  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -150.00 | Uncleared |
@@ -3781,7 +3781,7 @@ Then reconciling shows : Reconciliation Vertical
 | OnLineAt   | 2026-02-10      |
 | Difference | 200.00          |
 | Agrees     | false           |
-Then uncleared items offered are : UnclearedItem
+And uncleared items offered are : UnclearedItem
 | Ref | Date       | Payee         | Amount  |
 | T2  | 2026-02-05 | Harris Teeter | -150.00 |
 | T3  | 2026-02-09 | Costco        | -50.00  |
@@ -3797,7 +3797,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       | 1000.00           | 2026-02-10          |
 | Expenses:Groceries | Expense  | false       | 0.00              | never               |
 | Income:Salary      | Income   | false       | 0.00              | never               |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount  | Cleared   |
 | T1  | Assets:Checking | 2026-02-01 | Acme Payroll  | Income:Salary      | 1200.00 | Cleared   |
 | T2  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -150.00 | Uncleared |
@@ -3805,10 +3805,10 @@ Given transactions are : Transaction
 When register opened on : AccountSelect
 | Path            |
 | Assets:Checking |
-When reconciling is opened on : AccountSelect
+And reconciling is opened on : AccountSelect
 | Path            |
 | Assets:Checking |
-When items ticked in reconciling : ClearedTick
+And items ticked in reconciling : ClearedTick
 | Ref |
 | T2  |
 | T3  |
@@ -3821,9 +3821,9 @@ Then reconciling shows : Reconciliation Vertical
 | OnLineAt   | 2026-02-10      |
 | Difference | 0.00            |
 | Agrees     | true            |
-Then the balance adjustment offered is : BalanceAdjustmentOffer Vertical
+And the balance adjustment offered is : BalanceAdjustmentOffer Vertical
 | Shown | false |
-Then register lines are : RegisterLine CompareOnly
+And register lines are : RegisterLine CompareOnly
 | Ref | Cleared |
 | T1  | Cleared |
 | T2  | Cleared |
@@ -3842,14 +3842,14 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       | 1000.00           | 2026-02-10          |
 | Expenses:Groceries | Expense  | false       | 0.00              | never               |
 | Income:Salary      | Income   | false       | 0.00              | never               |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount  | Cleared   |
 | T1  | Assets:Checking | 2026-02-01 | Acme Payroll  | Income:Salary      | 1200.00 | Cleared   |
 | T2  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -150.00 | Uncleared |
 When reconciling is opened on : AccountSelect
 | Path            |
 | Assets:Checking |
-When items ticked in reconciling : ClearedTick
+And items ticked in reconciling : ClearedTick
 | Ref |
 | T2  |
 Then reconciling shows : Reconciliation Vertical
@@ -3861,7 +3861,7 @@ Then reconciling shows : Reconciliation Vertical
 | OnLineAt   | 2026-02-10      |
 | Difference | 50.00           |
 | Agrees     | false           |
-Then the balance adjustment offered is : BalanceAdjustmentOffer Vertical
+And the balance adjustment offered is : BalanceAdjustmentOffer Vertical
 | Shown    | true                       |
 | Amount   | -50.00                     |
 | Date     | 2026-02-10                 |
@@ -3883,26 +3883,26 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       | 1000.00           | 2026-02-10          |
 | Expenses:Groceries | Expense  | false       | 0.00              | never               |
 | Income:Salary      | Income   | false       | 0.00              | never               |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount  | Cleared   |
 | T1  | Assets:Checking | 2026-02-01 | Acme Payroll  | Income:Salary      | 1200.00 | Cleared   |
 | T2  | Assets:Checking | 2026-02-05 | Harris Teeter | Expenses:Groceries | -150.00 | Uncleared |
 When register opened on : AccountSelect
 | Path            |
 | Assets:Checking |
-When reconciling is opened on : AccountSelect
+And reconciling is opened on : AccountSelect
 | Path            |
 | Assets:Checking |
-When items ticked in reconciling : ClearedTick
+And items ticked in reconciling : ClearedTick
 | Ref |
 | T2  |
-When the balance adjustment is accepted
+And the balance adjustment is accepted
 Then register lines are : RegisterLine CompareOnly
 | Ref | Date       | Payee              | Category                   | Payment | Cleared   |
 | T1  | 2026-02-01 | Acme Payroll       | Income:Salary              | 0.00    | Cleared   |
 | T2  | 2026-02-05 | Harris Teeter      | Expenses:Groceries         | 150.00  | Cleared   |
 | T3  | 2026-02-10 | Balance~Adjustment | Equity:Balance~Adjustments | 50.00   | Uncleared |
-Then reconciling shows : Reconciliation Vertical
+And reconciling shows : Reconciliation Vertical
 | Shown      | true            |
 | Account    | Assets:Checking |
 | Balance    | 1000.00         |
@@ -3924,7 +3924,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder | DownloadedBalance | DownloadedBalanceAt |
 | Assets:Wallet      | Cash    | false       | 0.00              | never               |
 | Expenses:Groceries | Expense | false       | 0.00              | never               |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount | Date       | Payee  | Destination        | Amount | Cleared   |
 | T1  | Assets:Wallet | 2026-02-03 | Costco | Expenses:Groceries | -20.00 | Uncleared |
 When reconciling is opened on : AccountSelect
@@ -3939,7 +3939,7 @@ Then reconciling shows : Reconciliation Vertical
 | OnLineAt   | never         |
 | Difference | 0.00          |
 | Agrees     | false         |
-Then the balance adjustment offered is : BalanceAdjustmentOffer Vertical
+And the balance adjustment offered is : BalanceAdjustmentOffer Vertical
 | Shown | false |
 
 Scenario Reconciling is offered on a real account and not on a category
@@ -3950,11 +3950,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder | Hidden |
 | Assets:Checking    | Checking | false       | false  |
 | Expenses:Groceries | Expense  | false       | false  |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
 | T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
 When account list shown
-When account list node right clicked : TreeNode Vertical
+And account list node right clicked : TreeNode Vertical
 | Node | Expenses:Groceries |
 Then menu items are : MenuItem
 | Item           | Enabled |
@@ -4006,7 +4006,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto      | Expense | true        |
 | Expenses:Auto:Fuel | Expense | false       |
 | Expenses:Groceries | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 =FebruaryOnChecking
 When report run : ReportSpec Vertical
 | GroupBy  | Category     |
@@ -4014,16 +4014,16 @@ When report run : ReportSpec Vertical
 | To       | 2026-02-28   |
 | Interval | Whole        |
 | Detail   | Transactions |
-When report line clicked : ReportLineSelect Vertical
+And report line clicked : ReportLineSelect Vertical
 | Line | 5 |
 Then open tabs are : OpenTab
 | Position | Kind     | Account         | Name                 | Active |
 | 1        | Report   | none            | Spending by category | false  |
 | 2        | Register | Assets:Checking | Checking             | true   |
-Then panes are : PaneState
+And panes are : PaneState
 | Pane | Showing  | Account         | Active |
 | 1    | Register | Assets:Checking | true   |
-Then the register line selected is : RegisterSelect
+And the register line selected is : RegisterSelect
 | Line |
 | 3    |
 # The report reads: Expenses, Expenses:Auto, Expenses:Auto:Fuel, the 1 February
@@ -4042,7 +4042,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto      | Expense | true        |
 | Expenses:Auto:Fuel | Expense | false       |
 | Expenses:Groceries | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 =FebruaryOnChecking
 When report run : ReportSpec Vertical
 | GroupBy  | Category     |
@@ -4050,12 +4050,12 @@ When report run : ReportSpec Vertical
 | To       | 2026-02-28   |
 | Interval | Whole        |
 | Detail   | Transactions |
-When report line clicked : ReportLineSelect Vertical
+And report line clicked : ReportLineSelect Vertical
 | Line | 3 |
 Then open tabs are : OpenTab
 | Position | Kind   | Account | Name                 | Active |
 | 1        | Report | none    | Spending by category | true   |
-Then panes are : PaneState
+And panes are : PaneState
 | Pane | Showing | Account | Active |
 | 1    | Report  | none    | true   |
 # Line three is Expenses:Auto:Fuel, the category itself. No register tab is
@@ -4077,7 +4077,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto      | Expense | true        |
 | Expenses:Auto:Fuel | Expense | false       |
 | Expenses:Groceries | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 =FebruaryOnChecking
 When report run : ReportSpec Vertical
 | GroupBy  | Category     |
@@ -4085,7 +4085,7 @@ When report run : ReportSpec Vertical
 | To       | 2026-02-28   |
 | Interval | Whole        |
 | Detail   | Transactions |
-When report lines selected : ReportMenuSelect
+And report lines selected : ReportMenuSelect
 | Line |
 | 4    |
 Then menu items are : MenuItem
@@ -4103,7 +4103,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto      | Expense | true        |
 | Expenses:Auto:Fuel | Expense | false       |
 | Expenses:Groceries | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 =FebruaryOnChecking
 When report run : ReportSpec Vertical
 | GroupBy  | Category     |
@@ -4111,7 +4111,7 @@ When report run : ReportSpec Vertical
 | To       | 2026-02-28   |
 | Interval | Whole        |
 | Detail   | Transactions |
-When report lines selected : ReportMenuSelect
+And report lines selected : ReportMenuSelect
 | Line |
 | 4    |
 | 5    |
@@ -4129,7 +4129,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto      | Expense | true        |
 | Expenses:Auto:Fuel | Expense | false       |
 | Expenses:Groceries | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 =FebruaryOnChecking
 When report run : ReportSpec Vertical
 | GroupBy  | Category     |
@@ -4137,7 +4137,7 @@ When report run : ReportSpec Vertical
 | To       | 2026-02-28   |
 | Interval | Whole        |
 | Detail   | Transactions |
-When report lines selected : ReportMenuSelect
+And report lines selected : ReportMenuSelect
 | Line |
 | 3    |
 Then menu items are : MenuItem
@@ -4170,14 +4170,14 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto      | Expense  | true        |
 | Expenses:Auto:Fuel | Expense  | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 =FebruaryOnChecking
 When the transaction is opened : TransactionSelect Vertical
 | Ref | T3 |
 Then panes are : PaneState
 | Pane | Showing  | Account         | Active |
 | 1    | Register | Assets:Checking | true   |
-Then the register line selected is : RegisterSelect
+And the register line selected is : RegisterSelect
 | Line |
 | 3    |
 # T3 is the 10 February visit to the filling station. Assets:Checking is the
@@ -4204,7 +4204,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking   | false       |
 | Liabilities:Visa   | CreditCard | false       |
 | Expenses:Groceries | Expense    | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee        | Destination        | Amount  |
 | T1  | Liabilities:Visa | 2026-02-05 | Amazon       | Expenses:Groceries | -60.00  |
 | T2  | Assets:Checking  | 2026-02-25 | Visa Payment | Liabilities:Visa   | -200.00 |
@@ -4214,7 +4214,7 @@ Then the registers offered are : RegisterOffer
 | Account          |
 | Assets:Checking  |
 | Liabilities:Visa |
-Then panes are : PaneState
+And panes are : PaneState
 | Pane | Showing | Account | Active |
 | 1    | Empty   | none    | true   |
 # In the order the transaction's own sides name them, which is the order the
@@ -4230,7 +4230,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking   | false       |
 | Liabilities:Visa   | CreditCard | false       |
 | Expenses:Groceries | Expense    | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee        | Destination        | Amount  |
 | T1  | Liabilities:Visa | 2026-02-05 | Amazon       | Expenses:Groceries | -60.00  |
 | T2  | Assets:Checking  | 2026-02-25 | Visa Payment | Liabilities:Visa   | -200.00 |
@@ -4240,7 +4240,7 @@ When the transaction is opened in : RegisterChoice Vertical
 Then panes are : PaneState
 | Pane | Showing  | Account          | Active |
 | 1    | Register | Liabilities:Visa | true   |
-Then the register line selected is : RegisterSelect
+And the register line selected is : RegisterSelect
 | Line |
 | 2    |
 # The card's register has the charge on the fifth and the payment on the
@@ -4257,7 +4257,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto      | Expense  | true        |
 | Expenses:Auto:Fuel | Expense  | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 =FebruaryOnChecking
 When the transactions are recategorised : TransactionRecategorise
 | Ref | Category           |
@@ -4298,7 +4298,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto      | Expense | true        |
 | Expenses:Auto:Fuel | Expense | false       |
 | Expenses:Groceries | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 =FebruaryOnChecking
 When report run : ReportSpec Vertical
 | GroupBy  | Category     |
@@ -4422,11 +4422,11 @@ When account settings changed : AccountSettings Vertical
 | Path          | Assets:Checking |
 | Bank          | First Bank      |
 | AccountNumber | 0012-3456       |
-When account settings changed : AccountSettings Vertical
+And account settings changed : AccountSettings Vertical
 | Path          | Liabilities:Visa |
 | Bank          | First Bank       |
 | AccountNumber | 4111             |
-When account listing opened
+And account listing opened
 Then account listing rows are : AccountListingRow CompareOnly
 | Path             | Bank       | AccountNumber |
 | Assets:Checking  | First Bank | 0012-3456     |
@@ -4476,7 +4476,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Auto      | Expense | true        | false  |
 | Expenses:Auto:Fuel | Expense | false       | false  |
 When category listing opened
-When category added from the listing : NewCategory Vertical
+And category added from the listing : NewCategory Vertical
 | Name  | Tolls         |
 | Under | Expenses:Auto |
 | Type  | Expense       |
@@ -4497,12 +4497,12 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder | Hidden |
 | Expenses:Auto:Fuel | Expense | false       | false  |
 When category listing opened
-When category added from the listing : NewCategory Vertical
+And category added from the listing : NewCategory Vertical
 | Name  | Consulting |
 | Under | none       |
 | Type  | Income     |
 | Alias | none       |
-When category added from the listing : NewCategory Vertical
+And category added from the listing : NewCategory Vertical
 | Name  | Postage |
 | Under | none    |
 | Type  | Expense |
@@ -4523,7 +4523,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking | Checking | false       | false  |
 | Assets:Savings  | Savings  | false       | false  |
 When account listing opened
-When listing row clicked : ListingRowSelect Vertical
+And listing row clicked : ListingRowSelect Vertical
 | Path | Assets:Savings |
 Then the editor opened is : EditorOpened Vertical
 | Window | Account settings |
@@ -4535,7 +4535,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Groceries | Expense | false       | false  |
 | Expenses:Auto:Fuel | Expense | false       | false  |
 When category listing opened
-When listing row clicked : ListingRowSelect Vertical
+And listing row clicked : ListingRowSelect Vertical
 | Path | Expenses:Auto:Fuel |
 Then the editor opened is : EditorOpened Vertical
 | Window | Category settings  |
@@ -4551,11 +4551,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       | false  |
 | Assets:Wallet      | Cash     | false       | false  |
 | Expenses:Groceries | Expense  | false       | false  |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
 | T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
 When account list shown
-When account list node right clicked : TreeNode Vertical
+And account list node right clicked : TreeNode Vertical
 | Node | Assets:Checking |
 Then menu items are : MenuItem
 | Item           | Enabled |
@@ -4573,11 +4573,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       | false  |
 | Assets:Wallet      | Cash     | false       | false  |
 | Expenses:Groceries | Expense  | false       | false  |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
 | T1  | Assets:Checking | 2026-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
 When account list shown
-When account list node right clicked : TreeNode Vertical
+And account list node right clicked : TreeNode Vertical
 | Node | Assets:Wallet |
 Then menu items are : MenuItem
 | Item           | Enabled |
@@ -4596,7 +4596,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder | Hidden |
 | Assets:Checking | Checking | false       | false  |
 When account list shown
-When account list node right clicked : TreeNode Vertical
+And account list node right clicked : TreeNode Vertical
 | Node | Banking |
 Then menu items are : MenuItem
 | Item           | Enabled |
@@ -4608,7 +4608,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder | Hidden |
 | Assets:Checking | Checking | false       | false  |
 When account list shown
-When node edit chosen : TreeNode Vertical
+And node edit chosen : TreeNode Vertical
 | Node | Assets:Checking |
 Then the editor opened is : EditorOpened Vertical
 | Window | Account settings |
@@ -4678,10 +4678,10 @@ Given the chart of accounts is : ChartOfAccounts
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register column resized : RegisterColumnWidth Vertical
+And register column resized : RegisterColumnWidth Vertical
 | Column | Payee |
 | Width  | 240   |
-When account selected : AccountSelect
+And account selected : AccountSelect
 | Path             |
 | Liabilities:Visa |
 Then register column widths are : RegisterColumnWidth CompareOnly
@@ -4699,7 +4699,7 @@ Given the chart of accounts is : ChartOfAccounts
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register column resized : RegisterColumnWidth Vertical
+And register column resized : RegisterColumnWidth Vertical
 | Column | Memo |
 | Width  | 180  |
 Then recorded column widths are : RegisterColumnWidth
@@ -4715,14 +4715,14 @@ Given the chart of accounts is : ChartOfAccounts
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register column resized : RegisterColumnWidth Vertical
+And register column resized : RegisterColumnWidth Vertical
 | Column | Payee |
 | Width  | 240   |
-When register column resized : RegisterColumnWidth Vertical
+And register column resized : RegisterColumnWidth Vertical
 | Column | Category |
 | Width  | 300      |
-When the book is saved and opened again
-When account selected : AccountSelect
+And the book is saved and opened again
+And account selected : AccountSelect
 | Path            |
 | Assets:Checking |
 Then register column widths are : RegisterColumnWidth CompareOnly
@@ -4740,7 +4740,7 @@ Given the chart of accounts is : ChartOfAccounts
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register column resized : RegisterColumnWidth Vertical
+And register column resized : RegisterColumnWidth Vertical
 | Column | CheckNo |
 | Width  | 0       |
 Then register column widths are : RegisterColumnWidth CompareOnly
@@ -4783,16 +4783,16 @@ Given the chart of accounts is : ChartOfAccounts
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register column dragged through : RegisterColumnWidth
+And register column dragged through : RegisterColumnWidth
 | Column | Width |
 | Payee  | 200   |
 | Payee  | 220   |
 | Payee  | 240   |
-When the drag stops
+And the drag stops
 Then register column widths are : RegisterColumnWidth CompareOnly
 | Column | Width |
 | Payee  | 240   |
-Then book writes are : BookWrites Vertical
+And book writes are : BookWrites Vertical
 | Writes | 1 |
 # Three widths reported, the last of them kept, and one write. The two before
 # it were on their way somewhere and were never an answer to anything.
@@ -4807,14 +4807,14 @@ Given the chart of accounts is : ChartOfAccounts
 When account selected : AccountSelect
 | Path            |
 | Assets:Checking |
-When register column dragged through : RegisterColumnWidth
+And register column dragged through : RegisterColumnWidth
 | Column | Width |
 | Payee  | 200   |
 | Payee  | 220   |
 Then register column widths are : RegisterColumnWidth CompareOnly
 | Column | Width |
 | Payee  | 220   |
-Then book writes are : BookWrites Vertical
+And book writes are : BookWrites Vertical
 | Writes | 0 |
 
 # ---------------------------------------------------------------------------
@@ -4923,7 +4923,7 @@ Details Uncategorized is in the list and is not Quicken's. It is this
 \ actually posted to.
 When a new book is made named : BookName Vertical
 | Name | Household |
-When the new book question is answered : NewBookAnswer Vertical
+And the new book question is answered : NewBookAnswer Vertical
 | HistoryFile | none |
 Then the chart of accounts is : ChartOfAccounts
 | Path                           | Type       | Placeholder |
@@ -4989,7 +4989,7 @@ Description The standard list is not added to a history. Twenty years of
 \ whether a chart is added to.
 Given import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
-Given the file contains
+And the file contains
 """
 !Type:Cat
 NGroceries
@@ -5007,7 +5007,7 @@ LGroceries
 """
 When a new book is made named : BookName Vertical
 | Name | Household |
-When the new book question is answered : NewBookAnswer Vertical
+And the new book question is answered : NewBookAnswer Vertical
 | HistoryFile | household.qif |
 Then the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
@@ -5293,7 +5293,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
 | T1  | Assets:Checking | 2024-01-10 | Shop A | Expenses:Groceries | -10.00  |
 | T2  | Assets:Checking | 2024-01-11 | Shop B | Expenses:Groceries | -20.00  |
@@ -5302,7 +5302,7 @@ Then transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
 | T1  | Assets:Checking | 2024-01-10 | Shop A | Expenses:Groceries | -10.00  |
 | T2  | Assets:Checking | 2024-01-11 | Shop B | Expenses:Groceries | -20.00  |
-Then work in progress is : ProgressReport
+And work in progress is : ProgressReport
 | What | Done | Total | Reads | Finished |
 # No rows. A stopped job is over, the same as a finished one, and the strip
 # goes away either way.
@@ -5389,7 +5389,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type     | Placeholder |
 | Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination               | Amount  | Tag            |
 | T1  | Assets:Checking | 2024-01-10 | Home Depot | Expenses:Home:Maintenance | -100.00 | Rental         |
 | T2  | Assets:Checking | 2024-01-11 | Home Depot | Expenses:Home:Maintenance | -50.00  | Rental~Kitchen |
@@ -5424,7 +5424,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type     | Placeholder |
 | Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination               | Amount  | Tag            |
 | T1  | Assets:Checking | 2024-01-10 | Home Depot | Expenses:Home:Maintenance | -100.00 | Rental         |
 | T2  | Assets:Checking | 2024-01-11 | Home Depot | Expenses:Home:Maintenance | -50.00  | Rental~Kitchen |
@@ -5435,7 +5435,7 @@ Then transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination               | Amount  | Tag               |
 | T1  | Assets:Checking | 2024-01-10 | Home Depot | Expenses:Home:Maintenance | -100.00 | OakStreet         |
 | T2  | Assets:Checking | 2024-01-11 | Home Depot | Expenses:Home:Maintenance | -50.00  | OakStreet~Kitchen |
-Then tag listing rows are : TagListingRow
+And tag listing rows are : TagListingRow
 | Name      | Used |
 | Kitchen   | 1    |
 | OakStreet | 2    |
@@ -5602,7 +5602,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Liabilities:Visa       | CreditCard | false     |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee        | Destination            | Amount   | Cleared   |
 | T1  | Assets:Checking  | 2026-02-10 | Visa~Payment | Expenses:Uncategorized | -3348.07 | Uncleared |
 | T2  | Liabilities:Visa | 2026-02-12 | Payment      | Expenses:Uncategorized | 3348.07  | Cleared   |
@@ -5621,14 +5621,14 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Liabilities:Visa       | CreditCard | false     |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee        | Destination            | Amount   | Cleared   |
 | T1  | Assets:Checking  | 2026-02-10 | Visa~Payment | Expenses:Uncategorized | -3348.07 | Uncleared |
 | T2  | Liabilities:Visa | 2026-02-12 | Payment      | Expenses:Uncategorized | 3348.07  | Cleared   |
 When destination typed is : DestinationTyped Vertical
 | Ref         | T1               |
 | Destination | Liabilities:Visa |
-When transfer candidate chosen : TransferCandidateChoice Vertical
+And transfer candidate chosen : TransferCandidateChoice Vertical
 | Ref | T2 |
 Then transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee        | Destination      | Amount   | Cleared |
@@ -5645,14 +5645,14 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Liabilities:Visa       | CreditCard | false     |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee        | Destination            | Amount   | Cleared   |
 | T1  | Assets:Checking  | 2026-02-10 | Visa~Payment | Expenses:Uncategorized | -3348.07 | Uncleared |
 | T2  | Liabilities:Visa | 2026-02-12 | Payment      | Expenses:Uncategorized | 3348.07  | Cleared   |
 When destination typed is : DestinationTyped Vertical
 | Ref         | T1               |
 | Destination | Liabilities:Visa |
-When transfer candidate chosen : TransferCandidateChoice Vertical
+And transfer candidate chosen : TransferCandidateChoice Vertical
 | Ref | none |
 Then transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee        | Destination            | Amount   | Cleared   |
@@ -5679,7 +5679,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Visa       | CreditCard | false     |
 | Expenses:Groceries     | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee        | Destination            | Amount   | Cleared   |
 | T1  | Assets:Checking  | 2026-02-10 | Harris~Teeter | Expenses:Uncategorized | -3348.07 | Uncleared |
 | T2  | Liabilities:Visa | 2026-02-12 | Payment      | Expenses:Uncategorized | 3348.07  | Cleared   |
@@ -5699,7 +5699,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Assets:Savings         | Savings  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee    | Destination            | Amount  | Cleared   |
 | T1  | Assets:Checking | 2026-02-10 | Transfer | Expenses:Uncategorized | -500.00 | Uncleared |
 When destination typed is : DestinationTyped Vertical
@@ -5708,7 +5708,7 @@ When destination typed is : DestinationTyped Vertical
 Then transfer candidates are : TransferCandidateRow
 | Ref | Account | Date | Payee | Amount | Cleared | DaysApart |
 # No rows.
-Then transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee    | Destination    | Amount  | Cleared   |
 | T1  | Assets:Checking | 2026-02-10 | Transfer | Assets:Savings | -500.00 | Uncleared |
 
@@ -5721,7 +5721,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Liabilities:Visa       | CreditCard | false     |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee        | Destination            | Amount  | Cleared   |
 | T1  | Assets:Checking  | 2026-02-10 | Visa~Payment | Expenses:Uncategorized | -100.00 | Uncleared |
 | T2  | Liabilities:Visa | 2026-02-12 | Payment~A    | Expenses:Uncategorized | 100.00  | Cleared   |

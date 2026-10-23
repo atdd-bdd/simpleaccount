@@ -253,7 +253,7 @@ Then header matches are : HeaderMatches
 | 2        | Description     | Payee   | Alias     |
 | 3        | Amount          | Amount  | Alias     |
 | 4        | Running Balance | Balance | Alias     |
-Then header matching is complete : HeaderMatchResult Vertical
+And header matching is complete : HeaderMatchResult Vertical
 | Complete       | true |
 | MissingFields  | 0    |
 | UnmatchedCount | 0    |
@@ -279,7 +279,7 @@ Then header matches are : HeaderMatches
 | 2        | Payee        | Payee  | Alias     |
 | 3        | Withdrawals  | Debit  | Alias     |
 | 4        | Deposits     | Credit | Alias     |
-Then amount style follows from the matches : AmountStyleChoice Vertical
+And amount style follows from the matches : AmountStyleChoice Vertical
 | AmountStyle | DebitCredit |
 
 Attributes AmountStyleChoice
@@ -322,12 +322,12 @@ Then header matches are : HeaderMatches
 | 2        | Narrative    | Ignore | None      |
 | 3        | Amount       | Amount | Alias     |
 | 4        | Reference    | Ignore | None      |
-Then header matching is complete : HeaderMatchResult Vertical
+And header matching is complete : HeaderMatchResult Vertical
 | Complete       | false |
 | MissingFields  | 1     |
 | UnmatchedCount | 2     |
 | AmbiguousCount | 0     |
-Then user asked about headers are : UnmatchedHeader
+And user asked about headers are : UnmatchedHeader
 | Position | SourceHeader | Suggestion |
 | 2        | Narrative    | Payee      |
 | 4        | Reference    | CheckNo    |
@@ -367,7 +367,7 @@ Then header matching is complete : HeaderMatchResult Vertical
 | MissingFields  | 0     |
 | UnmatchedCount | 0     |
 | AmbiguousCount | 1     |
-Then ambiguous fields are : AmbiguousField
+And ambiguous fields are : AmbiguousField
 | Field  | Positions | Headers                   |
 | Amount | 3 and 4   | Amount, Transaction Amount |
 
@@ -398,7 +398,7 @@ Given saved profiles are : SavedProfile
 | Name            | Signature                                 |
 | Example Bank    | Posted Date,Description,Amount,Running Balance |
 | Two Column Bank | Trans Date,Payee,Withdrawals,Deposits     |
-Given the file contains
+And the file contains
 """
 Trans Date,Payee,Withdrawals,Deposits
 01/15/2024,HARRIS TEETER,45.00,
@@ -427,13 +427,13 @@ Description The user corrected a mapping once; that correction is not quietly
 Given saved profiles are : SavedProfile
 | Name         | Signature                      |
 | Odd Bank     | Date,Description,Narrative,Amount |
-Given saved header matches are : HeaderMatches
+And saved header matches are : HeaderMatches
 | Position | SourceHeader | Field  | MatchedBy |
 | 1        | Date         | Date   | User      |
 | 2        | Description  | Memo   | User      |
 | 3        | Narrative    | Payee  | User      |
 | 4        | Amount       | Amount | User      |
-Given the file contains
+And the file contains
 """
 Date,Description,Narrative,Amount
 01/15/2024,CARD PURCHASE,HARRIS TEETER,-45.00
@@ -445,7 +445,7 @@ Then header matches are : HeaderMatches
 | 2        | Description  | Memo   | Profile   |
 | 3        | Narrative    | Payee  | Profile   |
 | 4        | Amount       | Amount | Profile   |
-Then rows read are : CsvRowRead
+And rows read are : CsvRowRead
 | Date       | Payee         | Memo          | Amount |
 | 2024-01-15 | HARRIS TEETER | CARD PURCHASE | -45.00 |
 
@@ -456,7 +456,7 @@ Description The signature is compared as a set, so a bank that reorders its
 Given saved profiles are : SavedProfile
 | Name         | Signature                                      |
 | Example Bank | Posted Date,Description,Amount,Running Balance |
-Given the file contains
+And the file contains
 """
 Description,Posted Date,Running Balance,Amount
 HARRIS TEETER,01/15/2024,1705.00,-45.00
@@ -465,7 +465,7 @@ When headers matched
 Then profile recognised is : ProfileRecognition Vertical
 | Name  | Example Bank |
 | Asked | false        |
-Then header matches are : HeaderMatches
+And header matches are : HeaderMatches
 | Position | SourceHeader    | Field   | MatchedBy |
 | 1        | Description     | Payee   | Profile   |
 | 2        | Posted Date     | Date    | Profile   |
@@ -481,18 +481,18 @@ Date,Narrative,Amount
 01/15/2024,HARRIS TEETER,-45.00
 """
 When headers matched
-When header mapped by user : HeaderMatch Vertical
+And header mapped by user : HeaderMatch Vertical
 | Position     | 2         |
 | SourceHeader | Narrative |
 | Field        | Payee     |
 | MatchedBy    | User      |
-When profile saved as : ProfileLabel
+And profile saved as : ProfileLabel
 | Name           |
 | Narrative Bank |
 Then saved profiles are : SavedProfile
 | Name           | Signature             |
 | Narrative Bank | Date,Narrative,Amount |
-Then header matching is complete : HeaderMatchResult Vertical
+And header matching is complete : HeaderMatchResult Vertical
 | Complete       | true |
 | MissingFields  | 0    |
 | UnmatchedCount | 0    |
@@ -524,7 +524,7 @@ Then header matches are : HeaderMatches
 | 4        | Currency         | Ignore | Alias     |
 | 5        | Transaction Type | Ignore | Alias     |
 | 6        | Status           | Ignore | Alias     |
-Then header matching is complete : HeaderMatchResult Vertical
+And header matching is complete : HeaderMatchResult Vertical
 | Complete       | true |
 | MissingFields  | 0    |
 | UnmatchedCount | 0    |
@@ -538,12 +538,12 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Amount  |
 | T0  | Assets:Checking | 2024-01-01 | 1750.00 |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
-Given the file contains
+And the file contains
 """
 Date,Description,Amount,Balance
 01/15/2024,HARRIS TEETER,-45.00,1705.00
@@ -599,18 +599,18 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Amount  |
 | T0  | Assets:Checking | 2024-01-01 | 1750.00 |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
-Given the csv profile is : CsvProfile Vertical
+And the csv profile is : CsvProfile Vertical
 | Name          | Odd Heading Bank |
 | DateColumn    | Date             |
 | PayeeColumn   | Description      |
 | AmountColumn  | Amount           |
 | BalanceColumn | Position         |
-Given the file contains
+And the file contains
 """
 Date,Description,Amount,Position
 01/15/2024,HARRIS TEETER,-45.00,1705.00
@@ -630,15 +630,15 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
-Given the csv profile is : CsvProfile Vertical
+And the csv profile is : CsvProfile Vertical
 | Name          | Odd Heading Bank |
 | DateColumn    | Date             |
 | PayeeColumn   | Description      |
 | AmountColumn  | Amount           |
 | BalanceColumn | Position         |
-Given the file contains
+And the file contains
 """
 Date,Description,Amount
 01/15/2024,HARRIS TEETER,-45.00
@@ -647,7 +647,7 @@ When rows imported
 Then rows read are : CsvRowRead
 | Date       | Payee         | Amount |
 | 2024-01-15 | HARRIS TEETER | -45.00 |
-Then balance column check is : BalanceColumnCheck
+And balance column check is : BalanceColumnCheck
 | Line | RowBalance | ComputedBalance | Agrees |
 # No rows. Nothing was checked, because the file carried no balance.
 
@@ -659,18 +659,18 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Amount  |
 | T0  | Assets:Checking | 2024-01-01 | 1750.00 |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
-Given the csv profile is : CsvProfile Vertical
+And the csv profile is : CsvProfile Vertical
 | Name          | Odd Heading Bank |
 | DateColumn    | Date             |
 | PayeeColumn   | Description      |
 | AmountColumn  | Amount           |
 | BalanceColumn | Position         |
-Given the file contains
+And the file contains
 """
 Date,Description,Amount,Position
 01/15/2024,HARRIS TEETER,-45.00,
@@ -707,7 +707,7 @@ Given the csv profile is : CsvProfile Vertical
 | AmountStyle  | Signed          |
 | AmountColumn | Amount          |
 | OutwardSign  | Negative        |
-Given the file contains
+And the file contains
 """
 Date,Description,Amount
 01/15/2024,HARRIS TEETER #231,-45.00
@@ -734,7 +734,7 @@ Given the csv profile is : CsvProfile Vertical
 | AmountStyle  | DebitCredit     |
 | DebitColumn  | Withdrawal      |
 | CreditColumn | Deposit         |
-Given the file contains
+And the file contains
 """
 Posted,Payee,Withdrawal,Deposit
 01/15/2024,HARRIS TEETER,45.00,
@@ -761,7 +761,7 @@ Given the csv profile is : CsvProfile Vertical
 | AmountStyle  | Signed        |
 | AmountColumn | Amount        |
 | OutwardSign  | Positive      |
-Given the file contains
+And the file contains
 """
 Date,Description,Amount
 01/15/2024,HARRIS TEETER,45.00
@@ -806,7 +806,7 @@ Given the csv profile is : CsvProfile Vertical
 | AmountStyle  | DebitCredit     |
 | DebitColumn  | Withdrawal      |
 | CreditColumn | Deposit         |
-Given the file contains
+And the file contains
 """
 Posted,Payee,Withdrawal,Deposit
 01/15/2024,ODD ROW,45.00,20.00
@@ -881,7 +881,7 @@ Given the csv profile is : CsvProfile Vertical
 | PayeeColumn  | Description    |
 | AmountStyle  | Signed         |
 | AmountColumn | Amount         |
-Given the file contains
+And the file contains
 """
 Date,Description,Amount
 03/04/2024,SHOP A,-10.00
@@ -910,7 +910,7 @@ Given the csv profile is : CsvProfile Vertical
 | PayeeColumn  | Description    |
 | AmountStyle  | Signed         |
 | AmountColumn | Amount         |
-Given the file contains
+And the file contains
 """
 Date,Description,Amount
 03/04/2024,SHOP A,-10.00
@@ -930,7 +930,7 @@ Given the csv profile is : CsvProfile Vertical
 | PayeeColumn  | Description    |
 | AmountStyle  | Signed         |
 | AmountColumn | Amount         |
-Given the file contains
+And the file contains
 """
 Date,Description,Amount
 15/01/2024,SHOP A,-10.00
@@ -951,7 +951,7 @@ Given the csv profile is : CsvProfile Vertical
 | MemoColumn   | Memo         |
 | AmountStyle  | Signed       |
 | AmountColumn | Amount       |
-Given the file contains
+And the file contains
 """
 Date,Description,Memo,Amount
 01/15/2024,"SMITH, JONES & CO","Invoice 4, paid in full",-250.00
@@ -972,7 +972,7 @@ Given the csv profile is : CsvProfile Vertical
 | MemoColumn   | Memo         |
 | AmountStyle  | Signed       |
 | AmountColumn | Amount       |
-Given the file contains
+And the file contains
 """
 Date,Description,Memo,Amount
 01/15/2024,HARDWARE STORE,"Paint
@@ -994,7 +994,7 @@ Given the csv profile is : CsvProfile Vertical
 | PayeeColumn  | Description   |
 | AmountStyle  | Signed        |
 | AmountColumn | Amount        |
-Given the file contains
+And the file contains
 """
 Account Statement
 Account Number: ****7890
@@ -1014,7 +1014,7 @@ Given the csv profile is : CsvProfile Vertical
 | PayeeColumn  | 2               |
 | AmountStyle  | Signed          |
 | AmountColumn | 3               |
-Given the file contains
+And the file contains
 """
 01/15/2024,HARRIS TEETER,-45.00
 01/31/2024,ACME PAYROLL,3000.00
@@ -1034,7 +1034,7 @@ Given the csv profile is : CsvProfile Vertical
 | PayeeColumn  | Description  |
 | AmountStyle  | Signed       |
 | AmountColumn | Amount       |
-Given the file contains
+And the file contains
 """
 Date,Description,Amount
 01/15/2024,HARRIS TEETER,-45.00
@@ -1044,7 +1044,7 @@ Date,Description,Amount
 Then rows read are : CsvRowRead
 | Date       | Payee         | Amount |
 | 2024-01-15 | HARRIS TEETER | -45.00 |
-Then rows rejected are : CsvRowError
+And rows rejected are : CsvRowError
 | Line | Reason                        |
 | 4    | No date in the Date column    |
 
@@ -1087,21 +1087,21 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given the csv profile is : CsvProfile Vertical
+And the csv profile is : CsvProfile Vertical
 | Name           | Quicken Export |
 | DateColumn     | Date           |
 | PayeeColumn    | Payee          |
 | CategoryColumn | Category       |
 | AmountStyle    | Signed         |
 | AmountColumn   | Amount         |
-Given the file contains
+And the file contains
 """
 Date,Payee,Category,Amount
 01/15/2024,Harris Teeter,Expenses:Groceries,-45.00
 01/16/2024,Shell,Expenses:Auto:Fuel,-52.00
 01/17/2024,Unknown,,-10.00
 """
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When rows imported
 Then transactions are : Transaction
@@ -1109,7 +1109,7 @@ Then transactions are : Transaction
 | T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries     | -45.00 | Cleared |
 | T2  | Assets:Checking | 2024-01-16 | Shell         | Expenses:Auto:Fuel     | -52.00 | Cleared |
 | T3  | Assets:Checking | 2024-01-17 | Unknown       | Expenses:Uncategorized | -10.00 | Cleared |
-Then accounts created are : ChartOfAccounts
+And accounts created are : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Expenses:Auto      | Expense | true        |
 | Expenses:Auto:Fuel | Expense | false       |
@@ -1122,19 +1122,19 @@ Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
 | Assets:Checking | Checking | false       |
 | Assets:Savings  | Checking | false       |
-Given the csv profile is : CsvProfile Vertical
+And the csv profile is : CsvProfile Vertical
 | Name           | Quicken Export |
 | DateColumn     | Date           |
 | PayeeColumn    | Payee          |
 | CategoryColumn | Category       |
 | AmountStyle    | Signed         |
 | AmountColumn   | Amount         |
-Given the file contains
+And the file contains
 """
 Date,Payee,Category,Amount
 03/01/2024,Transfer,[Assets:Savings],-500.00
 """
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When rows imported
 Then transactions are : Transaction
@@ -1181,24 +1181,24 @@ Description The same file as the category scenario above, in a book whose
 \ the categories and the accounts created are what they were.
 Given the book setting is : BookSetting Vertical
 | SetClearedOnCsvImport | false |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given the csv profile is : CsvProfile Vertical
+And the csv profile is : CsvProfile Vertical
 | Name           | Quicken Export |
 | DateColumn     | Date           |
 | PayeeColumn    | Payee          |
 | CategoryColumn | Category       |
 | AmountStyle    | Signed         |
 | AmountColumn   | Amount         |
-Given the file contains
+And the file contains
 """
 Date,Payee,Category,Amount
 01/15/2024,Harris Teeter,Expenses:Groceries,-45.00
 """
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When rows imported
 Then transactions are : Transaction
@@ -1212,24 +1212,24 @@ Description The default, stated as a scenario of its own so that the option
 \ asserts; the difference is that here the setting is named.
 Given the book setting is : BookSetting Vertical
 | SetClearedOnCsvImport | true |
-Given the chart of accounts is : ChartOfAccounts
+And the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given the csv profile is : CsvProfile Vertical
+And the csv profile is : CsvProfile Vertical
 | Name           | Quicken Export |
 | DateColumn     | Date           |
 | PayeeColumn    | Payee          |
 | CategoryColumn | Category       |
 | AmountStyle    | Signed         |
 | AmountColumn   | Amount         |
-Given the file contains
+And the file contains
 """
 Date,Payee,Category,Amount
 01/15/2024,Harris Teeter,Expenses:Groceries,-45.00
 """
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When rows imported
 Then transactions are : Transaction
@@ -1344,22 +1344,22 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination            | Amount |
 | T1  | Assets:Checking | 2026-03-02 | Joe Coffee | Expenses:Uncategorized | -4.75  |
-Given the csv profile is : CsvProfile Vertical
+And the csv profile is : CsvProfile Vertical
 | Name           | Quicken Export |
 | DateColumn     | Date           |
 | PayeeColumn    | Payee          |
 | AmountStyle    | Signed         |
 | AmountColumn   | Amount         |
-Given the file contains
+And the file contains
 """
 Date,Payee,Amount
 03/02/2026,Joe Coffee,-4.75
 03/02/2026,Joe Coffee,-4.75
 """
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When rows imported
 Then import summary is : ImportSummary Vertical
@@ -1376,19 +1376,19 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given the csv profile is : CsvProfile Vertical
+And the csv profile is : CsvProfile Vertical
 | Name           | Quicken Export |
 | DateColumn     | Date           |
 | PayeeColumn    | Payee          |
 | AmountStyle    | Signed         |
 | AmountColumn   | Amount         |
-Given the file contains
+And the file contains
 """
 Date,Payee,Amount
 03/02/2026,Joe Coffee,-4.75
 03/02/2026,Joe Coffee,-4.75
 """
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When rows imported
 Then import summary is : ImportSummary Vertical
@@ -1402,22 +1402,22 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination            | Amount |
 | T1  | Assets:Checking | 2026-03-02 | Joe Coffee | Expenses:Uncategorized | -4.75  |
 | T2  | Assets:Checking | 2026-03-02 | Joe Coffee | Expenses:Uncategorized | -4.75  |
-Given the csv profile is : CsvProfile Vertical
+And the csv profile is : CsvProfile Vertical
 | Name           | Quicken Export |
 | DateColumn     | Date           |
 | PayeeColumn    | Payee          |
 | AmountStyle    | Signed         |
 | AmountColumn   | Amount         |
-Given the file contains
+And the file contains
 """
 Date,Payee,Amount
 03/02/2026,Joe Coffee,-4.75
 """
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When rows imported
 Then import summary is : ImportSummary Vertical
@@ -1434,19 +1434,19 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given the csv profile is : CsvProfile Vertical
+And the csv profile is : CsvProfile Vertical
 | Name           | Quicken Export |
 | DateColumn     | Date           |
 | PayeeColumn    | Payee          |
 | CategoryColumn | Category       |
 | AmountStyle    | Signed         |
 | AmountColumn   | Amount         |
-Given the file contains
+And the file contains
 """
 Date,Payee,Amount
 01/15/2024,Harris Teeter,-45.00
 """
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When rows imported
 Then import summary is : ImportSummary Vertical
@@ -1477,18 +1477,18 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type    | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination            | Amount |
 | T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Uncategorized | -45.00 |
 | T2  | Assets:Checking | 2024-01-16 | Shell         | Expenses:Uncategorized | -52.00 |
 | T3  | Assets:Checking | 2024-01-17 | Joe Coffee    | Expenses:Uncategorized | -4.75  |
-Given the csv profile is : CsvProfile Vertical
+And the csv profile is : CsvProfile Vertical
 | Name         | Quicken Export |
 | DateColumn   | Date           |
 | PayeeColumn  | Payee          |
 | AmountStyle  | Signed         |
 | AmountColumn | Amount         |
-Given the file contains
+And the file contains
 """
 Date,Payee,Amount
 01/15/2024,Harris Teeter,-45.00
@@ -1497,7 +1497,7 @@ Date,Payee,Amount
 01/18/2024,Harris Teeter,-31.20
 01/19/2024,Shell,-48.00
 """
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When rows imported
 Then import summary is : ImportSummary Vertical

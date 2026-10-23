@@ -1,10 +1,11 @@
 # Completed tasks
 
-Moved out of `tasks.md` on 2026-10-23. Twenty-two of the twenty-four items on
-that list are finished; they are kept here in full, under the headings they
-were written under, because each one records what was decided and why -- which
-is the part that is still worth reading when the same ground is walked again.
-`tasks.md` now holds only what is owed.
+Moved out of `tasks.md` on 2026-10-23, and item 24 the same day once it was
+done. Twenty-three of the twenty-four items on that list are finished; they
+are kept here in full, under the headings they were written under, because each
+one records what was decided and why -- which is the part that is still worth
+reading when the same ground is walked again. `tasks.md` now holds only what is
+owed, which is item 17.
 
 The order the work was done in, as the list recorded it at the time:
 
@@ -357,3 +358,28 @@ transfer scenarios in `Transactions.spectable` now say so.
       string-keyed map in `BookIndex` is still there and is still the cheapest
       next move.
 
+### 24. `And` for the second and later steps of a Given, When or Then
+
+Done on 2026-10-23. All fourteen files rewritten in one pass: 1,117 keywords
+became `And`, from 20 in `WorkedExample.spectable` to 426 in
+`UserInterface.spectable`, and `CoreTypes.spectable` has no steps at all so it
+has none. The analyzer reads the result at 0 diagnostics over 14 files.
+
+The byte-identical test was run the way the item asked and then some. The
+specification as committed was generated into one scratch folder and the
+rewritten specification into another, both with `--no-copy-spectable
+--tag-filter "NOT TBD"` and every file passed as `--context`, and `diff -r`
+between the two folders is empty -- not only the fourteen `test_*.cpp` but the
+fifteen `*_glue.h` stubs as well, which is the stronger statement: no step name
+moved either. The baseline folder was also compared against the repo's own
+`generated/` and matched it file for file, so the baseline is the real thing
+rather than a second opinion. 678 of 678 after the rebuild.
+
+What a run is, as the rewrite drew it: consecutive steps carrying the same
+keyword. A step's own table rows, a `#` comment, a continuation line and a
+raw block in triple quotes all continue a run, because none of them is a step
+-- so a `Given` whose content is a raw block, followed by another `Given`, does
+become `And`. Any other keyword line and any blank line end the run, and the
+keyword then stays. Ending a run is the safe direction: a run left unbroken
+where it should have broken is the one way this could have gone wrong, and the
+diff is what says it did not happen.

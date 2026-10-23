@@ -41,7 +41,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Salary      | Income  | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Auto:Fuel | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount  |
 | T1  | Assets:Checking | 2024-01-01 | Acme Payroll  | Income:Salary      | 3000.00 |
 | T2  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00  |
@@ -65,7 +65,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Income:Salary      | Income  | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Auto:Fuel | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount  |
 | T1  | Assets:Checking | 2024-01-01 | Acme Payroll  | Income:Salary      | 3000.00 |
 | T2  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00  |
@@ -126,7 +126,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder |
 | Assets:Checking | Checking | false       |
 | Assets:Joint    | Checking | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee    | Destination     | Amount   |
 | T1  | Assets:Joint    | 2026-01-05 | Transfer | Assets:Checking | -500.00  |
 | T2  | Assets:Joint    | 2026-02-05 | Transfer | Assets:Checking | -500.00  |
@@ -151,14 +151,14 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking   | false       |
 | Liabilities:Chase Visa | CreditCard | false       |
 | Unassigned             | OtherAsset | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount          | Date       | Payee            | Destination | Amount   |
 | T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | Unassigned  | -1200.00 |
 | T2  | Liabilities:Chase Visa | 2026-04-25 | PAYMENT RECEIVED | Unassigned  | 1200.00  |
 When the other entry is matched : EntryMatch Vertical
 | Ref      | T1 |
 | OtherRef | T2 |
-When register opened on : AccountSelect
+And register opened on : AccountSelect
 | Path            |
 | Assets:Checking |
 Then register lines are : RegisterLine
@@ -176,14 +176,14 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking   | false       |
 | Liabilities:Chase Visa | CreditCard | false       |
 | Unassigned             | OtherAsset | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount          | Date       | Payee            | Destination | Amount   |
 | T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | Unassigned  | -1200.00 |
 | T2  | Liabilities:Chase Visa | 2026-04-25 | PAYMENT RECEIVED | Unassigned  | 1200.00  |
 When the other entry is matched : EntryMatch Vertical
 | Ref      | T1 |
 | OtherRef | T2 |
-When register opened on : AccountSelect
+And register opened on : AccountSelect
 | Path                   |
 | Liabilities:Chase Visa |
 Then register lines are : RegisterLine
@@ -247,7 +247,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking   | Checking   | false       |
 | Expenses:Shopping | Expense    | false       |
 | Expenses:Dining   | Expense    | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee    | Destination       | Amount |
 | T1  | Liabilities:Visa | 2024-03-02 | Amazon   | Expenses:Shopping | -89.99 |
 | T2  | Liabilities:Visa | 2024-03-09 | The Cafe | Expenses:Dining   | -18.50 |
@@ -289,7 +289,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given transactions in entry order are : SequencedTransaction
+And transactions in entry order are : SequencedTransaction
 | EntrySeq | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount |
 | 1        | T1  | Assets:Checking | 2024-01-20 | Shop A | Expenses:Groceries | -10.00 |
 | 2        | T2  | Assets:Checking | 2024-01-15 | Shop B | Expenses:Groceries | -20.00 |
@@ -327,7 +327,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given transactions in entry order are : SequencedTransaction
+And transactions in entry order are : SequencedTransaction
 | EntrySeq | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount |
 | 1        | T1  | Assets:Checking | 2024-01-20 | Shop A | Expenses:Groceries | -10.00 |
 | 2        | T2  | Assets:Checking | 2024-01-15 | Shop B | Expenses:Groceries | -20.00 |
@@ -340,7 +340,7 @@ Then register lines are : RegisterLine CompareOnly
 | T1  | Shop A | 0.00    |
 | T2  | Shop B | 0.00    |
 | T3  | Shop C | 0.00    |
-Then running balance is shown : BalanceColumnState Vertical
+And running balance is shown : BalanceColumnState Vertical
 | Shown  | false                                  |
 | Reason | The register is not in date order      |
 
@@ -415,7 +415,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder | DownloadedBalance | DownloadedBalanceAt |
 | Assets:Checking        | Checking | false       | 1705.00           | 2024-01-31          |
 | Expenses:Uncategorized | Expense  | false       | 0.00              | never               |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination            | Amount  | Cleared   |
 | T1  | Assets:Checking | 2024-01-01 | Opening       | Expenses:Uncategorized | 1750.00 | Cleared   |
 | T2  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Uncategorized | -45.00  | Cleared   |
@@ -442,7 +442,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder | DownloadedBalance | DownloadedBalanceAt |
 | Assets:Checking        | Checking | false       | 1705.00           | 2024-01-31          |
 | Expenses:Uncategorized | Expense  | false       | 0.00              | never               |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination            | Amount  | Cleared |
 | T1  | Assets:Checking | 2024-01-01 | Opening       | Expenses:Uncategorized | 1750.00 | Cleared |
 | T2  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Uncategorized | -45.00  | Cleared |
@@ -468,7 +468,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder | DownloadedBalance | DownloadedBalanceAt |
 | Assets:Checking        | Checking | false       | 0.00              | never               |
 | Expenses:Uncategorized | Expense  | false       | 0.00              | never               |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination            | Amount  | Cleared   |
 | T1  | Assets:Checking | 2024-01-01 | Opening       | Expenses:Uncategorized | 1750.00 | Uncleared |
 | T2  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Uncategorized | -45.00  | Uncleared |
@@ -494,7 +494,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type       | Placeholder | DownloadedBalance | DownloadedBalanceAt |
 | Liabilities:Visa       | CreditCard | false       | 450.00            | 2024-01-31          |
 | Expenses:Uncategorized | Expense    | false       | 0.00              | never               |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount    | Date       | Payee     | Destination            | Amount  | Cleared |
 | T1  | Liabilities:Visa | 2024-01-10 | Amazon    | Expenses:Uncategorized | -450.00 | Cleared |
 When register opened on : AccountSelect
@@ -557,7 +557,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
 | T1  | Assets:Checking | 2024-01-10 | Shop A | Expenses:Groceries | -9.99   |
 | T2  | Assets:Checking | 2024-01-11 | Shop B | Expenses:Groceries | -100.00 |
@@ -579,7 +579,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount | Cleared   |
 | T1  | Assets:Checking | 2024-01-10 | Shop A | Expenses:Groceries | -10.00 | Cleared   |
 | T2  | Assets:Checking | 2024-01-11 | Shop B | Expenses:Groceries | -20.00 | Uncleared |
@@ -602,7 +602,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount |
 | T1  | Assets:Checking | 2024-01-10 | Shop A | Expenses:Groceries | -10.00 |
 | T2  | Assets:Checking | 2024-01-11 | Shop B | Expenses:Groceries | -20.00 |
@@ -623,21 +623,21 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount |
 | T1  | Assets:Checking | 2024-01-10 | Shop A | Expenses:Groceries | -10.00 |
 | T2  | Assets:Checking | 2024-01-11 | Shop B | Expenses:Groceries | -20.00 |
 When register sorted by : SortBy
 | Column | Direction |
 | Payee  | Ascending |
-When register sorted by : SortBy
+And register sorted by : SortBy
 | Column | Direction |
 | Date   | Ascending |
 Then register lines are : RegisterLine CompareOnly
 | Ref | Date       | Payee  | Balance |
 | T1  | 2024-01-10 | Shop A | -10.00  |
 | T2  | 2024-01-11 | Shop B | -30.00  |
-Then running balance is shown : BalanceColumnState Vertical
+And running balance is shown : BalanceColumnState Vertical
 | Shown | true |
 
 Scenario A sort leaves tied lines in the order they were already in
@@ -648,7 +648,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given transactions in entry order are : SequencedTransaction
+And transactions in entry order are : SequencedTransaction
 | EntrySeq | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount |
 | 1        | T1  | Assets:Checking | 2024-01-20 | Shop A | Expenses:Groceries | -10.00 |
 | 2        | T2  | Assets:Checking | 2024-01-15 | Shop A | Expenses:Groceries | -20.00 |
@@ -698,10 +698,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
 | Expenses:Auto:Repairs     | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination | Amount  | Memo  |
 | T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 | none  |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount | Memo         |
 | Expenses:Home:Maintenance | 100.00 | Paint        |
 | Expenses:Home:Garden      | 54.50  | Compost      |
@@ -720,10 +720,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
 | Expenses:Auto:Repairs     | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination | Amount  | Memo  |
 | T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 | none  |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount | Memo         |
 | Expenses:Home:Maintenance | 100.00 | Paint        |
 | Expenses:Home:Garden      | 54.50  | Compost      |
@@ -731,7 +731,7 @@ Given split lines are : TransactionSplit
 When register opened on : AccountSelect
 | Path            |
 | Assets:Checking |
-When line expanded : TransactionSelect
+And line expanded : TransactionSelect
 | Ref |
 | T1  |
 Then split lines shown are : SplitLineShown
@@ -756,10 +756,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
 | Expenses:Auto:Repairs     | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination | Amount  | Memo  |
 | T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 | none  |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount | Memo         |
 | Expenses:Home:Maintenance | 100.00 | Paint        |
 | Expenses:Home:Garden      | 54.50  | Compost      |
@@ -783,9 +783,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given today is : Today Vertical
+And today is : Today Vertical
 | Date | 2024-05-15 |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
 | T1  | Assets:Checking | 2024-05-01 | Shop A | Expenses:Groceries | 1000.00 |
 | T2  | Assets:Checking | 2024-05-10 | Shop B | Expenses:Groceries | -40.00  |
@@ -798,7 +798,7 @@ Then register lines are : RegisterLine CompareOnly
 | T1  | 2024-05-01 | 1000.00 |
 | T2  | 2024-05-10 | 960.00  |
 | T3  | 2024-06-01 | 900.00  |
-Then today marker is : TodayMarker Vertical
+And today marker is : TodayMarker Vertical
 | AfterRef       | T2         |
 | BalanceToday   | 960.00     |
 | FutureCount    | 1          |
@@ -821,7 +821,7 @@ Description Twenty years of history is tens of thousands of lines. Opening at
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
 | Assets:Checking | Checking | false       |
-Given the register holds : RegisterExtent Vertical
+And the register holds : RegisterExtent Vertical
 | FirstDate | 2005-01-01 |
 | LastDate  | 2026-09-30 |
 | LineCount | 41238      |
@@ -854,7 +854,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
 | T1  | Assets:Checking | 2023-12-20 | Shop A | Expenses:Groceries | 1000.00 |
 | T2  | Assets:Checking | 2024-01-15 | Shop B | Expenses:Groceries | -45.00  |
@@ -865,7 +865,7 @@ When register filtered to dates : DateRange Vertical
 Then register lines are : RegisterLine CompareOnly
 | Ref | Date       | Balance |
 | T2  | 2024-01-15 | 955.00  |
-Then opening balance line is : OpeningLine Vertical
+And opening balance line is : OpeningLine Vertical
 | AsAt    | 2023-12-31 |
 | Balance | 1000.00    |
 
@@ -928,11 +928,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given the book setting is : BookSetting Vertical
+And the book setting is : BookSetting Vertical
 | FiscalYearStart | 7 |
-Given today is : Today Vertical
+And today is : Today Vertical
 | Date | 2024-05-15 |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
 | T1  | Assets:Checking | 2023-12-20 | Shop A | Expenses:Groceries | 1000.00 |
 | T2  | Assets:Checking | 2024-01-15 | Shop B | Expenses:Groceries | -45.00  |
@@ -943,7 +943,7 @@ Then register lines are : RegisterLine CompareOnly
 | Ref | Date       | Balance |
 | T2  | 2024-01-15 | 955.00  |
 | T3  | 2024-02-20 | 903.00  |
-Then opening balance line is : OpeningLine Vertical
+And opening balance line is : OpeningLine Vertical
 | AsAt    | 2023-12-31 |
 | Balance | 1000.00    |
 
@@ -955,9 +955,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given today is : Today Vertical
+And today is : Today Vertical
 | Date | 2024-05-15 |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
 | T1  | Assets:Checking | 2022-03-01 | Shop A | Expenses:Groceries | 1000.00 |
 | T2  | Assets:Checking | 2022-06-01 | Shop B | Expenses:Groceries | -45.00  |
@@ -968,7 +968,7 @@ Then register lines are : RegisterLine CompareOnly
 | Ref | Date       | Balance |
 | T2  | 2022-06-01 | 955.00  |
 | T3  | 2024-02-20 | 903.00  |
-Then opening balance line is : OpeningLine Vertical
+And opening balance line is : OpeningLine Vertical
 | AsAt    | 2022-05-14 |
 | Balance | 1000.00    |
 
@@ -980,21 +980,21 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given today is : Today Vertical
+And today is : Today Vertical
 | Date | 2024-05-15 |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
 | T1  | Assets:Checking | 2022-03-01 | Shop A | Expenses:Groceries | 1000.00 |
 | T2  | Assets:Checking | 2024-02-20 | Shop B | Expenses:Groceries | -52.00  |
 When register filtered to named range : NamedRangeSelect Vertical
 | Name | This year |
-When register filtered to named range : NamedRangeSelect Vertical
+And register filtered to named range : NamedRangeSelect Vertical
 | Name | All dates |
 Then register lines are : RegisterLine CompareOnly
 | Ref | Date       | Balance |
 | T1  | 2022-03-01 | 1000.00 |
 | T2  | 2024-02-20 | 948.00  |
-Then opening balance line is : OpeningLine
+And opening balance line is : OpeningLine
 | AsAt | Balance |
 # No rows: there is nothing before the first transaction, so there is no
 # opening line at all rather than one reading zero.
@@ -1048,11 +1048,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given the book setting is : BookSetting Vertical
+And the book setting is : BookSetting Vertical
 | HideBefore | 2015-01-01 |
-Given today is : Today Vertical
+And today is : Today Vertical
 | Date | 2024-05-15 |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
 | T1  | Assets:Checking | 2012-03-01 | Shop A | Expenses:Groceries | 1000.00 |
 | T2  | Assets:Checking | 2016-02-20 | Shop B | Expenses:Groceries | -52.00  |
@@ -1062,7 +1062,7 @@ When register opened on : AccountSelect
 Then register lines are : RegisterLine CompareOnly
 | Ref | Date       | Balance |
 | T2  | 2016-02-20 | 948.00  |
-Then opening balance line is : OpeningLine Vertical
+And opening balance line is : OpeningLine Vertical
 | AsAt    | 2014-12-31 |
 | Balance | 1000.00    |
 
@@ -1073,11 +1073,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given the book setting is : BookSetting Vertical
+And the book setting is : BookSetting Vertical
 | HideBefore | 2015-01-01 |
-Given today is : Today Vertical
+And today is : Today Vertical
 | Date | 2024-05-15 |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee  | Destination        | Amount  |
 | T1  | Assets:Checking | 2012-03-01 | Shop A | Expenses:Groceries | 1000.00 |
 | T2  | Assets:Checking | 2016-02-20 | Shop B | Expenses:Groceries | -52.00  |
@@ -1087,7 +1087,7 @@ When register filtered to dates : DateRange Vertical
 Then register lines are : RegisterLine CompareOnly
 | Ref |
 # No rows.
-Then register note is : RegisterNote Vertical
+And register note is : RegisterNote Vertical
 | Note | This book hides transactions before 2015-01-01 |
 
 Attributes RegisterNote
@@ -1108,7 +1108,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Auto:Fuel | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo          |
 | T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | weekly shop   |
 | T2  | Assets:Checking | 2024-01-20 | Shell         | Expenses:Auto:Fuel | -52.00 | shop on route |
@@ -1137,7 +1137,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Auto:Fuel | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Memo          |
 | T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | weekly shop   |
 | T2  | Assets:Checking | 2024-01-20 | Shell         | Expenses:Auto:Fuel | -52.00 | shop on route |
@@ -1159,7 +1159,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given today is : Today Vertical
+And today is : Today Vertical
 | Date | 2024-05-15 |
 When register opened on : AccountSelect
 | Path            |
@@ -1175,11 +1175,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given today is : Today Vertical
+And today is : Today Vertical
 | Date | 2024-05-15 |
 When blank line filled : RegisterLine Vertical CompareOnly
 | Payee | Harris Teeter |
-When blank line left
+And blank line left
 Then register lines are : RegisterLine CompareOnly
 | Ref |
 # No rows: nothing was committed.
@@ -1195,7 +1195,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given today is : Today Vertical
+And today is : Today Vertical
 | Date | 2024-05-15 |
 When register opened on : AccountSelect
 | Path            |
@@ -1206,7 +1206,7 @@ Then blank line is : RegisterLine CompareOnly
 When blank line filled : RegisterLine Vertical CompareOnly
 | Payee   | Harris Teeter |
 | Payment | 45.00         |
-When blank line left
+And blank line left
 Then register lines are : RegisterLine CompareOnly
 | Date       | Payee         | Category               | Payment | Deposit |
 | 2024-05-15 | Harris Teeter | Expenses:Uncategorized | 45.00   | 0.00    |
@@ -1226,14 +1226,14 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type     | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense  | false       |
-Given today is : Today Vertical
+And today is : Today Vertical
 | Date | 2024-05-15 |
 When blank line filled : RegisterLine Vertical CompareOnly
 | Payee    | Harris Teeter  |
 | Category | Expenses:Groceries |
 | Tag      | Rental~Kitchen |
 | Payment  | 45.00          |
-When blank line left
+And blank line left
 Then register lines are : RegisterLine CompareOnly
 | Date       | Payee         | Category           | Tag            | Payment |
 | 2024-05-15 | Harris Teeter | Expenses:Groceries | Rental~Kitchen | 45.00   |
@@ -1245,7 +1245,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type     | Placeholder |
 | Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination               | Amount  | Tag    |
 | T1  | Assets:Checking | 2024-01-10 | Home Depot | Expenses:Home:Maintenance | -100.00 | Rental |
 | T2  | Assets:Checking | 2024-01-11 | Home Depot | Expenses:Home:Maintenance | -50.00  | none   |
@@ -1272,7 +1272,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
 | T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
 When register opened on : AccountSelect
@@ -1287,7 +1287,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                      | Type    | Placeholder |
 | Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
 | T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
 When register opened on : AccountSelect

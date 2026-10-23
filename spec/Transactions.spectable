@@ -168,7 +168,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder |
 | Assets:Checking        | Checking | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination | Amount |
 | T1  | Assets:Checking | 2024-05-15 | Harris Teeter | none        | -45.00 |
 Then transactions are : Transaction
@@ -183,7 +183,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path                 | Type     | Placeholder |
 | Assets:Checking      | Checking | false       |
 | Income:Uncategorized | Income   | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee        | Destination | Amount  |
 | T1  | Assets:Checking | 2024-05-31 | ACME PAYROLL | none        | 3000.00 |
 Then transactions are : Transaction
@@ -197,7 +197,7 @@ Description A book whose chart has never needed Income:Uncategorized gets it
 Given the chart of accounts is : ChartOfAccounts
 | Path            | Type     | Placeholder |
 | Assets:Checking | Checking | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee        | Destination | Amount  |
 | T1  | Assets:Checking | 2024-05-31 | ACME PAYROLL | none        | 3000.00 |
 Then accounts created are : ChartOfAccounts
@@ -260,7 +260,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking      | Checking | false       |
 | Income:Uncategorized | Income | false       |
 | Unassigned           | OtherAsset | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee        | Destination          | Amount  | Cleared |
 | T1  | Assets:Checking | 2026-04-15 | ACME PAYROLL | Income:Uncategorized | 3000.00 | Cleared |
 Then balances are : AccountBalance CompareOnly
@@ -322,7 +322,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Liabilities:Chase Visa | CreditCard | false       |
 | Unassigned             | OtherAsset | false       |
 | Expenses:Uncategorized | Expense    | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount          | Date       | Payee            | Destination            | Amount   | Cleared |
 | T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | Unassigned             | -1200.00 | Cleared |
 | T2  | Liabilities:Chase Visa | 2026-04-25 | PAYMENT RECEIVED | Unassigned             | 1200.00  | Cleared |
@@ -396,7 +396,7 @@ Description The generator waits for the clock rather than giving out a name it
 When transactions are created in a row : TransactionsCreated Vertical
 | HowMany | 3 |
 Then the names are all different
-Then the names increase
+And the names increase
 # Which is why the database can hold the Id unique and never refuse a write
 # that a person did nothing wrong to cause.
 
@@ -582,7 +582,7 @@ Then transactions are : Transaction CompareOnly
 | Date       | SourceAccount   | Destination     | Amount  | Cleared   |
 | 2024-03-01 | Assets:Checking | Assets:Savings  | -500.00 | Uncleared |
 | 2024-03-01 | Assets:Savings  | Assets:Checking | 500.00  | Uncleared |
-Then transaction is a transfer : TransferCheck Vertical
+And transaction is a transfer : TransferCheck Vertical
 | IsTransfer | true           |
 | FromAccount | Assets:Checking |
 | ToAccount  | Assets:Savings |
@@ -624,7 +624,7 @@ Then transactions are : Transaction CompareOnly
 | Date       | Payee | SourceAccount    | Destination      | Amount  | Cleared   |
 | 2024-03-05 | Visa  | Assets:Checking  | Liabilities:Visa | -300.00 | Uncleared |
 | 2024-03-05 | Visa  | Liabilities:Visa | Assets:Checking  | 300.00  | Uncleared |
-Then balances are : AccountBalance
+And balances are : AccountBalance
 | Account          | RawBalance | DisplayBalance | Notes                |
 | Assets:Checking  | -300.00    | -300.00        | Paid out             |
 | Liabilities:Visa | 300.00     | -300.00        | Owed by 300.00 less  |
@@ -691,7 +691,7 @@ When split entry committed : RegisterEntry Vertical
 | Date    | 2024-04-02      |
 | Payee   | Home Depot      |
 | Payment | 184.50          |
-When split lines are : SplitLine
+And split lines are : SplitLine
 | Category                  | Amount | Memo          |
 | Expenses:Home:Maintenance | 100.00 | Paint         |
 | Expenses:Home:Garden      | 54.50  | Compost       |
@@ -702,7 +702,7 @@ Then transaction is : Transaction Vertical CompareOnly
 | SourceAccount | Assets:Checking |
 | Destination   | Split           |
 | Amount        | -184.50         |
-Then split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount | Memo         |
 | Expenses:Home:Maintenance | 100.00 | Paint        |
 | Expenses:Home:Garden      | 54.50  | Compost      |
@@ -722,7 +722,7 @@ When split entry committed : RegisterEntry Vertical
 | Date    | 2024-04-02      |
 | Payee   | Home Depot      |
 | Payment | 184.50          |
-When split lines are : SplitLine
+And split lines are : SplitLine
 | Category                  | Amount |
 | Expenses:Home:Maintenance | 100.00 |
 | Expenses:Home:Garden      | 54.50  |
@@ -805,10 +805,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Garden      | Expense  | false       |
 | Expenses:Auto:Repairs     | Expense  | false       |
 | Expenses:Uncategorized    | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
 | T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount | Memo         |
 | Expenses:Home:Maintenance | 100.00 | Paint        |
 | Expenses:Home:Garden      | 54.50  | Compost      |
@@ -816,11 +816,11 @@ Given split lines are : TransactionSplit
 When split opened on : TransactionSelect
 | Ref |
 | T1  |
-When split lines are : SplitLine
+And split lines are : SplitLine
 | Category                  | Amount | Memo    |
 | Expenses:Home:Maintenance | 100.00 | Paint   |
 | Expenses:Home:Garden      | 54.50  | Compost |
-When split saved
+And split saved
 Then not matching is said : SplitMismatch Vertical
 | Message   | Not matching: the lines come to 154.50 of 184.50 |
 | Total     | 184.50                                           |
@@ -848,10 +848,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Garden      | Expense  | false       |
 | Expenses:Auto:Repairs     | Expense  | false       |
 | Expenses:Uncategorized    | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
 | T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount | Memo         |
 | Expenses:Home:Maintenance | 100.00 | Paint        |
 | Expenses:Home:Garden      | 54.50  | Compost      |
@@ -859,19 +859,19 @@ Given split lines are : TransactionSplit
 When split opened on : TransactionSelect
 | Ref |
 | T1  |
-When split lines are : SplitLine
+And split lines are : SplitLine
 | Category                  | Amount | Memo    |
 | Expenses:Home:Maintenance | 100.00 | Paint   |
 | Expenses:Home:Garden      | 54.50  | Compost |
-When split saved
-When not matching answered : SplitMismatchAnswer Vertical
+And split saved
+And not matching answered : SplitMismatchAnswer Vertical
 | Choice | CancelSave |
 Then split lines are : TransactionSplit
 | Destination               | Amount | Memo         |
 | Expenses:Home:Maintenance | 100.00 | Paint        |
 | Expenses:Home:Garden      | 54.50  | Compost      |
 | Expenses:Auto:Repairs     | 30.00  | Wiper blades |
-Then the split window is closed
+And the split window is closed
 
 Attributes SplitMismatchAnswer
 | Attribute | Type                | Default |
@@ -891,10 +891,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Garden      | Expense  | false       |
 | Expenses:Auto:Repairs     | Expense  | false       |
 | Expenses:Uncategorized    | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
 | T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount | Memo         |
 | Expenses:Home:Maintenance | 100.00 | Paint        |
 | Expenses:Home:Garden      | 54.50  | Compost      |
@@ -902,18 +902,18 @@ Given split lines are : TransactionSplit
 When split opened on : TransactionSelect
 | Ref |
 | T1  |
-When split lines are : SplitLine
+And split lines are : SplitLine
 | Category                  | Amount | Memo    |
 | Expenses:Home:Maintenance | 100.00 | Paint   |
 | Expenses:Home:Garden      | 54.50  | Compost |
-When split saved
-When not matching answered : SplitMismatchAnswer Vertical
+And split saved
+And not matching answered : SplitMismatchAnswer Vertical
 | Choice | EditSplit |
 Then the split window is open on : SplitLine
 | Category                  | Amount | Memo    |
 | Expenses:Home:Maintenance | 100.00 | Paint   |
 | Expenses:Home:Garden      | 54.50  | Compost |
-Then split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount | Memo         |
 | Expenses:Home:Maintenance | 100.00 | Paint        |
 | Expenses:Home:Garden      | 54.50  | Compost      |
@@ -930,10 +930,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Garden      | Expense  | false       |
 | Expenses:Auto:Repairs     | Expense  | false       |
 | Expenses:Uncategorized    | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
 | T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount | Memo         |
 | Expenses:Home:Maintenance | 100.00 | Paint        |
 | Expenses:Home:Garden      | 54.50  | Compost      |
@@ -941,19 +941,19 @@ Given split lines are : TransactionSplit
 When split opened on : TransactionSelect
 | Ref |
 | T1  |
-When split lines are : SplitLine
+And split lines are : SplitLine
 | Category                  | Amount | Memo    |
 | Expenses:Home:Maintenance | 100.00 | Paint   |
 | Expenses:Home:Garden      | 54.50  | Compost |
-When split saved
-When not matching answered : SplitMismatchAnswer Vertical
+And split saved
+And not matching answered : SplitMismatchAnswer Vertical
 | Choice | AddRemainder |
 Then split lines are : TransactionSplit
 | Destination               | Amount | Memo    |
 | Expenses:Home:Maintenance | 100.00 | Paint   |
 | Expenses:Home:Garden      | 54.50  | Compost |
 | Expenses:Uncategorized    | 30.00  | none    |
-Then transaction is : Transaction Vertical CompareOnly
+And transaction is : Transaction Vertical CompareOnly
 | Ref         | T1      |
 | Destination | Split   |
 | Amount      | -184.50 |
@@ -969,21 +969,21 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Maintenance | Expense  | false       |
 | Expenses:Home:Garden      | Expense  | false       |
 | Expenses:Uncategorized    | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
 | T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount | Memo    |
 | Expenses:Home:Maintenance | 130.00 | Paint   |
 | Expenses:Home:Garden      | 54.50  | Compost |
 When split opened on : TransactionSelect
 | Ref |
 | T1  |
-When split lines are : SplitLine
+And split lines are : SplitLine
 | Category                  | Amount | Memo    |
 | Expenses:Home:Maintenance | 160.00 | Paint   |
 | Expenses:Home:Garden      | 54.50  | Compost |
-When split saved
+And split saved
 Then not matching is said : SplitMismatch Vertical
 | Message   | Not matching: the lines come to 214.50 of 184.50 |
 | Total     | 184.50                                           |
@@ -1000,10 +1000,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Maintenance | Expense  | false       |
 | Expenses:Home:Garden      | Expense  | false       |
 | Expenses:Auto:Repairs     | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee      | Destination | Amount  |
 | T1  | Assets:Checking | 2024-04-02 | Home Depot | Split       | -184.50 |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount | Memo         |
 | Expenses:Home:Maintenance | 100.00 | Paint        |
 | Expenses:Home:Garden      | 54.50  | Compost      |
@@ -1011,12 +1011,12 @@ Given split lines are : TransactionSplit
 When split opened on : TransactionSelect
 | Ref |
 | T1  |
-When split lines are : SplitLine
+And split lines are : SplitLine
 | Category                  | Amount | Memo         |
 | Expenses:Home:Maintenance | 120.00 | Paint        |
 | Expenses:Home:Garden      | 34.50  | Compost      |
 | Expenses:Auto:Repairs     | 30.00  | Wiper blades |
-When split saved
+And split saved
 Then split lines are : TransactionSplit
 | Destination               | Amount | Memo         |
 | Expenses:Home:Maintenance | 120.00 | Paint        |
@@ -1037,7 +1037,7 @@ When split entry committed : RegisterEntry Vertical
 | Date    | 2024-04-15      |
 | Payee   | Acme Payroll    |
 | Deposit | 3550.00         |
-When split lines are : SplitLine
+And split lines are : SplitLine
 | Category               | Amount   | Memo       |
 | Income:Salary          | -5000.00 | Gross pay  |
 | Expenses:Taxes:Federal | 1200.00  | Withheld   |
@@ -1048,12 +1048,12 @@ Then transaction is : Transaction Vertical CompareOnly
 | SourceAccount | Assets:Checking |
 | Destination   | Split           |
 | Amount        | 3550.00         |
-Then split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination            | Amount   | Memo      |
 | Income:Salary          | -5000.00 | Gross pay |
 | Expenses:Taxes:Federal | 1200.00  | Withheld  |
 | Expenses:Insurance     | 250.00   | Premium   |
-Then balances are : AccountBalance
+And balances are : AccountBalance
 | Account                | RawBalance | DisplayBalance | Notes            |
 | Assets:Checking        | 3550.00    | 3550.00        | Net pay          |
 | Income:Salary          | -5000.00   | 5000.00        | Gross, as earned |
@@ -1074,7 +1074,7 @@ When split entry committed : RegisterEntry Vertical
 | Date    | 2024-04-15      |
 | Payee   | Acme Payroll    |
 | Deposit | 2800.00         |
-When split lines are : SplitLine
+And split lines are : SplitLine
 | Category       | Amount   | Memo            |
 | Income:Salary  | -3000.00 | Gross pay       |
 | Assets:Savings | 200.00   | Direct to saver |
@@ -1084,7 +1084,7 @@ Then transaction is : Transaction Vertical CompareOnly
 | SourceAccount | Assets:Checking |
 | Destination   | Split           |
 | Amount        | 2800.00         |
-Then split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination    | Amount   | Memo            |
 | Income:Salary  | -3000.00 | Gross pay       |
 | Assets:Savings | 200.00   | Direct to saver |
@@ -1127,7 +1127,7 @@ Then transaction is : Transaction Vertical CompareOnly
 | SourceAccount | Assets:Checking    |
 | Destination   | Expenses:Groceries |
 | Amount        | -45.00             |
-Then no split lines exist for it
+And no split lines exist for it
 
 Scenario A split names Split as its destination, and its categories live apart
 Description The transaction itself says Split and carries the total; the parts
@@ -1146,7 +1146,7 @@ When transaction entered : Transaction Vertical
 | Payee         | Acme Payroll    |
 | Destination   | Split           |
 | Amount        | 3550.00         |
-When split lines entered : TransactionSplit
+And split lines entered : TransactionSplit
 | Destination            | Amount   | Memo      |
 | Income:Salary          | -5000.00 | Gross pay |
 | Expenses:Taxes:Federal | 1200.00  | Withheld  |
@@ -1172,11 +1172,11 @@ When transaction entered : Transaction Vertical
 | Payee         | Acme Payroll    |
 | Destination   | Split           |
 | Amount        | 2800.00         |
-When split lines entered : TransactionSplit
+And split lines entered : TransactionSplit
 | Destination    | Amount   | Memo            |
 | Income:Salary  | -3000.00 | Gross pay       |
 | Assets:Savings | 200.00   | Direct to saver |
-When another entry is downloaded : Transaction Vertical
+And another entry is downloaded : Transaction Vertical
 | Ref           | T2             |
 | SourceAccount | Assets:Savings |
 | Date          | 2024-04-16     |
@@ -1204,7 +1204,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking   | false       |
 | Liabilities:Chase Visa | CreditCard | false       |
 | Unassigned             | OtherAsset | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee     | Destination | Amount   |
 | T1  | Assets:Checking | 2026-04-10 | CHASEBANK | Unassigned  | -1200.00 |
 When the other account is assigned : AccountAssignment Vertical
@@ -1213,7 +1213,7 @@ When the other account is assigned : AccountAssignment Vertical
 Then transaction is : Transaction Vertical CompareOnly
 | Ref         | T1                     |
 | Destination | Liabilities:Chase Visa |
-Then balances are : AccountBalance CompareOnly
+And balances are : AccountBalance CompareOnly
 | Account    | RawBalance |
 | Unassigned | 0.00       |
 # Nothing was added and nothing was deleted: the transaction that said
@@ -1231,7 +1231,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking   | false       |
 | Liabilities:Chase Visa | CreditCard | false       |
 | Unassigned             | OtherAsset | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount          | Date       | Payee            | Destination | Amount   |
 | T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | Unassigned  | -1200.00 |
 | T2  | Liabilities:Chase Visa | 2026-04-25 | PAYMENT RECEIVED | Unassigned  | 1200.00  |
@@ -1242,7 +1242,7 @@ Then transactions are : Transaction CompareOnly
 | Ref | SourceAccount          | Destination            | MatchedTo |
 | T1  | Assets:Checking        | Liabilities:Chase Visa | T2        |
 | T2  | Liabilities:Chase Visa | Assets:Checking        | T1        |
-Then balances are : AccountBalance CompareOnly
+And balances are : AccountBalance CompareOnly
 | Account    | RawBalance |
 | Unassigned | 0.00       |
 # Each keeps its own date and its own payee -- the bank's word for it on one
@@ -1360,7 +1360,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
 | T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
 When amount changed : AmountChange Vertical
@@ -1389,10 +1389,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking           | Checking | false       |
 | Expenses:Home:Maintenance | Expense | false       |
 | Expenses:Home:Garden      | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Destination | Amount  |
 | T1  | Assets:Checking | 2024-04-02 | Split       | -154.50 |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount |
 | Expenses:Home:Maintenance | 100.00 |
 | Expenses:Home:Garden      | 54.50  |
@@ -1410,7 +1410,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Dining    | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Destination        | Amount |
 | T1  | Assets:Checking | 2024-01-15 | Expenses:Groceries | -45.00 |
 When category changed : CategoryChange Vertical
@@ -1437,7 +1437,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Destination        | Amount |
 | T1  | Assets:Checking | 2024-01-15 | Expenses:Groceries | -45.00 |
 | T2  | Assets:Checking | 2024-01-16 | Expenses:Groceries | -12.00 |
@@ -1460,11 +1460,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Maintenance | Expense  | false       |
 | Expenses:Home:Garden      | Expense  | false       |
 | Expenses:Groceries        | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount  |
 | T1  | Assets:Checking | 2024-04-02 | Home Depot    | Split              | -154.50 |
 | T2  | Assets:Checking | 2024-04-03 | Harris Teeter | Expenses:Groceries | -12.00  |
-Given split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination               | Amount | Memo    |
 | Expenses:Home:Maintenance | 100.00 | Paint   |
 | Expenses:Home:Garden      | 54.50  | Compost |
@@ -1474,7 +1474,7 @@ When transaction deleted : TransactionSelect
 Then transactions are : Transaction CompareOnly
 | Ref | SourceAccount   | Date       | Destination        | Amount |
 | T2  | Assets:Checking | 2024-04-03 | Expenses:Groceries | -12.00 |
-Then split lines are : TransactionSplit
+And split lines are : TransactionSplit
 | Destination | Amount | Memo |
 # No rows left. T2 is not a split and never had any, so what this says is that
 # T1's two lines went with T1.
@@ -1487,7 +1487,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Destination        | Amount | Cleared    |
 | T1  | Assets:Checking | 2024-01-15 | Expenses:Groceries | -45.00 | Reconciled |
 When amount changed : AmountChange Vertical
@@ -1518,7 +1518,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path            | Type | Placeholder |
 | Assets:Checking | Checking | false       |
 | Assets:Savings  | Checking | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Destination     | Amount  | Cleared   |
 | T1  | Assets:Checking | 2024-03-01 | Assets:Savings  | -500.00 | Uncleared |
 | T2  | Assets:Savings  | 2024-03-03 | Assets:Checking | 500.00  | Uncleared |

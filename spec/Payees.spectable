@@ -89,10 +89,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given payee rules are : PayeeRules
+And payee rules are : PayeeRules
 | Pattern       | MatchType | Payee         | Category           |
 | HARRIS TEETER | Contains  | Harris Teeter | Expenses:Groceries |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name                         | Memo | CheckNum |
@@ -109,10 +109,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given payee rules are : PayeeRules
+And payee rules are : PayeeRules
 | Pattern | MatchType | Payee  | Category |
 | AMAZON  | Contains  | Amazon | none     |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name                    | Memo | CheckNum |
@@ -131,9 +131,9 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given payee rules are : PayeeRules
+And payee rules are : PayeeRules
 | Pattern | MatchType | Payee | Category |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name              | Memo | CheckNum |
@@ -151,10 +151,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given payee rules are : PayeeRules
+And payee rules are : PayeeRules
 | Pattern       | MatchType | Payee         | Category           |
 | HARRIS TEETER | Contains  | Harris Teeter | Expenses:Groceries |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name                         | Memo | CheckNum |
@@ -175,11 +175,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Shopping      | Expense | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given payee rules are : PayeeRules
+And payee rules are : PayeeRules
 | Pattern         | MatchType | Payee           | Category           |
 | AMAZON          | Contains  | Amazon          | Expenses:Shopping  |
 | AMAZON GROCERY  | Contains  | Amazon Grocery  | Expenses:Groceries |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name                    | Memo | CheckNum |
@@ -199,10 +199,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Shopping      | Expense | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given payee rules are : PayeeRules
+And payee rules are : PayeeRules
 | Pattern | MatchType | Payee  | Category          | Enabled |
 | AMAZON  | Contains  | Amazon | Expenses:Shopping | false   |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name                    | Memo | CheckNum |
@@ -250,17 +250,17 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Escrow      | Expense | false       |
 | Liabilities:Mortgage      | OtherDebt | false     |
 | Expenses:Uncategorized    | Expense | false       |
-Given payee split rules are : PayeeSplitRule Vertical
+And payee split rules are : PayeeSplitRule Vertical
 | Pattern   | FIRST NATIONAL MTG |
 | MatchType | Contains           |
 | Payee     | First National     |
 | Shape     | Amounts            |
-Given remembered split lines are : RememberedSplitLine
+And remembered split lines are : RememberedSplitLine
 | Category               | Amount  | Memo      |
 | Expenses:Home:Interest | 820.00  | Interest  |
 | Liabilities:Mortgage   | 430.00  | Principal |
 | Expenses:Home:Escrow   | 250.00  | Escrow    |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount   | FitId | Name                   | Memo | CheckNum |
@@ -270,7 +270,7 @@ Then split offered is : OfferedSplit
 | Expenses:Home:Interest | 820.00  | Interest  |
 | Liabilities:Mortgage   | 430.00  | Principal |
 | Expenses:Home:Escrow   | 250.00  | Escrow    |
-Then split shortfall is : SplitShortfall Vertical
+And split shortfall is : SplitShortfall Vertical
 | Total     | 1500.00 |
 | Allocated | 1500.00 |
 | Shortfall | 0.00    |
@@ -300,17 +300,17 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Home:Escrow      | Expense | false       |
 | Liabilities:Mortgage      | OtherDebt | false     |
 | Expenses:Uncategorized    | Expense | false       |
-Given payee split rules are : PayeeSplitRule Vertical
+And payee split rules are : PayeeSplitRule Vertical
 | Pattern   | FIRST NATIONAL MTG |
 | MatchType | Contains           |
 | Payee     | First National     |
 | Shape     | Amounts            |
-Given remembered split lines are : RememberedSplitLine
+And remembered split lines are : RememberedSplitLine
 | Category               | Amount  | Memo      |
 | Expenses:Home:Interest | 820.00  | Interest  |
 | Liabilities:Mortgage   | 430.00  | Principal |
 | Expenses:Home:Escrow   | 250.00  | Escrow    |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount   | FitId | Name                   | Memo | CheckNum |
@@ -331,16 +331,16 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Office:Rent    | Expense | false       |
 | Expenses:Office:Utility | Expense | false       |
 | Expenses:Uncategorized  | Expense | false       |
-Given payee split rules are : PayeeSplitRule Vertical
+And payee split rules are : PayeeSplitRule Vertical
 | Pattern   | OFFICE PARK LLC |
 | MatchType | Contains        |
 | Payee     | Office Park     |
 | Shape     | Percentages     |
-Given remembered split lines are : RememberedSplitLine
+And remembered split lines are : RememberedSplitLine
 | Category                | Percent | Memo    |
 | Expenses:Office:Rent    | 70      | Rent    |
 | Expenses:Office:Utility | 30      | Utility |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount   | FitId | Name            | Memo | CheckNum |
@@ -349,7 +349,7 @@ Then split offered is : OfferedSplit
 | Category                | Amount | Memo    |
 | Expenses:Office:Rent    | 700.01 | Rent    |
 | Expenses:Office:Utility | 300.00 | Utility |
-Then split shortfall is : SplitShortfall Vertical
+And split shortfall is : SplitShortfall Vertical
 | Total     | 1000.01 |
 | Allocated | 1000.01 |
 | Shortfall | 0.00    |
@@ -387,7 +387,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee              | Destination            | Amount |
 | T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | -45.00 |
 When category changed : CategoryChange Vertical
@@ -455,7 +455,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee                   | Destination            | Amount | Cleared |
 | T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231      | Expenses:Uncategorized | -45.00 | Cleared |
 | T2  | Assets:Checking | 2024-02-20 | HARRIS TEETER #418 CARY | Expenses:Uncategorized | -62.10 | Cleared |
@@ -469,7 +469,7 @@ Then would change : RuleApplication Vertical
 | Matched        | 2 |
 | AlreadyCorrect | 0 |
 | Skipped        | 1 |
-Then transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee          | Destination            | Amount | Cleared |
 | T1  | Assets:Checking | 2024-01-15 | Harris Teeter  | Expenses:Groceries     | -45.00 | Cleared |
 | T2  | Assets:Checking | 2024-02-20 | Harris Teeter  | Expenses:Groceries     | -62.10 | Cleared |
@@ -490,7 +490,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Dining        | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee              | Destination            | Amount | Cleared |
 | T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | -45.00 | Cleared |
 | T2  | Assets:Checking | 2024-02-20 | HARRIS TEETER #418 | Expenses:Dining        | -8.50  | Cleared |
@@ -503,7 +503,7 @@ Then would change : RuleApplication Vertical
 | Matched        | 1 |
 | AlreadyCorrect | 0 |
 | Skipped        | 1 |
-Then transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount | Cleared |
 | T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 | Cleared |
 | T2  | Assets:Checking | 2024-02-20 | Harris Teeter | Expenses:Dining    | -8.50  | Cleared |
@@ -518,7 +518,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee              | Destination            | Amount | Cleared    |
 | T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | -45.00 | Reconciled |
 When rule applied to existing : PayeeRule Vertical
@@ -552,11 +552,11 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Dining        | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given payee rules are : PayeeRule
+And payee rules are : PayeeRule
 | Pattern       | MatchType | Payee         | Category           | Enabled |
 | SHELL OIL     | Contains  | Shell Oil     | Expenses:Auto:Fuel | true    |
 | HARRIS TEETER | Contains  | Harris Teeter | Expenses:Groceries | true    |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee              | Destination            | Amount |
 | T1  | Assets:Checking | 2024-01-15 | SHELL OIL 3344     | Expenses:Uncategorized | -40.00 |
 | T2  | Assets:Checking | 2024-01-16 | HARRIS TEETER #231 | Expenses:Uncategorized | -45.00 |
@@ -567,7 +567,7 @@ Then applying the rules reported is : RuleApplication Vertical
 | Matched        | 2 |
 | AlreadyCorrect | 1 |
 | Skipped        | 1 |
-Then transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
 | T1  | Assets:Checking | 2024-01-15 | Shell Oil     | Expenses:Auto:Fuel | -40.00 |
 | T2  | Assets:Checking | 2024-01-16 | Harris Teeter | Expenses:Groceries | -45.00 |
@@ -589,10 +589,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Auto:Fuel     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given payee rules are : PayeeRule
+And payee rules are : PayeeRule
 | Pattern   | MatchType | Payee     | Category           | Enabled |
 | SHELL OIL | Contains  | Shell Oil | Expenses:Auto:Fuel | true    |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee          | Destination            | Amount |
 | T1  | Assets:Checking | 2024-01-15 | SHELL OIL 3344 | Expenses:Uncategorized | -40.00 |
 When rules applied to the book
@@ -600,7 +600,7 @@ Then applying the rules reported is : RuleApplication Vertical
 | Matched        | 1 |
 | AlreadyCorrect | 0 |
 | Skipped        | 0 |
-Then transaction is : Transaction Vertical CompareOnly
+And transaction is : Transaction Vertical CompareOnly
 | Ref         | T1                 |
 | Payee       | Shell Oil          |
 | Destination | Expenses:Auto:Fuel |
@@ -615,10 +615,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given payee rules are : PayeeRule
+And payee rules are : PayeeRule
 | Pattern       | MatchType | Payee         | Category           | Enabled |
 | HARRIS TEETER | Contains  | Harris Teeter | Expenses:Groceries | true    |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee              | Destination            | Amount | Cleared    |
 | T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | -45.00 | Reconciled |
 When rules applied to the book
@@ -626,7 +626,7 @@ Then applying the rules reported is : RuleApplication Vertical
 | Matched        | 0 |
 | AlreadyCorrect | 0 |
 | Skipped        | 1 |
-Then transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee              | Destination            | Amount | Cleared    |
 | T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231 | Expenses:Uncategorized | -45.00 | Reconciled |
 # Reconciled, still, on the transaction's own side -- the whole point of the
@@ -648,7 +648,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination | Amount |
 | T1  | Assets:Checking | 2024-01-15 | Harris Teeter | none        | -45.00 |
 | T2  | Assets:Checking | 2024-02-20 | Shell         | none        | -52.00 |
@@ -672,7 +672,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
 | Expenses:Dining    | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee         | Destination        | Amount |
 | T1  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Groceries | -45.00 |
 | T2  | Assets:Checking | 2024-02-20 | Harris Teeter | Expenses:Dining    | -8.50  |
@@ -696,7 +696,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Path               | Type    | Placeholder |
 | Assets:Checking    | Checking | false       |
 | Expenses:Groceries | Expense | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee              | Destination | Amount |
 | T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231 | none        | -45.00 |
 | T2  | Assets:Checking | 2024-02-20 | Harris Teeter      | none        | -62.10 |
@@ -825,7 +825,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Auto:Fuel     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given payee rules are : PayeeRules
+And payee rules are : PayeeRules
 | Pattern        | MatchType | Payee | Category           | Enabled |
 | SHELL OIL 3344 | Contains  | Shell | Expenses:Auto:Fuel | true    |
 When rule changed : RuleEdit Vertical
@@ -855,7 +855,7 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Auto:Fuel     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given payee rules are : PayeeRules
+And payee rules are : PayeeRules
 | Pattern   | MatchType | Payee | Category           | Enabled |
 | SHELL OIL | Contains  | Shell | Expenses:Auto:Fuel | true    |
 When rule deleted : RuleSelect Vertical
@@ -886,15 +886,15 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Auto:Fuel     | Expense | false       |
 | Expenses:Uncategorized | Expense | false       |
-Given payee rules are : PayeeRules
+And payee rules are : PayeeRules
 | Pattern   | MatchType | Payee | Category           | Enabled |
 | SHELL OIL | Contains  | Shell | Expenses:Auto:Fuel | true    |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name           | Memo | CheckNum |
 | DEBIT   | 2024-03-01 | -40.00 | S1    | SHELL OIL 2343 | none | none     |
-When rule deleted : RuleSelect Vertical
+And rule deleted : RuleSelect Vertical
 | Pattern   | SHELL OIL |
 | MatchType | Contains  |
 Then transactions are : Transaction
@@ -1218,10 +1218,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given payee conversions are : PayeeConversions
+And payee conversions are : PayeeConversions
 | Match           | Converted     |
 | HARRIS TEETER * | Harris Teeter |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name                         | Memo | CheckNum |
@@ -1239,10 +1239,10 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given payee conversions are : PayeeConversions
+And payee conversions are : PayeeConversions
 | Match           | Converted     |
 | HARRIS TEETER * | Harris Teeter |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name              | Memo | CheckNum |
@@ -1261,12 +1261,12 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee                        | Destination            | Amount | Cleared   |
 | T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231 DURHAM NC | Expenses:Uncategorized | -45.00 | Uncleared |
 | T2  | Assets:Checking | 2024-01-16 | SOME SHOP 4471 NC            | Expenses:Uncategorized | -12.00 | Uncleared |
 | T3  | Assets:Checking | 2024-01-17 | HARRIS TEETER #418           | Expenses:Groceries     | -31.00 | Reconciled |
-Given payee conversions are : PayeeConversions
+And payee conversions are : PayeeConversions
 | Match           | Converted     |
 | HARRIS TEETER * | Harris Teeter |
 When payees converted
@@ -1289,15 +1289,15 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given payee conversions are : PayeeConversions
+And payee conversions are : PayeeConversions
 | Match           | Converted     |
 | HARRIS TEETER * | Harris Teeter |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name                         | Memo | CheckNum |
 | DEBIT   | 2024-01-15 | -45.00 | none  | HARRIS TEETER #231 DURHAM NC | none | none     |
-When transactions imported : OfxTransactions
+And transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId | Name                         | Memo | CheckNum |
 | DEBIT   | 2024-01-15 | -45.00 | none  | HARRIS TEETER #231 DURHAM NC | none | none     |
 Then transactions are : Transaction
@@ -1313,13 +1313,13 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given payee conversions are : PayeeConversions
+And payee conversions are : PayeeConversions
 | Match           | Converted     |
 | HARRIS TEETER * | Harris Teeter |
-Given payee categories are : PayeeCategories
+And payee categories are : PayeeCategories
 | Payee         | Category           |
 | Harris Teeter | Expenses:Groceries |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name                         | Memo | CheckNum |
@@ -1337,13 +1337,13 @@ Given the chart of accounts is : ChartOfAccounts
 | Assets:Checking        | Checking | false       |
 | Expenses:Groceries     | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given payee conversions are : PayeeConversions
+And payee conversions are : PayeeConversions
 | Match           | Converted     |
 | HARRIS TEETER * | Harris Teeter |
-Given payee categories are : PayeeCategories
+And payee categories are : PayeeCategories
 | Payee           | Category           |
 | HARRIS TEETER * | Expenses:Groceries |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name                         | Memo | CheckNum |
@@ -1361,14 +1361,14 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Groceries     | Expense  | false       |
 | Expenses:Shopping      | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given payee conversions are : PayeeConversions
+And payee conversions are : PayeeConversions
 | Match           | Converted     |
 | HARRIS TEETER * | Harris Teeter |
-Given payee categories are : PayeeCategories
+And payee categories are : PayeeCategories
 | Payee           | Category           |
 | Harris Teeter   | Expenses:Groceries |
 | HARRIS TEETER * | Expenses:Shopping  |
-Given import target is : ImportTarget Vertical
+And import target is : ImportTarget Vertical
 | AccountPath | Assets:Checking |
 When transactions imported : OfxTransactions
 | TrnType | DatePosted | Amount | FitId       | Name                         | Memo | CheckNum |
@@ -1387,19 +1387,19 @@ Given the chart of accounts is : ChartOfAccounts
 | Expenses:Groceries     | Expense  | false       |
 | Expenses:Shopping      | Expense  | false       |
 | Expenses:Uncategorized | Expense  | false       |
-Given transactions are : Transaction
+And transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee                        | Destination            | Amount | Cleared    |
 | T1  | Assets:Checking | 2024-01-15 | HARRIS TEETER #231 DURHAM NC | Expenses:Uncategorized | -45.00 | Uncleared  |
 | T2  | Assets:Checking | 2024-01-16 | HARRIS TEETER #418           | Expenses:Shopping      | -31.00 | Uncleared  |
 | T3  | Assets:Checking | 2024-01-17 | HARRIS TEETER #231 DURHAM NC | Expenses:Uncategorized | -22.00 | Reconciled |
-Given payee conversions are : PayeeConversions
+And payee conversions are : PayeeConversions
 | Match           | Converted     |
 | HARRIS TEETER * | Harris Teeter |
-Given payee categories are : PayeeCategories
+And payee categories are : PayeeCategories
 | Payee         | Category           |
 | Harris Teeter | Expenses:Groceries |
 When payees converted
-When categories assigned
+And categories assigned
 Then transactions are : Transaction
 | Ref | SourceAccount   | Date       | Payee                        | Destination            | Amount | Cleared    |
 | T1  | Assets:Checking | 2024-01-15 | Harris Teeter                | Expenses:Groceries     | -45.00 | Uncleared  |
