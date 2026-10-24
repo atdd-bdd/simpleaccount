@@ -14,6 +14,7 @@
 #include "transaction.h"
 #include "register_entry.h"
 #include "register_lines.h"
+#include "reconcile.h"
 #include "register_view.h"
 #include "text_types.h"
 #include "transaction_id.h"
@@ -112,7 +113,7 @@ public:
     void when_register_opened_on(const std::vector<AccountSelectString>& values) {
         ASSERT_FALSE(values.empty());
         account_ = values.front().path;
-        open_lines_ = reg::lines_for(chart_, transactions_, splits_, account_);
+        open_lines_ = reg::lines_for(chart_, transactions_, splits_, account_, quicken_signs_);
         // The book's hide-before date applies to every register the book opens,
         // so it is applied by opening one rather than by a filter the user asks
         // for.
@@ -193,7 +194,7 @@ public:
             transactions_.push_back(done.transaction);
             if (done.is_transfer) transactions_.push_back(done.other_side);
         }
-        lines_ = reg::lines_for(chart_, transactions_, splits_, account_);
+        lines_ = reg::lines_for(chart_, transactions_, splits_, account_, quicken_signs_);
         filled_ = false;
     }
 
@@ -397,7 +398,7 @@ public:
             }
         }
         account_ = "Assets:Checking";
-        lines_ = reg::lines_for(chart_, transactions_, splits_, account_);
+        lines_ = reg::lines_for(chart_, transactions_, splits_, account_, quicken_signs_);
 
         ASSERT_EQ(values.size(), lines_.size()) << "lines in the register";
         for (const auto& value : values) {
@@ -447,6 +448,9 @@ private:
     // The book's own date, as the book stores it: empty for a book that hides
     // nothing.
     std::string hide_before_;
+    // The book's reading of what is owed. Off unless a scenario says the book
+    // reads balances the Quicken way.
+    bool quicken_signs_ = false;
     std::vector<reg::SplitLine> split_;
     reg::Filtered filtered_;
     reg::BlankLine blank_;
@@ -472,7 +476,7 @@ private:
             account_ = a.path.value();
             break;
         }
-        open_lines_ = reg::lines_for(chart_, transactions_, splits_, account_);
+        open_lines_ = reg::lines_for(chart_, transactions_, splits_, account_, quicken_signs_);
         lines_ = open_lines_;
     }
 
@@ -511,7 +515,7 @@ private:
             add_fixture(refs[i], dates[i], std::string("Shop ") + refs[i], amounts[i]);
         }
         account_ = "Assets:Checking";
-        lines_ = reg::lines_for(chart_, transactions_, splits_, account_);
+        lines_ = reg::lines_for(chart_, transactions_, splits_, account_, quicken_signs_);
     }
 public:
 
@@ -567,6 +571,10 @@ public:
     // which it shows nothing. The fiscal year start is a reporting decision and
     // the register does not read it, which is what the calendar-year scenario
     // is about; the other two belong to importing.
+    // A book-level display option, so it is a Given with nothing to say but
+    // that it is on. See "How this book writes what is owed" in Books.spectable.
+    void given_balances_are_read_the_quicken_way() { quicken_signs_ = true; }
+
     void given_the_book_setting_is(const std::vector<BookSettingString>& values) {
         ASSERT_FALSE(values.empty());
         hide_before_ = blank(values.front().hidebefore);
@@ -797,11 +805,59 @@ public:
 
 public:
 
+    // Each row is one status against the three things the program asks of one.
+    // Every answer is read from the code that does the asking: the cleared
+    // balance from balances_for over a register of that one transaction, what
+    // reconciling offers from uncleared_in, and the column from cleared_mark.
+    void examples_businessrule_a_reconciled_transaction_answers_yes_wherever_a_cleared_one_does(
+            const std::vector<ClearedMeaningString>& values) {
+        for (const auto& value : values) {
+            const types::ClearedStatus status =
+                types::cleared_status_from_string(value.status);
+            const std::string where = value.status.value;
+
+            chart::Chart accounts;
+            accounts.add(types::AccountPath("Assets:Checking"), types::AccountType::Checking);
+            accounts.add(types::AccountPath("Expenses:Groceries"), types::AccountType::Expense);
+            ledger::Transaction t;
+            t.id = ledger::new_id();
+            t.ref = types::TransactionRef("T1");
+            t.date = types::Date(2024, 1, 10);
+            t.payee = types::PayeeName("Harris Teeter");
+            t.source_account = accounts.ref_for_path("Assets:Checking");
+            t.destination = accounts.ref_for_path("Expenses:Groceries");
+            t.amount = Money("-45.00");
+            t.cleared = status;
+            const std::vector<ledger::Transaction> one{t};
+            const reg::BookIndex index(accounts, one, {});
+
+            // The whole of the register is this one transaction, so a status
+            // that counts toward the cleared balance makes it -45.00 and one
+            // that does not makes it nothing.
+            const reg::Balances b = reg::balances_for(index, "Assets:Checking");
+            const bool counted = b.cleared.cents() != 0;
+            EXPECT_EQ(parse_bool_cell(value.countsascleared), counted)
+                << where << " counts toward the cleared balance -- " << value.notes;
+            EXPECT_EQ(parse_bool_cell(value.countsascleared),
+                      types::counts_as_cleared(status))
+                << where << " counts as cleared -- " << value.notes;
+
+            const std::vector<recon::Item> offered =
+                recon::uncleared_in(index, "Assets:Checking");
+            EXPECT_EQ(parse_bool_cell(value.offeredwhenreconciling), offered.size() == 1)
+                << where << " offered when reconciling -- " << value.notes;
+
+            EXPECT_EQ(blank(value.thecolumnshows), types::cleared_mark(status))
+                << where << " the column shows -- " << value.notes;
+        }
+    }
+
     void then_register_balances_are(const std::vector<RegisterBalancesString>& values) {
         ASSERT_FALSE(values.empty());
         const RegisterBalancesString& want = values.front();
         const reg::Balances got =
-            reg::balances_for(chart_, transactions_, splits_, want.account.value);
+            reg::balances_for(chart_, transactions_, splits_, want.account.value,
+                              quicken_signs_);
         EXPECT_EQ(Money(want.balance.value).cents(), got.balance.cents()) << "balance";
         EXPECT_EQ(Money(want.cleared.value).cents(), got.cleared.cents()) << "cleared balance";
         EXPECT_EQ(Money(want.downloaded.value).cents(), got.downloaded.cents())
@@ -907,7 +963,7 @@ public:
         ASSERT_TRUE(ledger::match_destinations(&transactions_, mine->id, pair->id));
 
         account_ = "Assets:Checking";
-        lines_ = reg::lines_for(chart_, transactions_, splits_, account_);
+        lines_ = reg::lines_for(chart_, transactions_, splits_, account_, quicken_signs_);
 
         for (const auto& value : values) {
             const std::string ref = ref_for_kind(value.thetransaction);

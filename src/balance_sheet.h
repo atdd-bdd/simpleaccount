@@ -93,7 +93,8 @@ inline Money own_balance_as_at(const ledger::Ledger& book, const std::string& pa
 }  // namespace detail
 
 inline BalanceSheet balance_sheet(const chart::Chart& accounts, const ledger::Ledger& book,
-                                  const types::Date& as_at, bool zero_rows) {
+                                  const types::Date& as_at, bool zero_rows,
+                                  bool quicken_signs = false) {
     BalanceSheet out;
     int many = 0;
     const types::AccountGroup* order = types::account_groups_in_order(&many);
@@ -121,7 +122,10 @@ inline BalanceSheet balance_sheet(const chart::Chart& accounts, const ledger::Le
             if (members.empty()) continue;
             std::sort(members.begin(), members.end());
 
-            const int sign = wanted == BalanceSheetSection::Assets ? 1 : -1;
+            // Under the Quicken reading what is owed is printed negative, so
+            // the liabilities side keeps the sign its postings have. Net worth
+            // does not move either way -- see below.
+            const int sign = wanted == BalanceSheetSection::Assets || quicken_signs ? 1 : -1;
             const auto rolled = [&](const std::string& p) {
                 return detail::subtree_balance_as_at(book, p, as_at);
             };
@@ -180,7 +184,11 @@ inline BalanceSheet balance_sheet(const chart::Chart& accounts, const ledger::Le
             else out.totals.liabilities += group_total;
         }
     }
-    out.totals.net = out.totals.assets - out.totals.liabilities;
+    // Assets plus liabilities in the Quicken reading and assets less
+    // liabilities in the other, which come to the same number: what somebody is
+    // worth is not a matter of how a liability is printed.
+    out.totals.net = quicken_signs ? out.totals.assets + out.totals.liabilities
+                                   : out.totals.assets - out.totals.liabilities;
     return out;
 }
 

@@ -1287,3 +1287,133 @@ decisions:
 - **The sheet is worked out when its tab is shown**, like every other report
   tab, through `report_wants_working_out` and `report_worked_out`. Nothing new
   was needed in `ui::Workspace` for any of this.
+
+## 33. Reconciled is cleared, and a book-level reading of what is owed
+
+Two specifications written in one pass, both of them $TBD and neither of them
+coded yet. They are related only in that the first was found while looking at
+the second: a real book whose history reads as uncleared, and a question about
+what sign a card balance should have.
+
+### Reconciled counting as cleared
+
+The register's cleared figure, the list of what reconciling offers, and the
+mark in the cleared column all test `== Cleared` exactly, so a reconciled
+transaction counts as nothing cleared at all. On the real book that is 78% of
+the rows: Quicken writes `R` against everything a statement ever covered, the
+QIF import maps it to Reconciled faithfully, and the register then reports the
+whole of the history as a difference against the bank. The decisions:
+
+- **Three questions and no fourth.** The rule is an `Examples:` table of the
+  three statuses against the three things the program asks of one -- whether it
+  counts toward the cleared balance, whether reconciling offers it, and what
+  the column shows. Anything that tests for Cleared and not for Reconciled is
+  one of those three. Written as a table rather than as prose so that the
+  fourth site, when somebody adds one, has somewhere to be checked against.
+- **The column shows `R`, not a blank and not a `c`.** A reconciled line is
+  told from a cleared one rather than from an uncleared one. Showing nothing
+  was the old behaviour and is what made the book look untouched.
+- **Editing stays the exception.** Reconciled is not interchangeable with
+  Cleared there: an edit to a reconciled transaction warns, because a
+  reconciliation agreed it. That is already specified in CoreTypes and is left
+  as it is.
+- **The sort key is left alone.** `detail::sorts_before` orders by the enum, so
+  Uncleared before Cleared before Reconciled already holds, and the existing
+  SortKey row ("Uncleared before cleared") is still true.
+
+### The Quicken reading of what is owed
+
+"Should credit cards show negative balances, like Quicken shows?" They should
+if that is how you read them, and owed-positive is a recorded decision with
+other files depending on it, so this is a display option of the book rather
+than a change of convention.
+
+- **A sign on the way out, applied where a balance is printed and nowhere
+  earlier.** That is the whole of why it is safe. A posting, a raw balance, the
+  cleared and difference arithmetic, the comparison against a downloaded
+  balance and net worth are all worked out as before. The rule in
+  `Accounts.spectable` is a table of every figure that was checked and whether
+  it moves, so "display only" is a claim with a list behind it.
+- **One line of rule: a real account that reads as an amount owed reads
+  negative instead.** Not a list of account types to keep in step with
+  `AccountType`. That takes in the cards, the loans, Accounts Payable and
+  TransferOut, and leaves the three categories alone.
+- **The entry columns do not flip.** A charge is typed as 450.00 in the Charge
+  column under either reading, and the headings stay Charge and Payment. If the
+  entry flipped with the balance, the same keystrokes would mean two different
+  things depending on a display option, which is how a book gets wrong figures
+  in it rather than differently printed ones.
+- **All three balances and the difference flip together.** 450.00 against
+  450.00 comes to nothing and so does -450.00 against -450.00. Moving one of
+  the three would turn an account that agrees with its bank into one that does
+  not.
+- **Net worth does not move.** It is assets plus liabilities in this reading and
+  assets less liabilities in the other, and both come to the same number. What
+  somebody is worth is not a matter of how a liability is printed.
+- **A category has no statement, so the option reaches a category only through
+  a report.** The report's own Quicken signs option already exists and already
+  negates the expense figures of a category report; the book setting becomes
+  its default, and a single run can still be asked for the other way without
+  the book setting moving. The book says how figures are read here; the
+  checkbox says how this one is wanted.
+- **The setting is in the book row, and `BookInfrastructure` was not touched
+  yet.** Its `Examples:` table lists the columns of the `book` table and is
+  checked against the real schema, so adding `quicken_signs` to it before the
+  column exists would make a passing test fail. The new column joins that list
+  in the pass that writes it, with a schema version.
+- **Off in a new book.** Nothing about an existing book changes when this
+  arrives, and turning it off again restores the first reading exactly -- there
+  is nothing to convert.
+
+### Implementing the two, and what the code made us decide
+
+Both were written and then implemented in the same pass, at the author's
+instruction, so these are decisions taken against real code rather than against
+the tables.
+
+- **Reconciled is asked through two functions, not in five places.**
+  `types::counts_as_cleared` and `types::cleared_mark` in `account_type.h`, and
+  the four places that tested `== Cleared` now ask one of them: the register's
+  cleared balance, what reconciling offers, the clear-in-reconcile loop, and the
+  ledger balance an OFX import is checked against. The Qt cleared column asks
+  `cleared_mark`. A sixth site, if one arrives, has a function to call and a row
+  in the rule's table to be checked against.
+- **The sign is one parameter, defaulted off, threaded to the places that
+  print.** `types::print_sign(type, quicken_signs)` is the display sign, negated
+  for a real account that reads as an amount owed, and
+  `reading_is_turned_over(type, quicken_signs)` is the question behind it.
+  `lines_for`, `balances_for`, `figures_for`, `account_list`, `account_listing`
+  and `balance_sheet` take `bool quicken_signs = false`. Nothing else moved: no
+  arithmetic was rewritten, and every caller that does not pass the flag behaves
+  exactly as it did.
+- **The reconciling window's figures do flip, and the rule now says so.** They
+  come from `balances_for`, so they followed the three balances automatically.
+  A row was added to "What the Quicken reading leaves alone" rather than let
+  the table be silent about a figure that moves: the figures flip, what is
+  *offered* does not.
+- **The schema is version 19, and there is no migration.** The new column is
+  `quicken_signs INTEGER NOT NULL DEFAULT 0` on the book row. `kSchemaVersion`
+  went 18 to 19, and storage refuses any other version outright by recorded
+  design -- so the real `pughkilleen18.sadb` will be refused by this build
+  until it is either re-imported or altered in place. The decision is to bump
+  rather than to invent a migration path for a shape still being settled, and
+  the real book is to be re-imported; a one-line `ALTER TABLE book ADD COLUMN
+  quicken_signs INTEGER NOT NULL DEFAULT 0` plus `UPDATE schema SET version =
+  19` would do it in place if re-importing turns out to be expensive, and that
+  is to be run only with the author's say-so and after a copy is taken.
+- **`BookInfrastructure` now lists the column.** Its `Examples:` table names the
+  columns of the `book` table and the glue checks each one exists, so the row
+  was extended in this pass -- the pass that writes the column -- as the spec
+  pass said it would be.
+- **A report tab takes the book's reading when it is built.** The report's own
+  "Quicken signs" checkbox starts from the book setting. A report tab that is
+  already open keeps the box it was given rather than being changed underneath
+  somebody: it is that run's question, not the book's.
+- **The "leaves alone" rule is checked over a real book, and skips what it
+  cannot reach.** Each row's figure is worked out twice over one small fixture
+  -- a card with a statement to compare against -- once under each reading, and
+  the row's claim is checked against whether the two differ. Four rows name
+  something no code path reads the option for (a posting as it is stored, an
+  amount as it is typed, an opening balance, what is in the file). There is
+  nothing to work out for those, so the glue asserts the row says `false`: a
+  row claiming a change where there is no path to one fails.

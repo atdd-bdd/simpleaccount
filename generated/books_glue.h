@@ -629,6 +629,26 @@ public:
         open_name_ = "Business";
     }
 
+    // The book's display options are settings of the book row, so they are
+    // written and read back through the store rather than held here. See "How
+    // this book writes what is owed" in Books.spectable.
+    void when_book_display_options_are_set_to(
+            const std::vector<BookDisplayOptionsString>& values) {
+        ASSERT_FALSE(values.empty());
+        ASSERT_TRUE(store_.is_open()) << "no book was made";
+        store::BookInfo now = store_.info();
+        now.quicken_signs = parse_bool_cell(values.front().quickensigns);
+        last_ = store_.set_info(now);
+        ASSERT_FALSE(last_.refused) << last_.reason;
+    }
+
+    void then_book_display_options_are(const std::vector<BookDisplayOptionsString>& values) {
+        ASSERT_FALSE(values.empty());
+        ASSERT_TRUE(store_.is_open()) << "no book was made";
+        EXPECT_EQ(parse_bool_cell(values.front().quickensigns), store_.info().quicken_signs)
+            << "how the book writes what is owed";
+    }
+
     void given_the_chart_of_accounts_is(const std::vector<AccountString>& values) {
         chart_ = chart::Chart();
         for (const auto& value : values) {

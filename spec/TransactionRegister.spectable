@@ -510,6 +510,45 @@ Then register balances are : RegisterBalances Vertical
 # The posting is negative 450.00 and all four figures read 450.00, which is
 # what the statement says is owed.
 
+Scenario A credit card register read the Quicken way
+Description The same card with the book's Quicken signs option on. All four
+\ figures and the running balance are negated, and nothing else is:
+\ the charges are still typed and shown in the Charge column as 450.00
+\ and 40.00, and the downloaded balance in the account is still the
+\ 450.00 the statement stated. See the Quicken reading rules in
+\ Accounts and the option in Books.
+Details The difference is negated with the other two, which is the point of
+\ negating all of them together: 450.00 cleared against 450.00
+\ downloaded comes to nothing, and so does -450.00 against -450.00.
+\ A reading that moved one of the three would turn an account that
+\ agrees with its bank into one that does not.
+Given balances are read the Quicken way
+And the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder | DownloadedBalance | DownloadedBalanceAt |
+| Liabilities:Visa       | CreditCard | false       | 450.00            | 2024-01-31          |
+| Expenses:Uncategorized | Expense    | false       | 0.00              | never               |
+And transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee   | Destination            | Amount  | Cleared   |
+| T1  | Liabilities:Visa | 2024-01-10 | Amazon   | Expenses:Uncategorized | -450.00 | Cleared   |
+| T2  | Liabilities:Visa | 2024-02-05 | The~Cafe | Expenses:Uncategorized | -40.00  | Uncleared |
+When register opened on : AccountSelect
+| Path             |
+| Liabilities:Visa |
+Then register lines are : RegisterLine
+| Ref | Date       | Payee    | Category               | Payment | Deposit | Cleared   | Balance |
+| T1  | 2024-01-10 | Amazon   | Expenses:Uncategorized | 450.00  | 0.00    | Cleared   | -450.00 |
+| T2  | 2024-02-05 | The~Cafe | Expenses:Uncategorized | 40.00   | 0.00    | Uncleared | -490.00 |
+And register balances are : RegisterBalances Vertical
+| Account      | Liabilities:Visa |
+| Balance      | -490.00          |
+| Cleared      | -450.00          |
+| Downloaded   | -450.00          |
+| DownloadedAt | 2024-01-31       |
+| Difference   | 0.00             |
+# The scenario above is this card with the option off and without the February
+# charge, and every figure in it is the negation of one here. The two figures in
+# the Charge column are the ones that do not move.
+
 # ---------------------------------------------------------------------------
 # Sorting by a column other than the date
 # ---------------------------------------------------------------------------
@@ -1296,3 +1335,86 @@ When register opened on : AccountSelect
 Then register lines are : RegisterLine
 | Ref | Date       | Payee      | Category  | Payment | Deposit | Balance |
 | T1  | 2024-04-02 | Home Depot | --Split-- | 184.50  | 0.00    | -184.50 |
+
+# ---------------------------------------------------------------------------
+# A reconciled transaction is a cleared one
+# ---------------------------------------------------------------------------
+
+Description Reconciled is the third cleared status, and wherever being cleared
+\ matters it answers the same as Cleared does.
+Details Cleared means the bank has been seen to have it. Reconciled means that
+\ and one thing more: a finished reconciliation agreed a figure this
+\ transaction was part of. So it counts toward the cleared balance, it is
+\ not offered again for reconciling, and the cleared column tells it from
+\ a merely cleared line rather than from an uncleared one.
+\
+\ This is almost the whole of a book imported from Quicken. Quicken writes
+\ R in the cleared field of everything a statement ever covered, so the
+\ twenty years behind today arrive reconciled and only the last few weeks
+\ are cleared or uncleared. A register that counts Cleared alone therefore
+\ reads as though nothing had ever been reconciled: the cleared figure is
+\ short by the whole of the history, and the difference against the bank
+\ comes out as the account's own balance. That is what was seen on the
+\ real book, and it is a defect in the reading of the status rather than
+\ in the data.
+\
+\ The one place the two are not interchangeable is editing: an edit to a
+\ reconciled transaction warns, because a reconciliation said it was
+\ agreed. See the cleared status in CoreTypes.
+
+BusinessRule A reconciled transaction answers yes wherever a cleared one does
+Description The three statuses against the three questions the program asks of
+\ one.
+Details There is no fourth question. Anything that tests for Cleared and not
+\ for Reconciled is one of these three and is wrong.
+Examples: ClearedMeaning
+| Status     | CountsAsCleared | OfferedWhenReconciling | TheColumnShows | Notes                                        |
+| Uncleared  | false           | true                   | none           | In the book and not yet at the bank          |
+| Cleared    | true            | false                  | c              | The bank has been seen to have it            |
+| Reconciled | true            | false                  | R              | A finished reconciliation agreed it          |
+
+Attributes ClearedMeaning
+Description One cleared status and what it answers. TheColumnShows is the mark in
+\ the register's cleared column, which is one character wide because the
+\ column is read down rather than across.
+| Attribute              | Type          | Default   |
+| Status                 | ClearedStatus | Uncleared |
+| CountsAsCleared        | Boolean       | false     |
+| OfferedWhenReconciling | Boolean       | true      |
+| TheColumnShows         | Text          | none      |
+| Notes                  | String        | none      |
+
+Scenario A reconciled transaction counts toward the cleared balance
+Description The shape of an imported book: two reconciled transactions from the
+\ history, one cleared by a download, and one cheque written since. The
+\ cleared figure is all three of the first, so it agrees with the bank,
+\ and the difference is nothing.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type     | Placeholder | DownloadedBalance | DownloadedBalanceAt |
+| Assets:Checking        | Checking | false       | 1605.00           | 2024-01-31          |
+| Expenses:Uncategorized | Expense  | false       | 0.00              | never               |
+And transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination            | Amount  | Cleared    |
+| T1  | Assets:Checking | 2024-01-01 | Opening       | Expenses:Uncategorized | 1750.00 | Reconciled |
+| T2  | Assets:Checking | 2024-01-15 | Harris Teeter | Expenses:Uncategorized | -45.00  | Reconciled |
+| T3  | Assets:Checking | 2024-01-28 | Water Board   | Expenses:Uncategorized | -100.00 | Cleared    |
+| T4  | Assets:Checking | 2024-02-03 | Plumber       | Expenses:Uncategorized | -200.00 | Uncleared  |
+When register opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then register balances are : RegisterBalances Vertical
+| Account      | Assets:Checking |
+| Balance      | 1405.00         |
+| Cleared      | 1605.00         |
+| Downloaded   | 1605.00         |
+| DownloadedAt | 2024-01-31      |
+| Difference   | 0.00            |
+And register lines are : RegisterLine CompareOnly
+| Ref | Cleared    |
+| T1  | Reconciled |
+| T2  | Reconciled |
+| T3  | Cleared    |
+| T4  | Uncleared  |
+# Counting Cleared alone would make the cleared figure -100.00 and the
+# difference -1705.00, which is the whole of the history reported as a
+# disagreement with the bank.

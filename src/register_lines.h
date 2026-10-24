@@ -186,12 +186,17 @@ struct Balances {
 };
 
 
-inline std::vector<Line> lines_for(const BookIndex& book, const std::string& account) {
+// quicken_signs is the book's reading of what is owed, and it reaches only the
+// running balance column: the Charge and Payment columns are the entry, and a
+// charge is typed and shown as 450.00 under either reading. See "What the
+// Quicken reading leaves alone" in Accounts.spectable.
+inline std::vector<Line> lines_for(const BookIndex& book, const std::string& account,
+                                   bool quicken_signs = false) {
     const chart::Chart& accounts = book.accounts();
     const chart::RefIndex& index = book.refs();
     const std::vector<ledger::Transaction>& transactions = book.transactions();
     const chart::Account* a = accounts.find(account);
-    const int sign = a != nullptr ? types::display_sign(a->type) : 1;
+    const int sign = a != nullptr ? types::print_sign(a->type, quicken_signs) : 1;
 
     std::vector<Line> out;
     Money running;
@@ -329,21 +334,27 @@ inline std::vector<Line> lines_for(
         const chart::Chart& accounts,
         const std::vector<ledger::Transaction>& transactions,
         const std::vector<ledger::TransactionSplit>& splits,
-        const std::string& account) {
-    return lines_for(BookIndex(accounts, transactions, splits), account);
+        const std::string& account, bool quicken_signs = false) {
+    return lines_for(BookIndex(accounts, transactions, splits), account, quicken_signs);
 }
 
-inline Balances balances_for(const BookIndex& book, const std::string& account) {
+inline Balances balances_for(const BookIndex& book, const std::string& account,
+                             bool quicken_signs = false) {
     const chart::Chart& accounts = book.accounts();
     const chart::Account* a = accounts.find(account);
-    const int sign = a != nullptr ? types::display_sign(a->type) : 1;
+    const int sign = a != nullptr ? types::print_sign(a->type, quicken_signs) : 1;
+    // All four figures are printed in one reading or the other, never one in
+    // each: 450.00 cleared against 450.00 downloaded comes to nothing, and so
+    // does -450.00 against -450.00.
+    const bool turned_over =
+        a != nullptr && types::reading_is_turned_over(a->type, quicken_signs);
 
     // The register's own lines, because which transactions belong to this
     // account is a question only lines_for answers: a transfer in is somebody
     // else's transaction and a line here all the same, a matched transfer is a
     // line in one register and not in both, and a split is a line in each
     // category it touches.
-    const std::vector<Line> lines = lines_for(book, account);
+    const std::vector<Line> lines = lines_for(book, account, quicken_signs);
 
     Balances out;
     out.account = account;
@@ -354,12 +365,15 @@ inline Balances balances_for(const BookIndex& book, const std::string& account) 
     if (!lines.empty()) out.balance = lines.back().balance;
     Money cleared;
     for (const Line& line : lines)
-        if (line.cleared == types::ClearedStatus::Cleared)
+        if (types::counts_as_cleared(line.cleared))
             cleared += line.deposit - line.payment;
     out.cleared = sign < 0 ? -cleared : cleared;
 
     if (a != nullptr && a->downloaded_balance_at.has_value()) {
-        out.downloaded = a->downloaded_balance;
+        // The stored figure is in the program's own reading -- the amount the
+        // statement said was owed -- so it is turned over on the way out with
+        // the other two.
+        out.downloaded = turned_over ? -a->downloaded_balance : a->downloaded_balance;
         out.downloaded_at = a->downloaded_balance_at;
         out.difference = out.cleared - out.downloaded;
     }
@@ -370,8 +384,8 @@ inline Balances balances_for(const BookIndex& book, const std::string& account) 
 inline Balances balances_for(const chart::Chart& accounts,
                              const std::vector<ledger::Transaction>& transactions,
                              const std::vector<ledger::TransactionSplit>& splits,
-                             const std::string& account) {
-    return balances_for(BookIndex(accounts, transactions, splits), account);
+                             const std::string& account, bool quicken_signs = false) {
+    return balances_for(BookIndex(accounts, transactions, splits), account, quicken_signs);
 }
 
 // --- what the register shows, beyond the lines themselves -------------------

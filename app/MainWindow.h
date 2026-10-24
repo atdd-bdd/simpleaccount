@@ -297,6 +297,12 @@ private:
     // The book's hide-before date, as the book stores it: an ISO date, the
     // word none, or nothing at all. Every register reads it.
     std::string hideBefore_;
+    // How this book writes what is owed, as the book stores it. Kept here with
+    // the hide-before date for the same reason: every register, the account
+    // list and the balance sheet read it, and none of them should be asking
+    // the store on every refresh. Display only -- see "How this book writes
+    // what is owed" in Books.spectable.
+    bool quickenSigns_ = false;
     std::unique_ptr<ui::Workspace> workspace_;
     bool showHidden_ = false;
     QFont appFont_;

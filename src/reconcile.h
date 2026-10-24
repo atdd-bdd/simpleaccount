@@ -69,8 +69,9 @@ inline bool reconcilable(const chart::Chart& accounts, const std::string& accoun
            types::class_of(a->type) == types::AccountClass::Real;
 }
 
-inline Figures figures_for(const reg::BookIndex& book, const std::string& account) {
-    const reg::Balances b = reg::balances_for(book, account);
+inline Figures figures_for(const reg::BookIndex& book, const std::string& account,
+                           bool quicken_signs = false) {
+    const reg::Balances b = reg::balances_for(book, account, quicken_signs);
     Figures out;
     out.shown = true;
     out.account = account;
@@ -90,7 +91,10 @@ inline std::vector<Item> uncleared_in(const reg::BookIndex& book,
                                       const std::string& account) {
     std::vector<Item> out;
     for (const reg::Line& line : reg::lines_for(book, account)) {
-        if (line.cleared == types::ClearedStatus::Cleared) continue;
+        // Reconciled is cleared: a book imported from Quicken is almost all
+        // reconciled, and offering twenty years of it to be ticked again is
+        // not reconciling.
+        if (types::counts_as_cleared(line.cleared)) continue;
         Item item;
         item.ref = line.ref;
         item.date = line.date;

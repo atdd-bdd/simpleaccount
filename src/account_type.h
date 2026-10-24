@@ -203,6 +203,30 @@ inline std::string to_string(ClearedStatus c) {
     throw std::invalid_argument("unknown cleared status");
 }
 
+// A reconciled transaction is a cleared one. A finished reconciliation agreed
+// a figure it was part of, which is everything Cleared claims and one thing
+// more, so every question but editing is asked through here rather than
+// against Cleared itself -- the cleared balance, what reconciling offers, the
+// mark in the register's column, and the ledger balance an import is checked
+// against. See "A reconciled transaction answers yes wherever a cleared one
+// does" in TransactionRegister.spectable.
+inline bool counts_as_cleared(ClearedStatus c) {
+    return c == ClearedStatus::Cleared || c == ClearedStatus::Reconciled;
+}
+
+// The mark the register's cleared column shows. One character, because the
+// column is read down rather than across, and a reconciled line is told from a
+// cleared one rather than from an uncleared one -- showing nothing for
+// reconciled made an imported book read as though it had never been touched.
+inline std::string cleared_mark(ClearedStatus c) {
+    switch (c) {
+        case ClearedStatus::Uncleared:  return "";
+        case ClearedStatus::Cleared:    return "c";
+        case ClearedStatus::Reconciled: return "R";
+    }
+    return "";
+}
+
 inline std::string to_string(ImportSource s) {
     switch (s) {
         case ImportSource::Ofx: return "Ofx";
@@ -350,6 +374,27 @@ inline int display_sign(AccountType t) {
             // amount owed, which is the same question the balance sheet asks.
             return balance_side(t) == BalanceSide::Asset ? 1 : -1;
     }
+}
+
+// Whether the Quicken reading prints this account's balances the other way up
+// from the reading everything else in the program works in. One line of rule:
+// a real account that reads as an amount owed reads as a negative number
+// instead. A category is left alone -- it has no statement and no register, so
+// the only place its figure is written is a report, and that is where the
+// report's own Quicken signs option acts. See "The Quicken reading negates what
+// is owed and nothing else" in Accounts.spectable.
+inline bool reading_is_turned_over(AccountType t, bool quicken_signs) {
+    return quicken_signs && display_sign(t) < 0 &&
+           class_of(t) == AccountClass::Real;
+}
+
+// The sign a balance of this account is printed with, which is the display sign
+// under this program's own reading and its negation under Quicken's. It is a
+// sign on the way out, applied where a balance is printed and nowhere earlier:
+// nothing stored and nothing worked out passes through here.
+inline int print_sign(AccountType t, bool quicken_signs) {
+    return reading_is_turned_over(t, quicken_signs) ? -display_sign(t)
+                                                    : display_sign(t);
 }
 
 }  // namespace types

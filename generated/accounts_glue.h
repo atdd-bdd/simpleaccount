@@ -10,6 +10,11 @@
 #include "category_search.h"
 #include "date.h"
 #include "ledger.h"
+#include "balance_sheet.h"
+#include "reconcile.h"
+#include "register_lines.h"
+#include "report.h"
+#include "ui_model.h"
 #include "money.h"
 #include "store_sqlite.h"
 #include "text_types.h"
@@ -881,6 +886,252 @@ public:
 
 private:
     chart::LastUsedDates last_used_;
+public:
+
+// --- the Quicken reading of what is owed ------------------------------------
+
+public:
+
+    // The two readings of the same balance, side by side. Our reading is the
+    // display sign -- what the account's own statement shows -- and the Quicken
+    // reading negates it for a real account that reads as an amount owed. The
+    // raw balance is asserted too, because the claim is that it does not move.
+    void then_balances_read_both_ways_are(const std::vector<BalanceAsReadString>& values) {
+        for (const auto& value : values) {
+            const chart::Account* a = chart_.find(value.account);
+            ASSERT_NE(nullptr, a) << "no account " << value.account;
+            const Money raw = ledger_.raw_balance(value.account);
+            const std::string where = value.account.value;
+            if (value.rawbalance.value != DNCString)
+                EXPECT_EQ(Money(value.rawbalance).cents(), raw.cents())
+                    << where << " raw -- " << value.notes;
+            const int ours = types::display_sign(a->type);
+            const int theirs = types::print_sign(a->type, true);
+            if (value.ourreading.value != DNCString)
+                EXPECT_EQ(Money(value.ourreading).cents(), (ours < 0 ? -raw : raw).cents())
+                    << where << " our reading -- " << value.notes;
+            if (value.quickenreading.value != DNCString)
+                EXPECT_EQ(Money(value.quickenreading).cents(), (theirs < 0 ? -raw : raw).cents())
+                    << where << " the Quicken reading -- " << value.notes;
+            // And the display balance the rest of the program asks for is our
+            // reading, not something a third way round.
+            EXPECT_EQ((ours < 0 ? -raw : raw).cents(),
+                      ledger_.display_balance(value.account, a->type).cents())
+                << where << " display balance";
+        }
+    }
+
+    // One line of rule, checked against every account type there is: the sign
+    // of the Quicken reading is the display sign, negated for a real account
+    // that reads as an amount owed.
+    void examples_businessrule_the_quicken_reading_negates_what_is_owed_and_nothing_else(
+            const std::vector<QuickenReadingOfString>& values) {
+        for (const auto& value : values) {
+            const types::AccountType type = types::account_type_from_string(value.accounttype);
+            EXPECT_EQ(std::stoi(value.ourreading), types::display_sign(type))
+                << value.accounttype << " our reading -- " << value.notes;
+            EXPECT_EQ(std::stoi(value.quickenreading), types::print_sign(type, true))
+                << value.accounttype << " the Quicken reading -- " << value.notes;
+            // With the option off the two programs' readings are the same
+            // question, which is what makes this display only.
+            EXPECT_EQ(types::display_sign(type), types::print_sign(type, false))
+                << value.accounttype << " with the option off";
+        }
+    }
+
+    // Every figure the option was checked against, worked out both ways over
+    // one small book and compared. A row naming a figure no code path reads the
+    // option for -- an amount as it is typed, a posting as it is stored -- has
+    // nothing to work out, and is asserted not to change.
+    void examples_businessrule_what_the_quicken_reading_leaves_alone(
+            const std::vector<QuickenReadingTouchesString>& values) {
+        const QuickenFixture book;
+        for (const auto& value : values) {
+            const std::optional<std::pair<std::string, std::string>> both =
+                book.figure(value.figure);
+            const bool wanted = parse_bool_cell(value.changes);
+            if (!both.has_value()) {
+                EXPECT_FALSE(wanted)
+                    << value.figure << " is said to change, but nothing reads the "
+                    << "option on the way to it -- " << value.notes;
+                continue;
+            }
+            EXPECT_EQ(wanted, both->first != both->second)
+                << value.figure << " reads " << both->first << " and "
+                << both->second << " -- " << value.notes;
+        }
+    }
+
+private:
+
+    // A card with a statement to compare against, a bank account, and one
+    // charge the bank has reported. Everything in the rule above is read off
+    // this, each figure once under each reading.
+    struct QuickenFixture {
+        chart::Chart accounts;
+        std::vector<ledger::Transaction> transactions;
+        std::vector<ledger::TransactionSplit> splits;
+        ledger::Ledger ledger;
+
+        QuickenFixture() {
+            accounts.add(types::AccountPath("Assets:Checking"), types::AccountType::Checking);
+            accounts.add(types::AccountPath("Liabilities:Visa"), types::AccountType::CreditCard);
+            accounts.add(types::AccountPath("Expenses:Groceries"), types::AccountType::Expense);
+            accounts.add(types::AccountPath("Equity:Opening Balances"),
+                         types::AccountType::Equity);
+            // 400.00 owed where the book says 450.00, so the difference is a
+            // figure rather than a zero that would read the same either way.
+            chart::Account card = *accounts.find("Liabilities:Visa");
+            card.downloaded_balance = Money("400.00");
+            card.downloaded_balance_at = types::Date(2024, 1, 31);
+            accounts.put(card);
+
+            add("T1", types::Date(2024, 1, 2), "Opening", "Assets:Checking",
+                "Equity:Opening Balances", Money("1000.00"), types::ClearedStatus::Cleared);
+            add("T2", types::Date(2024, 1, 10), "Amazon", "Liabilities:Visa",
+                "Expenses:Groceries", Money("-450.00"), types::ClearedStatus::Cleared);
+            ledger::add_to_book(&ledger, accounts, transactions, splits);
+        }
+
+        void add(const std::string& ref, const types::Date& on, const std::string& payee,
+                 const std::string& from, const std::string& to, const Money& amount,
+                 types::ClearedStatus cleared) {
+            ledger::Transaction t;
+            t.id = ledger::new_id();
+            t.ref = types::TransactionRef(ref);
+            t.date = on;
+            t.payee = types::PayeeName(payee);
+            t.source_account = accounts.ref_for_path(from);
+            t.destination = accounts.ref_for_path(to);
+            t.amount = amount;
+            t.cleared = cleared;
+            transactions.push_back(t);
+        }
+
+        static bool mentions(const std::string& figure, const std::string& what) {
+            return figure.find(what) != std::string::npos;
+        }
+
+        static std::string money(const Money& m) { return std::to_string(m.cents()); }
+
+        // The figure named, under our reading and under Quicken's. Nothing for a
+        // figure the option cannot reach.
+        std::optional<std::pair<std::string, std::string>> figure(
+                const std::string& named) const {
+            const std::string card = "Liabilities:Visa";
+            const reg::BookIndex index(accounts, transactions, splits);
+
+            if (mentions(named, "Charge and Payment")) {
+                return both([&](bool q) {
+                    const std::vector<reg::Line> lines = reg::lines_for(index, card, q);
+                    std::string out;
+                    for (const reg::Line& line : lines)
+                        out += money(line.payment) + "/" + money(line.deposit) + " ";
+                    return out;
+                });
+            }
+            if (mentions(named, "running balance")) {
+                return both([&](bool q) {
+                    std::string out;
+                    for (const reg::Line& line : reg::lines_for(index, card, q))
+                        out += money(line.balance) + " ";
+                    return out;
+                });
+            }
+            if (mentions(named, "Balance, Cleared and Downloaded")) {
+                return both([&](bool q) {
+                    const reg::Balances b = reg::balances_for(index, card, q);
+                    return money(b.balance) + " " + money(b.cleared) + " " + money(b.downloaded);
+                });
+            }
+            if (mentions(named, "Difference")) {
+                return both([&](bool q) {
+                    return money(reg::balances_for(index, card, q).difference);
+                });
+            }
+            if (mentions(named, "downloaded balance agrees")) {
+                return both([&](bool q) {
+                    return recon::figures_for(index, card, q).agrees ? "agrees" : "does not";
+                });
+            }
+            if (mentions(named, "reconciling window")) {
+                return both([&](bool q) {
+                    const recon::Figures f = recon::figures_for(index, card, q);
+                    return money(f.balance) + " " + money(f.cleared) + " " +
+                           money(f.online) + " " + money(f.difference);
+                });
+            }
+            if (mentions(named, "offered when reconciling")) {
+                return both([&](bool) {
+                    std::string out;
+                    for (const recon::Item& item : recon::uncleared_in(index, card))
+                        out += item.ref + " ";
+                    return out;
+                });
+            }
+            if (mentions(named, "liability on a balance sheet")) {
+                return both([&](bool q) {
+                    const reports::BalanceSheet sheet = reports::balance_sheet(
+                        accounts, ledger, types::Date(2024, 12, 31), false, q);
+                    std::string out = money(sheet.totals.liabilities);
+                    for (const reports::BalanceSheetRow& row : sheet.rows)
+                        if (row.account == card) out += " " + money(row.balance);
+                    return out;
+                });
+            }
+            if (named == "Net worth") {
+                return both([&](bool q) {
+                    return money(reports::balance_sheet(accounts, ledger,
+                                                        types::Date(2024, 12, 31), false, q)
+                                     .totals.net);
+                });
+            }
+            if (mentions(named, "account list balance")) {
+                return both([&](bool q) {
+                    std::string out;
+                    for (const ui::AccountRow& row : ui::account_list(accounts, ledger, false, q))
+                        if (row.account == card || row.is_heading)
+                            out += money(row.balance) + " ";
+                    return out;
+                });
+            }
+            if (mentions(named, "category report")) {
+                return both([&](bool q) {
+                    reports::Spec spec;
+                    spec.from = types::Date(2024, 1, 1);
+                    spec.to = types::Date(2024, 12, 31);
+                    spec.quicken_signs = q;
+                    std::string out;
+                    for (const reports::Row& row : reports::category_report(accounts, ledger, spec).rows)
+                        if (row.account == "Expenses:Groceries") out += money(row.amount);
+                    return out;
+                });
+            }
+            if (mentions(named, "payee report")) {
+                return both([&](bool q) {
+                    reports::Spec spec;
+                    spec.from = types::Date(2024, 1, 1);
+                    spec.to = types::Date(2024, 12, 31);
+                    spec.quicken_signs = q;
+                    std::string out;
+                    for (const reports::PayeeRow& row :
+                         reports::payee_report(accounts, transactions, splits, spec))
+                        out += row.payee + " " + money(row.amount) + " ";
+                    return out;
+                });
+            }
+            if (mentions(named, "raw balance")) {
+                return both([&](bool) { return money(ledger.raw_balance(card)); });
+            }
+            return std::nullopt;
+        }
+
+        template <typename F>
+        static std::optional<std::pair<std::string, std::string>> both(F read) {
+            return std::make_pair(std::string(read(false)), std::string(read(true)));
+        }
+    };
+
 public:
 
 };

@@ -422,7 +422,7 @@ Details The version is read before anything else. A file written by a later
 Examples: BookInfrastructure
 | Table  | Columns                        | Notes                              |
 | schema | version                        | One row; read before anything else |
-| book   | name, fiscal_year_start, check_window_days, set_cleared_on_csv_import, last_id_used | One row; the Book entity's own data, its settings, and the id counter |
+| book   | name, fiscal_year_start, check_window_days, set_cleared_on_csv_import, quicken_signs, last_id_used | One row; the Book entity's own data, its settings, and the id counter |
 
 Attributes BookInfrastructure
 | Attribute | Type   | Default |
@@ -1100,3 +1100,61 @@ Attributes AccountIdentity
 Attributes IdCounter
 | Attribute  | Type    | Default |
 | LastIdUsed | Integer | 0       |
+
+# ---------------------------------------------------------------------------
+# How this book writes what is owed
+# ---------------------------------------------------------------------------
+
+Description One setting of the book: whether a balance that is owed is printed
+\ as the amount owed, which is this program's convention, or as a
+\ negative number, which is Quicken's.
+Details It is a setting of the book rather than of the program for the reason
+\ the CSV clearing option is -- it is a fact about how this set of
+\ figures is read, and somebody keeping a business book beside a
+\ personal one may well want the two read the same way but is entitled
+\ to read them differently. It is offered in the book settings dialog,
+\ beside the CSV one.
+\
+\ It is off in a new book: the program's own convention is the default,
+\ and nothing about an existing book changes when this arrives. What it
+\ changes when it is on is set out in the Quicken reading rules in
+\ Accounts -- in one line, a real account that reads as an amount owed
+\ is printed negative. Nothing is converted and nothing is recomputed;
+\ turning it off restores the first reading exactly.
+\
+\ It is also the default of the Quicken signs option a report carries,
+\ which negates the expense figures of a category report. A report can
+\ still be run the other way for one run without the book setting
+\ moving: the book says how figures are read here, and the checkbox on
+\ the report says how this one is wanted. See Reports.
+\
+\ The setting lives in the book row, as a column of its own beside the
+\ others -- see the infrastructure rule above, where it will join the
+\ list of the book row's columns when the column is written.
+
+Scenario A new book writes what is owed as the amount owed
+Description The program's own convention is what a book starts with, so a book
+\ made today reads as every book did before the option existed.
+Given a new book named Business
+Then book display options are : BookDisplayOptions Vertical
+| QuickenSigns | false |
+
+Attributes BookDisplayOptions
+Description How this book writes its figures. QuickenSigns on means what is owed
+\ is printed negative and a category report defaults to negating its
+\ expenses.
+| Attribute    | Type    | Default |
+| QuickenSigns | Boolean | false   |
+
+Scenario A book remembers how it writes what is owed
+Description A display option is no use if it has to be set again every time the
+\ book is opened, and it is kept in the book rather than beside it for
+\ the same reason the CSV options are.
+Given a new book named Business
+When book display options are set to : BookDisplayOptions Vertical
+| QuickenSigns | true |
+And the book is saved and opened again
+Then book display options are : BookDisplayOptions Vertical
+| QuickenSigns | true |
+# The chart and the transactions are not read at all here: the setting is in
+# the book row, which is read before anything else.

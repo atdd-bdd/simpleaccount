@@ -588,13 +588,19 @@ public:
 
 public:
 
+    // The book's reading of what is owed, which a balance sheet is printed in.
+    // See "How this book writes what is owed" in Books.spectable.
+    void given_balances_are_read_the_quicken_way() { quicken_signs_ = true; }
+    bool quicken_signs_ = false;
+
     void when_balance_sheet_run(const std::vector<ReportSpecString>& values) {
         ASSERT_FALSE(values.empty());
         const auto to = types::Date::from_iso(values.front().to);
         ASSERT_TRUE(to.has_value()) << values.front().to;
         balance_sheet_as_at_ = *to;
         balance_sheet_ = reports::balance_sheet(chart_, book_, *to,
-                                                parse_bool_cell(values.front().zerorows));
+                                                parse_bool_cell(values.front().zerorows),
+                                                quicken_signs_);
     }
 
     void then_balance_sheet_rows_are(const std::vector<BalanceSheetRowString>& values) {

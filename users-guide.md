@@ -54,7 +54,7 @@ chart is that file's own, which is the better answer when there is one.
 **File > Open book...** lists the books in the folder, and **Open recent**
 remembers the last few.
 
-**Edit > Book settings...** holds the four things that belong to the book
+**Edit > Book settings...** holds the five things that belong to the book
 rather than to an account:
 
 | Setting | What it does |
@@ -63,6 +63,7 @@ rather than to an account:
 | A check number is trusted for | How many days an import will look past, on a check number alone, when matching a check you typed against the bank posting it. |
 | A CSV import arrives cleared | On by default. A download is a statement, so its rows arrive cleared. Turn it off for a CSV you made by hand. |
 | Hide everything before | Every register shows only transactions after this date, with the earlier balance brought forward as an opening line so the register still adds up. |
+| Show what is owed as a negative number | Off by default. Quicken writes a card you owe 450.00 on as -450.00, and a book imported from it reads more familiarly with this on. It changes what is printed and nothing else: the figures the program adds up are the same either way, so turning it on and off cannot make a balance wrong. |
 
 ## The window
 
@@ -150,7 +151,11 @@ book -- so grey is the answer to "is there another half of this".
 
 **The Cleared column** is a tick you can click. It means the bank has reported
 the transaction. Everything imported arrives cleared; only a transaction you
-typed starts uncleared.
+typed starts uncleared. A transaction you have reconciled against a statement
+shows **R** rather than a tick, and counts as cleared everywhere a ticked one
+does -- the cleared balance, what reconciling offers, an import's check against
+the balance the bank states. Editing is the one exception: a reconciled
+transaction still warns before it changes.
 
 **Sorting.** Click a heading to sort by it, click again to reverse. Amount
 sorts on the signed number rather than the printed text, so -100.00 comes
@@ -309,7 +314,8 @@ Results are a tab in the bottom panel, so they survive while you work.
 
 **Reconcile** on an account, from the tree's context menu. The dialog lists
 what is not yet cleared -- date, payee, amount -- and says: *tick what the
-statement shows and press Clear ticked.* As you tick, the figures say what the
+statement shows and press Clear ticked.* A transaction already reconciled is
+not offered again, any more than a cleared one is. As you tick, the figures say what the
 book has cleared against what you entered for the statement.
 
 If the two still differ when you press **Done**, you are offered a **Balance

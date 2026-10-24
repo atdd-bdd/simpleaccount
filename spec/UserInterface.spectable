@@ -4179,6 +4179,43 @@ Then menu items are : MenuItem
 | Hide           | true    |
 | Delete...      | false   |
 
+Scenario A reconciled transaction is not offered for reconciling again
+Description The history of an imported book is reconciled, and reconciling an
+\ account must not offer twenty years of it to be ticked a second time.
+\ What is offered is what is not cleared, and reconciled is cleared --
+\ see the reconciled status rule in TransactionRegister.
+Details The cleared figure counts the reconciled deposit as well, which is the
+\ other half of the same reading: a window that offered the history and
+\ left it out of the figure would be wrong twice over, and the person
+\ reconciling would tick lines until the difference moved the wrong way.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder | DownloadedBalance | DownloadedBalanceAt |
+| Assets:Checking    | Checking | false       | 1000.00           | 2026-02-10          |
+| Expenses:Groceries | Expense  | false       | 0.00              | never               |
+| Income:Salary      | Income   | false       | 0.00              | never               |
+And transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount  | Cleared    |
+| T1  | Assets:Checking | 2026-01-05 | Acme Payroll  | Income:Salary      | 1200.00 | Reconciled |
+| T2  | Assets:Checking | 2026-02-01 | Harris Teeter | Expenses:Groceries | -150.00 | Cleared    |
+| T3  | Assets:Checking | 2026-02-05 | Costco        | Expenses:Groceries | -50.00  | Uncleared  |
+When reconciling is opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+Then reconciling shows : Reconciliation Vertical
+| Shown      | true            |
+| Account    | Assets:Checking |
+| Balance    | 1000.00         |
+| Cleared    | 1050.00         |
+| OnLine     | 1000.00         |
+| OnLineAt   | 2026-02-10      |
+| Difference | 50.00           |
+| Agrees     | false           |
+And uncleared items offered are : UnclearedItem
+| Ref | Date       | Payee  | Amount |
+| T3  | 2026-02-05 | Costco | -50.00 |
+# One line to tick, and ticking it closes the difference. The reconciled
+# deposit is in the 1050.00 and is not in the list.
+
 # ---------------------------------------------------------------------------
 # From a figure in a report to the transaction behind it
 # ---------------------------------------------------------------------------

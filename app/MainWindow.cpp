@@ -1158,11 +1158,13 @@ void MainWindow::buildMenus() {
 // newBook() and openBook(), which drop this one first.
 void MainWindow::rebuildWorkspace() {
     if (workspace_) {
+        workspace_->set_quicken_signs(quickenSigns_);
         workspace_->book_is_now(chart_, book_, transactions_, splits_);
         return;
     }
     workspace_ = std::make_unique<ui::Workspace>(chart_, book_, transactions_, splits_);
     workspace_->set_column_widths(columnWidths_);
+    workspace_->set_quicken_signs(quickenSigns_);
 }
 
 std::string MainWindow::selectedAccount() const {
@@ -1205,6 +1207,7 @@ void MainWindow::newBook() {
     categorisations_.clear();
     tagVocabulary_.clear();
     hideBefore_.clear();
+    quickenSigns_ = false;
     // Another book: the registers that were open were of accounts this one
     // does not have, so the workspace starts over rather than being handed
     // the new book.
@@ -1366,7 +1369,9 @@ void MainWindow::openNamed(const QString& name) {
     tagVocabulary_ = store_.tags();
     // The one book setting a register reads, kept here rather than asked of
     // the store on every refresh.
-    hideBefore_ = store_.info().hide_before;
+    const store::BookInfo settings = store_.info();
+    hideBefore_ = settings.hide_before;
+    quickenSigns_ = settings.quicken_signs;
     workspace_.reset();   // another book, so another set of tabs
     rememberRecent(name);
     bookChanged(name);
@@ -2059,6 +2064,11 @@ MainWindow::TabWidgets MainWindow::makeReportTab(int tabPosition, const std::str
     t.quicken = new QCheckBox("Quicken signs");
     t.quicken->setToolTip("Expenses negative, as Quicken writes them, so a figure "
                           "can be read straight against one of its reports.");
+    // The book says how figures are read here, so it says how this report is
+    // read to begin with; one run can still be asked for the other way without
+    // the book setting moving. A report tab already open keeps the box it was
+    // given -- it is this run's question, not the book's.
+    t.quicken->setChecked(quickenSigns_);
     t.zero = new QCheckBox("Show empty categories");
 
     auto* chooser = new QHBoxLayout;
@@ -2400,7 +2410,7 @@ MainWindow::TabWidgets MainWindow::makeBalanceSheetTab(int tabPosition,
 
     t.run = [this, container, asAt, zero, table, totals, sheet, bold]() {
         const reports::BalanceSheet drawn = reports::balance_sheet(
-            chart_, book_, asDate(asAt->date()), zero->isChecked());
+            chart_, book_, asDate(asAt->date()), zero->isChecked(), quickenSigns_);
         *sheet = drawn.rows;
         table->setRowCount(static_cast<int>(drawn.rows.size()));
         for (int r = 0; r < static_cast<int>(drawn.rows.size()); ++r) {
@@ -2938,6 +2948,12 @@ void MainWindow::editBookSettings() {
     auto* clears = new QCheckBox("A CSV import arrives cleared", &dialog);
     clears->setChecked(was.set_cleared_on_csv_import);
 
+    auto* signs = new QCheckBox("Show what is owed as a negative number", &dialog);
+    signs->setChecked(was.quicken_signs);
+    signs->setToolTip("The Quicken reading of a card or a loan. Display only -- "
+                      "nothing stored and nothing worked out changes, and "
+                      "turning it off again restores the first reading exactly.");
+
     auto* hides = new QCheckBox("Hide everything before", &dialog);
     auto* before = new QDateEdit(&dialog);
     before->setCalendarPopup(true);
@@ -2952,6 +2968,7 @@ void MainWindow::editBookSettings() {
     form->addRow("Fiscal year starts", fiscal);
     form->addRow("A check number is trusted for", window);
     form->addRow(clears);
+    form->addRow(signs);
     form->addRow(hides, before);
 
     auto* buttons =
@@ -2966,6 +2983,7 @@ void MainWindow::editBookSettings() {
     now.fiscal_year_start = fiscal->currentData().toInt();
     now.check_window_days = window->value();
     now.set_cleared_on_csv_import = clears->isChecked();
+    now.quicken_signs = signs->isChecked();
     now.hide_before = hides->isChecked()
                           ? before->date().toString("yyyy-MM-dd").toStdString()
                           : std::string();
@@ -2977,6 +2995,7 @@ void MainWindow::editBookSettings() {
     // The hide-before date changes what every register shows, so the registers
     // are built again rather than left showing years the book now hides.
     hideBefore_ = now.hide_before;
+    quickenSigns_ = now.quicken_signs;
     rebuildWorkspace();
     refresh();
 }
@@ -4026,7 +4045,7 @@ void MainWindow::refreshPane(int tabPosition, const reg::BookIndex& book) {
         static_cast<std::size_t>(tabPosition - 1) < rows.size()
             ? rows[static_cast<std::size_t>(tabPosition - 1)].account
             : std::string();
-    const std::vector<reg::Line> all = reg::lines_for(book, account);
+    const std::vector<reg::Line> all = reg::lines_for(book, account, quickenSigns_);
     // What this register shows, and the order it shows it in. The range is
     // applied first, because the balance brought forward is worked out by
     // walking the lines in date order -- which is the order they arrive in --
@@ -4058,7 +4077,7 @@ void MainWindow::refreshPane(int tabPosition, const reg::BookIndex& book) {
         // The figures are the register's own, worked out from the index the
         // lines were worked out from, so this is one more pass over this
         // account and not a second reading of the book.
-        const reg::Balances figures = reg::balances_for(book, account);
+        const reg::Balances figures = reg::balances_for(book, account, quickenSigns_);
         std::string said = "Balance " + figures.balance.in_register() +
                            "    Cleared " + figures.cleared.in_register();
         if (figures.downloaded_at.has_value())
@@ -4098,15 +4117,13 @@ void MainWindow::refreshPane(int tabPosition, const reg::BookIndex& book) {
         p.reg->setItem(r, 5, text(line.tag, line.tag));
         setAmount(p.reg, r, 6, line.payment);
         setAmount(p.reg, r, 7, line.deposit);
-        // What the bank has seen. Most of a long register is cleared, so the
-        // column is written for the lines that are not and left empty for the
-        // ones that are: a column of the same word thirty thousand times says
-        // nothing, and the handful of blanks are the ones being looked for.
-        // See the reconciling section of UserInterface.spectable.
+        // What the bank has seen: c for cleared, R for reconciled, and nothing
+        // for a line the bank has not reported. Short marks rather than the
+        // words, because the column is read down thirty thousand rows and the
+        // handful of blanks are the ones being looked for. See the reconciling
+        // section of UserInterface.spectable.
         p.reg->setItem(r, 8,
-                       text(line.cleared == types::ClearedStatus::Cleared
-                                ? std::string("c")
-                                : std::string(),
+                       text(types::cleared_mark(line.cleared),
                             types::to_string(line.cleared)));
         // A running balance down a list that is not in date order is a column
         // of meaningless numbers, so it is emptied rather than filled in.

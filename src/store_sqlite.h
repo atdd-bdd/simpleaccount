@@ -37,7 +37,7 @@ namespace store {
 // deleted while the shape was still being settled, so a file claiming another
 // version is a file this program did not write. Once there are books worth
 // keeping, a bump has to come with a way to read the version before it.
-inline constexpr int kSchemaVersion = 18;
+inline constexpr int kSchemaVersion = 19;
 
 struct Failure {
     bool refused = false;
@@ -64,6 +64,13 @@ struct BookInfo {
     // migrated for the record and are not being worked on -- rather than about
     // one register. See the hide-before rule in TransactionRegister.spectable.
     std::string hide_before;
+    // How this book writes what is owed. False, so that a new book reads a card
+    // balance as the amount owed, which is how everything in the program works
+    // it out. True reads what is owed as a negative number, the way Quicken
+    // writes it, and does so on the way out only -- it is also the default of
+    // the Quicken signs option on a report. See "How this book writes what is
+    // owed" in Books.spectable.
+    bool quicken_signs = false;
 };
 
 namespace detail {
@@ -170,6 +177,9 @@ CREATE TABLE book (
   -- The date before which the book shows nothing. Empty for a book that
   -- hides nothing. See the hide-before rule in TransactionRegister.spectable.
   hide_before       TEXT    NOT NULL DEFAULT '',
+  -- How this book writes what is owed, display only. See the Quicken signs
+  -- option in Books.spectable.
+  quicken_signs     INTEGER NOT NULL DEFAULT 0,
   -- The number the id counter last handed out, for accounts and categories
   -- together. Recorded rather than worked out from the chart, so a deleted
   -- account's number is never given to the next one created. See the counter
@@ -494,8 +504,9 @@ public:
 
         detail::Statement info(db.get(),
                                "INSERT INTO book (name, fiscal_year_start, check_window_days, "
-                               "set_cleared_on_csv_import, hide_before, last_id_used) "
-                               "VALUES (?, 1, 1, 1, '', 0)");
+                               "set_cleared_on_csv_import, hide_before, quicken_signs, "
+                               "last_id_used) "
+                               "VALUES (?, 1, 1, 1, '', 0, 0)");
         if (!info.ok()) return {true, info.why()};
         info.bind(1, name);
         if (!info.run()) return {true, info.why()};
@@ -516,12 +527,13 @@ public:
         detail::Statement put(db_.get(),
                               "UPDATE book SET fiscal_year_start = ?, "
                               "check_window_days = ?, set_cleared_on_csv_import = ?, "
-                              "hide_before = ?");
+                              "hide_before = ?, quicken_signs = ?");
         if (!put.ok()) return {true, put.why()};
         put.bind(1, static_cast<long long>(info.fiscal_year_start));
         put.bind(2, static_cast<long long>(info.check_window_days));
         put.bind(3, info.set_cleared_on_csv_import ? 1 : 0);
         put.bind(4, info.hide_before);
+        put.bind(5, info.quicken_signs ? 1 : 0);
         if (!put.run()) return {true, put.why()};
         return {};
     }
@@ -627,13 +639,15 @@ public:
         BookInfo out;
         detail::Statement read(db_.get(),
                                "SELECT name, fiscal_year_start, check_window_days, "
-                               "set_cleared_on_csv_import, hide_before FROM book");
+                               "set_cleared_on_csv_import, hide_before, quicken_signs "
+                               "FROM book");
         if (read.ok() && read.step_row()) {
             out.name = read.text(0);
             out.fiscal_year_start = static_cast<int>(read.integer(1));
             out.check_window_days = static_cast<int>(read.integer(2));
             out.set_cleared_on_csv_import = read.integer(3) != 0;
             out.hide_before = read.text(4);
+            out.quicken_signs = read.integer(5) != 0;
         }
         return out;
     }

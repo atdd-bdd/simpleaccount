@@ -1375,7 +1375,7 @@ inline LedgerBalanceResult check_ledger_balance(
     const chart::Ref account_ref = accounts.ref_for_path(account);
     Money cleared;
     for (const ledger::Transaction& t : transactions)
-        if (t.source_account == account_ref && t.cleared == types::ClearedStatus::Cleared)
+        if (t.source_account == account_ref && types::counts_as_cleared(t.cleared))
             cleared += t.amount;
     LedgerBalanceResult r;
     r.cleared_balance = cleared;

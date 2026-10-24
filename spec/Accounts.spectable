@@ -1123,6 +1123,148 @@ Attributes DisplaySignOf
 | DisplaySign | Integer     | 1       |
 | Notes       | String      | none    |
 
+# ---------------------------------------------------------------------------
+# Reading a balance the Quicken way
+# ---------------------------------------------------------------------------
+
+Description A book-level option for how what is owed is written. Display only --
+\ it changes what is printed and nothing that is worked out.
+Details The convention here is that what is owed reads as the amount owed: a
+\ card with 450.00 on it reads 450.00, because that is what the statement
+\ says and what somebody answering "how much do I owe" wants to see. See
+\ the display sign rule above, and the decisions section of README.
+\
+\ Quicken writes the same card as -450.00, and twenty years of reading it
+\ that way is a habit worth keeping. So the reading is an option of the
+\ book -- the book is where it belongs, because it is a fact about how
+\ this set of figures is read rather than about the machine it is read
+\ on, the same as whether a CSV import arrives cleared. See the option
+\ in Books.
+\
+\ What it does is negate what is owed when it is printed. It is a sign on
+\ the way out, applied where a balance is written and nowhere earlier,
+\ which is the whole of why it is safe: a posting, a raw balance, the
+\ cleared arithmetic, the comparison against a downloaded balance and net
+\ worth are all worked out exactly as they were, and the option cannot
+\ make the program disagree with itself.
+
+BusinessRule The Quicken reading negates what is owed and nothing else
+Description The display sign of each account type under the one reading and the
+\ other.
+Details The rule is one line: a real account that reads as an amount owed reads
+\ as a negative number instead. Everything else is left alone, and that
+\ includes the three categories -- a category has no statement and no
+\ register, so the only place its figure is written is a report, and that
+\ is where the report's own Quicken signs option acts.
+\
+\ The two readings of a liability differ by a sign and nothing else, so
+\ either can be had from the other at any time. Turning the option off
+\ again restores the first reading exactly; there is nothing to convert
+\ and nothing to lose.
+Examples: QuickenReadingOf
+| AccountType        | OurReading | QuickenReading | Notes                                        |
+| Checking           | 1          | 1              | Money held reads the same either way         |
+| Savings            | 1          | 1              |                                              |
+| RealEstate         | 1          | 1              |                                              |
+| Brokerage          | 1          | 1              |                                              |
+| AccountsReceivable | 1          | 1              | Owed to the business, so money held          |
+| TransferIn         | 1          | 1              | Due from the other book                      |
+| CreditCard         | -1         | 1              | 450.00 owed here reads -450.00 there         |
+| LineOfCredit       | -1         | 1              |                                              |
+| Mortgage           | -1         | 1              |                                              |
+| AutoLoan           | -1         | 1              |                                              |
+| PersonalLoan       | -1         | 1              |                                              |
+| OtherDebt          | -1         | 1              |                                              |
+| AccountsPayable    | -1         | 1              | Owed by the business                         |
+| TransferOut        | -1         | 1              | Due to the other book, so owed               |
+| Income             | -1         | -1             | Still the amount earned; the two agree       |
+| Expense            | 1          | 1              | Still the amount spent, in a register        |
+| Equity             | -1         | -1             | Quicken has nothing to compare it with       |
+# The second column is the display sign rule above. The third is the same
+# table with the real owed types flipped, which is the only difference the
+# option makes to a balance.
+
+Attributes QuickenReadingOf
+Description One account type and the sign its balance is printed with under each
+\ reading, as in the display sign rule above.
+| Attribute      | Type        | Default  |
+| AccountType    | AccountType | Checking |
+| OurReading     | Integer     | 1        |
+| QuickenReading | Integer     | 1        |
+| Notes          | String      | none     |
+
+BusinessRule What the Quicken reading leaves alone
+Description Every figure the option was checked against, and whether it moves.
+Details The entry columns are the ones worth being clear about. A charge to a
+\ card is typed as 450.00 in the Charge column under either reading, and
+\ the column headings do not change. If the entry columns flipped with
+\ the balance, the same keystrokes would mean two different things
+\ depending on a display option, which is how a book gets wrong figures
+\ in it rather than differently printed ones.
+Examples: QuickenReadingTouches
+| Figure                                                | Changes | Notes                                                  |
+| A posting's amount                                    | false   | Stored as it was; debits are positive throughout       |
+| A raw balance                                         | false   | The arithmetic is untouched                            |
+| The register's Charge and Payment columns             | false   | Headed as before; this is the entry, not the balance   |
+| The amount typed when entering or editing             | false   | Entered the way the statement reads it, as before      |
+| An opening balance entered for a new account          | false   | Still the amount owed                                  |
+| The register's running balance column                 | true    | Printed with the sign of the reading                    |
+| The register's Balance, Cleared and Downloaded        | true    | All three together                                     |
+| The register's Difference                             | true    | Which is why it still closes to zero                   |
+| Whether a downloaded balance agrees                   | false   | Compared before anything is printed                    |
+| What is offered when reconciling                      | false   | A list of transactions, not of balances                |
+| The reconciling window's figures                      | true    | The same three balances, so they read the same way     |
+| A liability on a balance sheet, and the liabilities total | true | Read as negative, as Quicken reads them                |
+| Net worth                                             | false   | The same number: assets plus liabilities in this reading |
+| The account list balance of a card or a loan          | true    | And the total of its group                             |
+| An expense figure on a category report                | true    | Through the report's own Quicken signs option          |
+| A payee report figure                                 | false   | A payee with both has no sign to flip; see Reports     |
+| What is stored in the book file                       | false   | The option itself is the only new thing stored         |
+# Nothing in the false rows can be reached by this option, which is what makes
+# it display only. The true rows are all of them places a balance is printed.
+
+Attributes QuickenReadingTouches
+| Attribute | Type    | Default |
+| Figure    | String  |         |
+| Changes   | Boolean | false   |
+| Notes     | String  | none    |
+
+Scenario Balances read both ways
+Description The same four accounts under both readings. Only what is owed
+\ differs, and it differs by a sign.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type       | Placeholder |
+| Assets:Checking    | Checking   | false       |
+| Liabilities:Visa   | CreditCard | false       |
+| Income:Salary      | Income     | false       |
+| Expenses:Groceries | Expense    | false       |
+And entries are : AccountEntry
+| Account            | Amount   |
+| Assets:Checking    | 1000.00  |
+| Assets:Checking    | -45.00   |
+| Liabilities:Visa   | -120.00  |
+| Liabilities:Visa   | 20.00    |
+| Income:Salary      | -1000.00 |
+| Expenses:Groceries | 45.00    |
+Then balances read both ways are : BalanceAsRead
+| Account            | RawBalance | OurReading | QuickenReading | Notes            |
+| Assets:Checking    | 955.00     | 955.00     | 955.00         | Money held       |
+| Liabilities:Visa   | -100.00    | 100.00     | -100.00        | Owed on the card |
+| Income:Salary      | -1000.00   | 1000.00    | 1000.00        | Earned           |
+| Expenses:Groceries | 45.00      | 45.00      | 45.00          | Spent            |
+# The raw balance is the same in both readings, because the reading is applied
+# on the way out and the stored figures never see it.
+
+Attributes BalanceAsRead
+Description One account's balance printed under each reading, beside the raw
+\ balance both are printed from.
+| Attribute      | Type        | Default |
+| Account        | AccountPath |         |
+| RawBalance     | Money       | 0.00    |
+| OurReading     | Money       | 0.00    |
+| QuickenReading | Money       | 0.00    |
+| Notes          | String      | none    |
+
 Define SomeEntries
 Description The entries the next three scenarios all read, named so that each
 \ can ask for them. A scenario cannot take a table from the scenario

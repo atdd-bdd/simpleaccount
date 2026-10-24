@@ -74,7 +74,8 @@ struct AccountRow {
 // with nothing in it is left out rather than shown empty.
 inline std::vector<AccountRow> account_list(const chart::Chart& accounts,
                                             const ledger::Ledger& book,
-                                            bool show_hidden = false) {
+                                            bool show_hidden = false,
+                                            bool quicken_signs = false) {
     // Every subtree total in one pass over the postings. Asking the ledger per
     // account instead is one pass each, which on the real book is 559 accounts
     // over 80,904 postings every time the list is drawn.
@@ -119,7 +120,7 @@ inline std::vector<AccountRow> account_list(const chart::Chart& accounts,
                 [&](const chart::Account& x) { return x.path.value() == parent; });
             if (parent_in_group) continue;
             const Money raw = total_of(a.path.value());
-            group_total += types::display_sign(a.type) < 0 ? -raw : raw;
+            group_total += types::print_sign(a.type, quicken_signs) < 0 ? -raw : raw;
         }
 
         AccountRow heading;
@@ -141,7 +142,7 @@ inline std::vector<AccountRow> account_list(const chart::Chart& accounts,
             // below whatever root of the group it sits under.
             row.indent = 1 + depth_within_group(a, in_group);
             const Money raw = total_of(a.path.value());
-            row.balance = types::display_sign(a.type) < 0 ? -raw : raw;
+            row.balance = types::print_sign(a.type, quicken_signs) < 0 ? -raw : raw;
             out.push_back(row);
         }
     }
@@ -187,7 +188,8 @@ struct ListingRow {
 // Every account, in path order so a parent reads above its children. A category
 // is not here: it is in the other listing.
 inline std::vector<ListingRow> account_listing(const chart::Chart& accounts,
-                                               const ledger::Ledger& book) {
+                                               const ledger::Ledger& book,
+                                               bool quicken_signs = false) {
     std::map<std::string, Money> subtree;
     for (const ledger::DatedPosting& p : book.postings()) {
         std::string path = p.account.value();
@@ -213,7 +215,7 @@ inline std::vector<ListingRow> account_listing(const chart::Chart& accounts,
         row.alias = a.alias;
         const auto at = subtree.find(row.path);
         const Money raw = at == subtree.end() ? Money() : at->second;
-        row.balance = types::display_sign(a.type) < 0 ? -raw : raw;
+        row.balance = types::print_sign(a.type, quicken_signs) < 0 ? -raw : raw;
         out.push_back(row);
     }
     std::sort(out.begin(), out.end(),
@@ -1001,10 +1003,18 @@ public:
 
     void set_column_widths(const std::map<std::string, int>& widths) { widths_ = widths; }
 
+    // How this book writes what is owed. The book's own setting, handed down
+    // from storage, and read by everything here that prints a balance -- the
+    // account list, a register, the reconciling window. Nothing worked out and
+    // nothing stored passes through it. See "How this book writes what is owed"
+    // in Books.spectable.
+    void set_quicken_signs(bool on) { quicken_signs_ = on; }
+    bool quicken_signs() const { return quicken_signs_; }
+
     // ------------------------------------------------- the two listings
 
     std::vector<ListingRow> account_listing_rows() const {
-        return account_listing(accounts_, book_);
+        return account_listing(accounts_, book_, quicken_signs_);
     }
 
     std::vector<ListingRow> category_listing_rows() const {
@@ -1455,7 +1465,7 @@ public:
         for (const std::string& ref : refs) {
             ledger::Transaction* writable = by_ref(ref);
             if (writable == nullptr) continue;
-            if (writable->cleared == types::ClearedStatus::Cleared) continue;
+            if (types::counts_as_cleared(writable->cleared)) continue;
             writable->cleared = types::ClearedStatus::Cleared;
             ++changed;
         }
@@ -1767,11 +1777,12 @@ public:
         const std::vector<Pane> rows = panes();
         const std::size_t index = static_cast<std::size_t>(pane_one_based - 1);
         if (index >= rows.size() || rows[index].account.empty()) return {};
-        return reg::lines_for(accounts_, transactions_, splits_, rows[index].account);
+        return reg::lines_for(accounts_, transactions_, splits_, rows[index].account,
+                              quicken_signs_);
     }
 
     std::vector<AccountRow> account_rows(bool show_hidden) const {
-        return account_list(accounts_, book_, show_hidden);
+        return account_list(accounts_, book_, show_hidden, quicken_signs_);
     }
 
     const ledger::Ledger& book() const { return book_; }
@@ -1921,6 +1932,9 @@ private:
 
     // The account the reconciling window is open on, empty when it is not.
     std::string recon_account_;
+
+    // Off in a new book, and off here until the book says otherwise.
+    bool quicken_signs_ = false;
 
     chart::Chart accounts_;
     ledger::Ledger book_;
