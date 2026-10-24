@@ -16,6 +16,8 @@
 #include "register_entry.h"
 #include "register_lines.h"
 #include "report.h"
+#include "balance_sheet.h"
+#include "report_menu.h"
 #include "text_types.h"
 #include "payee_rules.h"
 #include "transaction_edit.h"
@@ -2627,5 +2629,96 @@ public:
         }
         workspace_.reset();
     }
+
+    // --- the balance sheet --------------------------------------------------
+    //
+    // The figures are not here. What a balance sheet contains and how net
+    // worth is arrived at are Reports business and are worked out by
+    // src/balance_sheet.h; what is here is the window half -- the tab the
+    // sheet comes up on and what a line of it does when it is clicked.
+    //
+    // It is asked for with a ReportSpec because that is the one thing a report
+    // is asked for, and To is the date it is drawn up as at. From is
+    // deliberately not read: a balance is everything up to the date.
+    void when_balance_sheet_run(const std::vector<ReportSpecString>& values) {
+        ASSERT_FALSE(values.empty());
+        const auto as_at = types::Date::from_iso(values.front().to);
+        ASSERT_TRUE(as_at.has_value()) << values.front().to;
+        std::string title;
+        for (const reports::Offered& one : reports::offered_reports())
+            if (one.as_at_one_date) title = one.name;
+        ASSERT_FALSE(title.empty()) << "the menu offers no report drawn up as at a date";
+        workspace().open_report(title);
+        balance_sheet_position_ = static_cast<int>(workspace().open_tabs().size());
+        balance_sheet_ = reports::balance_sheet(workspace().accounts(), workspace().book(),
+                                                *as_at,
+                                                parse_bool_cell(values.front().zerorows));
+        workspace().report_worked_out(balance_sheet_position_);
+    }
+
+    void then_balance_sheet_rows_are(const std::vector<BalanceSheetRowString>& values) {
+        ASSERT_EQ(values.size(), balance_sheet_.rows.size())
+            << "number of balance sheet rows";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const reports::BalanceSheetRow& got = balance_sheet_.rows[i];
+            const std::string where = "row " + std::to_string(i);
+            EXPECT_EQ(values[i].section.value, reports::to_string(got.section)) << where << " section";
+            EXPECT_EQ(blank(values[i].group), got.group) << where << " group";
+            EXPECT_EQ(blank(values[i].account), got.account) << where << " account";
+            EXPECT_EQ(std::stoi(values[i].level), got.level) << where << " level";
+            EXPECT_EQ(Money(values[i].balance).cents(), got.balance.cents()) << where << " balance";
+            EXPECT_EQ(parse_bool_cell(values[i].isheading), got.is_heading) << where << " heading";
+            EXPECT_EQ(parse_bool_cell(values[i].issubtotal), got.is_subtotal)
+                << where << " subtotal";
+        }
+    }
+
+    void then_balance_sheet_total_is(const std::vector<NetWorthString>& values) {
+        for (const auto& value : values) {
+            EXPECT_EQ(Money(value.assets).cents(), balance_sheet_.totals.assets.cents())
+                << "assets";
+            EXPECT_EQ(Money(value.liabilities).cents(),
+                      balance_sheet_.totals.liabilities.cents()) << "liabilities";
+            EXPECT_EQ(Money(value.networth).cents(), balance_sheet_.totals.net.cents())
+                << "net worth";
+        }
+    }
+
+    // A line of the sheet is an account, so clicking it opens that account
+    // register. A heading is a total of what is under it and names no account
+    // of its own, so there is nothing to open and the click is let go rather
+    // than guessed at.
+    void when_balance_sheet_line_clicked(const std::vector<ReportLineSelectString>& values) {
+        ASSERT_FALSE(values.empty());
+        const int line = std::stoi(values.front().line);
+        if (line < 1 || line > static_cast<int>(balance_sheet_.rows.size())) return;
+        const reports::BalanceSheetRow& row =
+            balance_sheet_.rows[static_cast<std::size_t>(line - 1)];
+        if (row.is_heading || row.account.empty()) return;
+        workspace().select(row.account);
+    }
+
+    // What the menu offers is one list in the program, read twice -- the menu
+    // is built from it and a tab is named from it -- so the rule is checked
+    // against that list rather than against a window the suite cannot see.
+    // Which page is drawn follows from the same answer, which is why asking
+    // for one date and being a position are one column here.
+    void examples_businessrule_what_the_reports_menu_offers_and_what_each_one_asks_for(
+            const std::vector<ReportOfferedString>& values) {
+        const std::vector<reports::Offered> offered = reports::offered_reports();
+        ASSERT_EQ(values.size(), offered.size()) << "how many reports the menu offers";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const std::string where = values[i].thereport;
+            EXPECT_EQ(values[i].thereport, offered[i].name) << where << " on the menu";
+            EXPECT_EQ(values[i].thetabiscalled, offered[i].name) << where << " tab name";
+            const bool one_date = values[i].whatitasks.rfind("One date", 0) == 0;
+            EXPECT_EQ(one_date, offered[i].as_at_one_date) << where << " what it asks";
+            EXPECT_EQ(one_date, reports::report_is_as_at(offered[i].name))
+                << where << " asked by name";
+        }
+    }
+
+    reports::BalanceSheet balance_sheet_;
+    int balance_sheet_position_ = 0;
 
 };

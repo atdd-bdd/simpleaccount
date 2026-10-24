@@ -16,6 +16,8 @@
 #include "progress.h"
 #include "register_entry.h"
 #include "report.h"
+#include "balance_sheet.h"
+#include "report_menu.h"
 #include "store_sqlite.h"
 #include "ui_model.h"
 
@@ -112,7 +114,6 @@ private slots:
     // in it. See the listings section of UserInterface.spectable.
     void showAccountListing();
     void showCategoryListing();
-    void showReport();
     void toggleHidden();
     void accountClicked();
     void tabClosed(int index);
@@ -174,6 +175,13 @@ private:
         QLabel* totals = nullptr;
         std::shared_ptr<std::vector<reports::DetailLine>> shown;
         std::function<void()> run;
+
+        // A balance sheet. It asks for one date rather than a period, because
+        // it is a position rather than something that happened over a while;
+        // sheet is what the table is showing, kept so that a click on a line
+        // can be turned back into the account it names.
+        QDateEdit* asAt = nullptr;
+        std::shared_ptr<std::vector<reports::BalanceSheetRow>> sheet;
     };
 
     void buildMenus();
@@ -262,6 +270,11 @@ private:
     void recordBlankLine(int tabPosition);
     TabWidgets makeRegisterTab(int tabPosition);
     TabWidgets makeReportTab(int tabPosition, const std::string& title);
+    TabWidgets makeBalanceSheetTab(int tabPosition, const std::string& title);
+    // Opens the named report on a tab of its own. The name is the one the
+    // Reports menu offers, which is also what the tab is called and what says
+    // which page is drawn -- see src/report_menu.h.
+    void openReport(const std::string& title);
     std::string selectedAccount() const;
 
     // The book this window is of, held open. Empty until one is made or opened:

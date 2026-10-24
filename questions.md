@@ -1241,3 +1241,49 @@ Decisions taken, all of them written into the transfer-warning rule in
   gesture and the book is thousands of rows, not millions. If it ever shows,
   the fix is the integer-key `reg::BookIndex` already queued in `TODO.md`, or
   caching the answer per selection.
+
+## 32. The balance sheet gets a way in
+
+"Reports should include a balance statement." It already did, in every sense
+but the one that matters: `spec/Reports.spectable` specifies the sheet and the
+net worth tie, `src/balance_sheet.h` works both out, and the suite is green on
+them. What was missing was the way in -- the Reports menu offered one report,
+so nothing in the running program could show a sheet. Specified as the
+balance-sheet section of `UserInterface.spectable` and then written. The
+decisions:
+
+- **Two chooser rows, not one dialog that greys half of itself.** A spending
+  report is a period -- two dates and a width of column -- and a balance sheet
+  is a position, one date that it is drawn up as at. Asking for both in one
+  place and disabling the half that does not apply would be the same statement
+  in two voices. So the sheet tab asks for `As at` and nothing else, and the
+  `From` a `ReportSpec` carries is not read.
+- **One list of what the menu offers, in production code.** `src/report_menu.h`
+  holds `offered_reports()`: the name, and whether it is drawn up as at one
+  date. The menu is built from it, a report tab is named from it, and which
+  page is drawn is decided by it. Before this the tab title lived in a
+  conditional inside the glue and the menu item lived in a string literal in
+  `MainWindow`, which is two places for one fact. The `Examples:` table under
+  the Reports-menu rule is checked against that list, which is the only half
+  of the rule a headless suite can see; what the dialog looks like is the
+  window's and is not asserted.
+- **Which page a report tab gets is read off its name.** `ui::TabKind` has
+  Register and Report and no third kind, and adding one would touch the
+  workspace, the store and every table in the tabs section of the spec for a
+  distinction the workspace does not otherwise care about. A second sheet is
+  called `Balance sheet 2`, so the name is matched by prefix
+  (`reportNameOf`).
+- **A double click opens the register, not a single one.** The spec says
+  clicking a line on the sheet opens the account's register. In the window a
+  single click is how a row is selected, so the gesture that navigates is the
+  double click, with the same thing on the right-click menu where the rest of
+  the program says what a click will do. The model-level step
+  (`balance sheet line clicked`) is the navigation itself and says nothing
+  about the gesture.
+- **A heading opens nothing.** Every line but a heading names a real account;
+  a heading is the total of what is under it. So the click is let go rather
+  than guessed at -- opening the first account under the heading would be the
+  program choosing for you.
+- **The sheet is worked out when its tab is shown**, like every other report
+  tab, through `report_wants_working_out` and `report_worked_out`. Nothing new
+  was needed in `ui::Workspace` for any of this.

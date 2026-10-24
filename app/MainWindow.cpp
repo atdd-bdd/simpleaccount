@@ -59,6 +59,8 @@
 #include "import_review.h"
 #include "register_entry.h"
 #include "report.h"
+#include "balance_sheet.h"
+#include "report_menu.h"
 #include "report_ranges.h"
 #include "payee_rules.h"
 #include "qif_import.h"
@@ -1124,8 +1126,16 @@ void MainWindow::buildMenus() {
     accounts->addAction("Assign the &categories in the book", this,
                         &MainWindow::assignCategoriesInTheBook);
 
+    // One item per report the program offers, in the order it offers them.
+    // The list is src/report_menu.h rather than this line, so that the menu
+    // item, the tab it opens and the page drawn on it cannot drift apart.
     QMenu* reports = menuBar()->addMenu("&Reports");
-    reports->addAction("&Spending by category...", this, &MainWindow::showReport);
+    for (const reports::Offered& offered : reports::offered_reports()) {
+        const std::string name = offered.name;
+        QAction* item =
+            reports->addAction(QString::fromStdString("&" + name + "..."));
+        connect(item, &QAction::triggered, this, [this, name]() { openReport(name); });
+    }
 
     QMenu* view = menuBar()->addMenu("&View");
     auto* font = view->addAction("&Font...");
@@ -2321,13 +2331,148 @@ MainWindow::TabWidgets MainWindow::makeReportTab(int tabPosition, const std::str
     return t;
 }
 
-void MainWindow::showReport() {
+// The name the Reports menu offered, out of the name a tab carries. A second
+// tab of the same report is numbered -- Balance sheet 2 -- and is the same
+// report, so the number is dropped before the name is looked up.
+static std::string reportNameOf(const std::string& tab) {
+    for (const reports::Offered& offered : reports::offered_reports())
+        if (tab.rfind(offered.name, 0) == 0) return offered.name;
+    return tab;
+}
+
+// Builds the content of one balance-sheet tab. What it asks for is one date,
+// because a sheet is a position and not a period -- see the balance-sheet
+// section of UserInterface.spectable. Everything else about the tab is what
+// every report tab does: it is worked out when it is shown rather than when
+// the book changed, and run() says that it has been.
+MainWindow::TabWidgets MainWindow::makeBalanceSheetTab(int tabPosition,
+                                                       const std::string& title) {
+    (void)tabPosition;
+    (void)title;
+    TabWidgets t;
+    t.isReport = true;
+    auto* container = new QWidget;
+    t.widget = container;
+    auto* layout = new QVBoxLayout(container);
+
+    t.asAt = new QDateEdit;
+    t.asAt->setCalendarPopup(true);
+    t.asAt->setDisplayFormat("yyyy-MM-dd");
+    t.asAt->setDate(QDate::currentDate());
+    // An account with nothing in it is left off, the same as a category with
+    // nothing in it is left off the other report, unless it is asked for.
+    t.zero = new QCheckBox("Show empty accounts");
+
+    auto* chooser = new QHBoxLayout;
+    chooser->setContentsMargins(0, 0, 0, 0);
+    chooser->addWidget(new QLabel("As at"));
+    chooser->addWidget(t.asAt);
+    chooser->addStretch(1);
+    chooser->addWidget(t.zero);
+    auto* chooserHolder = new QWidget;
+    chooserHolder->setLayout(chooser);
+    layout->addWidget(chooserHolder);
+
+    t.reportTable = new QTableWidget;
+    t.reportTable->verticalHeader()->setVisible(false);
+    t.reportTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    t.reportTable->setColumnCount(2);
+    t.reportTable->setHorizontalHeaderLabels({"Account", "Balance"});
+    t.reportTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    t.reportTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    t.reportTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    pagesTheView(t.reportTable);
+    layout->addWidget(t.reportTable, 1);
+
+    t.totals = new QLabel;
+    QFont bold = appFont_;
+    bold.setBold(true);
+    t.totals->setFont(bold);
+    layout->addWidget(t.totals);
+
+    t.sheet = std::make_shared<std::vector<reports::BalanceSheetRow>>();
+
+    QDateEdit* asAt = t.asAt;
+    QCheckBox* zero = t.zero;
+    QTableWidget* table = t.reportTable;
+    QLabel* totals = t.totals;
+    std::shared_ptr<std::vector<reports::BalanceSheetRow>> sheet = t.sheet;
+
+    t.run = [this, container, asAt, zero, table, totals, sheet, bold]() {
+        const reports::BalanceSheet drawn = reports::balance_sheet(
+            chart_, book_, asDate(asAt->date()), zero->isChecked());
+        *sheet = drawn.rows;
+        table->setRowCount(static_cast<int>(drawn.rows.size()));
+        for (int r = 0; r < static_cast<int>(drawn.rows.size()); ++r) {
+            const reports::BalanceSheetRow& line =
+                drawn.rows[static_cast<std::size_t>(r)];
+            // A heading reads as the group it is the total of; a line reads as
+            // the name of its account, indented under that heading.
+            const std::string label =
+                std::string(static_cast<std::size_t>(line.level) * 2, 32) +
+                (line.account.empty()
+                     ? line.group
+                     : types::name_of(types::AccountPath(line.account)));
+            auto* item = new QTableWidgetItem(QString::fromStdString(label));
+            if (!line.account.empty())
+                item->setToolTip(QString::fromStdString(line.account));
+            const bool heavy = line.is_heading || line.is_subtotal;
+            if (heavy) item->setFont(bold);
+            table->setItem(r, 0, item);
+            setAmount(table, r, 1, line.balance);
+            if (heavy && table->item(r, 1) != nullptr) table->item(r, 1)->setFont(bold);
+        }
+        totals->setText(QString("Assets %1        Liabilities %2        Net worth %3")
+                            .arg(money(drawn.totals.assets))
+                            .arg(money(drawn.totals.liabilities))
+                            .arg(money(drawn.totals.net)));
+        if (workspace_) workspace_->report_worked_out(tabs_->indexOf(container) + 1);
+    };
+    std::function<void()> run = t.run;
+
+    connect(asAt, &QDateEdit::dateChanged, container, run);
+    connect(zero, &QCheckBox::toggled, container, run);
+
+    // Every line of a sheet but a heading names a real account, and a real
+    // account has a register, so the sheet is a way into the book and not only
+    // a page to read. A single click is how a row is selected, so the one that
+    // opens a register is the double click, and the same thing is on the
+    // right-click menu, where the rest of the program says what a click does.
+    const auto open = [this, sheet](int row) {
+        if (row < 0 || row >= static_cast<int>(sheet->size())) return;
+        const reports::BalanceSheetRow& line = (*sheet)[static_cast<std::size_t>(row)];
+        if (line.is_heading || line.account.empty()) return;
+        workspace_->select(line.account);
+        refresh();
+    };
+    connect(table, &QTableWidget::cellDoubleClicked, container,
+            [open](int row, int) { open(row); });
+    table->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(table, &QTableWidget::customContextMenuRequested, container,
+            [this, table, sheet, open](const QPoint& at) {
+        const int row = table->rowAt(at.y());
+        if (row < 0 || row >= static_cast<int>(sheet->size())) return;
+        const reports::BalanceSheetRow& line = (*sheet)[static_cast<std::size_t>(row)];
+        if (line.is_heading || line.account.empty()) return;
+        QMenu menu(table);
+        QAction* go = menu.addAction(
+            QString("Open the register for %1...")
+                .arg(QString::fromStdString(line.account)));
+        connect(go, &QAction::triggered, table, [open, row]() { open(row); });
+        menu.exec(table->viewport()->mapToGlobal(at));
+    });
+
+    run();
+    return t;
+}
+
+void MainWindow::openReport(const std::string& title) {
     if (!store_.is_open()) {
         QMessageBox::information(this, "SimpleAccount",
                                  "Open a book before reporting on it.");
         return;
     }
-    workspace_->open_report("Spending by category");
+    workspace_->open_report(title);
     refresh();
 }
 
@@ -3792,9 +3937,17 @@ void MainWindow::syncTabs() {
     }
     for (std::size_t i = tabWidgets_.size(); i < rows.size(); ++i) {
         const ui::TabRow& row = rows[i];
-        TabWidgets t = row.kind == ui::TabKind::Report
-                          ? makeReportTab(static_cast<int>(i) + 1, row.name)
-                          : makeRegisterTab(static_cast<int>(i) + 1);
+        // Which page a report tab gets is decided by its name, because the
+        // name is the report: a second balance sheet is called Balance sheet 2
+        // and is the same page, so the name is read up to what the menu
+        // offered.
+        TabWidgets t;
+        if (row.kind != ui::TabKind::Report)
+            t = makeRegisterTab(static_cast<int>(i) + 1);
+        else if (reports::report_is_as_at(reportNameOf(row.name)))
+            t = makeBalanceSheetTab(static_cast<int>(i) + 1, row.name);
+        else
+            t = makeReportTab(static_cast<int>(i) + 1, row.name);
         tabs_->addTab(t.widget, QString::fromStdString(row.name));
         tabWidgets_.push_back(t);
     }

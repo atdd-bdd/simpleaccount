@@ -6117,3 +6117,184 @@ Then menu items are : MenuItem
 | Add payee rule...         | true    |
 | Apply payee rules...      | true    |
 | Delete...                 | true    |
+
+# ---------------------------------------------------------------------------
+# A balance sheet on a tab of its own
+# ---------------------------------------------------------------------------
+
+Description What is owned and what is owed, as at one date, asked for from the
+\ Reports menu and shown on a tab like any other report.
+Details The figures are not this section. What a balance sheet contains, which
+\ accounts are on it and how net worth is arrived at are in Reports, and
+\ `src/balance_sheet.h` works them out and is green. What is missing is
+\ the way in: the Reports menu offers one report, so the sheet cannot be
+\ seen. This section is the window's half -- what the menu offers, what
+\ is asked before the page is drawn, what the tab is called and what
+\ clicking a line on it does.
+\
+\ A balance sheet is a position and every other report is a period, and
+\ the asking has to say so. The spending report asks for a range and an
+\ interval; the balance sheet asks for one date, which the sheet is
+\ drawn up as at, and the From it is handed is not read. Writing one
+\ dialog that asks for both and greys half of itself would be the same
+\ statement in two voices, so they are two.
+\
+\ Nothing else about a report tab changes. It is opened beside what is
+\ already open rather than replacing it, a second one carries a 2, and
+\ it is worked out again when the book is not the book it was drawn from
+\ -- the tab rules earlier in this file are about report tabs and a
+\ balance sheet is one.
+
+BusinessRule What the Reports menu offers, and what each one asks for
+Description One line per report on the menu, which is the list this section
+\ adds to. The asking differs because the reports differ in kind: a
+\ period is two dates and a width of column, a position is one date.
+Details The tab name is the report's own name, so two tabs are told apart by
+\ what is on them rather than by the order they were opened in -- and
+\ the second of the same kind carries a 2, as the tabs section says.
+Examples: ReportOffered
+| TheReport            | WhatItAsks                                        | TheTabIsCalled       |
+| Spending by category | A range, from one date to another, and an interval | Spending by category |
+| Balance sheet        | One date, which the sheet is drawn up as at       | Balance sheet        |
+
+Attributes ReportOffered
+| Attribute      | Type   | Default |
+| TheReport      | String |         |
+| WhatItAsks     | String |         |
+| TheTabIsCalled | String |         |
+
+Scenario A balance sheet opens on a tab of its own
+Description The sheet as at the end of February, over a book whose January is
+\ a salary, a supermarket, a card and a transfer to savings. The
+\ March salary is after the date asked for and is not in it.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type       | Placeholder |
+| Assets:Checking         | Checking   | false       |
+| Assets:Savings          | Savings    | false       |
+| Liabilities:Visa        | CreditCard | false       |
+| Income:Salary           | Income     | false       |
+| Expenses:Groceries      | Expense    | false       |
+| Equity:Opening Balances | Equity     | false       |
+And transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee         | Destination        | Amount  |
+| T1  | Assets:Checking  | 2026-01-05 | Acme~Payroll  | Income:Salary      | 3000.00 |
+| T2  | Assets:Checking  | 2026-01-15 | Harris~Teeter | Expenses:Groceries | -45.00  |
+| T3  | Liabilities:Visa | 2026-01-20 | Amazon        | Expenses:Groceries | -89.99  |
+| T4  | Assets:Checking  | 2026-01-25 | Transfer      | Assets:Savings     | -500.00 |
+| T5  | Assets:Checking  | 2026-03-10 | Acme~Payroll  | Income:Salary      | 1000.00 |
+When balance sheet run : ReportSpec Vertical
+| GroupBy  | Account    |
+| Interval | Whole      |
+| To       | 2026-02-28 |
+Then open tabs are : OpenTab
+| Position | Kind   | Account | Name          | Active |
+| 1        | Report | none    | Balance sheet | true   |
+And balance sheet rows are : BalanceSheetRow
+| Section     | Group       | Account          | Level | Balance | IsHeading | IsSubtotal |
+| Assets      | Banking     | none             | 0     | 2955.00 | true      | false      |
+| Assets      | none        | Assets:Checking  | 1     | 2455.00 | false     | false      |
+| Assets      | none        | Assets:Savings   | 1     | 500.00  | false     | false      |
+| Liabilities | CreditCards | none             | 0     | 89.99   | true      | false      |
+| Liabilities | none        | Liabilities:Visa | 1     | 89.99   | false     | false      |
+And balance sheet total is : NetWorth Vertical
+| Assets      | 2955.00 |
+| Liabilities | 89.99   |
+| NetWorth    | 2865.01 |
+# Checking is 3000 of salary less 45 of groceries less the 500 moved to
+# savings. The card reads as what is owed. The categories and the equity
+# account are not here, and net worth is 3000 earned less 134.99 spent, which
+# is the tie the Reports section states.
+
+Scenario The date is as at, and the one before it is not read
+Description The same book and the same sheet, asked for with a From that would
+\ have cut January out of a period report. A balance is everything up
+\ to the date, so the answer is the same answer.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type       | Placeholder |
+| Assets:Checking         | Checking   | false       |
+| Assets:Savings          | Savings    | false       |
+| Liabilities:Visa        | CreditCard | false       |
+| Income:Salary           | Income     | false       |
+| Expenses:Groceries      | Expense    | false       |
+| Equity:Opening Balances | Equity     | false       |
+And transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee         | Destination        | Amount  |
+| T1  | Assets:Checking  | 2026-01-05 | Acme~Payroll  | Income:Salary      | 3000.00 |
+| T2  | Assets:Checking  | 2026-01-15 | Harris~Teeter | Expenses:Groceries | -45.00  |
+| T3  | Liabilities:Visa | 2026-01-20 | Amazon        | Expenses:Groceries | -89.99  |
+| T4  | Assets:Checking  | 2026-01-25 | Transfer      | Assets:Savings     | -500.00 |
+When balance sheet run : ReportSpec Vertical
+| GroupBy  | Account    |
+| Interval | Whole      |
+| From     | 2026-02-01 |
+| To       | 2026-02-28 |
+Then balance sheet rows are : BalanceSheetRow
+| Section     | Group       | Account          | Level | Balance | IsHeading | IsSubtotal |
+| Assets      | Banking     | none             | 0     | 2955.00 | true      | false      |
+| Assets      | none        | Assets:Checking  | 1     | 2455.00 | false     | false      |
+| Assets      | none        | Assets:Savings   | 1     | 500.00  | false     | false      |
+| Liabilities | CreditCards | none             | 0     | 89.99   | true      | false      |
+| Liabilities | none        | Liabilities:Visa | 1     | 89.99   | false     | false      |
+# A February-only spending report over this book shows nothing at all. The
+# sheet shows the same figures as the scenario above, which is the whole of
+# what as at means and the reason the dialog asks for one date.
+
+Scenario Clicking an account on the balance sheet opens its register
+Description Every line of a balance sheet except a heading names a real
+\ account, and a real account has a register. So the sheet is a way
+\ into the book and not only a page to read, which is what the
+\ figure-to-transaction section says about the other report.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type       | Placeholder |
+| Assets:Checking         | Checking   | false       |
+| Assets:Savings          | Savings    | false       |
+| Liabilities:Visa        | CreditCard | false       |
+| Income:Salary           | Income     | false       |
+| Expenses:Groceries      | Expense    | false       |
+| Equity:Opening Balances | Equity     | false       |
+And transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee         | Destination        | Amount  |
+| T1  | Assets:Checking  | 2026-01-05 | Acme~Payroll  | Income:Salary      | 3000.00 |
+| T2  | Assets:Checking  | 2026-01-15 | Harris~Teeter | Expenses:Groceries | -45.00  |
+| T3  | Liabilities:Visa | 2026-01-20 | Amazon        | Expenses:Groceries | -89.99  |
+| T4  | Assets:Checking  | 2026-01-25 | Transfer      | Assets:Savings     | -500.00 |
+When balance sheet run : ReportSpec Vertical
+| GroupBy  | Account    |
+| Interval | Whole      |
+| To       | 2026-02-28 |
+And balance sheet line clicked : ReportLineSelect Vertical
+| Line | 5 |
+Then open tabs are : OpenTab
+| Position | Kind     | Account          | Name          | Active |
+| 1        | Report   | none             | Balance sheet | false  |
+| 2        | Register | Liabilities:Visa | Visa          | true   |
+# Line five is Liabilities:Visa: the sheet reads Banking, Checking, Savings,
+# CreditCards, Visa.
+
+Scenario Clicking a group heading on the balance sheet opens nothing
+Description A heading is a total of the accounts under it and names no account
+\ of its own, so there is no register to open and the click is
+\ ignored rather than guessed at.
+Given the chart of accounts is : ChartOfAccounts
+| Path                    | Type       | Placeholder |
+| Assets:Checking         | Checking   | false       |
+| Assets:Savings          | Savings    | false       |
+| Liabilities:Visa        | CreditCard | false       |
+| Income:Salary           | Income     | false       |
+| Expenses:Groceries      | Expense    | false       |
+| Equity:Opening Balances | Equity     | false       |
+And transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee         | Destination        | Amount  |
+| T1  | Assets:Checking  | 2026-01-05 | Acme~Payroll  | Income:Salary      | 3000.00 |
+| T2  | Assets:Checking  | 2026-01-15 | Harris~Teeter | Expenses:Groceries | -45.00  |
+| T3  | Liabilities:Visa | 2026-01-20 | Amazon        | Expenses:Groceries | -89.99  |
+| T4  | Assets:Checking  | 2026-01-25 | Transfer      | Assets:Savings     | -500.00 |
+When balance sheet run : ReportSpec Vertical
+| GroupBy  | Account    |
+| Interval | Whole      |
+| To       | 2026-02-28 |
+And balance sheet line clicked : ReportLineSelect Vertical
+| Line | 1 |
+Then open tabs are : OpenTab
+| Position | Kind   | Account | Name          | Active |
+| 1        | Report | none    | Balance sheet | true   |

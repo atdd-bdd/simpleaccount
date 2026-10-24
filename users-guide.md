@@ -337,6 +337,19 @@ With Detail set to Transactions, a right click on a line offers
 in, or, where a transfer is a line in two registers, a submenu naming both so
 that you choose.
 
+**Reports > Balance sheet...** opens a tab of its own, and asks for one date
+rather than a period: a balance sheet is a position, and every posting up to
+and including the date counts whichever day it was made on. It shows what is
+owned and what is owed, grouped the way the account list groups them, with the
+total of each group above its accounts and Assets, Liabilities and Net worth
+along the bottom. **Show empty accounts** brings in the accounts that come to
+nothing as at that date. Categories are not on it -- income and expense are
+what moved during a period, not what is held -- which is why net worth is also
+the opening balances plus what was earned less what was spent.
+
+Double click a line, or right click it, to open the register of the account it
+names. A group heading is a total and names no account, so it opens nothing.
+
 A report tab holds its last result and only recomputes when the book changes,
 so switching back to one is free. Every table scrolls, and so does every
 hand-built window: a dialog taller than the screen gets a scroll bar rather
@@ -380,7 +393,8 @@ An honest list, so nothing comes as a surprise:
   made, and that is the slow half. The strip says what it is doing but cannot
   say how far it has got until the rows start, so the bar sits still for most
   of the wait on a large download. Stop works throughout.
-- **Reports beyond spending by category.**
+- **Reports beyond spending by category and the balance sheet.** An income
+  statement, a net worth over time, and a report by payee are all owed.
 
 `tasks.md` and `TODO.md` hold what is owed; `archive/` holds what is done, with
 the reasoning. `README.md` and `decisions.md` say why the
