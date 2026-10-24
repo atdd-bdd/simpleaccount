@@ -1167,3 +1167,77 @@ own next paragraph.
   deliberately off the balance sheet (`CoreTypes.spectable`,
   `src/account_type.h:328`), but nothing stops one being chosen as an import
   target. Unenforced, and worth a rule if it is meant to be one.
+
+## 30. The two holes section 29 found in the context menu
+
+The author's instruction of 2026-10-23: *"fix the recategorize hole in the
+context menu and the match this transaction in the context menu. It's okay not
+to worry about a transfer account getting an import. It doesn't have a bank or
+account number, so the user would have to really do something difficult."* So
+two of section 29's three gaps are now written, and the third -- a Transfer
+account chosen as an import target -- is closed as not worth a rule.
+
+Also settled there: *"as long as this works according to my description, it
+doesn't matter whether there is one or two transactions."* The one-transaction
+transfer model stays as it is.
+
+### Recategorising a transfer is a warning before it is a change
+
+The hole was that `edit::assign_category` refuses only a split, so a category
+put on a transfer silently overwrote the destination -- which is the whole of
+what made it a line in two registers -- and left the other account short by the
+amount with nothing to show why. `payees::assign_categories` already guarded
+that case; the menu did not.
+
+Decisions taken, all of them written into the transfer-warning rule in
+`UserInterface.spectable`:
+
+- **Two calls, not one.** `recategorise` changes the purchases, leaves the
+  transfers untouched, and reports `Warned` and a `Warning` naming the register
+  that would lose the line. `answer_transfer_warning(accept)` does it or leaves
+  it. A dialog cannot be opened from inside the model, and a model that asked
+  would not be testable from a table.
+- **`Warned` and `Warning` are new fields on `Recategorised`, not a reuse of
+  `Refused`/`Reason`.** Refused is what the program will not do at all; warned
+  is what it will do once told to. Both default to 0 and `none`, so every
+  existing Recategorised table stayed valid.
+- **One answer covers every warned line in the selection**, because a selection
+  is one gesture. Twenty questions is not a question. The dialog says the first
+  warning and "and N more like it."
+- **`Changed` counts what each call changed.** A purchase changed by the first
+  call is not counted again by the answer, which is why declining reports
+  `Changed 0` even though the first call changed something.
+- **A line matched by hand is the same warning for a different reason**, and
+  accepting unmatches both sides: the far entry comes back into its own
+  register as `Unassigned`, because nobody has said yet where that money went.
+  Leaving it matched to a transaction that is no longer a transfer would be a
+  dangling link, and leaving it hidden would lose it altogether.
+- A split is still refused rather than warned about -- `warning_about` returns
+  nothing for a split and `assign_category` refuses it as before.
+
+### Match this transaction, from the register menu
+
+- **No window and no account.** `transfers::kAllTime` is 36500 days. The
+  two-day window exists so an import can pair without asking; somebody
+  reaching for this menu item is asking, and what they are looking for is
+  usually the pair the import would not make. Every other real account is
+  searched, because whoever reaches for it does not know which account the
+  other half is in -- if they knew it, they would type it into the destination
+  column and be asked there.
+- **Equal and opposite to the cent is kept**, and a candidate already paired
+  with something is not offered; `transfers::halves_for` already does both.
+  Order is closest in days first, as everywhere else.
+- **Choosing one is the merge, not a link.** One transaction is left, naming
+  both accounts, keeping its own date, payee and memo, cleared if either half
+  was. `transfers::merge` does not set the keeper's destination, so
+  `choose_match` sets it to the account the chosen half was in.
+- **Greyed rather than an empty dialog.** The item is on the menu whenever a
+  register is open and enabled only when there is something equal and opposite
+  to offer. Grey is the answer to "is there another half of this", given
+  without opening a dialog that has nothing in it.
+- **The cost of that is a `transfers::Book` index built on every right-click.**
+  `match_candidates()` runs on `menu_items()`, so the whole ledger is indexed
+  to decide whether one item is grey. Accepted for now: a right-click is one
+  gesture and the book is thousands of rows, not millions. If it ever shows,
+  the fix is the integer-key `reg::BookIndex` already queued in `TODO.md`, or
+  caching the answer per selection.

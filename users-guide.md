@@ -117,12 +117,36 @@ otherwise.
   refused.
 
 **Right click** a row, or a selection of rows (shift and control extend it),
-for Recategorize..., Split..., Add payee rule..., Apply payee rules... and
-Delete.... Split takes one transaction at a time, so it is greyed rather than
-left off for a selection of several or for a transaction that is already split
--- the answer to "can this be split" is then in the same place either way.
-Deleting removes both sides of a transaction, never one of them, because one
-side alone would leave the book out of balance.
+for Recategorize..., Match this transaction..., Split..., Add payee rule...,
+Apply payee rules... and Delete.... Split takes one transaction at a time, so
+it is greyed rather than left off for a selection of several or for a
+transaction that is already split -- the answer to "can this be split" is then
+in the same place either way. Deleting removes both sides of a transaction,
+never one of them, because one side alone would leave the book out of balance.
+
+**Recategorizing a transfer** is asked about before it is done. Naming the
+other account is the whole of what makes a transfer a line in two registers,
+so a category put there in its place does not change one line -- it takes the
+other register's line away. So the program says which register would lose the
+line and waits for a yes. The rest of the selection is not held up: the
+purchases change, and only the transfers wait. Say no and the transfer is left
+exactly as it was. The same question is asked when the line was matched by
+hand to an entry in another account; saying yes there sends that entry back
+into its own register with no category, which is where it was before anybody
+matched anything.
+
+**Match this transaction...** finds the other half of a payment when the
+destination column never offered it. Typing an account into the destination
+column asks about that account within two days; this asks about every other
+account and the whole of the book, which is how a row entered by hand in
+January is paired with a statement read in March. What it looks for is a line
+equal and opposite to the cent that is not already paired with something, and
+it offers the nearest in days first. Choosing one leaves a single transaction
+naming both accounts, keeping this line's own date, payee and memo, and
+cleared if either half was. Choosing none changes nothing. The item is greyed
+when there is nothing to offer -- more than one line selected, a split, a line
+that already names an account, or nothing equal and opposite anywhere in the
+book -- so grey is the answer to "is there another half of this".
 
 **The Cleared column** is a tick you can click. It means the bank has reported
 the transaction. Everything imported arrives cleared; only a transaction you

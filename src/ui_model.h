@@ -466,6 +466,12 @@ struct Recategorised {
     int changed = 0;
     int refused = 0;
     std::string reason;
+    // Refused is what the program will not do at all. Warned is what it
+    // will do once it has been told to go ahead, and until then has not
+    // done: a transfer, whose category would take the line out of the
+    // other account register altogether.
+    int warned = 0;
+    std::string warning;
 };
 
 class Workspace {
@@ -1172,6 +1178,13 @@ public:
         const bool anything = !selected_.empty() && !tabs_.empty() &&
                               tabs_[active_tab_].kind == TabKind::Register;
         return {MenuEntry{"Recategorize...", anything},
+                // The other half of this payment, wherever in the book it
+                // is. Greyed when there is nothing equal and opposite to
+                // offer, which is the answer to the question without a
+                // dialog that has nothing in it. See the menu-match rule
+                // in UserInterface.spectable.
+                MenuEntry{"Match this transaction...",
+                          anything && !match_candidates().empty()},
                 // One transaction at a time, because the window checks its
                 // lines against that transaction's amount and two of them have
                 // no one amount between them. A transaction that is already a
@@ -1305,9 +1318,23 @@ public:
             return out;
         }
 
+        warned_refs_.clear();
+        warned_category_.clear();
         for (const std::string& ref : refs) {
             ledger::Transaction* writable = by_ref(ref);
             if (writable == nullptr) continue;
+            // A transfer, or one side of a match made by hand. Either way a
+            // category here does not change one line: it takes the other
+            // account line away. So it waits for an answer, and the rest of
+            // the selection does not.
+            const std::string caution = warning_about(*writable);
+            if (!caution.empty()) {
+                ++out.warned;
+                if (out.warning.empty()) out.warning = caution;
+                warned_refs_.push_back(ref);
+                warned_category_ = category;
+                continue;
+            }
             const edit::Outcome done =
                 edit::assign_category(writable, accounts_, category);
             if (done.changed) {
@@ -1321,6 +1348,78 @@ public:
         }
         if (out.changed > 0) rebuild_book();
         return out;
+    }
+
+    // The answer to the warning the call above reported. Accepting does what
+    // it said it would do; declining leaves the transfers as they were. Either
+    // way the question is spent, so a second answer with nothing waiting on it
+    // changes nothing. Only this answer is counted: the purchases in the same
+    // selection were changed by the call before it and are not changed again.
+    // See the transfer-warning rule in UserInterface.spectable.
+    Recategorised answer_transfer_warning(bool accept) {
+        Recategorised out;
+        const std::vector<std::string> refs = warned_refs_;
+        const std::string category = warned_category_;
+        warned_refs_.clear();
+        warned_category_.clear();
+        if (!accept || category.empty()) return out;
+        for (const std::string& ref : refs) {
+            ledger::Transaction* writable = by_ref(ref);
+            if (writable == nullptr) continue;
+            unmatch(writable);
+            const edit::Outcome done =
+                edit::assign_category(writable, accounts_, category);
+            if (done.changed) {
+                ++out.changed;
+                continue;
+            }
+            ++out.refused;
+            if (out.reason.empty()) out.reason = why(*writable, done.reason);
+        }
+        if (out.changed > 0) rebuild_book();
+        return out;
+    }
+
+    bool transfer_warning_waiting() const { return !warned_refs_.empty(); }
+
+    // Every other real account, and all of time. What the destination column
+    // asks of a candidate narrowed by the account typed into it; this is the
+    // same question with neither the account nor the window, because whoever
+    // reaches for the menu does not know which account the other half is in.
+    // Nothing is offered for a split, for more than one line, or for a line
+    // that already names an account or is already matched: all four are
+    // already paired or have no one amount, and the menu is greyed instead.
+    std::vector<transfers::Half> match_candidates() const {
+        const std::vector<reg::Line> lines = register_lines(active_pane());
+        if (selected_.size() != 1) return {};
+        const ledger::Transaction* one = transaction_on(lines, selected_.front());
+        if (one == nullptr) return {};
+        if (chart::is_split(one->destination)) return {};
+        if (accounts_.is_real(one->destination)) return {};
+        if (!one->matched_to.value().empty()) return {};
+        return transfers::halves_for(accounts_.path_for_ref(one->source_account),
+                                     one->date, one->amount, transactions_,
+                                     accounts_, transfers::kAllTime);
+    }
+
+    // The chosen half and the selected line are one movement of money, so they
+    // become one transaction: the line keeps its own date, payee and memo,
+    // names the account the half was in, and keeps the cleared status either of
+    // them brought. Choosing none is the caller doing nothing at all.
+    bool choose_match(const std::string& half_id) {
+        const std::vector<reg::Line> lines = register_lines(active_pane());
+        if (selected_.size() != 1) return false;
+        const ledger::Transaction* one = transaction_on(lines, selected_.front());
+        if (one == nullptr) return false;
+        const std::string keeping = one->id.value();
+        const ledger::Transaction* half = by_id_const(half_id);
+        if (half == nullptr) return false;
+        const chart::Ref other = half->source_account;
+        if (!transfers::merge(keeping, half_id, &transactions_)) return false;
+        ledger::Transaction* keeper = by_id(keeping);
+        if (keeper != nullptr) keeper->destination = other;
+        rebuild_book();
+        return true;
     }
 
     // --- reconciling an account against what the bank said ------------------
@@ -1722,10 +1821,60 @@ private:
         return nullptr;
     }
 
+    // The transfers in a selection that are waiting on an answer, and the
+    // category they are waiting to be given. One answer covers all of
+    // them, because a selection is one gesture.
+    std::vector<std::string> warned_refs_;
+    std::string warned_category_;
+
     const ledger::Transaction* by_ref_const(const std::string& ref) const {
         for (const ledger::Transaction& t : transactions_)
             if (t.ref.value() == ref) return &t;
         return nullptr;
+    }
+
+    ledger::Transaction* by_id(const std::string& id) {
+        for (ledger::Transaction& t : transactions_)
+            if (t.id.value() == id) return &t;
+        return nullptr;
+    }
+
+    const ledger::Transaction* by_id_const(const std::string& id) const {
+        for (const ledger::Transaction& t : transactions_)
+            if (t.id.value() == id) return &t;
+        return nullptr;
+    }
+
+    // What has to be said before this line is recategorised, or nothing. A
+    // split is refused rather than warned about and is not this.
+    std::string warning_about(const ledger::Transaction& t) const {
+        if (chart::is_split(t.destination)) return std::string();
+        if (!t.matched_to.value().empty()) {
+            const ledger::Transaction* other = by_id_const(t.matched_to.value());
+            const std::string where =
+                other == nullptr ? std::string("another account")
+                                 : accounts_.path_for_ref(other->source_account);
+            return t.payee.value() + " is matched to an entry in " + where +
+                   ", which is left uncategorized";
+        }
+        if (accounts_.is_real(t.destination))
+            return t.payee.value() + " is a transfer to " +
+                   accounts_.path_for_ref(t.destination) + ", which loses the line";
+        return std::string();
+    }
+
+    // Taking a line out of a transfer undoes the match that said the two rows
+    // were one movement of money. The other entry comes back into its own
+    // register, uncategorised, because nobody has said yet where that money
+    // went -- which is the state it was in before anybody matched anything.
+    void unmatch(ledger::Transaction* t) {
+        if (t == nullptr || t->matched_to.value().empty()) return;
+        const std::string other_id = t->matched_to.value();
+        t->matched_to = types::TransactionId();
+        ledger::Transaction* other = by_id(other_id);
+        if (other == nullptr) return;
+        other->matched_to = types::TransactionId();
+        other->destination = ledger::unassigned_ref(accounts_);
     }
 
     ledger::Transaction* by_ref(const std::string& ref) {

@@ -26,6 +26,14 @@ namespace transfers {
 // is the pair that sets this.
 inline constexpr long long kWindow = 2;
 
+// No window at all, for the search somebody asks for from the menu. The two
+// day window is there so that an import can pair without asking; a person
+// reaching for Match this transaction is asking, and what they are looking
+// for is usually the pair an import would not make. A hundred years of days
+// rather than an infinity, because the gap is counted in days and sorted on.
+// See the menu-match rule in UserInterface.spectable.
+inline constexpr long long kAllTime = 36500;
+
 // One half already in the book that could be the other side of a row being
 // imported. Read off that transaction rather than guessed at, because the
 // question names it back to the person who entered it.

@@ -3168,11 +3168,15 @@ Description How many transactions a delete actually removed, because a
 
 Attributes Recategorised
 Description What came of it, counted, because a selection of twenty is too many
-\ to check by eye.
+\ to check by eye. Refused is what the program will not do at all.
+\ Warned is what it will do once it has been told to go ahead, and
+\ until then has not done.
 | Attribute | Type    | Default |
 | Changed   | Integer | 0       |
 | Refused   | Integer | 0       |
 | Reason    | String  | none    |
+| Warned    | Integer | 0       |
+| Warning   | String  | none    |
 
 Scenario The menu on a selection offers what can be done to it
 Description Two items to begin with. The menu will grow, and what is already
@@ -3191,9 +3195,10 @@ And register lines selected : RegisterSelect
 | Line |
 | 1    |
 Then menu items are : MenuItem
-| Item                 | Enabled |
-| Recategorize...      | true    |
-| Split...            | true    |
+| Item                      | Enabled |
+| Recategorize...           | true    |
+| Match this transaction... | false   |
+| Split...                  | true    |
 | Add payee rule...    | true    |
 | Apply payee rules... | true    |
 | Delete...            | true    |
@@ -3271,6 +3276,214 @@ And register lines are : RegisterLine CompareOnly
 | Ref | Date       | Category           |
 | T1  | 2026-02-01 | Expenses:Auto:Fuel |
 | T2  | 2026-02-08 | --Split--          |
+
+Attributes RecategoriseAnswer
+Description The answer to the warning. Accepting means go ahead and take the
+\ line out of the other register; declining means leave the transfer
+\ as it was.
+| Attribute | Type    | Default |
+| Accept    | Boolean | true    |
+
+BusinessRule Recategorising a transfer is a warning before it is a change
+Description A transfer's destination is the other account, and naming the other
+\ account is the whole of what makes it a line in two registers. A
+\ category put there in its place does not change one line: it takes
+\ the other register's line away altogether, and that account is left
+\ short by the amount with nothing to show why.
+Details The menu does not know a transfer from a purchase by looking, which is
+\ the point of having it: twenty lines from one shop are recategorised
+\ in one gesture, and one of them being a card payment is exactly the
+\ mistake worth catching. So the first call changes nothing about the
+\ transfers and reports what it would do, naming the register that
+\ loses the line; a second call, carrying the answer, does it or leaves
+\ it.
+\
+\ A line matched by hand to an entry in another account is the same
+\ warning for a different reason. There the other account keeps its own
+\ transaction, and what the match said was that the two are one
+\ movement of money, so one of them is not shown. Recategorising this
+\ side says it was not that movement after all, and the match goes with
+\ it: the other entry comes back into its own register, uncategorised,
+\ because nobody has said yet where that money went.
+\
+\ The rest of the selection is not held up. The purchases change on the
+\ first call and are counted as changed; only the transfers wait. One
+\ answer covers all of them, because a selection is one gesture and
+\ asking twenty times is not a question.
+Examples: TransferRecategorised
+| TheLine                          | TheFirstCall                | AcceptingIt                               |
+| A purchase                       | It is recategorised         | Nothing was asked                         |
+| A transfer to another account    | Unchanged, and warned about | The other register loses the line         |
+| One side of a match made by hand | Unchanged, and warned about | The other entry comes back, uncategorized |
+| A split                          | Refused, not warned about   | Nothing; a split is refused either way    |
+
+Attributes TransferRecategorised
+| Attribute    | Type   | Default |
+| TheLine      | String |         |
+| TheFirstCall | String |         |
+| AcceptingIt  | String |         |
+
+Scenario Recategorising a transfer says what it would do and waits
+Description A month of categorising with a card payment caught up in it. The
+\ purchase changes, the payment does not, and the register that would
+\ lose the line is named.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Checking   | false       |
+| Liabilities:Visa       | CreditCard | false       |
+| Expenses:Auto          | Expense    | true        |
+| Expenses:Auto:Fuel     | Expense    | false       |
+| Expenses:Uncategorized | Expense    | false       |
+And transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination            | Amount  |
+| T1  | Assets:Checking | 2026-02-01 | SHELL~OIL    | Expenses:Uncategorized | -40.00  |
+| T2  | Assets:Checking | 2026-02-10 | Visa~Payment | Liabilities:Visa       | -300.00 |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+And register lines selected : RegisterSelect
+| Line |
+| 1    |
+| 2    |
+And selection recategorised : CategoryChoice Vertical
+| Category | Expenses:Auto:Fuel |
+Then recategorising reported is : Recategorised Vertical
+| Changed | 1                                                                   |
+| Refused | 0                                                                   |
+| Warned  | 1                                                                   |
+| Warning | Visa Payment is a transfer to Liabilities:Visa, which loses the line |
+And transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination        | Amount  |
+| T1  | Assets:Checking | 2026-02-01 | SHELL~OIL    | Expenses:Auto:Fuel | -40.00  |
+| T2  | Assets:Checking | 2026-02-10 | Visa~Payment | Liabilities:Visa   | -300.00 |
+# The payment is exactly as it was. Nothing has been asked of the book yet.
+
+Scenario Accepting the warning takes the line out of the other register
+Description The answer is yes, and what follows is what the warning said would
+\ follow. The card register keeps its own rows and loses the line the
+\ transfer put there.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Checking   | false       |
+| Liabilities:Visa       | CreditCard | false       |
+| Expenses:Auto          | Expense    | true        |
+| Expenses:Auto:Fuel     | Expense    | false       |
+| Expenses:Office        | Expense    | false       |
+| Expenses:Uncategorized | Expense    | false       |
+And transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee        | Destination      | Amount  |
+| T1  | Assets:Checking  | 2026-02-10 | Visa~Payment | Liabilities:Visa | -300.00 |
+| T2  | Liabilities:Visa | 2026-02-12 | STAPLES      | Expenses:Office  | -45.00  |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+And register lines selected : RegisterSelect
+| Line |
+| 1    |
+And selection recategorised : CategoryChoice Vertical
+| Category | Expenses:Auto:Fuel |
+And the warning is answered : RecategoriseAnswer Vertical
+| Accept | true |
+Then recategorising reported is : Recategorised Vertical
+| Changed | 1 |
+| Refused | 0 |
+| Warned  | 0 |
+And transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee        | Destination        | Amount  |
+| T1  | Assets:Checking  | 2026-02-10 | Visa~Payment | Expenses:Auto:Fuel | -300.00 |
+| T2  | Liabilities:Visa | 2026-02-12 | STAPLES      | Expenses:Office    | -45.00  |
+When register opened on : AccountSelect
+| Path             |
+| Liabilities:Visa |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Payee   |
+| T2  | 2026-02-12 | STAPLES |
+# One line. The payment is an expense of the checking account now and the card
+# has no part in it, which is what the warning was about.
+
+Scenario Declining the warning leaves the transfer as it was
+Description The answer is no, and the transfer is untouched. The purchase in the
+\ same selection stays recategorised: the question was about the
+\ transfer and not about the gesture.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Checking   | false       |
+| Liabilities:Visa       | CreditCard | false       |
+| Expenses:Auto          | Expense    | true        |
+| Expenses:Auto:Fuel     | Expense    | false       |
+| Expenses:Uncategorized | Expense    | false       |
+And transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination            | Amount  |
+| T1  | Assets:Checking | 2026-02-01 | SHELL~OIL    | Expenses:Uncategorized | -40.00  |
+| T2  | Assets:Checking | 2026-02-10 | Visa~Payment | Liabilities:Visa       | -300.00 |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+And register lines selected : RegisterSelect
+| Line |
+| 1    |
+| 2    |
+And selection recategorised : CategoryChoice Vertical
+| Category | Expenses:Auto:Fuel |
+And the warning is answered : RecategoriseAnswer Vertical
+| Accept | false |
+Then recategorising reported is : Recategorised Vertical
+| Changed | 0 |
+| Refused | 0 |
+| Warned  | 0 |
+And transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination        | Amount  |
+| T1  | Assets:Checking | 2026-02-01 | SHELL~OIL    | Expenses:Auto:Fuel | -40.00  |
+| T2  | Assets:Checking | 2026-02-10 | Visa~Payment | Liabilities:Visa   | -300.00 |
+# Changed counts what this answer changed, which is nothing. T1 was changed by
+# the call before it and is not changed again.
+
+Scenario Recategorising one side of a match made by hand leaves the other uncategorized
+Description The match said these two rows are one movement of money. Taking one
+\ of them out of the transfer says they are not, so the other comes
+\ back into its own register with no category, which is the state it
+\ was in before anybody matched anything.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Checking   | false       |
+| Liabilities:Chase Visa | CreditCard | false       |
+| Unassigned             | OtherAsset | false       |
+| Expenses:Auto          | Expense    | true        |
+| Expenses:Auto:Fuel     | Expense    | false       |
+And transactions are : Transaction
+| Ref | SourceAccount          | Date       | Payee            | Destination | Amount   |
+| T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | Unassigned  | -1200.00 |
+| T2  | Liabilities:Chase Visa | 2026-04-25 | PAYMENT~RECEIVED | Unassigned  | 1200.00  |
+When the other entry is matched : EntryMatch Vertical
+| Ref      | T1 |
+| OtherRef | T2 |
+And account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+And register lines selected : RegisterSelect
+| Line |
+| 1    |
+And selection recategorised : CategoryChoice Vertical
+| Category | Expenses:Auto:Fuel |
+Then recategorising reported is : Recategorised Vertical
+| Changed | 0                                                                                       |
+| Warned  | 1                                                                                       |
+| Warning | CHASEBANK is matched to an entry in Liabilities:Chase Visa, which is left uncategorized |
+When the warning is answered : RecategoriseAnswer Vertical
+| Accept | true |
+Then transactions are : Transaction
+| Ref | SourceAccount          | Date       | Payee            | Destination        | Amount   |
+| T1  | Assets:Checking        | 2026-04-10 | CHASEBANK        | Expenses:Auto:Fuel | -1200.00 |
+| T2  | Liabilities:Chase Visa | 2026-04-25 | PAYMENT~RECEIVED | Unassigned         | 1200.00  |
+# Neither row is matched to anything now -- MatchedTo is none on both, which is
+# this table's default -- and T2 names no account, so it is the card register's
+# own uncategorised row again.
+When register opened on : AccountSelect
+| Path                   |
+| Liabilities:Chase Visa |
+Then register lines are : RegisterLine CompareOnly
+| Ref | Date       | Payee            |
+| T2  | 2026-04-25 | PAYMENT~RECEIVED |
 
 Scenario Deleting a selection removes every transaction in it
 Description Both transactions of each, never one side, because a delete that left
@@ -3644,9 +3857,10 @@ And register lines selected : RegisterSelect
 | 1    |
 | 2    |
 Then menu items are : MenuItem
-| Item                 | Enabled |
-| Recategorize...      | true    |
-| Split...             | false   |
+| Item                      | Enabled |
+| Recategorize...           | true    |
+| Match this transaction... | false   |
+| Split...                  | false   |
 | Add payee rule...    | true    |
 | Apply payee rules... | true    |
 | Delete...            | true    |
@@ -3675,9 +3889,10 @@ And register lines selected : RegisterSelect
 | Line |
 | 1    |
 Then menu items are : MenuItem
-| Item                 | Enabled |
-| Recategorize...      | true    |
-| Split...             | false   |
+| Item                      | Enabled |
+| Recategorize...           | true    |
+| Match this transaction... | false   |
+| Split...                  | false   |
 | Add payee rule...    | true    |
 | Apply payee rules... | true    |
 | Delete...            | true    |
@@ -5735,3 +5950,170 @@ Then transfer candidates are : TransferCandidateRow
 | T4  | Liabilities:Visa | 2026-02-10 | Payment~C | 100.00 | Uncleared | 0         |
 | T3  | Liabilities:Visa | 2026-02-11 | Payment~B | 100.00 | Cleared   | 1         |
 | T2  | Liabilities:Visa | 2026-02-12 | Payment~A | 100.00 | Cleared   | 2         |
+
+# ---------------------------------------------------------------------------
+# Matching a transaction from the register menu
+# ---------------------------------------------------------------------------
+
+Description The destination column finds the other half when the other account
+\ is named. This finds it when the account is not known, which is the
+\ case the automatic pairing leaves behind.
+
+BusinessRule Matching from the menu searches every other account and all of time
+Description A payment and its other half can sit in a book for years without
+\ ever having been offered to each other. An import pairs what is
+\ within two days of what it is reading, so a row entered by hand in
+\ January and a card statement read in March were never compared. The
+\ menu item is how somebody says these two are one thing after the
+\ program has stopped guessing.
+Details What it asks of a candidate is less than an import asks, on purpose.
+\ Equal and opposite to the cent it keeps, because that is what makes
+\ the two one movement of money, and a candidate already paired with
+\ something is not offered. The two-day window it drops: the window is
+\ there so that an import can pair without asking, and here somebody is
+\ asking. The account it drops too. Every other real account is
+\ searched, because whoever reaches for this does not know which
+\ account the other half is in; if they knew, they would type it in the
+\ destination column and be asked there.
+\
+\ The order is the order everywhere else: closest in days first. A
+\ payment of the same amount made every month has twelve candidates and
+\ the one meant is almost always the nearest.
+\
+\ Choosing one is the merge the destination column does. One transaction
+\ is left, naming both accounts, keeping its own date, payee and memo,
+\ and cleared if either half was. Choosing none changes nothing at all:
+\ unlike the destination column, nothing has been typed and there is
+\ nothing to leave behind.
+\
+\ The item is on the menu whenever the register is open and greyed when
+\ there is nothing to offer: a selection of more than one line, a split,
+\ or no equal and opposite row anywhere in the book. Greyed is the
+\ answer to is there another half of this, given without opening a
+\ dialog that has nothing in it.
+Examples: MatchFromMenu
+| TheSelection                                      | TheItem                              |
+| One line with an equal and opposite row elsewhere | Offered, and the rows are listed     |
+| One line with nothing equal and opposite anywhere | Greyed                               |
+| One line that is a split                          | Greyed                               |
+| More than one line                                | Greyed                               |
+
+Attributes MatchFromMenu
+| Attribute    | Type   | Default |
+| TheSelection | String |         |
+| TheItem      | String |         |
+
+Scenario A match is sought and every account is searched
+Description The savings withdrawal is fifteen days away and the card payment
+\ thirty-eight, and neither would have been paired by an import. Both
+\ are offered, nearest first.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Checking   | false       |
+| Assets:Savings         | Savings    | false       |
+| Liabilities:Visa       | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+And transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee        | Destination            | Amount   | Cleared   |
+| T1  | Assets:Checking  | 2026-02-10 | Visa~Payment | Expenses:Uncategorized | -1200.00 | Uncleared |
+| T2  | Liabilities:Visa | 2026-03-20 | PAYMENT      | Expenses:Uncategorized | 1200.00  | Cleared   |
+| T3  | Assets:Savings   | 2026-02-25 | Withdrawal   | Expenses:Uncategorized | 1200.00  | Uncleared |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+And register lines selected : RegisterSelect
+| Line |
+| 1    |
+And a match is sought for the selection
+Then transfer candidates are : TransferCandidateRow
+| Ref | Account          | Date       | Payee      | Amount  | Cleared   | DaysApart |
+| T3  | Assets:Savings   | 2026-02-25 | Withdrawal | 1200.00 | Uncleared | 15        |
+| T2  | Liabilities:Visa | 2026-03-20 | PAYMENT    | 1200.00 | Cleared   | 38        |
+# Two accounts, two candidates, and the import would have offered neither of
+# them: both are outside the two-day window it pairs within.
+
+Scenario Choosing the match from the menu leaves one transfer
+Description The merge, reached from the menu instead of from the destination
+\ column. The checking row keeps its own date and payee, names the
+\ card, and is cleared because the card half was.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Checking   | false       |
+| Assets:Savings         | Savings    | false       |
+| Liabilities:Visa       | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+And transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee        | Destination            | Amount   | Cleared   |
+| T1  | Assets:Checking  | 2026-02-10 | Visa~Payment | Expenses:Uncategorized | -1200.00 | Uncleared |
+| T2  | Liabilities:Visa | 2026-03-20 | PAYMENT      | Expenses:Uncategorized | 1200.00  | Cleared   |
+| T3  | Assets:Savings   | 2026-02-25 | Withdrawal   | Expenses:Uncategorized | 1200.00  | Uncleared |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+And register lines selected : RegisterSelect
+| Line |
+| 1    |
+And a match is sought for the selection
+And transfer candidate chosen : TransferCandidateChoice Vertical
+| Ref | T2 |
+Then transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee        | Destination            | Amount   | Cleared   |
+| T1  | Assets:Checking | 2026-02-10 | Visa~Payment | Liabilities:Visa       | -1200.00 | Cleared   |
+| T3  | Assets:Savings  | 2026-02-25 | Withdrawal   | Expenses:Uncategorized | 1200.00  | Uncleared |
+# T2 is gone and T3 is untouched: one candidate was chosen and the other was
+# only ever a candidate.
+
+Scenario Choosing none from the menu changes nothing at all
+Description The answer when none of the rows offered is the same money. There
+\ is nothing to undo, because naming no account is what the line said
+\ before the menu was opened and what it says after.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Checking   | false       |
+| Liabilities:Visa       | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+And transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee        | Destination            | Amount   | Cleared   |
+| T1  | Assets:Checking  | 2026-02-10 | Visa~Payment | Expenses:Uncategorized | -1200.00 | Uncleared |
+| T2  | Liabilities:Visa | 2026-03-20 | PAYMENT      | Expenses:Uncategorized | 1200.00  | Cleared   |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+And register lines selected : RegisterSelect
+| Line |
+| 1    |
+And a match is sought for the selection
+And transfer candidate chosen : TransferCandidateChoice Vertical
+| Ref | none |
+Then transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee        | Destination            | Amount   | Cleared   |
+| T1  | Assets:Checking  | 2026-02-10 | Visa~Payment | Expenses:Uncategorized | -1200.00 | Uncleared |
+| T2  | Liabilities:Visa | 2026-03-20 | PAYMENT      | Expenses:Uncategorized | 1200.00  | Cleared   |
+
+Scenario The item is live when there is something it could offer
+Description The same book as the scenario above, where the card holds an equal
+\ and opposite row. The menu says so before it is opened, which is
+\ the only thing on the menu that depends on the rest of the book.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Checking        | Checking   | false       |
+| Liabilities:Visa       | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+And transactions are : Transaction
+| Ref | SourceAccount    | Date       | Payee        | Destination            | Amount   | Cleared   |
+| T1  | Assets:Checking  | 2026-02-10 | Visa~Payment | Expenses:Uncategorized | -1200.00 | Uncleared |
+| T2  | Liabilities:Visa | 2026-03-20 | PAYMENT      | Expenses:Uncategorized | 1200.00  | Cleared   |
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+And register lines selected : RegisterSelect
+| Line |
+| 1    |
+Then menu items are : MenuItem
+| Item                      | Enabled |
+| Recategorize...           | true    |
+| Match this transaction... | true    |
+| Split...                  | true    |
+| Add payee rule...         | true    |
+| Apply payee rules...      | true    |
+| Delete...                 | true    |

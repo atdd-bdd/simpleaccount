@@ -2283,7 +2283,22 @@ MainWindow::TabWidgets MainWindow::makeReportTab(int tabPosition, const std::str
             const std::string into = pick.chosen();
             if (into.empty()) return;
             const ui::Recategorised done = workspace_->recategorise(refs, into);
-            if (done.changed > 0) {
+            int changed = done.changed;
+            // A transfer on a report line is the same question as a transfer in
+            // a register selection, and is asked the same way. See the
+            // transfer-warning rule in UserInterface.spectable.
+            if (done.warned > 0) {
+                QString ask = QString::fromStdString(done.warning);
+                if (done.warned > 1)
+                    ask += QString("\n\nand %1 more like it.").arg(done.warned - 1);
+                ask += "\n\nGo ahead?";
+                const bool accept =
+                    QMessageBox::question(this, "Recategorize", ask,
+                                          QMessageBox::Yes | QMessageBox::No,
+                                          QMessageBox::No) == QMessageBox::Yes;
+                changed += workspace_->answer_transfer_warning(accept).changed;
+            }
+            if (changed > 0) {
                 transactions_ = workspace_->transactions();
                 book_ = workspace_->book();
                 save();
@@ -2937,6 +2952,9 @@ void MainWindow::registerMenu(int tabPosition, const QPoint& at) {
         if (entry.item.rfind("Recategorize", 0) == 0)
             connect(action, &QAction::triggered, this,
                     [this]() { recategorise(1); });
+        else if (entry.item.rfind("Match this transaction", 0) == 0)
+            connect(action, &QAction::triggered, this,
+                    [this]() { matchTransaction(1); });
         else if (entry.item.rfind("Delete", 0) == 0)
             connect(action, &QAction::triggered, this,
                     [this]() { deleteSelection(1); });
@@ -3345,7 +3363,32 @@ void MainWindow::recategorise(int paneOneBased) {
     if (into.empty()) return;
 
     const ui::Recategorised done = workspace_->recategorise_selection(into);
-    if (done.changed > 0) {
+    int changed = done.changed;
+    int refused = done.refused;
+    std::string reason = done.reason;
+
+    // A transfer caught up in the selection is asked about before it is
+    // touched, because a category there does not change a line -- it takes the
+    // other account line away. Nothing of the transfers has been done yet; the
+    // answer is what does it or leaves it. One question covers all of them,
+    // because the selection was one gesture. See the transfer-warning rule in
+    // UserInterface.spectable.
+    if (done.warned > 0) {
+        QString ask = QString::fromStdString(done.warning);
+        if (done.warned > 1)
+            ask += QString("\n\nand %1 more like it.").arg(done.warned - 1);
+        ask += "\n\nGo ahead?";
+        const bool accept =
+            QMessageBox::question(this, "Recategorize", ask,
+                                  QMessageBox::Yes | QMessageBox::No,
+                                  QMessageBox::No) == QMessageBox::Yes;
+        const ui::Recategorised answered = workspace_->answer_transfer_warning(accept);
+        changed += answered.changed;
+        refused += answered.refused;
+        if (reason.empty()) reason = answered.reason;
+    }
+
+    if (changed > 0) {
         transactions_ = workspace_->transactions();
         book_ = workspace_->book();
         save();
@@ -3353,14 +3396,65 @@ void MainWindow::recategorise(int paneOneBased) {
         refresh();
     }
     // Said out loud, because a selection of twenty is too many to check by eye.
-    QString said = QString("%1 changed").arg(done.changed);
-    if (done.refused > 0) {
-        said += QString(", %1 left alone").arg(done.refused);
-        if (!done.reason.empty())
-            said += "\n\n" + QString::fromStdString(done.reason);
+    QString said = QString("%1 changed").arg(changed);
+    if (refused > 0) {
+        said += QString(", %1 left alone").arg(refused);
+        if (!reason.empty()) said += "\n\n" + QString::fromStdString(reason);
     }
-    if (done.refused > 0) QMessageBox::information(this, "Recategorize", said);
+    if (refused > 0) QMessageBox::information(this, "Recategorize", said);
     else status_->setText(said + "  --  " + QString::fromStdString(into));
+}
+
+// The other half of the selected line, sought from the register menu rather
+// than offered by the destination column. What it asks of a candidate is less
+// than an import asks: equal and opposite to the cent and not already paired,
+// but no window and no account, because whoever reaches for this does not know
+// which account the other half is in. Closest in days is offered first, and
+// choosing one is the merge the destination column does. See the menu-match
+// rule in UserInterface.spectable.
+void MainWindow::matchTransaction(int paneOneBased) {
+    (void)paneOneBased;
+    const std::vector<transfers::Half> halves = workspace_->match_candidates();
+    // The menu item is grey when there is nothing to offer, so this is only
+    // reached with something in hand. A dialog with nothing in it would be the
+    // worse answer to the same question.
+    if (halves.empty()) return;
+
+    QStringList offered;
+    for (const transfers::Half& half : halves)
+        offered << QString("%1   %2   %3   (%4 day%5 apart)")
+                       .arg(QString::fromStdString(half.account))
+                       .arg(QString::fromStdString(half.date.iso()))
+                       .arg(QString::fromStdString(
+                           half.payee.empty() ? std::string("no payee") : half.payee))
+                       .arg(half.days_apart)
+                       .arg(half.days_apart == 1 ? "" : "s");
+    const QString none = "None of them";
+    offered << none;
+
+    bool said = false;
+    const QString chose = QInputDialog::getItem(
+        this, "Match this transaction",
+        QString("These lines elsewhere in the book are equal and opposite to\n"
+                "this one. Is one of them the same payment?"),
+        offered, 0, false, &said);
+    // None changes nothing at all. Nothing was typed, so there is nothing to
+    // leave behind: the line names no account before the menu was opened and
+    // names none after.
+    if (!said || chose == none) return;
+    const int at = offered.indexOf(chose);
+    if (at < 0 || static_cast<std::size_t>(at) >= halves.size()) return;
+    const transfers::Half& half = halves[static_cast<std::size_t>(at)];
+    const QString where = QString::fromStdString(half.account);
+    const QString when = QString::fromStdString(half.date.iso());
+    if (!workspace_->choose_match(half.transaction_id)) return;
+
+    transactions_ = workspace_->transactions();
+    book_ = workspace_->book();
+    save();
+    rebuildWorkspace();
+    refresh();
+    status_->setText(QString("Matched with the line of %1 in %2").arg(when).arg(where));
 }
 
 void MainWindow::deleteSelection(int paneOneBased) {

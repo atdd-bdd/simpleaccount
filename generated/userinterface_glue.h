@@ -785,6 +785,46 @@ public:
     void when_selection_recategorised(const std::vector<CategoryChoiceString>& values) {
         ASSERT_FALSE(values.empty());
         recategorised_ = workspace().recategorise_selection(values.front().category.value);
+        // The call changed the workspace transactions, so these are read back
+        // here -- which is what the window does after the same call. Without
+        // it a Then on the transactions reads the copies as they were.
+        transactions_ = workspace().transactions();
+        book_ = workspace().book();
+    }
+
+    // The answer to the warning a transfer in the selection raised. Accepting
+    // takes the line out of the other register; declining leaves it. See the
+    // transfer-warning rule in UserInterface.spectable.
+    void when_the_warning_is_answered(const std::vector<RecategoriseAnswerString>& values) {
+        ASSERT_FALSE(values.empty());
+        recategorised_ =
+            workspace().answer_transfer_warning(parse_bool_cell(values.front().accept));
+        transactions_ = workspace().transactions();
+        book_ = workspace().book();
+    }
+
+    // Two rows said by hand to be one movement of money. The same call the
+    // register makes; here it is the Given of a scenario about what happens to
+    // a match afterwards.
+    void when_the_other_entry_is_matched(const std::vector<EntryMatchString>& values) {
+        for (const auto& value : values) {
+            ledger::Transaction* t = transaction_by_ref(value.ref.value);
+            ASSERT_NE(nullptr, t) << "no transaction " << value.ref.value;
+            ledger::Transaction* other = transaction_by_ref(value.otherref.value);
+            ASSERT_NE(nullptr, other) << "no transaction " << value.otherref.value;
+            EXPECT_TRUE(ledger::match_destinations(&transactions_, t->id, other->id))
+                << value.ref.value << " could not be joined with " << value.otherref.value;
+        }
+        rebuild_book();
+        workspace_.reset();
+    }
+
+    // Match this transaction, from the register menu: every other account and
+    // all of time, because whoever reaches for it does not know which account
+    // the other half is in.
+    void when_a_match_is_sought_for_the_selection() {
+        candidates_ = workspace().match_candidates();
+        candidates_from_menu_ = true;
     }
 
     void then_recategorising_reported_is(const std::vector<RecategorisedString>& values) {
@@ -796,6 +836,9 @@ public:
         // about the count should not have to write the sentence out.
         if (want.reason != "none" && want.reason != DNCString)
             EXPECT_EQ(want.reason, recategorised_.reason) << "reason";
+        EXPECT_EQ(std::stoi(want.warned), recategorised_.warned) << "warned";
+        if (want.warning != "none" && want.warning != DNCString)
+            EXPECT_EQ(want.warning, recategorised_.warning) << "warning";
     }
 
     void when_payee_rule_asked_for() { offered_ = workspace().rule_offered(); }
@@ -1928,6 +1971,10 @@ public:
     }
 
     std::vector<std::string> vocabulary_;
+    // Whether the candidates in hand were sought from the menu rather than
+    // found by typing an account into the destination column. The two
+    // answer none differently, and only one of them has a selection.
+    bool candidates_from_menu_ = false;
     bool tag_listing_opened_ = false;
 
     // Naming the second account is the first moment there is anything to ask
@@ -1974,6 +2021,20 @@ public:
     void when_transfer_candidate_chosen(const std::vector<TransferCandidateChoiceString>& values) {
         ASSERT_FALSE(values.empty());
         const std::string ref = blank(values.front().ref);
+        if (candidates_from_menu_) {
+            candidates_from_menu_ = false;
+            candidates_.clear();
+            // None from the menu changes nothing at all: nothing was typed, so
+            // there is nothing to leave behind.
+            if (ref.empty()) return;
+            const ledger::Transaction* half = transaction_by_ref(ref);
+            ASSERT_NE(nullptr, half) << "no transaction " << ref;
+            EXPECT_TRUE(workspace().choose_match(half->id.value()))
+                << "nothing was matched";
+            transactions_ = workspace().transactions();
+            book_ = workspace().book();
+            return;
+        }
         if (ref.empty()) {
             // None is a real answer and not an unanswered question. It creates
             // nothing: the transaction already names both accounts, so it is
@@ -2411,6 +2472,160 @@ public:
     void when_the_balance_adjustment_is_accepted() {
         EXPECT_TRUE(workspace().accept_balance_adjustment())
             << "nothing was offered to adjust";
+    }
+
+public:
+
+    // --- the two rules that are checked rather than read --------------------
+    //
+    // Both of these rules enumerate cases no one scenario can carry: a split
+    // and a selection of several are greyed and are offered nothing, and that
+    // is two more books than a scenario holds. So each row builds the book its
+    // own words describe, here rather than in a table.
+    static chart::Chart five_accounts() {
+        const char* paths[] = {"Assets:Checking", "Liabilities:Visa",
+                               "Expenses:Uncategorized", "Expenses:Auto",
+                               "Expenses:Auto:Fuel"};
+        const char* kinds[] = {"Checking", "CreditCard", "Expense", "Expense",
+                               "Expense"};
+        chart::Chart made;
+        for (int i = 0; i < 5; ++i) {
+            chart::Account a;
+            a.path = types::AccountPath(paths[i]);
+            a.type = types::account_type_from_string(kinds[i]);
+            a.placeholder = std::string(paths[i]) == "Expenses:Auto";
+            made.put(a);
+        }
+        return made;
+    }
+
+    // One line, named as a table would name it. A destination of Split makes
+    // the line a split and writes the two rows under it, because a split is a
+    // transaction plus its parts and neither alone is one.
+    void add_line(const std::string& ref, const std::string& account,
+                  const std::string& date, const std::string& payee,
+                  const std::string& destination, const std::string& amount) {
+        ledger::Transaction t;
+        t.id = ledger::new_id();
+        t.ref = types::TransactionRef(ref);
+        const auto on = types::Date::from_iso(date);
+        if (on) t.date = *on;
+        t.payee = types::PayeeName(payee);
+        t.source_account = chart_.ref_for_path(account);
+        t.amount = Money(amount);
+        const bool split = destination == "Split";
+        t.destination = split ? chart::split_ref() : chart_.ref_for_path(destination);
+        transactions_.push_back(t);
+        if (!split) return;
+        const Money whole = -t.amount;
+        const Money part = Money::from_cents(whole.cents() / 2);
+        const char* where[] = {"Expenses:Uncategorized", "Expenses:Auto:Fuel"};
+        const Money amounts[] = {part, whole - part};
+        for (int i = 0; i < 2; ++i) {
+            ledger::TransactionSplit one;
+            one.transaction_id = t.id;
+            one.destination = chart_.ref_for_path(where[i]);
+            one.amount = amounts[i];
+            splits_.push_back(one);
+        }
+    }
+
+    // A purchase changes, a transfer and a matched line wait, a split is
+    // refused. The first call is read off the rule own words, and then the
+    // answer is given to see that accepting does what waiting promised.
+    void examples_businessrule_recategorising_a_transfer_is_a_warning_before_it_is_a_change(
+            const std::vector<TransferRecategorisedString>& values) {
+        ASSERT_FALSE(values.empty()) << "the rule states no lines";
+        for (const auto& value : values) {
+            const std::string& what = value.theline;
+            const bool split = what.find("split") != std::string::npos;
+            const bool transfer = what.find("transfer") != std::string::npos;
+            const bool matched = what.find("match") != std::string::npos;
+
+            chart_ = five_accounts();
+            transactions_.clear();
+            splits_.clear();
+            add_line("T1", "Assets:Checking", "2026-02-10", "Visa Payment",
+                     split ? "Split"
+                           : (transfer ? "Liabilities:Visa" : "Expenses:Uncategorized"),
+                     "-300.00");
+            if (matched) {
+                add_line("T2", "Liabilities:Visa", "2026-02-12", "PAYMENT RECEIVED",
+                         "Expenses:Uncategorized", "300.00");
+                ASSERT_TRUE(ledger::match_destinations(&transactions_,
+                                                       transactions_.front().id,
+                                                       transactions_.back().id))
+                    << "the two could not be joined";
+            }
+            rebuild_book();
+            workspace_.reset();
+            workspace().select("Assets:Checking");
+            workspace().select_lines(std::vector<int>{1});
+
+            const std::string& said = value.thefirstcall;
+            const int changed = said == "It is recategorised" ? 1 : 0;
+            const int warned = said == "Unchanged, and warned about" ? 1 : 0;
+            const int refused = said == "Refused, not warned about" ? 1 : 0;
+            const ui::Recategorised first =
+                workspace().recategorise_selection("Expenses:Auto:Fuel");
+            EXPECT_EQ(changed, first.changed) << what;
+            EXPECT_EQ(warned, first.warned) << what;
+            EXPECT_EQ(refused, first.refused) << what;
+            EXPECT_EQ(warned == 1, workspace().transfer_warning_waiting()) << what;
+
+            // Accepting changes the line that waited, and changes nothing where
+            // nothing was asked -- a split is refused either way.
+            const ui::Recategorised answered = workspace().answer_transfer_warning(true);
+            EXPECT_EQ(warned, answered.changed) << value.acceptingit;
+        }
+        workspace_.reset();
+    }
+
+    // Whether the item is live, which is the whole of what the menu says before
+    // it is opened. The amounts are equal and opposite and thirty-eight days
+    // apart, so nothing but the rule being tested can rule a row out.
+    void examples_businessrule_matching_from_the_menu_searches_every_other_account_and_all_of_time(
+            const std::vector<MatchFromMenuString>& values) {
+        ASSERT_FALSE(values.empty()) << "the rule states no selections";
+        for (const auto& value : values) {
+            const std::string& what = value.theselection;
+            chart_ = five_accounts();
+            transactions_.clear();
+            splits_.clear();
+            add_line("T1", "Assets:Checking", "2026-02-10", "Visa Payment",
+                     what.find("a split") != std::string::npos
+                         ? "Split"
+                         : "Expenses:Uncategorized",
+                     "-1200.00");
+            if (what.find("nothing equal and opposite") == std::string::npos)
+                add_line("T2", "Liabilities:Visa", "2026-03-20", "PAYMENT",
+                         "Expenses:Uncategorized", "1200.00");
+            std::vector<int> lines{1};
+            if (what.find("More than one line") != std::string::npos) {
+                add_line("T3", "Assets:Checking", "2026-02-11", "SHELL OIL",
+                         "Expenses:Uncategorized", "-40.00");
+                lines.push_back(2);
+            }
+            rebuild_book();
+            workspace_.reset();
+            workspace().select("Assets:Checking");
+            workspace().select_lines(lines);
+
+            const bool offered = value.theitem.find("Greyed") == std::string::npos;
+            bool enabled = false;
+            bool found = false;
+            for (const ui::MenuEntry& entry : workspace().menu_items())
+                if (entry.item.rfind("Match this transaction", 0) == 0) {
+                    enabled = entry.enabled;
+                    found = true;
+                }
+            EXPECT_TRUE(found) << "the item is not on the menu at all";
+            EXPECT_EQ(offered, enabled) << what;
+            // Grey and nothing to offer are the same answer, and the item is
+            // grey because of what the search found rather than beside it.
+            EXPECT_EQ(offered, !workspace().match_candidates().empty()) << what;
+        }
+        workspace_.reset();
     }
 
 };

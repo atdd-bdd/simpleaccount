@@ -239,6 +239,9 @@ private:
     // UserInterface.spectable.
     void applyColumnWidths();
     void recategorise(int tabPosition);
+    // The other half of the selected line, wherever in the book it is.
+    // See the menu-match rule in UserInterface.spectable.
+    void matchTransaction(int tabPosition);
     void deleteSelection(int tabPosition);
     // Splitting a transaction already in the register, and reconciling an
     // account against what the bank last said. See the splitting and
