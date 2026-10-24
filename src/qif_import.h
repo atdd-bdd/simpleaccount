@@ -10,6 +10,7 @@
 #include "date_parse.h"
 #include "ledger.h"
 #include "money.h"
+#include "progress.h"
 #include "transaction.h"
 #include "transaction_id.h"
 #include "qif_reader.h"
@@ -130,6 +131,9 @@ struct Imported {
     TransferPairingReport transfer_pairing;
     bool refused = false;
     std::string refusal;
+    // The reader was told to give up part way through. Nothing here is to be
+    // used: a stopped import is not a short one, and the book stays as it was.
+    bool stopped = false;
 
     // The transactions made, in the order they were made. A transaction is
     // identified by its index, written T1, T2 and so on, which is how the
@@ -222,6 +226,10 @@ public:
     // keeps its markers, which is why that is the default. See the arrives
     // cleared rule in ImportOfx.
     void as_a_statement() { a_statement_ = true; }
+    // Where to say how far this has got, where anyone is listening. Two places
+    // inside report: reading the records and working out the transactions, which
+    // between them are the whole of the time a real file takes.
+    void reporting_to(progress::Ticker ticker) { ticker_ = std::move(ticker); }
 
     Imported run(const std::string& text) {
         const File file = read(decode(text), target_);
@@ -241,8 +249,9 @@ public:
         declare_accounts(file);
         declare_categories(file);
         read_records(file);
-        if (result_.refused) return result_;
+        if (result_.refused || result_.stopped) return result_;
         build_transactions();
+        if (result_.stopped) return result_;
         report_guessed_categories();
         result_.transfer_pairing.bracketed_fields = bracketed_fields_;
         result_.transfer_pairing.pairs_formed = result_.summary.duplicate;
@@ -278,6 +287,7 @@ private:
     types::DateOrder order_;
     std::string target_;
     bool a_statement_ = false;
+    progress::Ticker ticker_;
     Imported result_;
     std::map<std::string, char> category_kind_;   // name -> 'I' or 'E'
     std::map<std::string, std::string> account_paths_;  // QIF name -> path
@@ -329,7 +339,17 @@ private:
     }
 
     void read_records(const File& file) {
+        // The records are counted before a line of them is read, so this half
+        // can say how far there is to go. Every two hundredth rather than every
+        // one: a record is cheap and the ticker crosses a thread.
+        long long seen = 0;
+        const long long all = static_cast<long long>(file.records.size());
         for (const Record& r : file.records) {
+            if (++seen % 200 == 0 &&
+                !progress::carry_on(ticker_, "Reading the file", seen, all)) {
+                result_.stopped = true;
+                return;
+            }
             // This round imports the investment records that move cash somewhere
             // outside the account and leaves the securities side alone. The 21
             // records that name a category are why the section is in scope at
@@ -431,7 +451,14 @@ private:
     void build_transactions() {
         collect_split_legs();
         std::vector<bool> used(result_.records.size(), false);
+        const long long all = static_cast<long long>(result_.records.size());
         for (std::size_t i = 0; i < result_.records.size(); ++i) {
+            if (i % 200 == 0 &&
+                !progress::carry_on(ticker_, "Working out the transactions",
+                                    static_cast<long long>(i), all)) {
+                result_.stopped = true;
+                return;
+            }
             if (used[i]) continue;
             const ReadRecord& rec = result_.records[i];
             const Record& raw = raw_[i];

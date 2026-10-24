@@ -1032,3 +1032,138 @@ transaction to join, and the half already here is left naming the account the
 answer gave it, exactly as before. That case has no scenario; it is written
 this way so that answering yes and then unticking cannot leave a match
 pointing at nothing.
+
+## 28. The thread the two unmet halves of item 17 were waiting for
+
+Question 14 above left item 17 part done and said exactly what was owed: a tick
+callback in the readers, and the work off the thread that paints. Both are now
+written, so this records what was decided while writing them. No spec table
+changed: the noticeable-time rule and its four scenarios were already untagged,
+generated and green -- they state what the strip says, and what a thread is for
+is not reachable from a test that has no window.
+
+- **What a reader is handed.** `progress::Ticker` is
+  `bool(const std::string& what, long long done, long long total)`, returning
+  false for stop. The `what` is in it rather than fixed by the caller because a
+  reader does two things in turn -- a QIF reads its records, then works out the
+  transactions -- and each has its own count. Without it the bar would fill
+  twice under one set of words, or the second half would report nothing. The
+  unit stays the window's, settled before the work starts, because it is a word
+  about the counting and not about the work.
+- **A reader with no ticker runs as it did.** `progress::carry_on` takes an
+  empty ticker for yes, so the command line, `ui::Workspace` and every test are
+  untouched; the parameter is defaulted at the end of the three
+  `review::from_file` signatures and is a setter, `reporting_to`, on
+  `qif::Importer`, in the style of `as_a_statement`.
+- **Stopping is said in the result, not thrown.** `qif::Imported` and
+  `review::Prepared` gained `bool stopped`, and a stopped read returns where it
+  was. Nothing is undone because nothing was written: reading and saving are
+  separate, and all three callers return before the saving. The register says
+  "Reading stopped; the book is as it was", which is the recalculation
+  scenario's rule applied to an import.
+- **Where the ticks are.** Every two hundredth record, because a record is
+  cheap and the ticker crosses a thread: `read_records` and
+  `build_transactions` in the QIF importer, and the row loops of `from_ofx` and
+  `from_csv`. **Decision, and a limit worth knowing:** deciding which rows of a
+  download are duplicates happens before the first row is made, and that is the
+  slow half of a download. It reports nothing. So the strip shows the words and
+  a bar that says only that something is going on until the rows start -- which
+  is what the rule asks for in that case, a count with no total being no
+  estimate, but it is a bar that sits still for most of the wait on a large
+  file. Reporting from inside `ofx::decide` and `csv::decide` would mean a
+  ticker in the matching itself, which is a third reader to change; not done
+  here.
+- **How the waiting works.** `MainWindow::runWithProgress` starts a
+  `std::thread`, then waits in a `QEventLoop` with a 50 ms `QTimer` that reads
+  the worker's `progress::Running` and paints the strip from it. The worker
+  touches nothing the window paints: it has its own copies, and the ticker
+  writes two numbers and a string under a lock and reads one flag back. A throw
+  on the worker is carried out in an `exception_ptr` and raised on the thread
+  that asked, rather than ending the program.
+- **Nothing else is offered while it runs.** The menu bar and the whole central
+  widget are disabled for the duration and Stop is the only live control, which
+  is the rule's "nothing that would change the book is offered while the work
+  runs" read literally. The register greys out while an import reads, which is
+  heavier-looking than it needs to be but says the truth.
+- **The button appears only where it would work.** `progressStopping_` is the
+  worker's `Running` while there is one and null otherwise, and Stop is shown
+  only when it is set. The one tick site that is still on this thread -- filling
+  a register's cells -- therefore shows the strip with no button, as before, and
+  `advanceProgress` still pumps repaints only for it. A button that does
+  nothing is worse than no button, and that has not changed; there is now
+  simply somewhere it does something.
+
+## 29. `matching transfers.txt` read against what the program does
+
+The author's note of 2026-10-23, checked line by line against the code and the
+spec tables. Four of its seven paragraphs are already the program's behaviour;
+three are not, and one of those three is a disagreement about the model rather
+than a gap. Nothing was changed in response to it -- per CLAUDE.md the spec
+comes first, and these are the author's calls.
+
+**Agrees, already written.**
+
+- *"Imports should be marked as cleared; manually input transactions should be
+  marked as not cleared."* That is the arrives-cleared rule in
+  `ImportOfx.spectable`, applied to CSV by the book's own setting and to a QIF
+  read as a statement; `reg::Entry::cleared` starts `Uncleared` for a line
+  typed into the register.
+- *The pairing question on import.* `transfers::halves_for` pairs equal and
+  opposite to the cent, in some other real account, within `kWindow = 2` days,
+  not already paired, closest in days first -- so +/- 2 days, either direction,
+  whichever account is being imported, exactly as the note asks. The question
+  is the transfer question in `UserInterface.spectable`, answered Yes, Yes and
+  remember, or No.
+- *What the two registers show afterwards.* Account A's line reads Account B
+  and Account B's reads Account A, as the note's tables have it.
+- *Reconciling.* The dialog lists every uncleared transaction with a tick and
+  "Clear ticked", and the Balance Adjustment is offered only for a difference
+  that is still there once the ticking is done -- so a balance that matches
+  when the uncleared rows are accounted for creates nothing, which is the
+  note's last paragraph.
+
+**Disagrees about the model, and the author should settle it.** The note says
+that on Yes *the transactions* are changed -- two transactions, each naming the
+other's account. This program's settled decision is that a transfer is **one**
+transaction naming both accounts, shown as a line in each of their registers
+(`TransactionRegister.spectable:86`, decision in `README.md`, and
+`transfers::merge`'s own comment). So on Yes the two halves are merged: one is
+kept with its date, payee and memo, it gains the other's cleared status if that
+one was cleared and the other's import identifiers, and the other row is gone.
+On an import pairing the same thing is done by recording a match -- `matched_to`
+on both -- so the far side is shown as a duplicate rather than as a second row.
+What a person sees in the two registers is what the note describes; what is
+underneath is one transaction, not two. The difference matters for the note's
+own next paragraph.
+
+**Missing, and not specified anywhere yet.**
+
+- *"Match this transaction" in the register's context menu.* The register
+  offers "Go to the transaction..." and "Recategorize..." and nothing else.
+  Pairing from the register happens only when a real account is typed into the
+  destination column, and `transfers::halves_in` then looks in **that one
+  account** -- not "potential matching transactions in all other accounts",
+  which is `halves_for` and already written. So the menu item is a dialog plus
+  a call that exists. Cancel meaning no change is free. **"Create a transaction
+  in the other account" is new behaviour** and has no scenario: under the
+  one-transaction model it is not a second transaction but naming the other
+  account in the destination column, which is what the register already does
+  by hand -- unless the author means something else by it.
+- *Re-categorising one side of an existing match.* The note asks for the other
+  side to go uncategorized with a warning dialog. Today nothing warns.
+  `edit::assign_category` refuses a split and allows everything else, so
+  "Recategorize..." on a transfer silently rewrites the destination from the
+  other account to a category, which takes the line out of the other register
+  and leaves any recorded match pointing at a transaction that is no longer a
+  transfer. The bulk pass does not have this hole -- `payees::assign_categories`
+  skips anything whose destination is not a category account, and skips
+  Reconciled -- so the two paths disagree with each other, which is a defect
+  whichever way the note is answered. **Decision:** written down here rather
+  than fixed, because what should happen is the question: refuse, or warn and
+  unpick the pairing. Under one transaction there is no "other one" to leave
+  uncategorized, so the warning would say "this will take the line out of
+  Account B's register".
+- *"Transfer Accounts do not have imports."* The Transfer group exists and is
+  deliberately off the balance sheet (`CoreTypes.spectable`,
+  `src/account_type.h:328`), but nothing stops one being chosen as an import
+  target. Unenforced, and worth a rule if it is meant to be one.

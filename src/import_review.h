@@ -8,6 +8,7 @@
 #include "ofx_import.h"
 #include "ofx_reader.h"
 #include "payee_rules.h"
+#include "progress.h"
 #include "transaction.h"
 #include "ui_model.h"
 
@@ -26,6 +27,9 @@ namespace review {
 struct Prepared {
     bool refused = false;
     std::string refusal;
+    // The reader was told to give up part way through, so the rows here are
+    // part of a file and not a review. Nothing has reached the book.
+    bool stopped = false;
     // Said out loud rather than swallowed: columns the alias table could not
     // place, rows that could not be read, a check number that matched on the
     // number but not the day.
@@ -72,7 +76,8 @@ inline Prepared from_ofx(const std::string& text, const std::string& account,
                          chart::Chart* accounts,
                          const std::vector<payees::Rule>& rules,
                          const std::vector<payees::Conversion>& conversions = {},
-                         const std::vector<payees::Categorisation>& categories = {}) {
+                         const std::vector<payees::Categorisation>& categories = {},
+                         const progress::Ticker& ticker = {}) {
     Prepared out;
     out.into = account;
     const ofx::Read parsed = ofx::read(text);
@@ -95,7 +100,17 @@ inline Prepared from_ofx(const std::string& text, const std::string& account,
             decided, account, existing.size(), accounts, rules, conversions, categories);
 
         std::size_t next = 0;
+        const long long all = static_cast<long long>(decided.decided.size());
         for (const ofx::Decided& one : decided.decided) {
+            // The rows of one statement, which is the only count this reader
+            // has: a file of several statements starts the count again at each,
+            // and a download is of one statement in all but name.
+            if (line % 200 == 0 &&
+                !progress::carry_on(ticker, "Reading the download",
+                                    static_cast<long long>(line), all)) {
+                out.stopped = true;
+                return out;
+            }
             ui::ReviewRow row;
             row.line = ++line;
             row.date = one.downloaded.date_posted;
@@ -132,7 +147,8 @@ inline Prepared from_csv(const std::string& text, const std::string& account,
                          const std::vector<payees::Rule>& rules,
                          bool clear_what_is_imported = true,
                          const std::vector<payees::Conversion>& conversions = {},
-                         const std::vector<payees::Categorisation>& categories = {}) {
+                         const std::vector<payees::Categorisation>& categories = {},
+                         const progress::Ticker& ticker = {}) {
     Prepared out;
     out.into = account;
     const csv::Read file = csv::read(text);
@@ -183,7 +199,14 @@ inline Prepared from_csv(const std::string& text, const std::string& account,
 
     int line = 0;
     std::size_t next = 0;
+    const long long all = static_cast<long long>(decided.decided.size());
     for (const csv::Decided& one : decided.decided) {
+        if (line % 200 == 0 &&
+            !progress::carry_on(ticker, "Reading the download",
+                                static_cast<long long>(line), all)) {
+            out.stopped = true;
+            return out;
+        }
         ui::ReviewRow row;
         row.line = ++line;
         row.date = one.row.date;
@@ -233,12 +256,13 @@ inline Prepared from_file(const std::string& text, const std::string& account,
                           const std::vector<payees::Rule>& rules,
                           bool clear_what_a_csv_brings_in = true,
                           const std::vector<payees::Conversion>& conversions = {},
-                          const std::vector<payees::Categorisation>& categories = {}) {
+                          const std::vector<payees::Categorisation>& categories = {},
+                          const progress::Ticker& ticker = {}) {
     return looks_like_a_csv(text)
                ? from_csv(text, account, existing, accounts, rules,
-                          clear_what_a_csv_brings_in, conversions, categories)
+                          clear_what_a_csv_brings_in, conversions, categories, ticker)
                : from_ofx(text, account, existing, accounts, rules, conversions,
-                          categories);
+                          categories, ticker);
 }
 
 // The two things a download carries that came from the bank rather than from

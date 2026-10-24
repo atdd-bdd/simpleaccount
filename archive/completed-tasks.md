@@ -1,11 +1,12 @@
 # Completed tasks
 
-Moved out of `tasks.md` on 2026-10-23, and item 24 the same day once it was
-done. Twenty-three of the twenty-four items on that list are finished; they
-are kept here in full, under the headings they were written under, because each
-one records what was decided and why -- which is the part that is still worth
-reading when the same ground is walked again. `tasks.md` now holds only what is
-owed, which is item 17.
+Moved out of `tasks.md` on 2026-10-23, and items 24 and 17 the same day once
+they were done. All twenty-four items on that list are finished; they are kept
+here in full, under the headings they were written under, because each one
+records what was decided and why -- which is the part that is still worth
+reading when the same ground is walked again. `tasks.md` is now the list with
+nothing left on it; what is owed is in `TODO.md` and in `questions.md`
+section 31.
 
 The order the work was done in, as the list recorded it at the time:
 
@@ -383,3 +384,46 @@ become `And`. Any other keyword line and any blank line end the run, and the
 keyword then stays. Ending a run is the safe direction: a run left unbroken
 where it should have broken is the one way this could have gone wrong, and the
 diff is what says it did not happen.
+
+### 17. A modeless "in progress" dialog
+
+Specified in `UserInterface.spectable` -- `BusinessRule Work that takes a
+noticeable time says so, and does not take the window away`, its
+`ProgressShown` examples, and four scenarios -- all of which were untagged and
+green before this, because they state what the strip *says* and
+`progress.h` has said it correctly since the rule was written. Done in two
+sittings, and the second one is the interesting half.
+
+The first sitting put the strip in the status bar: a label and a bar, hidden
+until `progress::shows()` says a second has gone by, driven from the one loop
+in the window that is both countable and writes nothing -- filling a register's
+cells. It left two parts of the rule unmet, both for want of a thread, and
+`questions.md` 14 said exactly what was owed: a tick callback in the readers,
+and the work off the thread that paints.
+
+Done on 2026-10-23, and both of those are now written. `progress::Ticker` is
+`bool(const std::string& what, long long done, long long total)`, returning
+false for stop; `progress::Running` is the ground the two threads share -- the
+worker writes the words and the two numbers under a lock, the window reads them
+to paint, and the window writes the one flag the worker reads.
+`qif::Importer::reporting_to()` and a defaulted trailing parameter on
+`review::from_file`, `from_ofx` and `from_csv` are how a reader is given one,
+and an absent ticker means yes, so the command line and every test run exactly
+as they did. `qif::Imported` and `review::Prepared` gained `bool stopped`, and
+the three window callers return before the saving on it: a stopped read leaves
+the book as it was because nothing had been written, which is the
+recalculation scenario's rule applied to an import.
+`MainWindow::runWithProgress()` starts a `std::thread` and waits in a
+`QEventLoop` on a 50 ms timer, with the menu bar and the central widget
+disabled and Stop the only live control -- the rule's "nothing that would
+change the book is offered while the work runs", read literally. Stop is on the
+strip only while there is a worker to tell, so the one tick site still on the
+UI thread shows the strip without it, as before.
+
+What this does not do, and it is written down rather than left to be
+rediscovered: deciding which rows of a download are duplicates runs before the
+first row is made, and reports nothing. The strip shows the words and a bar
+that says only that something is going on for that half of a large download --
+which is what the rule asks for when there is no total, but it is a bar that
+sits still. Reporting from inside `ofx::decide` and `csv::decide` is the next
+move there. `questions.md` 28 has the rest of the reasoning.

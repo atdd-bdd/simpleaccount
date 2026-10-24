@@ -343,21 +343,34 @@ private:
     // --- saying that something long is going on -----------------------------
     //
     // The words and the two numbers are progress::Report's, which has no Qt in
-    // it and is stated in UserInterface.spectable; these three are the painting
-    // of it. In the status bar rather than in a window of its own, because a
+    // it and is stated in UserInterface.spectable; these are the painting of
+    // it. In the status bar rather than in a window of its own, because a
     // window over the work hides what the work is about and because nothing is
     // being asked. advanceProgress returns whether to carry on, which is false
-    // only once there is a way to stop -- see questions.md.
+    // once Stop has been pressed.
     void beginProgress(const std::string& what, long long total,
                        const std::string& unit = std::string());
     bool advanceProgress(long long done);
     void endProgress();
 
+    // A long reader, run on a thread of its own with the strip showing and
+    // Stop live. The work is handed the ticker to report through; it is called
+    // on the worker's thread and must touch nothing this window paints.
+    // Returns whether it ran to the end -- false means Stop was pressed, and
+    // the caller is to leave the book exactly as it was.
+    bool runWithProgress(const std::string& what, const std::string& unit,
+                         const std::function<void(const progress::Ticker&)>& work);
+
     progress::Report progress_;
     QElapsedTimer progressSince_;
     QLabel* progressText_ = nullptr;
     QProgressBar* progressBar_ = nullptr;
+    QPushButton* progressStop_ = nullptr;
     bool progressShowing_ = false;
+    // Who Stop would tell, and nullptr when the work is on this thread and
+    // there is nobody to tell. The button is on the strip only when this is
+    // set: a button that does nothing is worse than no button.
+    progress::Running* progressStopping_ = nullptr;
 
     // The other half of a transfer entered by hand, asked about from the
     // register. Separate from recordBlankLine because it is a question and a

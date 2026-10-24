@@ -48,8 +48,11 @@
 #include <QSpinBox>
 #include <QStyle>
 #include <QStyleOptionSlider>
+#include <atomic>
+#include <exception>
 #include <functional>
 #include <memory>
+#include <thread>
 #include <fstream>
 #include <sstream>
 
@@ -553,10 +556,22 @@ MainWindow::MainWindow() {
     progressBar_ = new QProgressBar;
     progressBar_->setMaximumWidth(220);
     progressBar_->setTextVisible(false);
+    // The only thing the strip offers. Hidden with the rest of it, and shown
+    // only when the work is on a thread of its own, because on this thread the
+    // click could not arrive until the work it would stop had finished.
+    progressStop_ = new QPushButton("Stop");
     progressText_->hide();
     progressBar_->hide();
+    progressStop_->hide();
     statusBar()->addPermanentWidget(progressText_);
     statusBar()->addPermanentWidget(progressBar_);
+    statusBar()->addPermanentWidget(progressStop_);
+    connect(progressStop_, &QPushButton::clicked, this, [this] {
+        if (!progressStopping_) return;
+        progressStopping_->stop();
+        progressStop_->setEnabled(false);
+        progressStop_->setText("Stopping");
+    });
 
     buildMenus();
 
@@ -1620,8 +1635,24 @@ void MainWindow::importHistoryFrom(const QString& path) {
     std::ostringstream buffer;
     buffer << in.rdbuf();
 
+    // The history of a real book is the longest read the program does, so it
+    // runs on a thread of its own with the strip showing and Stop live. Nothing
+    // here is shared with the window: the importer builds its own chart.
     qif::Importer importer;
-    const qif::Imported imported = importer.run(buffer.str());
+    const std::string text = buffer.str();
+    qif::Imported imported;
+    const bool ran = runWithProgress("Reading the history", "records",
+                                     [&](const progress::Ticker& tick) {
+                                         importer.reporting_to(tick);
+                                         imported = importer.run(text);
+                                     });
+    if (!ran || imported.stopped) {
+        // A stopped read leaves the book exactly as it was, because nothing was
+        // written: the reading and the saving are separate, and this returns
+        // before the saving.
+        status_->setText("Reading stopped; the book is as it was");
+        return;
+    }
     if (imported.refused) {
         // All or nothing: a book half imported is neither the old data nor the
         // new, with no way to tell which arrived.
@@ -1659,7 +1690,19 @@ void MainWindow::importQifForReviewFrom(const QString& path) {
     // rows arrive cleared. The history is asked for once, when the book is
     // made, and keeps the markers it carries.
     importer.as_a_statement();
-    const qif::Imported imported = importer.run(buffer.str());
+    // start_from and import_into are settled here, on this thread, and the
+    // chart they copied is the importer's own from then on.
+    const std::string text = buffer.str();
+    qif::Imported imported;
+    const bool ran = runWithProgress("Reading the file", "records",
+                                     [&](const progress::Ticker& tick) {
+                                         importer.reporting_to(tick);
+                                         imported = importer.run(text);
+                                     });
+    if (!ran || imported.stopped) {
+        status_->setText("Reading stopped; the book is as it was");
+        return;
+    }
     if (imported.refused) {
         QMessageBox::warning(this, "SimpleAccount",
                              QString::fromStdString(imported.refusal));
@@ -1898,9 +1941,28 @@ void MainWindow::importTransactionsFrom(const QString& path) {
     // Whether a CSV arrives cleared is the book's own setting, read off its row
     // rather than remembered here. See the CSV cleared rule in ImportCsv.spectable.
     const bool clear_a_csv = !store_.is_open() || store_.info().set_cleared_on_csv_import;
-    const review::Prepared prepared = review::from_file(
-        text, account, transactions_, &accounts, rules_, clear_a_csv, conversions_,
-        categorisations_);
+    // On a thread of its own, over its own copy of the chart. The window's own
+    // transactions are read but not written -- the reader compares against them
+    // to find what it has seen before -- and nothing on this thread writes them
+    // while it waits, because everything that could is disabled.
+    //
+    // Deciding which rows are duplicates happens before the first row is made,
+    // and that is the slow half of a download; it reports nothing, so the strip
+    // shows the words and a bar that says only that something is going on until
+    // the rows start. Which is what the rule asks for: a count with no total is
+    // not an estimate.
+    review::Prepared prepared;
+    const bool ran = runWithProgress(
+        "Reading the download", "rows", [&](const progress::Ticker& tick) {
+            prepared = review::from_file(text, account, transactions_, &accounts,
+                                         rules_, clear_a_csv, conversions_,
+                                         categorisations_, tick);
+        });
+    if (!ran || prepared.stopped) {
+        workspace_->cancel_import_confirmation();
+        status_->setText("Reading stopped; the book is as it was");
+        return;
+    }
     if (prepared.refused) {
         workspace_->cancel_import_confirmation();
         QMessageBox::warning(this, "SimpleAccount",
@@ -4240,6 +4302,68 @@ void MainWindow::offerTheOtherHalf(const reg::Committed& done, const std::string
                          .arg(QString::fromStdString(half.account)));
 }
 
+// --- the work, off the thread that paints -----------------------------------
+//
+// A reader of a real file is one call that takes seconds, and while it runs on
+// this thread the window cannot repaint and a click cannot arrive. So it runs
+// on a thread of its own and this one waits in an event loop, polling what the
+// worker has written and painting the strip from it. That is what makes Stop a
+// button rather than a decoration.
+//
+// Two rules of the waiting are worth stating. The worker touches nothing this
+// window paints: it is handed its own copies, and the ticker it reports through
+// writes numbers into a progress::Running and reads one flag back. And while it
+// runs, the menu bar and the whole of the window below it are disabled -- the
+// one thing offered is Stop, because anything else offered would be a way to
+// change the book half way through reading a file into it.
+bool MainWindow::runWithProgress(
+    const std::string& what, const std::string& unit,
+    const std::function<void(const progress::Ticker&)>& work) {
+    progress::Running running;
+    std::atomic<bool> done{false};
+    std::exception_ptr failed;
+
+    progressStopping_ = &running;
+    // No total yet: the reader finds out how much there is when it opens the
+    // file, and until it says so the strip is words and a bar that only says
+    // something is going on. A count with no total is not an estimate.
+    beginProgress(what, 0, unit);
+    menuBar()->setEnabled(false);
+    if (QWidget* middle = centralWidget()) middle->setEnabled(false);
+
+    std::thread worker([&] {
+        // A throw here would otherwise end the program rather than the import,
+        // so it is carried back and raised on the thread that asked.
+        try {
+            work(running.ticker());
+        } catch (...) {
+            failed = std::current_exception();
+        }
+        done.store(true);
+    });
+
+    QEventLoop waiting;
+    QTimer polls;
+    polls.setInterval(50);
+    connect(&polls, &QTimer::timeout, &waiting, [&] {
+        const progress::Report said = running.report();
+        if (!said.what.empty()) progress_.what = said.what;
+        progress_.total = said.total;
+        advanceProgress(said.done);
+        if (done.load()) waiting.quit();
+    });
+    polls.start();
+    waiting.exec();
+    worker.join();
+
+    progressStopping_ = nullptr;
+    endProgress();
+    menuBar()->setEnabled(true);
+    if (QWidget* middle = centralWidget()) middle->setEnabled(true);
+    if (failed) std::rethrow_exception(failed);
+    return !running.stopping();
+}
+
 // --- saying that something long is going on ---------------------------------
 //
 // The report is asked for at the start and shown only if the work is still
@@ -4253,21 +4377,27 @@ void MainWindow::beginProgress(const std::string& what, long long total,
     progress_.total = total;
     progress_.unit = unit;
     progressShowing_ = false;
+    if (progressStop_) {
+        progressStop_->setText("Stop");
+        progressStop_->setEnabled(true);
+        progressStop_->hide();
+    }
     progressSince_.start();
 }
 
-// Returns whether to carry on, which is always true today: there is nothing on
-// the strip to press, because the work runs on the thread that would deliver
-// the click. The return is here so that the callers already read it when there
-// is. See questions.md.
+// Returns whether to carry on. That is false once Stop has been pressed, and
+// true for work on this thread, where there is nothing to press: the click
+// could not arrive until the work it would stop had finished.
 bool MainWindow::advanceProgress(long long done) {
     progress_ = progress::advanced(progress_, done);
     const double running = static_cast<double>(progressSince_.elapsed()) / 1000.0;
-    if (!progress::shows(progress_, running)) return true;
+    if (!progress::shows(progress_, running))
+        return !progressStopping_ || !progressStopping_->stopping();
     if (!progressShowing_) {
         progressShowing_ = true;
         progressText_->show();
         progressBar_->show();
+        if (progressStopping_) progressStop_->show();
     }
     progressText_->setText(QString::fromStdString(progress::reads(progress_)));
     if (progress_.total > 0) {
@@ -4278,12 +4408,16 @@ bool MainWindow::advanceProgress(long long done) {
         // something is going on.
         progressBar_->setRange(0, 0);
     }
-    // Repaints only. A click arriving in the middle of a half-filled table
-    // would be answered against a register that does not yet exist, so user
-    // input waits until the work is done -- which is the same reason there is
-    // nothing on the strip to click.
-    QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
-    return true;
+    // Repaints only, for work on this thread: a click arriving in the middle of
+    // a half-filled table would be answered against a register that does not
+    // yet exist. Work on a thread of its own is already inside an event loop
+    // that is taking clicks, which is where Stop comes from, so nothing is
+    // pumped here.
+    if (!progressStopping_) {
+        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+        return true;
+    }
+    return !progressStopping_->stopping();
 }
 
 // Finishing takes the report away. The strip is not a log, and what the work
@@ -4294,4 +4428,5 @@ void MainWindow::endProgress() {
     progressShowing_ = false;
     progressText_->hide();
     progressBar_->hide();
+    progressStop_->hide();
 }

@@ -8,10 +8,11 @@ Each item says whether a spec table already exists for it. Per CLAUDE.md,
 anything marked **spec first** starts with a `.spectable` and stops for review
 before any production code.
 
-Twenty-three of the twenty-four items are done. They have moved, in full, to
+All twenty-four items are done. They have moved, in full, to
 `archive/completed-tasks.md`, which is also where the record of what each one
-settled now lives. What follows is what is owed: item 17, the half of the
-progress report that wants a thread.
+settled now lives. What is owed now is in `TODO.md` and in `questions.md`
+section 31 -- the behaviours that are specified and not yet written -- rather
+than here.
 
 Two traps found while writing those tables, worth knowing before adding to
 them:
@@ -48,29 +49,3 @@ importer keeps it as the transaction's check number, so the register shows
 for that reason. Whether the action belongs anywhere, and whether it belongs
 there, is the author's call.
 
-
-## The window
-
-- [ ] **17. A modeless "in progress" dialog** during an import and a
-      recalculation. Specified -- "Saying that something long is going on" in
-      `UserInterface.spectable`: `BusinessRule Work that takes a noticeable
-      time says so, and does not take the window away`, and four `$TBD`
-      scenarios. What they settle: modeless, because a modal window over an
-      import hides the register the import is about to change and because
-      nothing is being asked; a count with a total is a time estimate and a
-      count without one is not, so work that cannot say how much there is
-      reports what it has done and no bar; the report appears only when the
-      work takes longer than a second, so an import of six rows shows nothing;
-      finishing takes the report away; and stopping a recalculation leaves the
-      book exactly as it was, because a half-finished recalculation is not a
-      state the book is allowed to be in. Part done -- the strip is in the
-      status bar, hidden until progress::shows() says a second has gone by, and
-      it is driven from the one loop in the window that is both countable and
-      writes nothing: filling a register's cells. Two things are not met, both
-      for want of a thread. The opaque imports -- qif::Importer::run,
-      review::from_file -- are each one call with no point inside to report
-      from, so they say nothing; and there is no Stop, because the work runs on
-      the thread that would deliver the click and a button that does nothing is
-      worse than none. advanceProgress() already returns whether to carry on
-      and the callers already read it. *Code left: a tick callback in the
-      readers, and the work off this thread.* questions.md 14.

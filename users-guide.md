@@ -83,7 +83,13 @@ Three areas:
 the book and still counts; it is simply out of the way.
 
 The status bar says what just happened, and shows a progress strip for work
-that takes longer than a second.
+that takes longer than a second: what is going on, how far it has got where
+that can be counted, and a **Stop** button when the work is one of the long
+reads -- a history, a statement, a download. Stopping one leaves the book
+exactly as it was, because nothing is written until the reading is done. While
+such a read runs the menus and the window below them are greyed out: Stop is
+the only thing offered, so that nothing can change the book half way through
+reading a file into it.
 
 ## The register
 
@@ -345,10 +351,11 @@ An honest list, so nothing comes as a surprise:
 
 - **Investments.** A QIF investment record's action word currently lands in the
   Num column. Investment accounts are deliberately left for later.
-- **A progress dialog with a Stop button.** The status bar strip appears for
-  work that takes more than a second, but a long import still says nothing
-  while it runs, because the reading is one call on the thread that would
-  deliver the click.
+- **A count for the first half of a download.** Working out which rows of an
+  OFX or CSV file are ones you already have happens before the first row is
+  made, and that is the slow half. The strip says what it is doing but cannot
+  say how far it has got until the rows start, so the bar sits still for most
+  of the wait on a large download. Stop works throughout.
 - **Reports beyond spending by category.**
 
 `tasks.md` and `TODO.md` hold what is owed; `archive/` holds what is done, with

@@ -1,4 +1,7 @@
 #pragma once
+#include <atomic>
+#include <functional>
+#include <mutex>
 #include <string>
 
 namespace progress {
@@ -70,5 +73,68 @@ inline Report stopped(const Report& report) {
     out.finished = true;
     return out;
 }
+
+// --- the work, on a thread of its own ---------------------------------------
+//
+// What a long reader is given so that it can say where it has got to, and be
+// told to give up. Returning false means stop, and a reader that is stopped
+// says so in its result rather than handing back half a file: nothing has
+// reached the book yet, so there is nothing to undo. A reader with no ticker
+// -- the command line, every test -- runs exactly as it did before, which is
+// why carry_on takes an empty one for yes.
+using Ticker = std::function<bool(const std::string& what, long long done,
+                                  long long total)>;
+
+inline bool carry_on(const Ticker& ticker, const std::string& what, long long done,
+                     long long total) {
+    return !ticker || ticker(what, done, total);
+}
+
+// The two threads' shared ground: the worker writes where it has got to, the
+// window reads it to paint the strip, and the window writes the one flag the
+// worker reads. A lock rather than three atomics because what is being said is
+// a sentence and a pair of numbers together -- a half-updated report would
+// read as the wrong count against the wrong words. It is taken once every few
+// hundred records, which costs nothing beside the records.
+class Running {
+public:
+    // On the worker's thread. Returns whether to carry on.
+    bool note(const std::string& what, long long done, long long total) {
+        {
+            const std::lock_guard<std::mutex> held(lock_);
+            what_ = what;
+            done_ = done;
+            total_ = total;
+        }
+        return !stop_.load();
+    }
+
+    Ticker ticker() {
+        return [this](const std::string& what, long long done, long long total) {
+            return note(what, done, total);
+        };
+    }
+
+    // On the thread that paints. The unit is not here: it is the window's word
+    // for what is being counted, settled before the work starts.
+    Report report() const {
+        const std::lock_guard<std::mutex> held(lock_);
+        Report out;
+        out.what = what_;
+        out.done = done_;
+        out.total = total_;
+        return out;
+    }
+
+    void stop() { stop_.store(true); }
+    bool stopping() const { return stop_.load(); }
+
+private:
+    mutable std::mutex lock_;
+    std::string what_;
+    long long done_ = 0;
+    long long total_ = 0;
+    std::atomic<bool> stop_{false};
+};
 
 }  // namespace progress
