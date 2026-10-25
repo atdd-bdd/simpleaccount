@@ -674,6 +674,8 @@ private:
     // right-clicked, lines being one-based.
     int find_result_line_ = 0;
     std::vector<reg::SplitLine> split_shown_;
+    // What Tag all left ticked, waiting for Clear ticked.
+    std::vector<std::string> tagged_;
     ui::Workspace::SplitOutcome split_saved_;
 
     // The splits go in too. They are the fourth argument and it has a default,
@@ -2452,6 +2454,24 @@ public:
         workspace().clear_in_reconcile(refs);
     }
 
+    // Tag all. The ticks are a state of the window rather than of the book --
+    // in the dialog they are the table's check boxes -- so the glue holds them
+    // the way the window does, and clearing them is the separate press it is
+    // there.
+    void when_every_line_is_tagged_in_reconciling() {
+        tagged_ = workspace().tag_all_in_reconcile();
+    }
+
+    void then_the_lines_tagged_are(const std::vector<ClearedTickString>& values) {
+        ASSERT_EQ(values.size(), tagged_.size()) << "number of lines tagged";
+        for (std::size_t i = 0; i < values.size(); ++i)
+            EXPECT_EQ(values[i].ref.value, tagged_[i]) << "line " << i;
+    }
+
+    void when_the_tagged_lines_are_cleared() {
+        workspace().clear_in_reconcile(tagged_);
+    }
+
     void then_the_balance_adjustment_offered_is(
             const std::vector<BalanceAdjustmentOfferString>& values) {
         ASSERT_FALSE(values.empty());
@@ -2720,5 +2740,12 @@ public:
 
     reports::BalanceSheet balance_sheet_;
     int balance_sheet_position_ = 0;
+
+public:
+
+    void given_reconciling_is_opened_on(const std::vector<AccountSelectString>& values) {
+        for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
+        ADD_FAILURE() << "Not implemented: given_reconciling_is_opened_on";
+    }
 
 };

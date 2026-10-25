@@ -48,6 +48,7 @@
 #include <QSpinBox>
 #include <QStyle>
 #include <QStyleOptionSlider>
+#include <algorithm>
 #include <atomic>
 #include <exception>
 #include <functional>
@@ -3366,7 +3367,8 @@ void MainWindow::reconcileAccount(const QString& account) {
     table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     layout->addWidget(table, 1);
     layout->addWidget(new QLabel(
-        tr("Tick what the statement shows and press Clear ticked."), &dialog));
+        tr("Tick what the statement shows and press Clear ticked. Tag all ticks "
+           "every line, for a statement most of which is on it."), &dialog));
 
     // The figures and the list are read from the workspace every time, because
     // a tick changes a transaction and the difference closing as lines are
@@ -3402,6 +3404,25 @@ void MainWindow::reconcileAccount(const QString& account) {
     show();
 
     auto* buttons = new QHBoxLayout;
+    // Tag all ticks and writes nothing: a statement most of whose lines are on
+    // it is ticked in one press and the two that are not there are unticked,
+    // rather than forty ticked one at a time. What it ticks is what the window
+    // offers, which is what the workspace answers. See "Tagging every line
+    // ticks all that is offered and nothing else" in UserInterface.spectable.
+    auto* tagAll = new QPushButton(tr("Tag all"), &dialog);
+    connect(tagAll, &QPushButton::clicked, &dialog, [&]() {
+        const std::vector<std::string> tagged = workspace_->tag_all_in_reconcile();
+        const QSignalBlocker quiet(table);
+        for (int r = 0; r < table->rowCount(); ++r) {
+            QTableWidgetItem* at = table->item(r, 0);
+            if (at == nullptr) continue;
+            if (static_cast<std::size_t>(r) >= offered.size()) continue;
+            const std::string& ref = offered[static_cast<std::size_t>(r)].ref;
+            if (std::find(tagged.begin(), tagged.end(), ref) == tagged.end()) continue;
+            at->setCheckState(Qt::Checked);
+        }
+    });
+    buttons->addWidget(tagAll);
     auto* clear = new QPushButton(tr("Clear ticked"), &dialog);
     connect(clear, &QPushButton::clicked, &dialog, [&]() {
         std::vector<std::string> refs;

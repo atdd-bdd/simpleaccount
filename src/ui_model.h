@@ -1458,6 +1458,16 @@ public:
                                    recon_account_);
     }
 
+    // What Tag all ticks: every line the window is offering, in the order it
+    // offers them. Tagging is not clearing -- Clear ticked is still its own
+    // press -- so this answers what is ticked and writes nothing. A line
+    // already cleared is not among them because it was never offered.
+    std::vector<std::string> tag_all_in_reconcile() const {
+        std::vector<std::string> refs;
+        for (const recon::Item& item : uncleared_offered()) refs.push_back(item.ref);
+        return refs;
+    }
+
     // A tick is a cleared status and nothing else: no amount moves, and what
     // was already cleared is left alone rather than counted again.
     int clear_in_reconcile(const std::vector<std::string>& refs) {

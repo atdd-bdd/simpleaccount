@@ -4216,6 +4216,65 @@ And uncleared items offered are : UnclearedItem
 # One line to tick, and ticking it closes the difference. The reconciled
 # deposit is in the 1050.00 and is not in the list.
 
+Scenario Tagging every line ticks all that is offered and nothing else
+Description A statement most of whose lines are on it is the ordinary case, and
+\ ticking forty lines one at a time to find the two that are not there
+\ is the wrong way round. Tag all ticks the lot, and what is not on the
+\ statement is then unticked.
+Details Tagging is not clearing. Tag all leaves lines ticked and writes
+\ nothing -- Clear ticked is still the press that writes -- so a tag by
+\ mistake costs nothing but a second look. And what it ticks is what the
+\ window offers, so the cleared deposit is not tagged, because it was
+\ never in the list to tag.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder | DownloadedBalance | DownloadedBalanceAt |
+| Assets:Checking    | Checking | false       | 1000.00           | 2026-02-10          |
+| Expenses:Groceries | Expense  | false       | 0.00              | never               |
+| Income:Salary      | Income   | false       | 0.00              | never               |
+And transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount  | Cleared   |
+| T1  | Assets:Checking | 2026-01-05 | Acme Payroll  | Income:Salary      | 1200.00 | Cleared   |
+| T2  | Assets:Checking | 2026-02-01 | Harris Teeter | Expenses:Groceries | -150.00 | Uncleared |
+| T3  | Assets:Checking | 2026-02-05 | Costco        | Expenses:Groceries | -50.00  | Uncleared |
+When reconciling is opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+And every line is tagged in reconciling
+Then the lines tagged are : ClearedTick
+| Ref |
+| T2  |
+| T3  |
+
+Scenario Tagging every line and clearing them closes the reconciliation
+Description The whole of a statement that agrees, in two presses. The figures
+\ are the test of it -- cleared comes to what the bank said and the
+\ difference goes to nothing -- rather than the ticks, which are a
+\ state of the window and not of the book.
+Given the chart of accounts is : ChartOfAccounts
+| Path               | Type     | Placeholder | DownloadedBalance | DownloadedBalanceAt |
+| Assets:Checking    | Checking | false       | 1000.00           | 2026-02-10          |
+| Expenses:Groceries | Expense  | false       | 0.00              | never               |
+| Income:Salary      | Income   | false       | 0.00              | never               |
+And transactions are : Transaction
+| Ref | SourceAccount   | Date       | Payee         | Destination        | Amount  | Cleared   |
+| T1  | Assets:Checking | 2026-01-05 | Acme Payroll  | Income:Salary      | 1200.00 | Cleared   |
+| T2  | Assets:Checking | 2026-02-01 | Harris Teeter | Expenses:Groceries | -150.00 | Uncleared |
+| T3  | Assets:Checking | 2026-02-05 | Costco        | Expenses:Groceries | -50.00  | Uncleared |
+When reconciling is opened on : AccountSelect
+| Path            |
+| Assets:Checking |
+And every line is tagged in reconciling
+And the tagged lines are cleared
+Then reconciling shows : Reconciliation Vertical
+| Shown      | true            |
+| Account    | Assets:Checking |
+| Balance    | 1000.00         |
+| Cleared    | 1000.00         |
+| OnLine     | 1000.00         |
+| OnLineAt   | 2026-02-10      |
+| Difference | 0.00            |
+| Agrees     | true            |
+
 # ---------------------------------------------------------------------------
 # From a figure in a report to the transaction behind it
 # ---------------------------------------------------------------------------

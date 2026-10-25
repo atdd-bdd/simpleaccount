@@ -315,7 +315,13 @@ Results are a tab in the bottom panel, so they survive while you work.
 **Reconcile** on an account, from the tree's context menu. The dialog lists
 what is not yet cleared -- date, payee, amount -- and says: *tick what the
 statement shows and press Clear ticked.* A transaction already reconciled is
-not offered again, any more than a cleared one is. As you tick, the figures say what the
+not offered again, any more than a cleared one is.
+
+**Tag all** ticks every line in the list. A statement most of whose lines are
+on it is the ordinary case, so ticking the lot and unticking the two that are
+not there is fewer presses than ticking forty one at a time. It writes nothing
+-- Clear ticked is still the press that writes -- so a tag by mistake costs
+nothing but a second look. As you tick, the figures say what the
 book has cleared against what you entered for the statement.
 
 If the two still differ when you press **Done**, you are offered a **Balance
