@@ -216,6 +216,12 @@ register in front of you only knows what you last looked at. The dialog
 proposes an account, says *why* it proposed it -- the file says so, the file's
 name fits, or it is the register you are in -- and lets you change it.
 
+Confirming it teaches the account. A QFX states a bank id and an account
+number, and an account that had neither is given both there and then, so the
+next download into it is placed without the question being asked again. See
+**Account settings** under Accounts and categories for the two fields and what
+happens when a download disagrees with one.
+
 What arrives is a review in the bottom panel, one row per transaction in the
 file, with a tick box and an **Import says** column:
 
@@ -380,8 +386,8 @@ than putting its buttons below the bottom edge.
 ## Accounts and categories
 
 **Accounts > New account...** takes a name, a type, the group it goes under, an
-opening balance and the date of it, and the bank and the number on the
-statement. The opening balance is a transaction against
+opening balance and the date of it, and the bank, the bank id and the number
+on the statement. The opening balance is a transaction against
 `Equity:Opening Balances` -- not a field on the account -- so the figure has
 one home however it was entered.
 
@@ -390,10 +396,24 @@ node, in path order, with no group headings and nothing hidden left out. The
 tree is the opposite on all four counts, deliberately. Clicking a line opens
 the editor for the thing on it; Edit on the tree opens the same one.
 
-**Account settings** holds the bank, the number on the statement, and the
-starting balance with its date -- read off the book and written back to that
-same transaction. An account that never had one shows an empty field rather
-than a zero.
+**Account settings** holds the bank, the bank id in a download, the number on
+the statement, and the starting balance with its date -- read off the book and
+written back to that same transaction. An account that never had one shows an
+empty field rather than a zero.
+
+**Bank** is for you and **bank id in a download** is for a file: the first is
+whatever you call the place, the second is the routing number a QFX states.
+Neither is required, and the bank id is one you will usually never type. The
+first download you confirm for an account writes both it and the number on the
+statement onto the account, if they were empty, which is what lets next
+month's download go to the right register without asking. A book imported from
+Quicken starts with all three empty, so expect to be asked once per account and
+not again.
+
+Where a download states a number and the account already says a different one,
+neither is changed -- an import cannot know which is right -- and **Worth a
+look** says so when the import finishes. Account settings is where to settle
+it.
 
 **Category settings** holds the name, the group it sits under, the type, an
 alias, and a tick to keep it out of the pickers.

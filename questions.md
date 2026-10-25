@@ -1460,3 +1460,48 @@ balance never arrives from a download needs a way to say what the statement
 says, which is the dialog a CSV import wants as well. Until that exists,
 reconciling a QIF-imported account can clear lines but cannot close against a
 figure.
+
+## 35. The bank id a download teaches, and where it is read
+
+The ask was that a QFX import write the bank number onto an account that has
+none. That behaviour was already specified and already written, in both halves:
+
+- `spec/ImportOfx.spectable`, "What a download teaches an account" -- the first
+  download confirmed for an account writes the bank id and the account number
+  onto it, only what is blank is filled in, and a disagreement leaves the
+  account alone and writes a note. Two live scenarios, neither tagged.
+- `src/ofx_import.h` `teach_account`, called from `confirm_import_with` in
+  `src/ui_model.h`, and the book written for it in `importTransactionsFrom`
+  when `book_writes()` moved.
+
+So nothing was owed in `spec/`. What was owed was in the window, and it is why
+the behaviour looked absent:
+
+**The account dialogs had no bank-id line.** `spec/Accounts.spectable` lists
+`BankId` among what an account's dialog holds, with two passing scenarios, and
+its Details say in as many words that a disagreement "is settled" in the
+account dialog. The Qt dialog offered Bank and Number on the statement only, so
+a learned routing number could neither be seen nor corrected, and the
+new-account dialog captioned its Bank field "The bank's name or id" --
+conflating the two attributes the specification keeps apart on purpose.
+
+Decided: both dialogs now carry **Bank id in a download**, between Bank and
+Number on the statement. In the new-account dialog it is placeheld "Usually
+left empty; a download fills it in", because nobody reads a routing number off
+a statement to label an account -- the field is there to be read later, not
+filled in now. Bank's placeholder is now "The bank's name".
+
+**A disagreeing number was noted and the note thrown away.** `teach_account`
+returns its notes; `confirm_import_with` used only `learned` and dropped them.
+The glue calls `teach_account` directly, so the specified `NoteCount` of 1 was
+satisfied in the suite while the program said nothing. Decided: the workspace
+keeps them (`teaching_notes()`, cleared when the confirmation is cancelled) and
+the window appends them to the "Worth a look" box the import's own notes
+already go in. One box, because they are one import's worth of remarks.
+
+Not done, and not thought to be wanted: a bank-id column in the account list.
+The settings Details argue against it directly -- the dialog exists so that what
+is true of one account only does not become another column.
+
+No spec file changed, so the suite can only have moved by `ui_model.h`'s two
+new members; it was re-run anyway.

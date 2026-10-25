@@ -772,8 +772,9 @@ void MainWindow::showCategoryListing() {
     dialog.exec();
 }
 
-// What is kept about one account: which bank it is at and the number on the
-// statement. See the settings section of Accounts.spectable.
+// What is kept about one account: which bank it is at, what that bank calls
+// itself in a download, and the number on the statement. See the settings
+// section of Accounts.spectable.
 void MainWindow::editAccountSettings(const QString& path) {
     const chart::Account* existing = chart_.find(path.toStdString());
     if (existing == nullptr) return;
@@ -783,8 +784,15 @@ void MainWindow::editAccountSettings(const QString& path) {
     auto* form = new QFormLayout(scrollingBody(&dialog));
     form->addRow("Account", new QLabel(path, &dialog));
     auto* bank = new QLineEdit(QString::fromStdString(existing->bank), &dialog);
+    // Bank is for a person and Bank id is for a file, which is why they are two
+    // lines rather than one. This one is usually not typed at all: the first
+    // download confirmed for the account writes it down. It is shown anyway,
+    // because an import that found a different one leaves the account alone and
+    // says so, and this is the only place that can be settled.
+    auto* bankId = new QLineEdit(QString::fromStdString(existing->bank_id), &dialog);
     auto* number = new QLineEdit(QString::fromStdString(existing->account_number), &dialog);
     form->addRow("Bank", bank);
+    form->addRow("Bank id in a download", bankId);
     form->addRow("Number on the statement", number);
 
     // The starting balance is shown here rather than only at creation, because
@@ -817,6 +825,7 @@ void MainWindow::editAccountSettings(const QString& path) {
     // Kept exactly as typed, with only the blanks at either end taken off: a
     // number on a statement is a label and not an amount.
     a.bank = bank->text().trimmed().toStdString();
+    a.bank_id = bankId->text().trimmed().toStdString();
     a.account_number = number->text().trimmed().toStdString();
     chart_.put(a);
 
@@ -1532,7 +1541,9 @@ void MainWindow::newAccount() {
     // the first download can be placed into without anybody being asked which
     // account it belongs to. Neither is required; a cash account has neither.
     auto* bank = new QLineEdit(&dialog);
-    bank->setPlaceholderText("The bank's name or id");
+    bank->setPlaceholderText("The bank's name");
+    auto* bankId = new QLineEdit(&dialog);
+    bankId->setPlaceholderText("Usually left empty; a download fills it in");
     auto* number = new QLineEdit(&dialog);
     number->setPlaceholderText("As it appears on the statement");
     auto* asAt = new QDateEdit(QDate::currentDate(), &dialog);
@@ -1546,6 +1557,7 @@ void MainWindow::newAccount() {
     form->addRow("Opening balance", opening);
     form->addRow("As at", asAt);
     form->addRow("Bank", bank);
+    form->addRow("Bank id in a download", bankId);
     form->addRow("Number on the statement", number);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
                                          &dialog);
@@ -1596,6 +1608,7 @@ void MainWindow::newAccount() {
     if (made != nullptr) {
         chart::Account withNumbers = *made;
         withNumbers.bank = bank->text().trimmed().toStdString();
+        withNumbers.bank_id = bankId->text().trimmed().toStdString();
         withNumbers.account_number = number->text().trimmed().toStdString();
         chart_.put(withNumbers);
     }
@@ -2017,10 +2030,14 @@ void MainWindow::importTransactionsFrom(const QString& path) {
     refresh();
 
     // Said out loud rather than swallowed. A note nobody is shown is a note
-    // nobody acts on.
-    if (!prepared.notes.empty()) {
+    // nobody acts on. The account's own numbers are among them: a download whose
+    // routing number or account number disagreed with what the account already
+    // says changed neither, and this is where that is heard.
+    std::vector<std::string> notes = prepared.notes;
+    for (const std::string& note : workspace_->teaching_notes()) notes.push_back(note);
+    if (!notes.empty()) {
         QString said;
-        for (const std::string& note : prepared.notes)
+        for (const std::string& note : notes)
             said += QString::fromStdString(note) + "\n";
         QMessageBox::information(this, "Worth a look", said.trimmed());
     }

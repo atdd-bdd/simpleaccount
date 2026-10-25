@@ -722,6 +722,11 @@ public:
 
     const ImportConfirmation& import_confirmation() const { return confirming_; }
 
+    // What the last confirmed import had to say about the account's numbers.
+    // Empty is the usual answer: either nothing was known and it was learned,
+    // or what was known agreed with the file.
+    const std::vector<std::string>& teaching_notes() const { return taught_notes_; }
+
     // The rows of the file, now that the account is settled. Into the account
     // the dialog proposed, or into another one chosen in it; either way the
     // rows are stamped with it, that register becomes the active tab, and the
@@ -763,6 +768,13 @@ public:
             ofx::teach_account(&accounts_, account, confirming_.bank_id,
                                confirming_.account_number);
         if (taught.learned) ++book_writes_;
+        // A number that disagreed is the one thing teaching has to say out
+        // loud. It is kept here because this is the only moment it is known,
+        // and the import's own notes are made on another thread before the
+        // account was settled, so there is nowhere else to put it.
+        taught_notes_.clear();
+        for (const ofx::Note& note : taught.notes)
+            taught_notes_.push_back(note.detail);
 
         std::vector<ReviewRow> stamped = rows;
         for (ReviewRow& r : stamped) r.account = account;
@@ -772,7 +784,10 @@ public:
 
     // Cancelled reads nothing: no tab is opened, no panel, no row. The only
     // thing that happened is that the dialog was up, and now it is not.
-    void cancel_import_confirmation() { confirming_ = ImportConfirmation(); }
+    void cancel_import_confirmation() {
+        confirming_ = ImportConfirmation();
+        taught_notes_.clear();
+    }
 
     // An import goes into the account confirmed for it.
     void review_import(const std::vector<ReviewRow>& rows, const std::string& into) {
@@ -1953,6 +1968,9 @@ private:
     std::vector<Tab> tabs_;
     std::size_t active_tab_ = 0;
     ImportConfirmation confirming_;
+
+    // What teaching the account's numbers had to say; see teaching_notes().
+    std::vector<std::string> taught_notes_;
 
     // A half already in the book whose other side an accepted review will
     // rewrite, because somebody said the two were one payment.
