@@ -1417,3 +1417,46 @@ the tables.
   amount as it is typed, an opening balance, what is in the file). There is
   nothing to work out for those, so the glue asserts the row says `false`: a
   row claiming a change where there is no path to one fails.
+
+## 34. Two things the window was not saying
+
+Both reported from the running program, and both turned out to be the window
+rather than the model: the model-level scenarios for each already pass.
+
+**A find that matched nothing showed no panel at all.** `perform_find` opens the
+results tab whether or not anything matched, and the panel's heading reads
+"Nothing matched" when nothing did -- so the specification and the workspace
+were right. What was wrong is the height. The panel is a child of a vertical
+splitter, and its table carries `setMinimumHeight(1)` so that the panel can be
+dragged small; a splitter hands a child the height it last had, so a panel that
+had been shut could open with none of itself on screen. A find then looked like
+a find that did nothing. The decision: a panel that was shut is given room as it
+opens -- a third of the height, up to 220 pixels, taken from the register above
+-- and a panel already open is left at whatever height somebody dragged it to.
+
+**Pressing Done on a reconciliation could do nothing visible.** The Balance
+Adjustment is only offered where there is a difference to write, and a
+difference needs a statement balance to differ from. A book read from a QIF has
+no statement balance anywhere in it, so on those accounts there is no offer, and
+Done closed the window in silence -- which reads as an offer that is broken
+rather than an offer that does not apply. Two decisions:
+
+- Where there is no on-line balance, the window now says so when it closes:
+  there is nothing to reconcile against, no adjustment to offer, and what was
+  ticked has still been cleared. Where the two agree, it stays silent -- the
+  figures line already says `-- agrees`, and a popup for the ordinary happy
+  ending is noise.
+- An accepted adjustment is now selected in the register. It is dated the day
+  the balance was stated, which is not the end of the register, so a line
+  written in the middle of twenty years of history was easy to take for a line
+  that was never written.
+
+Neither fix touches `src/` or `spec/`: both read state the specification already
+describes (`OnLineAt` is `never`, the panel is open when it has a tab) and both
+are presentation. The suite was not re-run for them for that reason.
+
+What is still owed here is the deferred item from section 25: an account whose
+balance never arrives from a download needs a way to say what the statement
+says, which is the dialog a CSV import wants as well. Until that exists,
+reconciling a QIF-imported account can clear lines but cannot close against a
+figure.

@@ -3451,6 +3451,8 @@ void MainWindow::reconcileAccount(const QString& account) {
     // written: it is a figure nobody could explain, and whether to record it
     // is the person's decision.
     const recon::Adjustment offer = workspace_->balance_adjustment_offered();
+    const recon::Figures closing = workspace_->reconcile_state();
+    bool written = false;
     if (offer.shown) {
         const QString question =
             tr("The book and the bank differ by %1.\n\n"
@@ -3465,16 +3467,34 @@ void MainWindow::reconcileAccount(const QString& account) {
         if (QMessageBox::question(this, tr("Balance Adjustment"), question,
                                   QMessageBox::Yes | QMessageBox::No,
                                   QMessageBox::No) == QMessageBox::Yes)
-            workspace_->accept_balance_adjustment();
+            written = workspace_->accept_balance_adjustment();
+    } else if (!closing.online_at.has_value()) {
+        // Nothing to adjust against rather than nothing to adjust. A book read
+        // from a QIF has no statement balance anywhere in it, so there is no
+        // difference to write and no offer to make -- and a Done that then
+        // does nothing at all looks like the offer is broken. See questions.md
+        // section 34.
+        QMessageBox::information(
+            this, tr("Reconcile %1").arg(account),
+            tr("No on-line balance has been downloaded for this account, so "
+               "there is nothing to reconcile against and no Balance "
+               "Adjustment to offer. What was ticked has still been cleared."));
     }
 
     chart_ = workspace_->accounts();
     transactions_ = workspace_->transactions();
     splits_ = workspace_->splits();
     book_ = workspace_->book();
+    // An accepted offer writes one transaction and it is the last one written.
+    // It is dated the day the balance was stated, which is not the end of the
+    // register, so it is selected rather than left to be looked for.
+    const std::string adjustment =
+        written && !transactions_.empty() ? transactions_.back().ref.value()
+                                         : std::string();
     workspace_->close_reconcile();
     save();
     rebuildWorkspace();
+    if (!adjustment.empty()) workspace_->go_to_transaction_in(adjustment, path);
     refresh();
 }
 
@@ -4235,7 +4255,28 @@ void MainWindow::syncBottomTabs() {
     }
     for (const ui::BottomTabRow& row : rows)
         if (row.active) bottomTabs_->setCurrentIndex(row.tab - 1);
-    bottomTabs_->setVisible(workspace_->bottom_panel().open);
+    const bool open = workspace_->bottom_panel().open;
+    const bool showing = bottomTabs_->isVisible();
+    bottomTabs_->setVisible(open);
+    // A splitter gives a child the height it last had, and this one's table
+    // asks for a single pixel so that it can be dragged small -- which means a
+    // panel that opens can open with none of itself showing, and a find that
+    // matched nothing then reads as a find that did nothing at all. So a panel
+    // that was shut is given room as it opens: enough for the heading and a
+    // few rows, taken from the register above. A panel already open is left
+    // alone, because its height is then something somebody chose.
+    if (open && !showing) {
+        QList<int> sizes = rightSplit_->sizes();
+        if (sizes.size() == 2) {
+            const int total = sizes[0] + sizes[1];
+            const int wanted = std::min(220, total / 3);
+            if (total > wanted && sizes[1] < wanted) {
+                sizes[1] = wanted;
+                sizes[0] = total - wanted;
+                rightSplit_->setSizes(sizes);
+            }
+        }
+    }
 }
 
 // The import review, beside the active tab only while one is waiting. There

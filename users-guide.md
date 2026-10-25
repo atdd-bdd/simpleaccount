@@ -331,6 +331,16 @@ the account you are reconciling -- otherwise the reconciliation it was made for
 could not close -- and uncleared on the other side. It is one transaction, not
 two rows, and you can decline it.
 
+An account whose balance has never arrived from a download has nothing to
+reconcile against, and the window says so when it closes: there is no
+difference to write and no adjustment to offer. Ticking still clears what you
+ticked. A book read from a QIF is in that position everywhere, because a QIF
+never states a balance.
+
+An adjustment you accept is dated the day the balance was stated, which is not
+necessarily the end of the register, so the register selects the line it just
+wrote rather than leaving you to find it.
+
 Reconciling is the acceptance test for this program: the checking accounts
 balancing against real statements is what says the book is right.
 
