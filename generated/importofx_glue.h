@@ -1859,4 +1859,56 @@ public:
         }
     }
 
+public:
+
+    // The window reaches a line of this register belonging to another
+    // account's transaction and nothing else, so every row is built that way:
+    // the card is the account being imported, and the lines are transfers
+    // entered in the joint account naming the card. The download is dated the
+    // first of the month and the lines the second onwards, which is the shape
+    // the author's own book was in -- near enough to be the same payment, not
+    // near enough for the day to settle it.
+    void examples_businessrule_a_far_side_line_is_matched_across_the_bank_s_posting_lag(
+            const std::vector<FarSideMatchString>& values) {
+        for (const auto& value : values) {
+            const int lines = std::stoi(value.linesinthewindow);
+            const int rows = std::stoi(value.rows);
+            ASSERT_GT(rows, 0) << "a row of the file is what is being judged";
+
+            start_fresh("Liabilities:Visa", types::AccountType::CreditCard);
+            chart_.put(account_of("Assets:Joint Checking", types::AccountType::Checking));
+            for (int n = 0; n < lines; ++n) {
+                ledger::Transaction t;
+                t.id = ledger::new_id();
+                t.ref = types::TransactionRef("T" + std::to_string(n + 1));
+                t.date = types::Date(2026, 2, 2 + n);
+                t.payee = types::PayeeName("WF CREDIT CARD AUTO PAY");
+                t.source_account = chart_.ref_for_path("Assets:Joint Checking");
+                t.destination = chart_.ref_for_path("Liabilities:Visa");
+                t.amount = Money("-932.17");
+                t.cleared = types::ClearedStatus::Cleared;
+                transactions_.push_back(t);
+            }
+
+            ofx::Statement statement;
+            for (int n = 0; n < rows; ++n) {
+                ofx::Transaction row;
+                row.date_posted = types::Date(2026, 2, 1);
+                row.amount = Money("932.17");
+                // Distinct, so test one settles nothing and the question left
+                // is the one this rule answers.
+                row.fit_id = "F10" + std::to_string(n);
+                row.name = "AUTOMATIC PAYMENT - THANK YOU";
+                statement.transactions.push_back(row);
+            }
+            import(statement);
+
+            ASSERT_EQ(static_cast<std::size_t>(rows), decided_.decided.size());
+            for (const ofx::Decided& one : decided_.decided)
+                EXPECT_EQ(value.disposition.value, ofx::to_string(one.disposition))
+                    << value.rows << " row(s) against " << value.linesinthewindow
+                    << " line(s) -- " << value.why;
+        }
+    }
+
 };

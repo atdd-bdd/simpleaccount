@@ -331,14 +331,17 @@ inline std::vector<detail::Existing> existing_in(
 }
 
 // Five days of lag between the day a payment was entered and the day the bank
-// posted it. The Ofx importer no longer reaches across that: inside an import
-// all it has is an amount and a date, and reaching days on that much is
+// posted it. It is asked of two dates that come from two different places, and
+// never of two readings of one bank's own record -- those agree about the day,
+// so a day's difference there is a second posting and not a lag. Inside an
+// import that means exactly one thing reaches across it: a line of this
+// register belonging to another account's transaction, whose identity the
+// transaction has already settled by naming this account. Everything else has
+// an amount and a date and nothing else, and reaching days on that much is
 // guessing, so a same-day likeness is offered to be answered and anything
-// further is a second transaction. The window belongs to the questions asked
-// of two dates from two different places -- the Csv importer, which has no
-// identifier to work with, and the pass that pairs one register's transaction
-// against another's once an import has been accepted. See the date-window rule
-// in ImportOfx.spectable.
+// further is a second transaction. The same five days are asked again after an
+// import is accepted, of the pass that pairs one register's transaction
+// against another's. See the date-window rule in ImportOfx.spectable.
 inline constexpr long long kMatchWindow = 5;
 
 // A check number is the strongest thing in a bank file -- it is written on the
@@ -713,6 +716,125 @@ inline std::vector<Judgement> judge(std::vector<detail::Existing>* already,
             settled[i] = true;
         }
     }
+    // 3 and 4 once more, and only for the lines of this register that belong
+    // to another account's transaction. Above, the key is the date and the
+    // amount and the date is exact, because two records of one posting from
+    // one bank agree about the day. A far-side line is not that: somebody has
+    // already said the movement belongs to this account, because the
+    // transaction names it, so its identity is not in question and the date is
+    // the only thing left to decide -- and the gap between the day a card
+    // posts a payment and the day a bank posts it is the ordinary case rather
+    // than a coincidence. The author's own book had eleven automatic payments
+    // of a card, every one of them already a transfer in the joint account
+    // naming the card, and five of the eleven came up New over a weekend or a
+    // holiday. Confirming that would have paid the card a second time, five
+    // times over.
+    //
+    // It is also the one place where reaching across days cannot invent
+    // anything. A payment and a refund of the same amount a day apart are two
+    // records this account owns, and a day's reach there would merge them; a
+    // far-side line is in another account by construction, so there is no row
+    // of this account's own to merge it with.
+    //
+    // Counting comes first, as it does above and for the same reason, but the
+    // thing counted is a component rather than a bucket: a row reaches the
+    // lines of its amount within the window, those lines reach other rows, and
+    // what has to balance is the row count against the line count over
+    // everything so joined. One row and one line is that line. Any other
+    // shape is a question, because nothing says which goes with which.
+    {
+        std::unordered_map<long long, std::vector<std::size_t>> far_lines;
+        for (std::size_t at = 0; at < already->size(); ++at) {
+            const detail::Existing& e = (*already)[at];
+            if (e.claimed || !e.far_side) continue;
+            far_lines[e.amount.cents()].push_back(at);
+        }
+        std::vector<long long> far_keys;
+        std::unordered_map<long long, std::vector<std::size_t>> far_rows;
+        for (std::size_t i = 0; i < rows.size(); ++i) {
+            if (settled[i]) continue;
+            if (far_lines.find(rows[i].amount.cents()) == far_lines.end()) continue;
+            std::vector<std::size_t>& group = far_rows[rows[i].amount.cents()];
+            if (group.empty()) far_keys.push_back(rows[i].amount.cents());
+            group.push_back(i);
+        }
+        for (long long key : far_keys) {
+            const std::vector<std::size_t>& group = far_rows[key];
+            const std::vector<std::size_t>& lines = far_lines[key];
+            const auto within = [&](std::size_t i, std::size_t at) {
+                return std::abs(types::Date::days_between((*already)[at].date,
+                                                          rows[i].date)) <= kMatchWindow;
+            };
+            std::vector<bool> row_seen(group.size(), false);
+            std::vector<bool> line_seen(lines.size(), false);
+            for (std::size_t seed = 0; seed < group.size(); ++seed) {
+                if (row_seen[seed]) continue;
+                // The component containing this row: everything joined to it
+                // by the window, rows in file order and lines in book order,
+                // which is the order the pairing then uses.
+                std::vector<std::size_t> rows_here{seed};
+                std::vector<std::size_t> lines_here;
+                row_seen[seed] = true;
+                for (std::size_t scan = 0; scan < rows_here.size(); ++scan) {
+                    for (std::size_t l = 0; l < lines.size(); ++l) {
+                        if (line_seen[l] || !within(group[rows_here[scan]], lines[l])) continue;
+                        line_seen[l] = true;
+                        lines_here.push_back(l);
+                        for (std::size_t r = 0; r < group.size(); ++r) {
+                            if (row_seen[r] || !within(group[r], lines[l])) continue;
+                            row_seen[r] = true;
+                            rows_here.push_back(r);
+                        }
+                    }
+                }
+
+                // Nothing of this amount is within reach, so this is not the
+                // test that decides and the row stays as it is.
+                if (lines_here.empty()) continue;
+
+                std::sort(rows_here.begin(), rows_here.end());
+                std::sort(lines_here.begin(), lines_here.end());
+
+                if (rows_here.size() == lines_here.size()) {
+                    for (std::size_t k = 0; k < rows_here.size(); ++k) {
+                        detail::Existing& e = (*already)[lines[lines_here[k]]];
+                        const std::size_t i = group[rows_here[k]];
+                        Judgement& j = out[i];
+                        e.claimed = true;
+                        j.disposition = Disposition::Duplicate;
+                        j.claimed_id = e.id;
+                        j.claimed_ref = e.ref;
+                        j.claim_ids.push_back(e.id);
+                        // As above: the payee cannot refuse the duplicate, and
+                        // a far-side line's payee is the other account's word
+                        // for the movement rather than this bank's, so a
+                        // disagreement here is especially ordinary. It is
+                        // still worth saying.
+                        if (!detail::payees_agree(e.payee, e.raw_name, rows[i].payee, rules))
+                            note_once(&j, DuplicateNote::PayeeUnmatched);
+                        and_what_changed(&j, e, rows[i]);
+                        settled[i] = true;
+                    }
+                    continue;
+                }
+
+                // The counts disagree, so every row of the component is
+                // offered and nothing is claimed -- including a row that fell
+                // on the day, which is no better evidenced than the rest once
+                // the window is what is being asked about.
+                for (std::size_t r : rows_here) {
+                    const std::size_t i = group[r];
+                    out[i].disposition = Disposition::Possible;
+                    out[i].claimed_id = (*already)[lines[lines_here.front()]].id;
+                    out[i].claimed_ref = (*already)[lines[lines_here.front()]].ref;
+                    for (std::size_t l : lines_here)
+                        out[i].claim_ids.push_back((*already)[lines[l]].id);
+                    settled[i] = true;
+                }
+            }
+        }
+    }
+
     return out;
 }
 

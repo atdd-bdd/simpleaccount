@@ -1505,3 +1505,97 @@ is true of one account only does not become another column.
 
 No spec file changed, so the suite can only have moved by `ui_model.h`'s two
 new members; it was re-run anyway.
+
+## 36. Five automatic payments that should have been duplicates
+
+A credit card was downloaded -- `testdata/CreditCard (1).csv`, eleven rows of
+AUTOMATIC PAYMENT - THANK YOU -- and five of the eleven came up New although
+the transfer was already in Joint Checking naming the card. The question was
+whether they were too many days off or something else. Both, and the something
+else is the interesting half.
+
+**What the dates are.** The card posts the payment on the first of the month;
+the bank posts it on the next working day. Six of the eleven were on the day
+and matched. The five that did not: 2026-08-01 Sat against 08-03 Mon, 07-01
+against 07-02, 03-01 Sun against 03-03, 02-01 Sun against 02-03, and 01-01 --
+New Year's Day -- against 01-02. One or two days, every time, and never more.
+
+**Why no window caught them.** Two mechanisms could have, and both declined.
+
+Tests three and four key on `detail::fingerprint`, which is the date and the
+amount with nothing between them, so a day apart is a different bucket rather
+than a near miss. The payee was never consulted for that test, so it was never
+a payee problem: `AUTOMATIC PAYMENT - THANK YOU` against `WF CREDIT CARD AUTO
+PAY` would not have matched either, and it did not need to.
+
+`transfers::halves_for` does have a two-day window, which would have caught all
+five. It skips them: `src/transfer_match.h:97` passes over any half whose
+destination is already a real account. The five halves in the book name the
+card correctly, which is exactly why they are the strongest evidence there is,
+and that is what disqualified them. The best-evidenced case was getting less
+reach than one pointing at a category.
+
+And `ofx::kMatchWindow = 5` has one occurrence in the whole tree, its own
+declaration. The five-day lag it was written for is implemented nowhere.
+
+**Decided, as a specification first.** Tests three and four reach across a
+window for a far-side line only -- a line of this register that belongs to
+another account's transaction. Somebody has already said the movement belongs
+here, so the date is the only thing left in question, and it is also the one
+place where reaching cannot invent anything: a far-side line is in another
+account by construction, so there is no row of this account's own to merge it
+with. Same-account matching stays to the day, where loosening it really would
+merge a payment with a refund of the same amount. Counting still comes first,
+so two lines in the window against one row is a Possible, not a guess.
+
+`spec/ImportOfx.spectable` carries `BusinessRule A far-side line is matched
+across the bank's posting lag` with its own `Examples: FarSideMatch`, four
+scenarios -- the Monday case, six days away staying New, two candidates being
+a question, and on the day still working -- the exception written into the
+disposition rule's Details, and the boundary spelled out in the scenario about
+a day either side. Tests three and four in `Examples: DispositionRule` now say
+where the window applies rather than gaining a row of their own, because the
+window is a refinement of those tests and not a sixth one.
+
+**Written in the same pass, which the house rule does not usually allow.** The
+standing instruction for a queued item here is to untag the scenarios and make
+them pass, so this went in as code too rather than stopping at the table. The
+code is a second counting pass in `ofx::judge`, after the exact one: far-side
+lines of the row's amount are joined to the rows that reach them, and what has
+to balance is the row count against the line count over everything so joined.
+A component rather than a bucket, because a window is not an equality --
+row A can reach a line that row B also reaches while A and B are six days
+apart.
+
+**No new `DuplicateNote` value.** A far-side match across days notes
+`PayeeUnmatched` if the payees disagree, exactly as the same-day far-side match
+already does, and nothing else: there is nothing to say about clearing or
+identifiers on a far-side line, since the import changes neither. A note for
+"found across days" was considered and left out -- `examples_datatype_
+duplicatenote` checks the type by size against `ofx::all_notes()`, so a value
+is not free, and what it would say is already in the disposition.
+
+**One spec row that is thin and says so.** `Examples: DateWindow` gains a row
+for the far-side window, and the glue's "5 days" branch asserts
+`kMatchWindow == 5` -- so it passes on the constant alone and says nothing
+about behaviour. It is there so the four windows are still written down in one
+place. The behaviour is in the four scenarios.
+
+**Correcting something this file said about the glue.** The converter does
+append a new method to an existing `*_glue.h`: regenerating wrote
+`examples_businessrule_a_far_side_line_is_matched_across_the_bank_s_posting_lag`
+into `generated/importofx_glue.h` as a failing stub with the rest of the file
+untouched. "Never overwrites" means never rewrites what is there, not never
+touches the file. The stub was then filled in by hand, as usual.
+
+**A discrepancy found on the way and left alone.** That table's other five-day
+row, `One register's transaction against another's`, is checked against
+`kMatchWindow`, but the pass it describes is `transfers::halves_for`, which
+uses `kWindow = 2` in `src/transfer_match.h`. The row claims five days for
+something the code does in two. Not touched here: it is a separate question,
+and answering it means deciding whether those two windows are one number or
+two. The same pass has the other half of this bug still in it --
+`src/transfer_match.h:97` skips any half whose destination is already a real
+account, which is why the five payments were never even offered for pairing
+after the import either. The import no longer needs that pass to catch them,
+so it is no longer urgent, but it is still wrong.

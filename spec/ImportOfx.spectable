@@ -599,6 +599,12 @@ Details Test one is what makes a second read of the same file do nothing. It
 \ different places. Nothing in it happens while a row is being judged.
 \ See proposing transfers.
 \
+\ The one exception is a line of this register that belongs to another
+\ account's transaction. Its identity is not in question -- the
+\ transaction names this account -- so the date is the only thing left
+\ to decide, and the days between may be as many as the window allows.
+\ See a far-side line is matched across the bank's posting lag, below.
+\
 \ Cleared status decides nothing here. It used to: an uncleared
 \ transaction was taken to be one somebody typed and was asked about
 \ rather than matched, and a cleared one was taken to be a second
@@ -610,8 +616,8 @@ Examples: DispositionRule
 | Test | Condition                                                             | Disposition |
 | 1    | A transaction in this account carries this FITID, from an Ofx import   | Duplicate   |
 | 2    | This is a checking account, and a transaction in it has the same check number, amount and payee, dated within the book's check-number window | Duplicate |
-| 3    | The rows and the lines of this account's register with this date and this amount are equal in number | Duplicate |
-| 4    | There are lines of this account's register with this date and this amount, and they are not equal in number to the rows | Possible |
+| 3    | The rows and the lines of this account's register with this amount are equal in number -- on this date, or within the far-side window where the line belongs to another account's transaction | Duplicate |
+| 4    | There are such lines and they are not equal in number to the rows | Possible |
 | 5    | Nothing above applies                                                 | New         |
 # A row that is the other half of a payment already in the book is still New
 # here. Whether it is that half is asked after the judging, on the amount and
@@ -984,7 +990,9 @@ Scenario The same amount a day either side of an imported transaction is a secon
 Description The dates disagree, and between two of the bank's own records that
 \ means two postings. Five days would have swallowed this one; the
 \ window is not offered here, because there is no lag between a bank
-\ and itself to allow for.
+\ and itself to allow for. Nor does the far-side window reach it: this
+\ is a transaction this account owns, not a line of its register
+\ belonging to somebody else's.
 Given the chart of accounts is : ChartOfAccounts
 | Path                   | Type     | Placeholder |
 | Assets:Checking        | Checking | false       |
@@ -1043,6 +1051,160 @@ And transactions are : ImportedTransaction
 # One transaction, untouched: it keeps the identifier the joint account's own
 # download gave it and does not take this one. In Ken Checking's register the
 # line reads 3000.00 the other way up, which is what the row says.
+
+# ---------------------------------------------------------------------------
+# A line of this register that belongs to another account's transaction
+# ---------------------------------------------------------------------------
+
+BusinessRule A far-side line is matched across the bank's posting lag
+Description Tests three and four are to the day, except where the line of this
+\ register they are counting belongs to another account's transaction.
+\ There the days between the two dates may be as many as the window
+\ allows. A transaction this account owns is still matched to the day.
+Details This came out of the author's own book. A credit card was downloaded
+\ over eleven automatic payments, every one of them already in the
+\ joint checking account as a transfer naming the card -- and five of
+\ the eleven imported as New. The card posts the payment on the first
+\ of the month and the bank posts it on the next working day, so the
+\ first fell on a Saturday twice, on a Sunday once and on New Year's
+\ Day once. Confirming that import would have paid the card a second
+\ time, five times over.
+\
+\ A far-side line is the best-evidenced thing the import ever looks at,
+\ and it was being given the least reach of anything. Somebody has
+\ already said this movement belongs to this account: the transaction
+\ names it. So its identity is not in question and the date is the only
+\ thing left to decide, and the gap between the day a card posts a
+\ payment and the day a bank posts it is the ordinary case rather than
+\ a coincidence.
+\
+\ It is also the one place where reaching across days cannot invent
+\ anything. The reason tests three and four are to the day is that two
+\ records of one posting from one bank agree about the day, so a day's
+\ difference is a second posting -- a payment and a refund of the same
+\ amount are exactly that, and a day's reach would silently merge them.
+\ A far-side line is in another account by construction. There is no
+\ row of this account's own for it to be merged with.
+\
+\ The window is the five days the program has had a constant for since
+\ before any of this and has never used. Five days covers a weekend
+\ with a holiday on either side of it, which is the whole of what a
+\ posting lag is.
+\
+\ Counting comes first, exactly as it does in tests three and four, and
+\ for the same reason. One row and one line in the window is that line.
+\ Two of either is a question, because nothing says which goes with
+\ which, and answering it either way doubles a transaction or loses
+\ one.
+Examples: FarSideMatch
+| Rows | LinesInTheWindow | Disposition | Why                                                                     |
+| 1    | 1                | Duplicate   | The line names this account and the days between are the bank's lag     |
+| 1    | 2                | Possible    | Nothing says which of the two lines the row is                          |
+| 2    | 1                | Possible    | One of the two rows is the line and nothing says which                  |
+| 1    | 0                | New         | Nothing of this amount within the window, so the row is the first of it |
+
+Attributes FarSideMatch
+Description How many rows of the file and how many lines of this register
+\ belonging to another account's transaction are of this amount, the
+\ lines counted over the window rather than on the day.
+| Attribute        | Type              | Default |
+| Rows             | Integer           | 0       |
+| LinesInTheWindow | Integer           | 0       |
+| Disposition      | ImportDisposition | New     |
+| Why              | String            |         |
+
+Scenario The card posts a payment on the first and the bank posts it on the Monday
+Description The five that got through, reduced to one of them. The transfer is
+\ in the joint account already, dated the Monday the money left it, and
+\ the card's own statement says the Saturday. Nine hundred and some
+\ dollars, twice, is what the day between them used to cost.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Joint Checking  | Checking   | false       |
+| Liabilities:Visa       | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+And transactions are : ImportedTransaction
+| Ref | SourceAccount         | Date       | Payee                   | Destination      | Amount  | Cleared | FitId |
+| T1  | Assets:Joint Checking | 2026-02-03 | WF CREDIT CARD AUTO PAY | Liabilities:Visa | -932.17 | Cleared | none  |
+And import target is : ImportTarget Vertical
+| AccountPath | Liabilities:Visa |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name                          | Memo | CheckNum |
+| CREDIT  | 2026-02-01 | 932.17 | 20260201001 | AUTOMATIC PAYMENT - THANK YOU | none | none     |
+Then import summary is : ImportSummary Vertical
+| New       | 0 |
+| Duplicate | 1 |
+| Possible  | 0 |
+# The transfer is left as it is, as a duplicate found this way always is. It is
+# the joint account's transaction and this file is not the joint account's bank
+# speaking.
+
+Scenario A far-side line further off than the window is a second payment
+Description Six days is not a posting lag. Two payments of the same amount in
+\ one month is ordinary on a card, and nothing in the file says which
+\ of the two it is, so the row is the first record of itself.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Joint Checking  | Checking   | false       |
+| Liabilities:Visa       | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+And transactions are : ImportedTransaction
+| Ref | SourceAccount         | Date       | Payee                   | Destination      | Amount  | Cleared | FitId |
+| T1  | Assets:Joint Checking | 2026-02-07 | WF CREDIT CARD AUTO PAY | Liabilities:Visa | -932.17 | Cleared | none  |
+And import target is : ImportTarget Vertical
+| AccountPath | Liabilities:Visa |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name                          | Memo | CheckNum |
+| CREDIT  | 2026-02-01 | 932.17 | 20260201001 | AUTOMATIC PAYMENT - THANK YOU | none | none     |
+Then import summary is : ImportSummary Vertical
+| New       | 1 |
+| Duplicate | 0 |
+| Possible  | 0 |
+
+Scenario Two far-side lines within the window and one row is a question
+Description The counts disagree, and a window does not make them agree. The row
+\ is one of the two payments and nothing says which, so it is asked
+\ about rather than decided.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Joint Checking  | Checking   | false       |
+| Liabilities:Visa       | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+And transactions are : ImportedTransaction
+| Ref | SourceAccount         | Date       | Payee                   | Destination      | Amount  | Cleared | FitId |
+| T1  | Assets:Joint Checking | 2026-02-02 | WF CREDIT CARD AUTO PAY | Liabilities:Visa | -932.17 | Cleared | none  |
+| T2  | Assets:Joint Checking | 2026-02-03 | WF CREDIT CARD AUTO PAY | Liabilities:Visa | -932.17 | Cleared | none  |
+And import target is : ImportTarget Vertical
+| AccountPath | Liabilities:Visa |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name                          | Memo | CheckNum |
+| CREDIT  | 2026-02-01 | 932.17 | 20260201001 | AUTOMATIC PAYMENT - THANK YOU | none | none     |
+Then import summary is : ImportSummary Vertical
+| New       | 0 |
+| Duplicate | 0 |
+| Possible  | 1 |
+
+Scenario A far-side line on the day is still a duplicate
+Description The window reaches further; it does not stop reaching where it used
+\ to. Six of the eleven payments were on the day and were found, and
+\ they are still found.
+Given the chart of accounts is : ChartOfAccounts
+| Path                   | Type       | Placeholder |
+| Assets:Joint Checking  | Checking   | false       |
+| Liabilities:Visa       | CreditCard | false       |
+| Expenses:Uncategorized | Expense    | false       |
+And transactions are : ImportedTransaction
+| Ref | SourceAccount         | Date       | Payee                   | Destination      | Amount  | Cleared | FitId |
+| T1  | Assets:Joint Checking | 2026-03-01 | WF CREDIT CARD AUTO PAY | Liabilities:Visa | -932.17 | Cleared | none  |
+And import target is : ImportTarget Vertical
+| AccountPath | Liabilities:Visa |
+When transactions imported : OfxTransactions
+| TrnType | DatePosted | Amount | FitId       | Name                          | Memo | CheckNum |
+| CREDIT  | 2026-03-01 | 932.17 | 20260301001 | AUTOMATIC PAYMENT - THANK YOU | none | none     |
+Then import summary is : ImportSummary Vertical
+| New       | 0 |
+| Duplicate | 1 |
+| Possible  | 0 |
 
 Scenario Two identical downloaded transactions both import
 Description A shop visited twice in one day for the same amount gives two
@@ -1623,31 +1785,37 @@ Description Written down together because having four windows in one program
 \ invites someone to unify them, and unifying them breaks one case or
 \ another. Each row is a different question about two dates, and the
 \ window follows from whose dates they are.
-Details Nearly all of this is same-day, and deliberately so. While a row is
-\ being identified the only window is the check-number one, where a
-\ number says the two records are of one payment and the days between
-\ them are the bank's lag and nothing else.
+Details Nearly all of this is same-day, and deliberately so. Two of these
+\ windows are open while a row is being identified, and both are open
+\ for one reason: something other than the date has already said the
+\ two records are of one payment, so the days between them are the
+\ bank's lag and nothing else. A check number is written on the check
+\ itself. A far-side line's transaction names this account.
 \
-\ Everywhere else inside the import the dates agree or they do not, and
-\ it makes no difference how the transaction already there was come by.
+\ Everywhere else inside the import the dates agree or they do not.
 \ Two records of one posting from one bank agree about the day, so a
 \ day's difference is a difference and not a lag. A transaction somebody
-\ typed carries their date rather than the bank's, and an amount and a
-\ date is too little evidence to reach across days on -- so nothing
+\ typed into this account carries their date rather than the bank's,
+\ and an amount and a date is too little evidence to reach across days
+\ on -- so nothing
 \ reaches, and what the import has instead of a window is the count: as
 \ many as the book has is a duplicate, any other number is a question.
 \
-\ The last row is the window that used to be inside the import and is
-\ not any more. Pairing a transaction in one register against one in
-\ another is asked of transactions after the import has been accepted,
-\ never of rows while each one is being judged, and it has a window
-\ because its two dates come from two different places.
+\ The last two rows are one number asked in two places, and five days
+\ is the lag between the day a payment is entered and the day a bank
+\ posts it, whichever of the two is asking. Pairing a transaction in
+\ one register against one in another is asked after an import has
+\ been accepted. The far-side row is asked during one, and is the only
+\ thing that reaches across days while a row is being judged --
+\ because it is the only one of them whose two dates come from two
+\ different places.
 Examples: DateWindow
 | Rule                                              | Window   | Why                                        |
 | A download against a check already in the book    | 1 day    | The number carries it; see the check rule  |
-| A download against anything else in the book      | Same day | Two records of one posting agree about the day, and an amount and a date cannot reach further |
+| A download against a line this account owns       | Same day | Two records of one posting agree about the day, and an amount and a date cannot reach further |
 | Two new downloads proposed as one transfer        | 2 days   | Both halves are electronic and near        |
 | One register's transaction against another's      | 5 days   | Asked after the import, of two books' own dates |
+| A download against a line belonging to another account's transaction | 5 days | The transaction names this account already, so the bank's posting lag is all that is in question |
 
 Attributes DateWindow
 | Attribute | Type   | Default |
