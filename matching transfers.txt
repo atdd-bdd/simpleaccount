@@ -1,0 +1,81 @@
+
+
+Matching transfers between two accounts.  
+
+First note:  Imports are considered to be correct.   Manually input transactions are more questionable.   Imports should be marked as "cleared".  Manually input transactions (or created ones) should be marked as "not cleared".    
+
+An import or existing register (say Account A) has a transaction with:
+
+| Date | Paid Amount | Category | 
+| 2 Feb 2026 | $200.00 | Uncategorized | 
+
+When an import to another account (Account B)  has: 
+
+| Date | Received Amount | Category | 
+| 2 Feb 2026 | $200.00 | |
+
+Then on import, a dialog should come up saying "are these the same transaction" .
+If the answer is Yes, 
+then the transactions are changed to: 
+Account A 
+ | Date | Paid Amount | Category | 
+| 2 Feb 2026 | $200.00 | Account B |  
+and 
+Account B
+| Date | Received Amount | Category | 
+| 2 Feb 2026 | $200.00 | Account A  |
+
+This matching should occur if the two dates are +/- 2 days.  And it should occur regardless of what account is being imported.  It could occur in either direction (A first or B first).  
+
+Now if a transaction exists in a register (Account A), such as: 
+| Date | Paid Amount | Category | 
+| 2 Feb 2026 | $200.00 | Uncategorized | 
+And the user clicks the context menu "Match this transaction" 
+Then potential matching transactions in all other accounts (+/- days) should be shown. 
+If the user selects one, then the result should be as
+Account A 
+ | Date | Paid Amount | Category | 
+| 2 Feb 2026 | $200.00 | Account B |  
+and 
+Account B
+| Date | Received Amount | Category | 
+| 2 Feb 2026 | $200.00 | Account A  |
+
+If the user says, "Cancel", then no changes should be made. If the user says, "Create a transaction in other account", then result should be: 
+Account A 
+ | Date | Paid Amount | Category | 
+| 2 Feb 2026 | $200.00 | Account B |  
+and 
+Account B
+| Date | Received Amount | Category | 
+| 2 Feb 2026 | $200.00 | Account A  |
+where this is a new transaction in Account B 
+
+
+Given existing match such as:
+Account A 
+ | Date | Paid Amount | Category | 
+| 2 Feb 2026 | $200.00 | Account B |  
+and 
+Account B
+| Date | Received Amount | Category | 
+| 2 Feb 2026 | $200.00 | Account A  |
+If the user decides to assign either one to a different category, then the other one should be uncategorized (with a dialog box warning)
+
+Suppose the user manually adds another transaction such as:
+| Date | Paid Amount | Category | 
+| 10 Feb 2026 | $100.00 | Account B| 
+And the user clicks the context menu "Match this transaction" 
+Then it should work the same as above. 
+
+Now some matches may go into a Transfer Account.  That's typically for transfers from accounts that are not kept as part of Simpleaccount.   Transfer Accounts do not have imports. 
+
+Now reconcilling a local balance with an online balance should should all uncleared transactions as part of trying to do the balance.  The user can select to clear those transactions.   If there is a balance match, taking into account the uncleared transactions, then no "Balance Adjustment" should be created.   
+  
+ 
+
+
+
+| 
+
+
