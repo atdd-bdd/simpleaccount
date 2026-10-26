@@ -258,6 +258,13 @@ gap in days: **One payment** or **Two payments**. No answer writes anything.
 
 **Accept ticked rows** is what writes. Untick anything you do not want.
 
+**Show only ticked rows** narrows the list to what will be brought in, which
+on a month of a card is a handful out of two hundred. It is a reading aid and
+nothing more: the ticks are untouched, the heading still counts the whole
+import, and accepting a narrowed list brings in exactly what accepting the
+whole of it would. A row you untick leaves the list as you untick it; clear
+the box and it is back. Each new import opens showing everything.
+
 An import never creates an account -- the account is the one you confirmed. It
 does create a category it has not heard of, as an Expense or an Income
 according to which way the money went, so a file naming categories of its own

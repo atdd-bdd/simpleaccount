@@ -316,9 +316,12 @@ public:
         EXPECT_EQ(std::stoll(want.daysapart), got.days_apart) << "days apart";
     }
 
-    void then_import_review_rows_are(const std::vector<ImportReviewRowString>& values) {
-        const std::vector<ui::ReviewRow>& got = workspace().review();
-        ASSERT_EQ(values.size(), got.size()) << "number of review rows";
+    // The rows of a review read column by column. Both the whole list and the
+    // narrowed one are checked this way; what differs is the list handed in.
+    void check_review_rows(const std::vector<ImportReviewRowString>& values,
+                           const std::vector<ui::ReviewRow>& got,
+                           const char* what) {
+        ASSERT_EQ(values.size(), got.size()) << "number of " << what << " rows";
         for (std::size_t i = 0; i < values.size(); ++i) {
             EXPECT_EQ(std::stoi(values[i].line), got[i].line) << "row " << i << " line";
             if (!dnc(values[i].payee.value))
@@ -340,6 +343,10 @@ public:
                 EXPECT_EQ(parse_bool_cell(values[i].accepted), got[i].accepted)
                     << "row " << i << " accepted";
         }
+    }
+
+    void then_import_review_rows_are(const std::vector<ImportReviewRowString>& values) {
+        check_review_rows(values, workspace().review(), "review");
     }
 
     void then_import_review_summary_is(const std::vector<ImportReviewSummaryString>& values) {
@@ -2746,6 +2753,32 @@ public:
     void given_reconciling_is_opened_on(const std::vector<AccountSelectString>& values) {
         for (const auto& v : values) { std::cout << v.to_string() << "\n"; }
         ADD_FAILURE() << "Not implemented: given_reconciling_is_opened_on";
+    }
+
+public:
+
+    void then_import_review_view_is(const std::vector<ImportReviewViewString>& values) {
+        for (const auto& value : values) {
+            EXPECT_EQ(parse_bool_cell(value.onlyticked),
+                      workspace().showing_only_ticked_rows()) << "only ticked";
+            EXPECT_EQ(std::stoi(value.shown),
+                      static_cast<int>(workspace().review_shown().size())) << "shown";
+        }
+    }
+
+    void when_only_ticked_rows_shown() {
+        workspace().show_only_ticked_rows(true);
+    }
+
+    void then_import_review_shown_rows_are(const std::vector<ImportReviewRowString>& values) {
+        // What the review is showing, which is every row while the checkbox is
+        // clear. The list is built on demand, so it is held by value.
+        const std::vector<ui::ReviewRow> shown = workspace().review_shown();
+        check_review_rows(values, shown, "shown review");
+    }
+
+    void when_every_row_shown() {
+        workspace().show_only_ticked_rows(false);
     }
 
 };

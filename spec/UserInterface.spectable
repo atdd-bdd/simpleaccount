@@ -1950,6 +1950,169 @@ And panes are : PaneState
 # The same as accepting, as far as the panel goes: the import is over either way.
 
 # ---------------------------------------------------------------------------
+# Showing only the rows that are ticked
+# ---------------------------------------------------------------------------
+
+Description A month of a card is two hundred rows and nearly all of them are
+\ right. What is worth reading twice is the handful that will be
+\ brought in, so the review can be narrowed to those: a checkbox over
+\ the rows, and what it leaves out is everything unticked.
+
+Attributes ImportReviewView
+Description What the review is showing. OnlyTicked is the checkbox; Shown is
+\ how many rows are in front of the person, which is all of them while
+\ the checkbox is clear.
+| Attribute  | Type    | Default |
+| OnlyTicked | Boolean | false   |
+| Shown      | Integer | 0       |
+
+Scenario The review opens showing every row
+Description Including the ones it has already decided against. A row left out
+\ of the first reading is a decision nobody made.
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+And import reviewed : ImportReviewRow
+=AnImportOfThree
+Then import review view is : ImportReviewView Vertical
+| OnlyTicked | false |
+| Shown      | 3     |
+
+Scenario Showing only the ticked rows leaves the rest out
+Description The duplicate is unticked, so it is not among the rows shown. It is
+\ still a row of the import: the checkbox narrows what is read, not
+\ what was imported, and the counts are of the import.
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+And import reviewed : ImportReviewRow
+=AnImportOfThree
+And only ticked rows shown
+Then import review view is : ImportReviewView Vertical
+| OnlyTicked | true |
+| Shown      | 2    |
+And import review shown rows are : ImportReviewRow
+| Line | Payee         | Disposition | Accepted |
+| 1    | Harris Teeter | New         | true     |
+| 2    | Unknown Shop  | New         | true     |
+And import review rows are : ImportReviewRow
+| Line | Payee         | Disposition | Accepted |
+| 1    | Harris Teeter | New         | true     |
+| 2    | Unknown Shop  | New         | true     |
+| 3    | Harris Teeter | Duplicate   | false     |
+And import review summary is : ImportReviewSummary Vertical
+| Rows       | 3     |
+| NewRows    | 2     |
+| Duplicates | 1     |
+| Accepted   | 2     |
+| Committed  | false |
+
+Scenario Unticking a row takes it out of what is shown at once
+Description The checkbox is a question the review keeps answering rather than
+\ a filter somebody applies, so the row leaves as it is unticked. It
+\ is the one surprising thing about it, and the way back is the
+\ checkbox: nothing has been lost.
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+And import reviewed : ImportReviewRow
+=AnImportOfThree
+And only ticked rows shown
+And review row unticked : ReviewRowSelect
+| Line |
+| 2    |
+Then import review view is : ImportReviewView Vertical
+| OnlyTicked | true |
+| Shown      | 1    |
+And import review shown rows are : ImportReviewRow
+| Line | Payee         | Disposition | Accepted |
+| 1    | Harris Teeter | New         | true     |
+
+Scenario Ticking a duplicate brings it into what is shown
+Description The other way round, and the reason the checkbox is worth having
+\ while the ticks are being changed rather than only afterwards.
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+And import reviewed : ImportReviewRow
+=AnImportOfThree
+And only ticked rows shown
+And review row ticked : ReviewRowSelect
+| Line |
+| 3    |
+Then import review view is : ImportReviewView Vertical
+| OnlyTicked | true |
+| Shown      | 3    |
+And import review shown rows are : ImportReviewRow
+| Line | Payee         | Disposition | Accepted |
+| 1    | Harris Teeter | New         | true     |
+| 2    | Unknown Shop  | New         | true     |
+| 3    | Harris Teeter | Duplicate   | true     |
+
+Scenario Clearing the checkbox brings the unticked rows back
+Description Nothing was thrown away, which is what makes the checkbox safe to
+\ press on an import nobody has read yet.
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+And import reviewed : ImportReviewRow
+=AnImportOfThree
+And only ticked rows shown
+And every row shown
+Then import review view is : ImportReviewView Vertical
+| OnlyTicked | false |
+| Shown      | 3     |
+And import review shown rows are : ImportReviewRow
+| Line | Payee         | Disposition | Accepted |
+| 1    | Harris Teeter | New         | true     |
+| 2    | Unknown Shop  | New         | true     |
+| 3    | Harris Teeter | Duplicate   | false     |
+
+Scenario What is accepted is what is ticked, whatever is shown
+Description The checkbox decides what is read and nothing else. Accepting a
+\ narrowed review brings in exactly what accepting the whole of it
+\ would have, because the ticks are the same ticks.
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+And import reviewed : ImportReviewRow
+=AnImportOfThree
+And only ticked rows shown
+And import accepted
+Then import review summary is : ImportReviewSummary Vertical
+| Rows       | 3    |
+| NewRows    | 2    |
+| Duplicates | 1    |
+| Accepted   | 2    |
+| Committed  | true |
+And register lines are : RegisterLine CompareOnly
+| Ref | Date       | Payee         | Balance |
+| T1  | 2026-01-05 | Acme Payroll  | 3000.00 |
+| T2  | 2026-01-15 | Harris Teeter | 2955.00 |
+| T4  | 2026-01-25 | Transfer      | 2455.00 |
+| T5  | 2026-02-02 | Harris Teeter | 2402.90 |
+| T6  | 2026-02-03 | Unknown Shop  | 2379.15 |
+
+Scenario The next import opens showing every row again
+Description The checkbox belongs to the review in front of you rather than to
+\ the program, so a narrowed review that was accepted or cancelled does
+\ not narrow the next one. An import whose rows were silently hidden by
+\ something somebody pressed last week is the worst thing this could
+\ do.
+When account selected : AccountSelect
+| Path            |
+| Assets:Checking |
+And import reviewed : ImportReviewRow
+=AnImportOfThree
+And only ticked rows shown
+And import cancelled
+And import reviewed : ImportReviewRow
+=AnImportOfThree
+Then import review view is : ImportReviewView Vertical
+| OnlyTicked | false |
+| Shown      | 3     |
+
+# ---------------------------------------------------------------------------
 # Showing the transaction an import row was decided against
 # ---------------------------------------------------------------------------
 

@@ -1599,3 +1599,49 @@ two. The same pass has the other half of this bug still in it --
 account, which is why the five payments were never even offered for pairing
 after the import either. The import no longer needs that pass to catch them,
 so it is no longer urgent, but it is still wrong.
+
+## 37. Showing only the rows that are ticked
+
+**The ask.** *"on the import dialog, have a button / checkbox to show only
+tagged items."* A month of a card is two hundred rows and nearly all of them
+are right; what is worth reading twice is the handful that will be brought in.
+
+**What it is.** A checkbox over the review table, `Show only ticked rows`. It
+narrows what is drawn to the rows whose tick is set, and nothing else: the
+ticks are unchanged, the counts in the heading are counts of the import, and
+accepting a narrowed review brings in exactly what accepting the whole of it
+would have.
+
+**Decisions made here, not asked.**
+
+- **It is a view, not a list.** `review()` still returns every row, so every
+  scenario already written against it and the summary counts are untouched.
+  The new `review_shown()` builds the narrowed list on demand. Nothing is
+  removed from the review, which is what makes the checkbox safe to press on
+  an import nobody has read yet.
+- **A row leaves as it is unticked.** Unticking under the filter takes the row
+  out of what is shown at once, rather than waiting for the next press of the
+  checkbox. It is the one surprising thing about it, and the way back is the
+  checkbox. The alternative -- a filter that is applied and then holds still --
+  was considered and dropped: it means the thing in front of you disagrees with
+  the ticks, which is worse than a row that moves.
+- **The checkbox resets on each import.** `review_import` clears it. An import
+  whose rows were hidden by something somebody pressed last week is the worst
+  thing this could do, and the cost is that someone reviewing two files in a
+  row presses it twice.
+- **The menu now reads the row's own line.** `reviewMenu` took the clicked
+  row's line to be its index plus one, which stops being true as soon as rows
+  are left out. It reads `Qt::UserRole` off the tick cell instead, which is
+  where the line already was for the tick handler. That was a latent defect
+  this change would have turned into a real one.
+- **The glue's row comparison is now shared.** `then_import_review_rows_are`
+  and the new `then_import_review_shown_rows_are` both call
+  `check_review_rows`, so the two lists are read by the same column-by-column
+  code against different inputs.
+
+**Not done.** The checkbox is the only thing in front of it: there is no
+"show only new rows", no "show only duplicates". Those are the obvious next
+asks and they are not specified, so they are not written. Nor does the
+narrowed view change what the heading says -- it says `N rows, M ticked` of
+the import throughout, because a count that changes with the filter cannot be
+reconciled against the file.

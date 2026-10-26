@@ -338,6 +338,7 @@ private:
     QWidget* reviewPanel_ = nullptr;
     QLabel* reviewHeading_ = nullptr;
     QTableWidget* reviewTable_ = nullptr;
+    QCheckBox* reviewOnlyTicked_ = nullptr;
 
     // The results of a find, the panel's other tab. The dialog that asks for
     // them is modeless and kept, so that a search can be adjusted and run

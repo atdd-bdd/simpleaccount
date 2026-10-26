@@ -794,6 +794,10 @@ public:
         review_ = rows;
         review_line_ = 0;
         look_ = DuplicateLook();
+        // The checkbox belongs to the review in front of you rather than to
+        // the program. An import whose rows were hidden by something somebody
+        // pressed last week is the worst thing it could do.
+        only_ticked_ = false;
         for (ReviewRow& r : review_)
             if (r.disposition != "New") r.accepted = false;
         committed_ = false;
@@ -1782,6 +1786,27 @@ public:
     const std::string& review_account() const { return review_account_; }
 
     const std::vector<ReviewRow>& review() const { return review_; }
+
+    // A month of a card is two hundred rows and nearly all of them are right.
+    // What is worth reading twice is the handful that will be brought in, so
+    // the review can be narrowed to those. It narrows what is read and
+    // nothing else: the counts are of the import, and accepting a narrowed
+    // review brings in exactly what accepting the whole of it would.
+    void show_only_ticked_rows(bool only) { only_ticked_ = only; }
+    bool showing_only_ticked_rows() const { return only_ticked_; }
+
+    // The rows in front of the person. Asked every time rather than kept,
+    // because a tick changes the answer: unticking a row while the review is
+    // narrowed takes that row out of it at once, and the way back is the
+    // checkbox.
+    std::vector<ReviewRow> review_shown() const {
+        if (!only_ticked_) return review_;
+        std::vector<ReviewRow> out;
+        for (const ReviewRow& r : review_)
+            if (r.accepted) out.push_back(r);
+        return out;
+    }
+
     bool committed() const { return committed_; }
     // The transactions the last accept added, in the order it added them. Only
     // those: what the book already held is not an outcome of the import.
@@ -2045,6 +2070,9 @@ private:
         }
     }
     bool review_open_ = false;
+    // Whether the review is showing only what is ticked; see
+    // show_only_ticked_rows.
+    bool only_ticked_ = false;
     std::string review_account_;
     Listing listing_ = Listing::None;
     Editor editor_;

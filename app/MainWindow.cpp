@@ -450,7 +450,22 @@ MainWindow::MainWindow() {
     reviewPanel_ = new QWidget;
     auto* reviewLayout = new QVBoxLayout(reviewPanel_);
     reviewHeading_ = new QLabel;
-    reviewLayout->addWidget(reviewHeading_);
+    // The checkbox narrows what is read to the rows that are ticked. It is a
+    // question the review keeps answering rather than a filter somebody
+    // applies, so a row leaves as it is unticked and comes back as it is
+    // ticked again. Nothing is thrown away, and it says nothing about what
+    // accepting will bring in -- that is the ticks.
+    reviewOnlyTicked_ = new QCheckBox("Show only ticked rows");
+    auto* reviewTop = new QHBoxLayout;
+    reviewTop->addWidget(reviewHeading_);
+    reviewTop->addStretch();
+    reviewTop->addWidget(reviewOnlyTicked_);
+    reviewLayout->addLayout(reviewTop);
+    connect(reviewOnlyTicked_, &QCheckBox::toggled, this, [this](bool only) {
+        if (refreshing_) return;
+        workspace_->show_only_ticked_rows(only);
+        refreshReviewPanel();
+    });
     reviewTable_ = new QTableWidget;
     reviewTable_->setColumnCount(7);
     reviewTable_->setHorizontalHeaderLabels(
@@ -3164,7 +3179,11 @@ void MainWindow::reviewMenu(const QPoint& at) {
     if (!workspace_ || !workspace_->review_showing()) return;
     const QModelIndex index = reviewTable_->indexAt(at);
     if (!index.isValid()) return;
-    workspace_->select_review_line(index.row() + 1);
+    // The row that was clicked carries its own line, which is not the row
+    // index while the review is showing only what is ticked.
+    const QTableWidgetItem* clicked = reviewTable_->item(index.row(), 0);
+    if (!clicked) return;
+    workspace_->select_review_line(clicked->data(Qt::UserRole).toInt());
 
     QMenu menu(this);
     for (const ui::MenuEntry& entry : workspace_->review_menu_items()) {
@@ -4302,11 +4321,14 @@ void MainWindow::refreshReviewPanel() {
     if (!workspace_->review_showing()) return;
     const bool was = refreshing_;
     refreshing_ = true;
-    const std::vector<ui::ReviewRow>& reviewRows = workspace_->review();
+    // The heading counts the import; the table draws what is being shown,
+    // which is all of it unless the checkbox is set.
     reviewHeading_->setText(QString("Import into %1  --  %2 rows, %3 ticked")
                                 .arg(QString::fromStdString(workspace_->review_account()))
-                                .arg(reviewRows.size())
+                                .arg(workspace_->review().size())
                                 .arg(workspace_->accepted_count()));
+    reviewOnlyTicked_->setChecked(workspace_->showing_only_ticked_rows());
+    const std::vector<ui::ReviewRow> reviewRows = workspace_->review_shown();
     reviewTable_->setRowCount(static_cast<int>(reviewRows.size()));
     for (int r = 0; r < static_cast<int>(reviewRows.size()); ++r) {
         const ui::ReviewRow& row = reviewRows[static_cast<std::size_t>(r)];
